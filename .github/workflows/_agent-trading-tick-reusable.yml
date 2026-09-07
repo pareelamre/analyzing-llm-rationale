@@ -143,6 +143,9 @@ jobs:
         run: |
           hard_failures=0
           provider_degradations=0
+          mkdir -p tmp/agent-trading
+          python scripts/agent_trading_tick.py --discover-candidates-only tmp/agent-trading/shared_candidates.json || echo "Candidate pre-discovery failed, will discover per model."
+          export AGENT_TRADING_CANDIDATES_FILE="tmp/agent-trading/shared_candidates.json"
           for MODEL in $MODELS; do
             export AGENT_TRADING_MODEL="$MODEL"
             export FORESEA_AGENT_ACCOUNT_DB_PATH="tmp/agent-trading/$MODEL/store.sqlite"

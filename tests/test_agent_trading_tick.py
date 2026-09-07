@@ -2074,5 +2074,81 @@ Belief update: P(NO) on AGI market: 97%
         self.assertIn("Belief update: P(NO)", state)
 
 
+class CandidatesFileTests(unittest.TestCase):
+    def _fake_report(self, thesis="Passed this cycle.", transcript=None):
+        return SimpleNamespace(thesis=thesis, tool_transcript=transcript or [])
+
+    def test_run_cycle_loads_candidates_from_file_and_skips_discovery(self):
+        with tempfile.TemporaryDirectory() as td:
+            cand_path = Path(td) / "candidates.json"
+            cand_path.write_text(json.dumps([_quote("KXPREPARED")]), encoding="utf-8")
+            env = {
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json"),
+                "FORESEA_AGENT_CYCLE_ID": "test-cycle-prepared",
+                "AGENT_TRADING_CANDIDATES_FILE": str(cand_path),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch.object(agent_trading_tick, "_init_local_agent"),
+                mock.patch.object(agent_trading_tick, "_discover_candidates") as discover_mock,
+                mock.patch.object(
+                    agent_trading_tick,
+                    "_call_agent_analyze",
+                    return_value=self._fake_report(thesis="No trade."),
+                ) as call_mock,
+            ):
+                agent_trading_tick.run_cycle("model-prep")
+                discover_mock.assert_not_called()
+                question_arg = call_mock.call_args[0][0]
+                self.assertIn("KXPREPARED", question_arg)
+
+    def test_run_cycle_falls_back_to_discovery_when_file_invalid(self):
+        with tempfile.TemporaryDirectory() as td:
+            cand_path = Path(td) / "invalid.json"
+            cand_path.write_text("not json", encoding="utf-8")
+            env = {
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json"),
+                "FORESEA_AGENT_CYCLE_ID": "test-cycle-fallback",
+                "AGENT_TRADING_CANDIDATES_FILE": str(cand_path),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch.object(agent_trading_tick, "_init_local_agent"),
+                mock.patch.object(
+                    agent_trading_tick,
+                    "_discover_candidates",
+                    return_value=[_quote("KXFALLBACK")],
+                ) as discover_mock,
+                mock.patch.object(
+                    agent_trading_tick,
+                    "_call_agent_analyze",
+                    return_value=self._fake_report(thesis="No trade."),
+                ) as call_mock,
+            ):
+                agent_trading_tick.run_cycle("model-prep")
+                discover_mock.assert_called_once()
+                question_arg = call_mock.call_args[0][0]
+                self.assertIn("KXFALLBACK", question_arg)
+
+    def test_discover_candidates_only_cli_executes_and_writes(self):
+        with tempfile.TemporaryDirectory() as td:
+            out_path = Path(td) / "discovered_candidates.json"
+            fake_candidates = [_quote("KXDISCOVERED")]
+            with (
+                mock.patch.object(sys, "argv", ["agent_trading_tick.py", "--discover-candidates-only", str(out_path)]),
+                mock.patch.object(agent_trading_tick, "_discover_candidates", return_value=fake_candidates) as discover_mock,
+            ):
+                exit_code = agent_trading_tick.main()
+                self.assertEqual(exit_code, 0)
+                discover_mock.assert_called_once()
+                self.assertTrue(out_path.exists())
+                data = json.loads(out_path.read_text(encoding="utf-8"))
+                self.assertEqual(len(data), 1)
+                self.assertEqual(data[0]["ident"], "KXDISCOVERED")
+
+
 if __name__ == "__main__":
     unittest.main()
+

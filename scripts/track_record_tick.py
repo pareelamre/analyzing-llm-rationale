@@ -48,6 +48,7 @@ import urllib.request
 from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Optional
 
 from opentelemetry import metrics as otel_metrics
 from opentelemetry import trace as otel_trace
@@ -653,6 +654,12 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         article for article in (quote.get("venue_news_articles") or [])
         if isinstance(article, dict)
     ]
+    prefetched_articles = [
+        article for article in (quote.get("news_articles") or [])
+        if isinstance(article, dict)
+    ]
+    has_prefetched_evidence = bool(prefetched_articles)
+    all_articles = prefetched_articles if has_prefetched_evidence else venue_articles
     span = otel_trace.get_current_span()
     span.set_attributes({
         "market.platform": platform,
@@ -660,6 +667,7 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "forecast.model": model or MODEL,
         "forecast.context.rules_present": bool(resolution_criteria),
         "forecast.context.venue_articles": len(venue_articles),
+        "forecast.context.prefetched_articles": len(prefetched_articles),
     })
     if not resolution_criteria:
         logger.warning(
@@ -671,12 +679,12 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "question": quote["question"],
         "description": quote.get("description") or "",
         "resolution_criteria": resolution_criteria,
-        "news_articles": venue_articles,
+        "news_articles": all_articles,
         # Force the structured forecast template. Without this the server's
         # always-on chat mode answers conversationally (question_type="chat",
         # no market_analysis) and every LLM snapshot is silently dropped.
         "chat_mode": False,
-        "attach_evidence": True,
+        "attach_evidence": not has_prefetched_evidence,
         "evidence_top_k": evidence_top_k,
         "evidence_detail": TRACK_RECORD_EVIDENCE_DETAIL,
         "market_platform": quote.get("platform"),
@@ -766,11 +774,37 @@ PRICE_ONLY = "--price-only" in sys.argv
 MARK_TO_MARKET_ONLY = "--mtm-only" in sys.argv
 RESOLVED_ONLY = "--resolved-only" in sys.argv
 SNAPSHOT_ONLY = "--snapshot-only" in sys.argv
-_MODE_FLAGS = [PRICE_ONLY, MARK_TO_MARKET_ONLY, RESOLVED_ONLY, SNAPSHOT_ONLY]
+PREPARE_TARGETS_ONLY = "--prepare-targets-only" in sys.argv or "--discover-targets-only" in sys.argv
+_MODE_FLAGS = [PRICE_ONLY, MARK_TO_MARKET_ONLY, RESOLVED_ONLY, SNAPSHOT_ONLY, PREPARE_TARGETS_ONLY]
 if sum(1 for flag in _MODE_FLAGS if flag) > 1:
     raise RuntimeError(
-        "Use only one of --price-only, --mtm-only, --resolved-only, or --snapshot-only"
+        "Use only one of --price-only, --mtm-only, --resolved-only, --snapshot-only, or --prepare-targets-only"
     )
+
+
+def _extract_flag_value(flag: str) -> Optional[str]:
+    for idx, arg in enumerate(sys.argv):
+        if arg == flag and idx + 1 < len(sys.argv) and not sys.argv[idx + 1].startswith("-"):
+            return sys.argv[idx + 1]
+        if arg.startswith(f"{flag}="):
+            return arg.split("=", 1)[1]
+    return None
+
+
+TARGETS_OUTPUT_PATH = (
+    _extract_flag_value("--prepare-targets-only")
+    or _extract_flag_value("--discover-targets-only")
+    or _extract_flag_value("--output")
+    or _extract_flag_value("--out")
+    or os.environ.get("TRACK_TARGETS_OUTPUT")
+)
+
+TARGETS_INPUT_FILE = (
+    _extract_flag_value("--targets-file")
+    or _extract_flag_value("--contexts-file")
+    or os.environ.get("TRACK_TARGETS_FILE")
+    or os.environ.get("TRACK_CONTEXTS_FILE")
+)
 
 _LIVE_MARKET_KEYS = (
     "source",
@@ -934,7 +968,21 @@ def _write_json_atomically(path: Path, payload: object) -> None:
         raise
 
 
+def _write_text_file(path: Path, content: str) -> None:
+    """Synchronous file write to avoid ASYNC240 in async functions."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def _read_text_file(path: Path) -> str | None:
+    """Synchronous file read to avoid ASYNC240 in async functions."""
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return None
+
+
 def _model_progress(store: DuckDBStore, model: str) -> dict:
+
     row = store._con.execute(
         """
         SELECT
@@ -980,6 +1028,7 @@ async def _record_snapshots_with_retries(
     store: DuckDBStore,
     *,
     seeds: list[tuple[str, str]],
+    prepared_targets: Optional[list[dict]] = None,
 ) -> int:
     """Retry the forecast pass when every /predict call fails transiently.
 
@@ -997,6 +1046,7 @@ async def _record_snapshots_with_retries(
             "forecast.target_shard.count": TRACK_TARGET_SHARD_COUNT,
             "forecast.target_shard.index": TRACK_TARGET_SHARD_INDEX,
             "forecast.targets.max": TRACK_FORECAST_MAX_TARGETS or 0,
+            "forecast.targets.prepared": bool(prepared_targets),
         })
         recorded_total = 0
         try:
@@ -1006,6 +1056,7 @@ async def _record_snapshots_with_retries(
                 successes_before = _predict_stats["successes"]
                 recorded_total += await trl.record_snapshots(
                     store, market_data, forecast_fn,
+                    prepared_targets=prepared_targets,
                     models=TRACK_MODELS, default_model=MODEL, per_venue=PER_VENUE,
                     seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
                     reforecast_each_tick=REFORECAST_EACH_TICK,
@@ -1070,6 +1121,29 @@ async def _record_snapshots_with_retries(
 
 async def main() -> int:
     print(f"track-record predict mode: {_predict_mode()}")
+    if PREPARE_TARGETS_ONLY:
+        store = DuckDBStore(STORE_PATH)
+        seeds = _get_pending_markets()
+        print(f"discovering and bundling common target parameters (seeds={len(seeds)})...")
+        targets = trl.discover_forecast_targets(
+            store,
+            market_data,
+            models=TRACK_MODELS,
+            default_model=MODEL,
+            per_venue=PER_VENUE,
+            seed_idents=seeds,
+            convergence_per_venue=CONVERGENCE_PER_VENUE,
+            target_shard_count=TRACK_TARGET_SHARD_COUNT,
+            target_shard_index=TRACK_TARGET_SHARD_INDEX,
+            max_targets=TRACK_FORECAST_MAX_TARGETS,
+            fetch_venue_candles=_fetch_venue_candles_batch,
+        )
+        out_path = Path(TARGETS_OUTPUT_PATH or "tmp/forecast_targets.json")
+        serialized = trl.serialize_forecast_targets(targets)
+        _write_text_file(out_path, serialized)
+        print(f"saved {len(targets)} unified target contexts to {out_path}")
+        return 0
+
     run_snapshots = not (PRICE_ONLY or MARK_TO_MARKET_ONLY or RESOLVED_ONLY)
     run_prices = not (RESOLVED_ONLY or SNAPSHOT_ONLY)
     run_resolutions = not (MARK_TO_MARKET_ONLY or SNAPSHOT_ONLY)
@@ -1104,14 +1178,34 @@ async def main() -> int:
     recorded = 0
     backfilled = 0
     if run_snapshots:
-        seeds = _get_pending_markets()
-        recorded = await _record_snapshots_with_retries(store, seeds=seeds)
+        prepared_targets: Optional[list[dict]] = None
+        if TARGETS_INPUT_FILE:
+            targets_path = Path(TARGETS_INPUT_FILE)
+            content = _read_text_file(targets_path)
+            if content is not None:
+                try:
+                    prepared_targets = trl.deserialize_forecast_targets(content)
+                    print(f"loaded {len(prepared_targets)} prepared targets from {targets_path}")
+                except Exception as exc:
+                    print(
+                        f"warning: failed to load prepared targets from {targets_path}: {exc}, falling back to live discovery",
+                        file=sys.stderr,
+                    )
+            else:
+                print(
+                    f"warning: prepared targets file {targets_path} does not exist, falling back to live discovery",
+                    file=sys.stderr,
+                )
+
+        seeds = _get_pending_markets() if prepared_targets is None else []
+        recorded = await _record_snapshots_with_retries(store, seeds=seeds, prepared_targets=prepared_targets)
         if ALLOW_RESOLVED_BACKFILL:
             backfilled = await trl.backfill_missing_model_snapshots(
                 store, forecast_fn,
                 models=TRACK_MODELS, default_model=MODEL,
                 concurrency=PREDICT_CONCURRENCY)
-        _mark_enrolled([f"{p}:{i}" for p, i in seeds])
+        if seeds:
+            _mark_enrolled([f"{p}:{i}" for p, i in seeds])
 
     if run_ledger:
         ledger_summary = sync_snapshot_ledger(store)
