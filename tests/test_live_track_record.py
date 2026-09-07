@@ -336,5 +336,35 @@ class WiredPayloadSourceTests(unittest.TestCase):
                 "AGENT_TRADING_BOARD",
                 "AGENT_TRADING_AUDIT",
                 "AGENT_TRADING_AUDIT_ARCHIVE",
+                "CRYPTO_KALSHI_EDGE",
             },
+        )
+
+
+class KalshiEdgePayloadConfigTests(unittest.TestCase):
+    """The last payload reader that could not be repointed."""
+
+    def test_the_default_comes_from_the_module_that_owns_the_payload(self):
+        from analyzing_llm_rationale import crypto_kalshi
+        from analyzing_llm_rationale import server as server_module
+
+        # Overridable via CRYPTO_KALSHI_EDGE_URL; not reloading the server
+        # module here to prove that, since re-importing it mid-suite rebuilds
+        # the FastAPI app and every reader alongside it.
+        self.assertEqual(
+            server_module._CRYPTO_KALSHI_EDGE_URL,
+            crypto_kalshi.DEFAULT_KALSHI_EDGE_REMOTE_URL,
+        )
+
+    def test_the_endpoint_no_longer_hardcodes_the_constant(self):
+        import re
+        from pathlib import Path as _P
+
+        source = (
+            _P(__file__).resolve().parents[1]
+            / "src" / "analyzing_llm_rationale" / "server.py"
+        ).read_text(encoding="utf-8")
+        self.assertFalse(
+            re.search(r"requests\.get\(\s*crypto_kalshi\.DEFAULT_KALSHI_EDGE_REMOTE_URL", source),
+            "the kalshi edge endpoint should read the overridable URL",
         )
