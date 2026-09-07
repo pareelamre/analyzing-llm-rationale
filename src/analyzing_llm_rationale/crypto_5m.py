@@ -2787,7 +2787,29 @@ def _crypto_replay_side(
 
 
 def _load_crypto_5m_equity_fallback(db_path: Path) -> Optional[Dict[str, Any]]:
-    # Freshest committed source first: the GitHub tick regenerates + commits the
+    # GCS first when configured, matching the six payloads server.py reads
+    # through _gcs_payload_source. This one is the third-heaviest committed
+    # artifact in the repository -- ~808 revisions of a 395KB file -- and
+    # reading it here is what lets the tick stop committing it.
+    gcs_bucket = os.environ.get("CRYPTO_5M_EQUITY_GCS_BUCKET", "").strip()
+    if gcs_bucket:
+        gcs_object = os.environ.get(
+            "CRYPTO_5M_EQUITY_GCS_OBJECT", "crypto_5m_equity_payload.json",
+        ).strip() or "crypto_5m_equity_payload.json"
+        try:
+            from analyzing_llm_rationale import gcs_store
+
+            payload = gcs_store.read_json_object(gcs_bucket, gcs_object)
+        except Exception:
+            payload = None
+        if isinstance(payload, dict):
+            out = dict(payload)
+            out["fallback"] = True
+            out["fallback_source"] = f"gs://{gcs_bucket}/{gcs_object}"
+            out["db_path"] = str(db_path)
+            return out
+
+    # Freshest committed source next: the GitHub tick regenerates + commits the
     # equity payload every ~15 min, so the raw-GitHub copy is the current one.
     remote_url = os.environ.get("CRYPTO_5M_EQUITY_URL", DEFAULT_EQUITY_REMOTE_URL).strip()
     if remote_url:
