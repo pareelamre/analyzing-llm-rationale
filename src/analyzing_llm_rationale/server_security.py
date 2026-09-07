@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hmac
+import logging
 import time
 from collections import defaultdict
 from typing import Any, Optional
 
 from fastapi import HTTPException, Request
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
@@ -16,6 +19,7 @@ class RateLimiter:
         self._period = period
         self._log: dict[str, list[float]] = defaultdict(list)
         self._redis = None
+        self._redis_degraded = False
         redis_url = None
         try:
             import os
@@ -33,16 +37,53 @@ class RateLimiter:
                     socket_timeout=1,
                 )
                 self._redis.ping()
-            except Exception:
+            except Exception as exc:
                 self._redis = None
+                logger.warning(
+                    "REDIS_URL is set but unusable (%s: %s); rate limiting will "
+                    "count per instance, so the effective limit is multiplied by "
+                    "the instance count",
+                    type(exc).__name__, exc,
+                )
 
     def is_allowed(self, key: str) -> bool:
         if self._redis is not None:
             try:
-                return self._is_allowed_redis(self._redis, key)
-            except Exception:
-                pass
+                allowed = self._is_allowed_redis(self._redis, key)
+            except Exception as exc:
+                self._note_redis_lost(exc)
+            else:
+                self._note_redis_back()
+                return allowed
         return self._is_allowed_local(key)
+
+    def _note_redis_lost(self, exc: BaseException) -> None:
+        """Say so once when the shared window is gone.
+
+        Falling back is the right behaviour -- a limiter that raises when
+        Redis blinks would take the service down to protect it. But the
+        fallback counts in this process only, so with N instances the
+        effective limit becomes N times the configured one. Silently.
+
+        Logged on the transition rather than per call: this runs on every
+        request, and a message per request during an outage buries the one
+        line that explains it.
+        """
+        if self._redis_degraded:
+            return
+        self._redis_degraded = True
+        logger.warning(
+            "rate limiter fell back to the per-instance window (%s: %s); the "
+            "effective limit is now multiplied by the instance count until "
+            "Redis recovers",
+            type(exc).__name__, exc,
+        )
+
+    def _note_redis_back(self) -> None:
+        if not self._redis_degraded:
+            return
+        self._redis_degraded = False
+        logger.info("rate limiter is counting in Redis again")
 
     def _is_allowed_redis(self, client: Any, key: str) -> bool:
         bucket = int(time.time() // self._period)
