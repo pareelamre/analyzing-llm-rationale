@@ -104,7 +104,11 @@ _REQUIRED_API_KEY: Optional[str] = os.environ.get("API_KEY")
 _GOOGLE_CLIENT_ID: Optional[str] = os.environ.get("GOOGLE_CLIENT_ID")
 _GITHUB_CLIENT_ID: Optional[str] = os.environ.get("GITHUB_CLIENT_ID")
 _GITHUB_CLIENT_SECRET: Optional[str] = os.environ.get("GITHUB_CLIENT_SECRET")
-_SESSION_SECRET: str = os.environ.get("SESSION_SECRET", "change-me-in-production")
+#: Signs every session JWT. Anyone who knows it can mint a token for any
+#: account, so the placeholder below must never reach a deployment -- see
+#: _refuse_to_serve_with_the_default_session_secret.
+_DEFAULT_SESSION_SECRET = "change-me-in-production"
+_SESSION_SECRET: str = os.environ.get("SESSION_SECRET", _DEFAULT_SESSION_SECRET)
 _SESSION_TTL_DAYS = 30
 # The live track record is produced by a GitHub Action and committed to the repo
 # (static/track_record_live.json). The server reads that committed file — at
@@ -2470,6 +2474,37 @@ _rate_limiter = RateLimiter(calls=int(os.environ.get("RATE_LIMIT_PER_MIN", "60")
 _predict_rate_limiter = RateLimiter(calls=int(os.environ.get("PREDICT_RATE_LIMIT_PER_MIN", "10")), period=60)
 
 
+def _refuse_to_serve_with_the_default_session_secret() -> None:
+    """Stop, on Cloud Run, if session tokens are signed with the placeholder.
+
+    decode_session verifies an HS256 signature against this secret. With the
+    placeholder in force, anyone who has read the source can sign a token
+    carrying any `sub` and be that user -- it is not a weak password, it is a
+    published one.
+
+    Cloud Run always sets K_SERVICE, and the deployed service does set
+    SESSION_SECRET, so this changes nothing about how it runs today. It exists
+    so that a deployment which forgets to set it fails loudly at startup
+    instead of serving forgeable sessions quietly.
+
+    Off Cloud Run -- tests, local runs -- it warns rather than refuses, so the
+    default keeps working where nothing is exposed.
+    """
+    if _SESSION_SECRET != _DEFAULT_SESSION_SECRET:
+        return
+    if os.environ.get("K_SERVICE"):
+        raise RuntimeError(
+            "SESSION_SECRET is still the built-in placeholder. Session tokens "
+            "would be signed with a value published in the source, so anyone "
+            "could mint one for any account. Set SESSION_SECRET on the service "
+            "before serving traffic."
+        )
+    logger.warning(
+        "SESSION_SECRET is the built-in placeholder. Fine locally; set it "
+        "before anything reachable serves a session."
+    )
+
+
 #: Endpoints whose only access control is _check_api_key.
 #
 # check_api_key returns without checking anything when no key is configured:
@@ -2534,6 +2569,7 @@ async def lifespan(app: FastAPI):
             'python-multipart is required for Form/File endpoints. '
             'Install the serve extras: pip install "analyzing-llm-rationale[serve]"'
         ) from None
+    _refuse_to_serve_with_the_default_session_secret()
     _warn_if_api_key_guard_is_inert()
     logger.info("foresea server starting up")
     async with AsyncExitStack() as stack:
