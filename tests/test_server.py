@@ -5532,6 +5532,8 @@ class ServerTests(unittest.TestCase):
         """
         import asyncio
 
+        from fastapi import HTTPException
+
         primary = FailingProvider("zai-org/GLM-5.3-Flash")
         req = server_module.AgentAnalyzeRequest(
             question="check it",
@@ -5552,7 +5554,7 @@ class ServerTests(unittest.TestCase):
             mock.patch.object(server_module, "_AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES", 0),
         ):
             server_module.logger.reset_mock()
-            with self.assertRaises(Exception):
+            with self.assertRaises(HTTPException):
                 asyncio.run(
                     server_module._agent_tool_loop(req, None, "check it", None, None)
                 )
