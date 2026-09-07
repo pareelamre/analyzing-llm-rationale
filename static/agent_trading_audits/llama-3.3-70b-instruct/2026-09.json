@@ -121,7 +121,7 @@
         "version": 1
       },
       "cycle_id": "30m:993499",
-      "event_type": "trade",
+      "event_type": "unfilled_order",
       "execution": {
         "cash_delta": 0.0,
         "cash_required": 0.0,
@@ -141,7 +141,7 @@
       },
       "mode": "shadow",
       "outcome": "open",
-      "record_hash": "c547d179ca9387d364a7466da2564f8f60bd4495e306a5e64e071b48bb4ee5ec",
+      "record_hash": "8d5ca2a2ca433d272678c1c2b8bbdf6d227dd572d651c8d46fb15e5468af82f6",
       "recorded_at": "2026-09-01T21:34:33.646160+00:00"
     },
     {
@@ -204,7 +204,7 @@
         "version": 1
       },
       "cycle_id": "30m:993537",
-      "event_type": "trade",
+      "event_type": "unfilled_order",
       "execution": {
         "cash_delta": 0.0,
         "cash_required": 0.0,
@@ -224,7 +224,7 @@
       },
       "mode": "shadow",
       "outcome": "open",
-      "record_hash": "eb3897b0b8aaf9608cd0b99ca43566977f2b4864d51d494ddfcbfb7519dd6f21",
+      "record_hash": "6bc1ffb658d34b5cf9c261d73998be8861332c135fec53a0c014b48f4094b07a",
       "recorded_at": "2026-09-02T16:43:29.988504+00:00"
     },
     {
@@ -704,7 +704,7 @@
         "version": 1
       },
       "cycle_id": "30m:993661",
-      "event_type": "trade",
+      "event_type": "unfilled_order",
       "execution": {
         "cash_delta": 0.0,
         "cash_required": 0.0,
@@ -724,7 +724,7 @@
       },
       "mode": "shadow",
       "outcome": "open",
-      "record_hash": "e130f2425b0bee4ba68f7d1022eb58266dcc35d1e172c86264817430b6d5f22b",
+      "record_hash": "dce7fdb108ace01b6b60471a5f58b1afa62ec5eadd5dcabd49a7c8839ffd12e9",
       "recorded_at": "2026-09-05T06:37:37.747100+00:00"
     },
     {
@@ -787,7 +787,7 @@
         "version": 1
       },
       "cycle_id": "30m:993677",
-      "event_type": "trade",
+      "event_type": "unfilled_order",
       "execution": {
         "cash_delta": 0.0,
         "cash_required": 0.0,
@@ -807,7 +807,7 @@
       },
       "mode": "shadow",
       "outcome": "open",
-      "record_hash": "10d14d39e4b7e92d9f16b7702f25e9802c78ed3dc8652ca7975ef55c3bce39c0",
+      "record_hash": "94dfeda159b09280c98635e0136d5ddfa0067cf15eab4e67393a2d81855d0169",
       "recorded_at": "2026-09-05T14:34:39.158882+00:00"
     },
     {
@@ -870,7 +870,7 @@
         "version": 1
       },
       "cycle_id": "30m:993685",
-      "event_type": "trade",
+      "event_type": "unfilled_order",
       "execution": {
         "cash_delta": 0.0,
         "cash_required": 0.0,
@@ -890,7 +890,7 @@
       },
       "mode": "shadow",
       "outcome": "open",
-      "record_hash": "1100ceac2746f7e2b4982dc5dedb6cf5f6d5048da1e5abc6c1596ca699317d8a",
+      "record_hash": "0b0ab76251f027041da8ea323bb604eb0d25b4a9e2e015da993bd9c1737146fa",
       "recorded_at": "2026-09-05T18:36:47.246365+00:00"
     },
     {
@@ -1058,7 +1058,7 @@
         "version": 1
       },
       "cycle_id": "30m:993729",
-      "event_type": "trade",
+      "event_type": "unfilled_order",
       "execution": {
         "cash_delta": 0.0,
         "cash_required": 0.0,
@@ -1078,7 +1078,7 @@
       },
       "mode": "shadow",
       "outcome": "open",
-      "record_hash": "256247939fcaa296635a8d4f7caf53f655b93174df9d0c3ac5d5c0d34e976c2f",
+      "record_hash": "cc6060f13ed8862968e99df939b6bdc85060133e5e3374851db68cdfacc27ee2",
       "recorded_at": "2026-09-06T16:31:02.911118+00:00"
     },
     {
@@ -1234,6 +1234,89 @@
       "outcome": "no",
       "record_hash": "c6f08c5eb4ec6a65534deb978a0f9a09d8988b15c497d2f1fb845c229f521de8",
       "recorded_at": "2026-09-07T02:15:09.684071+00:00"
+    },
+    {
+      "action_id": "25140fc0-bfa7-4812-bac1-4d7229a0b54e",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_filled_partial",
+          "filled_quantity": 100.0
+        },
+        "quote": {
+          "marketable": true,
+          "observed_ask": 0.08,
+          "source": "live_venue_quote",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.08,
+          "quantity": "100.00"
+        },
+        "risk": {
+          "allowed": true,
+          "cash_before": 7989.153601,
+          "cash_required": 556.381994,
+          "concentration_cap": 1198.37304,
+          "cycle_id": "30m:993752",
+          "cycle_spend_after": 556.381994,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 1046.444198,
+          "daily_risk_before": 490.062204,
+          "daily_risk_limit": 2396.74608,
+          "drawdown_after": 0.204451,
+          "fee": 33.663097,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 522.718897,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 522.718897,
+          "open_markets_after": 1,
+          "per_cycle_spend_limit": 1597.83072,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.52,
+          "eligible": true,
+          "kelly_fraction": 0.25,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.08,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 556.381994,
+          "target_quantity": 6533.986210065798
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:993752",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": -8.5152,
+        "cash_required": 8.5152,
+        "fee": 0.5152,
+        "netting_payout": 0.0,
+        "notional": 8.0,
+        "price": 0.08,
+        "quantity": 100.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXNFLRETIRE-LJOHNSON65-2627"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "69beba47d921740ef58c33d540ec1c5287be0277f9205c663ce04edb9c04e7cd",
+      "recorded_at": "2026-09-07T04:18:36.270394+00:00"
     }
   ],
   "month": "2026-09",

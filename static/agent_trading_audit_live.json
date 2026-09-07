@@ -620,7 +620,7 @@
           "version": 1
         },
         "cycle_id": "30m:993640",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -640,7 +640,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "8b643cec5d772c3516d74bc5e33459b8a944bed02bdf9f88ef9d595634c72ed9",
+        "record_hash": "ed193536e2cf4ffcd04d76fea03c11c94b0f7111bc199c548d88d574e511f575",
         "recorded_at": "2026-09-04T20:25:45.183002+00:00"
       },
       {
@@ -1010,7 +1010,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985660",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -1030,7 +1030,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "2ab502b1547d9a643422bca87bb3e3384a36d90588d732f6a5b9f793877efe21",
+        "record_hash": "8f0398a14bc0fded912bb2f409510e089ff3ce973a1de3ce2b04da7b634d3dcb",
         "recorded_at": "2026-08-18T23:03:44.027230+00:00"
       },
       {
@@ -1070,7 +1070,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985658",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -1090,7 +1090,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "106968486941ce36ab6a6e53b460fd2c5770760b8972d07b50c893dde72199d2",
+        "record_hash": "82445832a70a66c66ff157a2f61618058002ec56f3d8e125e7f66156cd3cef5f",
         "recorded_at": "2026-08-18T22:36:55.875432+00:00"
       },
       {
@@ -1100,7 +1100,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985648",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -1120,7 +1120,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "e099af161b59699cf03008acf544b5cf5f6bb68c9f14ece167187bc11b6d8a97",
+        "record_hash": "05abd723e0a7260c731edec2292da0d787948008f87665a1e54863f722aada1d",
         "recorded_at": "2026-08-18T20:01:59.627948+00:00"
       },
       {
@@ -1436,6 +1436,89 @@
       }
     ],
     "gpt-oss-120b": [
+      {
+        "action_id": "9e834dd5-2f3e-4a50-aacb-77f9dd6aeee5",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 22.43
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.73,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.73,
+            "quantity": 1
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 10013.126785,
+            "cash_required": 353.728517,
+            "concentration_cap": 1501.969018,
+            "cycle_id": "30m:993752",
+            "cycle_spend_after": 353.728517,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 1590.200649,
+            "daily_risk_before": 1236.472132,
+            "daily_risk_limit": 3003.938035,
+            "drawdown_after": 0.003778,
+            "fee": 6.561457,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 347.16706,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 347.16706,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 2002.625357,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.1,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 353.728517,
+            "target_quantity": 475.5713145290175
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993752",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -16.683367,
+          "cash_required": 16.683367,
+          "fee": 0.309467,
+          "netting_payout": 0.0,
+          "notional": 16.3739,
+          "price": 0.73,
+          "quantity": 22.43,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXHIGHNY-26SEP07-B77.5"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "dfeec442a4f41853104fc2973fdfee58a121054203000aa3a2b8f8ecb9882950",
+        "recorded_at": "2026-09-07T04:17:25.967932+00:00"
+      },
       {
         "action_id": "65067941-b72e-41cf-9a97-27cc416e94fc",
         "agent_id": "gpt-oss-120b",
@@ -1895,7 +1978,7 @@
           "version": 1
         },
         "cycle_id": "30m:993641",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -1915,7 +1998,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "62193ff6b41367f4e581115fe0c7db092c60a046a01f4a449364db6c4ab6b9c9",
+        "record_hash": "51973ffb480ea4380f7c1522bb111c0b73dbec61d33632ad9d94afedda7f44b9",
         "recorded_at": "2026-09-04T20:41:47.054829+00:00"
       },
       {
@@ -2353,7 +2436,7 @@
           "version": 1
         },
         "cycle_id": "30m:993537",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -2373,7 +2456,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "b8aaa1df20f5164eb0a42f138de25ce021879c698975a8998d3a2bffb64da52b",
+        "record_hash": "faea80768d62d3ce4c6de2456fd0a81e0db7bc4d6767c15f3b7e1140e8d937b7",
         "recorded_at": "2026-09-02T16:42:23.079684+00:00"
       },
       {
@@ -2428,7 +2511,7 @@
           "version": 1
         },
         "cycle_id": "30m:993527",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -2448,7 +2531,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "b112fe4ecdde20dce8fe29728aa19fa82e4ac50040f7a84008846318f1a96cbc",
+        "record_hash": "52ff651168b4ba60bda086d91ca1c5d4c3fde9295b91e8535ac832c0a43332e0",
         "recorded_at": "2026-09-02T11:56:17.337305+00:00"
       },
       {
@@ -2533,7 +2616,7 @@
           "version": 1
         },
         "cycle_id": "30m:993493",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -2553,7 +2636,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "202907fb18bdc61cc932ef6e1ca41439516bfa074c9211327e060af822315bbc",
+        "record_hash": "9d698d793908d83346a56e48b3f313045a1fb6312acf36f89424a180b19f1944",
         "recorded_at": "2026-09-01T18:48:59.146624+00:00"
       },
       {
@@ -2743,7 +2826,7 @@
           "version": 1
         },
         "cycle_id": "30m:993467",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -2763,7 +2846,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "517722dab6a25deac574c1ec5ed992d8f40962051e23138e01e82768eb7716fb",
+        "record_hash": "8692603d98cd66155dff882dc6bd821677f2d78edcb62d1b30e108101e7e4369",
         "recorded_at": "2026-09-01T05:49:53.386681+00:00"
       },
       {
@@ -2818,7 +2901,7 @@
           "version": 1
         },
         "cycle_id": "30m:993467",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -2838,7 +2921,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "342ee0ea211c8370c603299ab6411653049cf9c97b684933528ce0be2e6b9390",
+        "record_hash": "0a09fc6d0816ba1ea88b654b2867328c3cff1de55978ec70af44997817485d66",
         "recorded_at": "2026-09-01T05:49:50.510355+00:00"
       },
       {
@@ -2893,7 +2976,7 @@
           "version": 1
         },
         "cycle_id": "30m:993467",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -2913,7 +2996,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "195c0257b1f0c6bac902ff1f80bbcb8adc92bcf013a8ee13cce37b903fc83279",
+        "record_hash": "7e1ff3af9feb0ff850be009f81390d96bde7356c76e30628a7909d2871bf1759",
         "recorded_at": "2026-09-01T05:49:46.411893+00:00"
       },
       {
@@ -3133,7 +3216,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985703",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -3153,7 +3236,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "2e78aa4528f6cfc0cd28040268054a41f28f10a95f923b5a5118b091523a3a5d",
+        "record_hash": "714f07df34abd0ca969bd65ac5394ec071dfb1ef3a05be10f1ad8e2782b2b79f",
         "recorded_at": "2026-08-19T09:55:01.802601+00:00"
       },
       {
@@ -3163,7 +3246,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985701",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -3183,7 +3266,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "8c31def7bd838051adccecbbc276e57775089a73b3643441e546709475b2b70c",
+        "record_hash": "a2124aa9cebd1b41566c98ef7cf485712c2dd6c684887895129070feab9feacc",
         "recorded_at": "2026-08-19T09:19:34.498084+00:00"
       },
       {
@@ -4029,6 +4112,89 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "25140fc0-bfa7-4812-bac1-4d7229a0b54e",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 100.0
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.08,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.08,
+            "quantity": "100.00"
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 7989.153601,
+            "cash_required": 556.381994,
+            "concentration_cap": 1198.37304,
+            "cycle_id": "30m:993752",
+            "cycle_spend_after": 556.381994,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 1046.444198,
+            "daily_risk_before": 490.062204,
+            "daily_risk_limit": 2396.74608,
+            "drawdown_after": 0.204451,
+            "fee": 33.663097,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 522.718897,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 522.718897,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1597.83072,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.52,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 556.381994,
+            "target_quantity": 6533.986210065798
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993752",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -8.5152,
+          "cash_required": 8.5152,
+          "fee": 0.5152,
+          "netting_payout": 0.0,
+          "notional": 8.0,
+          "price": 0.08,
+          "quantity": 100.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXNFLRETIRE-LJOHNSON65-2627"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "69beba47d921740ef58c33d540ec1c5287be0277f9205c663ce04edb9c04e7cd",
+        "recorded_at": "2026-09-07T04:18:36.270394+00:00"
+      },
+      {
         "action_id": "a850e009-d5cb-4dc0-87fb-9b6aabf74016",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -4242,7 +4408,7 @@
           "version": 1
         },
         "cycle_id": "30m:993729",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -4262,7 +4428,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "256247939fcaa296635a8d4f7caf53f655b93174df9d0c3ac5d5c0d34e976c2f",
+        "record_hash": "cc6060f13ed8862968e99df939b6bdc85060133e5e3374851db68cdfacc27ee2",
         "recorded_at": "2026-09-06T16:31:02.911118+00:00"
       },
       {
@@ -4430,7 +4596,7 @@
           "version": 1
         },
         "cycle_id": "30m:993685",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -4450,7 +4616,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "1100ceac2746f7e2b4982dc5dedb6cf5f6d5048da1e5abc6c1596ca699317d8a",
+        "record_hash": "0b0ab76251f027041da8ea323bb604eb0d25b4a9e2e015da993bd9c1737146fa",
         "recorded_at": "2026-09-05T18:36:47.246365+00:00"
       },
       {
@@ -4513,7 +4679,7 @@
           "version": 1
         },
         "cycle_id": "30m:993677",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -4533,7 +4699,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "10d14d39e4b7e92d9f16b7702f25e9802c78ed3dc8652ca7975ef55c3bce39c0",
+        "record_hash": "94dfeda159b09280c98635e0136d5ddfa0067cf15eab4e67393a2d81855d0169",
         "recorded_at": "2026-09-05T14:34:39.158882+00:00"
       },
       {
@@ -4596,7 +4762,7 @@
           "version": 1
         },
         "cycle_id": "30m:993661",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -4616,7 +4782,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "e130f2425b0bee4ba68f7d1022eb58266dcc35d1e172c86264817430b6d5f22b",
+        "record_hash": "dce7fdb108ace01b6b60471a5f58b1afa62ec5eadd5dcabd49a7c8839ffd12e9",
         "recorded_at": "2026-09-05T06:37:37.747100+00:00"
       },
       {
@@ -5096,7 +5262,7 @@
           "version": 1
         },
         "cycle_id": "30m:993537",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -5116,7 +5282,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "eb3897b0b8aaf9608cd0b99ca43566977f2b4864d51d494ddfcbfb7519dd6f21",
+        "record_hash": "6bc1ffb658d34b5cf9c261d73998be8861332c135fec53a0c014b48f4094b07a",
         "recorded_at": "2026-09-02T16:43:29.988504+00:00"
       },
       {
@@ -5179,7 +5345,7 @@
           "version": 1
         },
         "cycle_id": "30m:993499",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -5199,7 +5365,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "c547d179ca9387d364a7466da2564f8f60bd4495e306a5e64e071b48bb4ee5ec",
+        "record_hash": "8d5ca2a2ca433d272678c1c2b8bbdf6d227dd572d651c8d46fb15e5468af82f6",
         "recorded_at": "2026-09-01T21:34:33.646160+00:00"
       },
       {
@@ -5914,7 +6080,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985878",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -5934,7 +6100,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "16de6ff671948d63aed87a943330d8bfb41f9cecb71fd3675e3980b2729c7964",
+        "record_hash": "a856a6dfa33b7819a9e57a367a5583833d37dfb6792c020166813cba7b227cc2",
         "recorded_at": "2026-08-21T05:43:28.427489+00:00"
       },
       {
@@ -5974,7 +6140,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985872",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -5994,7 +6160,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "4724b169afcfea5434057d781c6c67ce926a681933f4c06e1bc1dd0d79844d21",
+        "record_hash": "78c7f73afe3f0748a68b769d3343e3c4186fbaed4f7048b8c757d77735114344",
         "recorded_at": "2026-08-21T04:07:55.129236+00:00"
       },
       {
@@ -6334,7 +6500,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985758",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -6354,7 +6520,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "4c9b5ef75611cfa98dacab32b8d06723cb57e868688f098d71714fdea381d6d8",
+        "record_hash": "03a49c496c400fa3906b9655cd6f49ee460daa39810c8df62e917160fb095bc0",
         "recorded_at": "2026-08-19T23:36:39.427923+00:00"
       },
       {
@@ -6394,7 +6560,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985752",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -6414,7 +6580,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "4911af86be68770f580466cec9128a561136a6b86ec057cb4f0630a08b0abfd0",
+        "record_hash": "805bda17a57458e01a72f66bbd4b3a9998d54e4d268e7e50acff4086ec1bdea2",
         "recorded_at": "2026-08-19T22:06:14.508500+00:00"
       },
       {
@@ -6484,7 +6650,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985742",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -6504,7 +6670,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "cd76a70d438c934f52ed1e783b4a03cf0c71c496da3bdac6e858690d79922574",
+        "record_hash": "493917290b5b698a79128fcf7fc44ccbdfa31d5ecfc09dea543e9aa75a3fb07c",
         "recorded_at": "2026-08-19T19:36:21.002400+00:00"
       },
       {
@@ -6579,7 +6745,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985735",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -6599,7 +6765,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "9f024f5955e012270df752f6de61e74e7e36ecce14134974d120d699b5e36265",
+        "record_hash": "8ed286899a1c6cfd605c562dd5fbddcc1eac36b71ce74bbe364ea60e6f29dc86",
         "recorded_at": "2026-08-19T17:47:23.845821+00:00"
       },
       {
@@ -6824,7 +6990,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985681",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -6844,7 +7010,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "e527227913a6b8342781c6a34cfb6cae54b87b3c7ad326b75ba6855f1913916c",
+        "record_hash": "09db0f99f84ec67ed42d34771d30762dd3e5c2985c3e73578fc1fdc24754ce73",
         "recorded_at": "2026-08-19T04:21:57.407869+00:00"
       },
       {
@@ -6854,7 +7020,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985681",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -6874,7 +7040,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "afdaec177a43f1ef100dbcd5d9d1265a9eb61253df8da8611d4b63a4f7c9cb22",
+        "record_hash": "8cc269e3d7627ffeb54d4b1307dc264d2c21135ab96ba4df69e64ffb3e1c0382",
         "recorded_at": "2026-08-19T04:21:51.621151+00:00"
       },
       {
@@ -6884,7 +7050,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985675",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -6904,7 +7070,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "bac7fd9afb7614ee17486ec07c1e36b9d7cd3007210223f7ecddc74f0df6a463",
+        "record_hash": "a89f8e877ad5e9b1fc172fe402cbb89f9e21f63f7bf9a9ee2ec49a9c630e69a9",
         "recorded_at": "2026-08-19T02:48:39.441175+00:00"
       },
       {
@@ -6944,7 +7110,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985662",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -6964,7 +7130,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "d6b09febf770bedde7d71bf6727a15615c923dd26397b1cc6b5df8b7fb74062c",
+        "record_hash": "01bbf11d8512edc93b6fcf792a0e6389480fe5a1516f689effd6a266cb941760",
         "recorded_at": "2026-08-18T23:35:23.540760+00:00"
       },
       {
@@ -7124,7 +7290,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985533",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -7144,7 +7310,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "d374b27f6fe747fb04af24d2c5f596b73b5f584f46c56e0bdfb06c6b3769b220",
+        "record_hash": "fabfa67e2f488989193caee6aa2107d74adb77a76120d8fbc07181976f9f4891",
         "recorded_at": "2026-08-17T15:15:22.325071+00:00"
       },
       {
@@ -8935,6 +9101,89 @@
     ],
     "minimax-m3": [
       {
+        "action_id": "516c735a-e33e-4b89-a088-29e8ef6c1f90",
+        "agent_id": "minimax-m3",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 22.43
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.73,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.73,
+            "quantity": 1
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 8468.327435,
+            "cash_required": 299.156195,
+            "concentration_cap": 1270.249115,
+            "cycle_id": "30m:993752",
+            "cycle_spend_after": 299.156195,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 299.156195,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2540.49823,
+            "drawdown_after": 0.153722,
+            "fee": 5.549173,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 293.607022,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 293.607022,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1693.665487,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.1,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 299.156195,
+            "target_quantity": 402.201399882214
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993752",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -16.683367,
+          "cash_required": 16.683367,
+          "fee": 0.309467,
+          "netting_payout": 0.0,
+          "notional": 16.3739,
+          "price": 0.73,
+          "quantity": 22.43,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXHIGHNY-26SEP07-B77.5"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "14dacd330cf8c7e76f90086c0b8b8dd8697dd90fc4fcaad61c36989cf88388e6",
+        "recorded_at": "2026-09-07T04:20:35.645817+00:00"
+      },
+      {
         "action_id": "05d7202b-046c-4112-bce9-e4c8efec77e3",
         "agent_id": "minimax-m3",
         "audit": {
@@ -9379,7 +9628,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985942",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -9399,7 +9648,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "79c2851bb95503a00de7628035c0965271a2fb39e59a242f778995617572c688",
+        "record_hash": "0585cea20c34f645ff041fb47a2d6da19ef19705788bdab5fe10852aaf8594e6",
         "recorded_at": "2026-08-21T21:35:43.975368+00:00"
       },
       {
@@ -9574,7 +9823,7 @@
           "status": "legacy_record"
         },
         "cycle_id": "15m:1985493",
-        "event_type": "trade",
+        "event_type": "unfilled_order",
         "execution": {
           "cash_delta": 0.0,
           "cash_required": 0.0,
@@ -9594,7 +9843,7 @@
         },
         "mode": "shadow",
         "outcome": "open",
-        "record_hash": "a52d03b4ac528bd39c2469e6bedf49330ab44b96057c44fb74ab339d38d12b5c",
+        "record_hash": "6aa753a20b827fa25722168abb230b4ad810ae537ab721822a26768abda5dd23",
         "recorded_at": "2026-08-17T05:17:50.057529+00:00"
       },
       {
@@ -10522,7 +10771,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-07T02:22:44.519509+00:00",
+  "generated_at": "2026-09-07T04:23:36.927987+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
