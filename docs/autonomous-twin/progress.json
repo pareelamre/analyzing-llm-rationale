@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_t17_in_progress",
+  "implementation_status": "t06_t07_and_t12_t20_in_progress",
   "implementation_baseline": "0944bdc83b8c71d639fd09f2b5ad3cfa6d06e15e",
-  "next_task": "T06",
+  "next_task": "T12",
   "live_authorized": false,
   "release_gates": {
     "G0": "not_evaluated",
@@ -296,8 +296,8 @@
       "status": "complete",
       "substep": "typed preview/submit/status/cancel/account parity, versioned captured depth, seeded adverse scenarios, exact fill/fee/settlement events, and canonical account snapshots implemented",
       "branch": "codex/shadow-venue-adapter",
-      "commit": null,
-      "pr_url": null,
+      "commit": "822d7938",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/522",
       "checks": [
         "py -m unittest tests.test_twin_simulator",
         "py -m unittest discover -s tests",
@@ -309,7 +309,7 @@
         "tests/test_twin_simulator.py"
       ],
       "blockers": [],
-      "handoff": "T11 can inject ShadowVenue behind submit_claimed_command while reusing TradeIntent, RiskResult, ExecutionCommand, and AccountSnapshot."
+      "handoff": "Complete. foresea_edge_v1 can use ShadowVenue behind the existing intent, risk, command, and account abstractions."
     },
     {
       "id": "T11",
@@ -318,15 +318,27 @@
         "T09",
         "T10"
       ],
-      "status": "in_progress",
-      "substep": "deterministic exit maintenance runs before provider-bound research; persistent strategy records, cooldowns, and full lifecycle policy remain pending",
-      "branch": "codex/autonomous-twin-next",
+      "status": "complete",
+      "substep": "foresea_edge_v1 reuses canonical account, market, research, calibration, risk, intent, and shadow-venue records for durable reconcile, exit, cooldown, research, scoring, and one-entry cycles",
+      "branch": "codex/autonomous-strategy-loop",
       "commit": null,
-      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/447",
-      "checks": [],
-      "evidence": [],
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_strategy tests.test_twin_risk tests.test_twin_simulator (pass: 27 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1617 tests; 6 Datastore emulator tests skipped)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (pass; generated graph changes intentionally unstaged)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/strategy.py",
+        "src/analyzing_llm_rationale/twin/risk.py",
+        "src/analyzing_llm_rationale/twin/simulator.py",
+        "tests/test_twin_strategy.py",
+        "configs/twin.yaml"
+      ],
       "blockers": [],
-      "handoff": null
+      "handoff": "T12 is ready. Reuse the canonical strategy cycle, captured shadow books, forecast ledger, and existing forecast-evaluation functions for causal replay."
     },
     {
       "id": "T12",
