@@ -183,6 +183,11 @@ MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
 # is at least in the candidate set; the merit gate still decides what is worth
 # trading, and nothing here forces a position.
 MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "90"))
+# Candidate hurdle ceiling: contracts where the cheapest side requires more than
+# 8pp edge to clear fees+floor are dropped from the new candidate menu. Foresea's
+# live track record shows LLM accuracy falls to 27.9% on 20pp+ claimed edge;
+# presenting 15-50pp wide-spread contracts tempts models into hallucinated conviction.
+MAX_CANDIDATE_HURDLE = float(os.environ.get("AGENT_TRADING_MAX_CANDIDATE_HURDLE", "0.08"))
 WEATHER_CANDIDATE_QUOTA = max(
     0, min(CANDIDATE_COUNT, int(os.environ.get("AGENT_TRADING_WEATHER_CANDIDATE_QUOTA", "1")))
 )
@@ -863,15 +868,19 @@ def _edge_hurdle_by_side(quote: Dict[str, Any]) -> Dict[str, float]:
     """
     from analyzing_llm_rationale.benchmark_tools import _kalshi_fee, _min_net_edge
 
+    platform = str(quote.get("platform") or "").strip().lower()
     q = MarketQuote.from_mapping(quote)
     out: Dict[str, float] = {}
     for side in ("YES", "NO"):
         ask, bid = q.ask(side), q.bid(side)
         if ask is None or bid is None or not 0.0 < ask < 1.0:
             continue
-        try:
-            fee = _kalshi_fee(ask, 1.0)
-        except Exception:
+        if platform == "kalshi":
+            try:
+                fee = _kalshi_fee(ask, 1.0)
+            except Exception:
+                fee = 0.0
+        else:
             fee = 0.0
         out[side.lower()] = (ask - (ask + bid) / 2.0) + fee + _min_net_edge()
     return out
@@ -1111,9 +1120,82 @@ def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
     # exists -- this fleet's own resolved record puts 20pp+ disagreements at
     # 26.6% accuracy -- so a reachable bar on a well-priced market is a better
     # proposition than an unreachable one on a stale quote.
-    pool.sort(key=_edge_hurdle_pp)
     room = max(0, CANDIDATE_COUNT - len(new_quotes))
-    new_quotes.extend(pool[:room])
+    if room <= 0:
+        return new_quotes
+
+    # Partition by venue so both Kalshi and Polymarket receive balanced,
+    # non-starving representation rather than Polymarket's zero-fee structure
+    # crowding Kalshi out of the entire menu.
+    kalshi_pool = [q for q in pool if str(q.get("platform") or "").strip().lower() == "kalshi"]
+    poly_pool = [q for q in pool if str(q.get("platform") or "").strip().lower() != "kalshi"]
+
+    kalshi_pool.sort(key=_edge_hurdle_pp)
+    poly_pool.sort(key=_edge_hurdle_pp)
+
+    # Filter out contracts where the cheapest side's hurdle exceeds the ceiling.
+    # When a market requires >8pp edge just to break even, LLM accuracy drops
+    # sharply into the 27.9% hallucination zone (see track_record_live.json).
+    k_eligible = [q for q in kalshi_pool if _edge_hurdle_pp(q) <= MAX_CANDIDATE_HURDLE]
+    p_eligible = [q for q in poly_pool if _edge_hurdle_pp(q) <= MAX_CANDIDATE_HURDLE]
+
+    # Target an even split between venues in venue order (Kalshi gets the odd slot)
+    target_k = (room + 1) // 2
+    target_p = room // 2
+    selected_k = list(k_eligible[:target_k])
+    selected_p = list(p_eligible[:target_p])
+
+    # Fill any remaining quota from the other venue's eligible quotes if one has a shortfall
+    remaining = room - len(selected_k) - len(selected_p)
+    if remaining > 0:
+        extra_k = [q for q in k_eligible[target_k:] if q not in selected_k]
+        extra_p = [q for q in p_eligible[target_p:] if q not in selected_p]
+        for q in extra_k + extra_p:
+            if remaining <= 0:
+                break
+            if str(q.get("platform") or "").strip().lower() == "kalshi":
+                selected_k.append(q)
+            else:
+                selected_p.append(q)
+            remaining -= 1
+
+    # Fallback to general pool if eligible quotes didn't fully fill room
+    if remaining > 0:
+        for q in kalshi_pool + poly_pool:
+            if remaining <= 0:
+                break
+            if q not in selected_k and q not in selected_p:
+                if str(q.get("platform") or "").strip().lower() == "kalshi":
+                    selected_k.append(q)
+                else:
+                    selected_p.append(q)
+                remaining -= 1
+
+    # Interleave selected candidates in venue order (Kalshi, Polymarket, ...)
+    # so both venues get alternating, non-starving representation.
+    interleaved: List[Dict[str, Any]] = []
+    iter_k = iter(selected_k)
+    iter_p = iter(selected_p)
+    while len(interleaved) < room:
+        added = False
+        try:
+            interleaved.append(next(iter_k))
+            added = True
+            if len(interleaved) >= room:
+                break
+        except StopIteration:
+            pass
+        try:
+            interleaved.append(next(iter_p))
+            added = True
+            if len(interleaved) >= room:
+                break
+        except StopIteration:
+            pass
+        if not added:
+            break
+
+    new_quotes.extend(interleaved[:room])
     return new_quotes
 
 
