@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import os
 import unittest
 
-from analyzing_llm_rationale.weather_research import research_weather_market
+from analyzing_llm_rationale.weather_research import (
+    calculate_bracket_probability,
+    parse_market_strike,
+    research_weather_market,
+)
 
 
 class _Response:
@@ -174,9 +179,93 @@ class WeatherResearchTests(unittest.TestCase):
         result = research_weather_market(quote, http_get=get)
 
         self.assertIsNotNone(result.get("model_forecast"))
-        self.assertEqual(result["model_forecast"]["projected_high_f"], 78.5)
-        self.assertEqual(result["model_forecast"]["projected_low_f"], 72.0)
+        # Calibrated with KNYC bias (-0.5)
+        self.assertEqual(result["model_forecast"]["raw_projected_high_f"], 78.5)
+        self.assertEqual(result["model_forecast"]["projected_high_f"], 78.0)
+        self.assertEqual(result["model_forecast"]["station_bias_offset_f"], -0.5)
         self.assertEqual(result["model_forecast"]["provider"], "open-meteo")
+
+    def test_google_weather_forecast_and_bracket_probability(self):
+        quote = {
+            "question": "Will the high temperature in Chicago Midway be 80° or above?",
+            "subtitle": "80° or above",
+            "category": "Weather",
+            "resolution_criteria": "NWS Daily Climate Report, station KMDW.",
+            "price": 0.40,
+        }
+        responses = {
+            "https://api.weather.gov/stations/KMDW/observations/latest": {
+                "properties": {
+                    "timestamp": "2026-09-07T10:00:00+00:00",
+                    "temperature": {"value": 22.0},
+                    "dewpoint": {"value": 12.0},
+                    "windSpeed": {"value": 5.0},
+                    "precipitationLastHour": {"value": 0.0},
+                },
+                "geometry": {"coordinates": [-87.7522, 41.7868]},
+            },
+            "https://api.weather.gov/points/41.7868,-87.7522": {
+                "properties": {"forecastHourly": "https://example.test/hourly"},
+            },
+            "https://example.test/hourly": {
+                "properties": {"periods": []},
+            },
+            "https://weather.googleapis.com/v1/forecast/hours:lookup?location.latitude=41.7868&location.longitude=-87.7522&hours=24&unitsSystem=IMPERIAL&key=test-gmp-key": {
+                "forecastHours": [
+                    {
+                        "interval": {"startTime": "2026-09-07T12:00:00Z"},
+                        "temperature": {"unit": "FAHRENHEIT", "degrees": 75.0},
+                    },
+                    {
+                        "interval": {"startTime": "2026-09-07T16:00:00Z"},
+                        "temperature": {"unit": "FAHRENHEIT", "degrees": 81.0},
+                    },
+                ]
+            },
+        }
+
+        def get(url, **_kwargs):
+            return _Response(responses[url])
+
+        try:
+            os.environ["GOOGLE_WEATHER_API_KEY"] = "test-gmp-key"
+            result = research_weather_market(quote, http_get=get)
+            self.assertEqual(result["source_status"], "nws_observation_available")
+            mf = result["model_forecast"]
+            self.assertEqual(mf["provider"], "google_maps_weather")
+            self.assertEqual(mf["model"], "google_deepmind_weathernext_metnet")
+            self.assertEqual(mf["raw_projected_high_f"], 81.0)
+            # KMDW bias is +1.5°F (urban heat island)
+            self.assertEqual(mf["station_bias_offset_f"], 1.5)
+            self.assertEqual(mf["projected_high_f"], 82.5)
+
+            bp = result["bracket_probability"]
+            self.assertIsNotNone(bp)
+            self.assertEqual(bp["strike_spec"]["strike_type"], "greater_than_or_equal")
+            self.assertEqual(bp["strike_spec"]["strike_f"], 80.0)
+            self.assertEqual(bp["model_mean_high_f"], 82.5)
+            # When mean is 82.5 and strike is 80, prob of >= 80 is very high (> 0.9)
+            self.assertGreater(bp["model_probability"], 0.90)
+            self.assertEqual(bp["market_implied_probability"], 0.40)
+            self.assertGreater(bp["model_edge"], 0.50)
+        finally:
+            os.environ.pop("GOOGLE_WEATHER_API_KEY", None)
+
+    def test_bracket_probability_calculations(self):
+        # Less than
+        spec1 = parse_market_strike({"subtitle": "Below 75.5°"})
+        self.assertEqual(spec1["strike_type"], "less_than")
+        self.assertEqual(spec1["strike_f"], 75.5)
+        p1 = calculate_bracket_probability(75.5, spec1, uncertainty_std_f=2.0)
+        self.assertEqual(p1["model_probability"], 0.50)
+
+        # Between
+        spec2 = parse_market_strike({"question": "Will temperature be 70 to 80 degrees?"})
+        self.assertEqual(spec2["strike_type"], "between")
+        self.assertEqual(spec2["strike_low_f"], 70.0)
+        self.assertEqual(spec2["strike_high_f"], 80.0)
+        p2 = calculate_bracket_probability(75.0, spec2, uncertainty_std_f=2.0)
+        self.assertGreater(p2["model_probability"], 0.98)
 
 
 if __name__ == "__main__":
