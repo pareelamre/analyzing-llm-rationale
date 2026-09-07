@@ -283,6 +283,11 @@ class ServerTests(unittest.TestCase):
         self.provider = FakeProvider()
         self.evidence_pipeline = FakeEvidencePipeline()
         self.analytics_db = Path(tempfile.gettempdir()) / f"foresea_test_analytics_{uuid.uuid4().hex[:8]}.duckdb"
+        # Restored in tearDown: without it the module global keeps pointing at
+        # this test's temp path after the file has been deleted, so anything
+        # later in the session reads analytics from a path that is gone
+        # instead of the configured one.
+        self._original_analytics_db = server_module._ANALYTICS_DB
         server_module._ANALYTICS_DB = self.analytics_db
         try:
             if self.analytics_db.exists():
@@ -332,6 +337,7 @@ class ServerTests(unittest.TestCase):
         self._logger_patch.stop()
         self._require_auth_patch.stop()
         self._datastore_patch.stop()
+        server_module._ANALYTICS_DB = self._original_analytics_db
         _state.clear()
         _local_cache.clear()
         try:
