@@ -330,3 +330,62 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrackRecordSummaryTests(unittest.TestCase):
+    """foresea_track_record could not answer the question it exists for.
+
+    GET /track-record returns the full aggregate -- ~1.96M characters, of
+    which models_comparison, paper_pnl and primary_paper_pnl are 98.4%. That
+    exceeds an MCP client's response limit, so the call fails outright
+    rather than reporting accuracy. The fields the tool's own description
+    promises are 5,363 characters: 0.27% of what it sent.
+    """
+
+    def _payload(self):
+        return {
+            "generated_at": "2026-09-07T04:28:55+00:00",
+            "overall": {"accuracy": 0.8116, "model_brier": 0.1415, "n": 2835},
+            "by_horizon": [{"horizon": "7-14d", "n": 398}],
+            "calibration": [{"bucket": 0.5, "n": 10}],
+            "methodology": "resolved markets only",
+            "models_comparison": ["x"] * 5000,
+            "paper_pnl": {"rows": ["y"] * 5000},
+            "primary_paper_pnl": {"rows": ["z"] * 5000},
+        }
+
+    def test_the_bulk_blocks_go_and_the_summary_stays(self):
+        out = mcp._summarise_track_record(self._payload())
+        for gone in ("models_comparison", "paper_pnl", "primary_paper_pnl"):
+            self.assertNotIn(gone, out)
+        for kept in ("overall", "by_horizon", "calibration", "methodology", "generated_at"):
+            self.assertIn(kept, out)
+        self.assertEqual(out["overall"]["accuracy"], 0.8116)
+
+    def test_it_says_what_it_dropped_and_where_to_get_it(self):
+        out = mcp._summarise_track_record(self._payload())
+        omitted = out["omitted_for_size"]
+        self.assertEqual(
+            sorted(omitted["keys"]),
+            ["models_comparison", "paper_pnl", "primary_paper_pnl"],
+        )
+        self.assertIn("/track-record", omitted["detail"])
+
+    def test_it_shrinks_the_payload_by_orders_of_magnitude(self):
+        import json as _json
+
+        payload = self._payload()
+        before = len(_json.dumps(payload))
+        after = len(_json.dumps(mcp._summarise_track_record(payload)))
+        self.assertLess(after * 10, before, "summary should be far smaller than the aggregate")
+
+    def test_a_payload_without_bulk_blocks_is_untouched(self):
+        lean = {"overall": {"accuracy": 1.0}, "generated_at": "t"}
+        out = mcp._summarise_track_record(lean)
+        self.assertEqual(out, lean)
+        self.assertNotIn("omitted_for_size", out)
+
+    def test_a_non_dict_passes_straight_through(self):
+        for value in (None, [], "text", 3):
+            with self.subTest(value=value):
+                self.assertEqual(mcp._summarise_track_record(value), value)

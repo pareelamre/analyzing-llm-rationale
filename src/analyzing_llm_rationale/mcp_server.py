@@ -181,6 +181,37 @@ def build_agent_analyze_payload(
     })
 
 
+# /track-record returns the full aggregate: ~1.96M characters, of which
+# models_comparison, paper_pnl and primary_paper_pnl are 98.4%. That exceeds
+# the response limit of an MCP client outright -- the tool fails rather than
+# answering "how accurate is Foresea?", which is the one thing it exists to
+# do. The fields its own description promises are 5,363 characters, 0.27% of
+# what it sends.
+#
+# Dropping those three keys leaves ~31K: every summary block, calibration,
+# every segmentation, the methodology note. Named rather than allow-listed so
+# a new summary field is published automatically instead of silently omitted.
+_TRACK_RECORD_BULK_KEYS = ("models_comparison", "paper_pnl", "primary_paper_pnl")
+
+
+def _summarise_track_record(payload: Any) -> Any:
+    """Drop the bulk blocks so the result fits an MCP client's response limit."""
+    if not isinstance(payload, dict):
+        return payload
+    omitted = [k for k in _TRACK_RECORD_BULK_KEYS if k in payload]
+    if not omitted:
+        return payload
+    summary = {k: v for k, v in payload.items() if k not in _TRACK_RECORD_BULK_KEYS}
+    summary["omitted_for_size"] = {
+        "keys": omitted,
+        "detail": (
+            "Per-model comparisons and paper-PnL ledgers are omitted here because "
+            "they exceed an MCP response limit. Fetch GET /track-record for them."
+        ),
+    }
+    return summary
+
+
 class ForeseaClient:
     """Small HTTP client used by the MCP tools."""
 
@@ -770,7 +801,7 @@ def create_mcp_server(
         "What's the Brier score?". Returns accuracy, Brier score, calibration (ECE),
         and skill-vs-market broken down by time horizon."""
 
-        return await _call_tool_async(client.atrack_record)
+        return _summarise_track_record(await _call_tool_async(client.atrack_record))
 
     @mcp.tool()
     async def foresea_edge_board() -> Dict[str, Any]:
@@ -915,7 +946,10 @@ def create_mcp_server(
     async def track_record_resource() -> str:
         """Foresea's public resolved-forecast track record."""
 
-        return json.dumps(await _call_tool_async(client.atrack_record), sort_keys=True)
+        return json.dumps(
+            _summarise_track_record(await _call_tool_async(client.atrack_record)),
+            sort_keys=True,
+        )
 
     @mcp.resource(
         "foresea://edge-board",
