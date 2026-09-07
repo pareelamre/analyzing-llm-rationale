@@ -641,11 +641,193 @@ def _open_idents(client) -> Dict[Tuple[str, str], Dict[str, Any]]:
     return seen
 
 
+def serialize_forecast_targets(targets: List[Dict[str, Any]]) -> str:
+    """Serialize target market contexts to JSON with datetime support."""
+    def _json_default(obj: Any) -> Any:
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if hasattr(obj, "isoformat"):
+            return obj.isoformat()
+        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+    return _json.dumps(targets, default=_json_default, indent=2)
+
+
+def deserialize_forecast_targets(payload: str) -> List[Dict[str, Any]]:
+    """Deserialize target market contexts from JSON."""
+    return _json.loads(payload)
+
+
+def discover_forecast_targets(
+    client,
+    market_data,
+    *,
+    models: Optional[List[str]] = None,
+    default_model: str = "gpt-oss-120b",
+    per_venue: int = 3,
+    min_discovery_lead_days: float = 2.0,
+    max_discovery_lead_days: float = 365.0,
+    seed_idents: Optional[List[Tuple[str, str]]] = None,
+    convergence_per_venue: int = 0,
+    target_shard_count: int = 1,
+    target_shard_index: int = 0,
+    max_targets: Optional[int] = None,
+    fetch_venue_candles: Optional[Callable[[List[str]], Dict[Tuple[str, str], List[Dict[str, Any]]]]] = None,
+    fetch_evidence_fn: Optional[Callable[[str, int], List[Dict[str, Any]]]] = None,
+    evidence_top_k: int = 5,
+) -> List[Dict[str, Any]]:
+    """Discover, enrich, and bundle all common parameters for target prediction markets.
+
+    Fetches open tracked markets, seeds, fresh listings from Polymarket and Kalshi,
+    bundles venue candles, and optionally pre-retrieves ranked news evidence.
+    The resulting target list can be serialized and passed directly to
+    `record_snapshots(prepared_targets=...)` so multiple parallel models can forecast
+    identical markets without duplicate network requests.
+    """
+    model_list = list(models) if models else [default_model]
+
+    # 1) Markets we're already tracking that are still open → re-fetch live quote.
+    targets: List[Dict[str, Any]] = []
+    if client is not None:
+        for meta in _open_idents(client).values():
+            quote = _fetch_current_quote(market_data, meta.get("platform") or "", meta.get("ident") or "")
+            if quote and quote.get("probability") is not None:
+                targets.append(quote)
+
+    # 1.5) Agent-enrolled seeds (explicit agent forecasts via the evolution-loop bridge).
+    seen = {(q.get("platform"), _quote_ident(q)) for q in targets}
+    for plat, ident in (seed_idents or []):
+        if not ident:
+            continue
+        quote = _fetch_current_quote(market_data, plat or "", ident or "")
+        if not quote or quote.get("probability") is None:
+            continue
+        key = (quote.get("platform"), _quote_ident(quote))
+        if key in seen:
+            continue
+        targets.append(quote)
+        seen.add(key)
+
+    # 2) Discover new markets within the resolution-horizon window
+    discovered: List[Dict[str, Any]] = []
+    for lister in (market_data.list_polymarket, market_data.list_kalshi):
+        try:
+            discovered.extend(lister(
+                limit=per_venue,
+                min_close_days=min_discovery_lead_days,
+                max_close_days=max_discovery_lead_days,
+            )[:per_venue])
+        except market_data.MarketDataError:
+            continue
+    known = {(q.get("platform"), _quote_ident(q)) for q in targets}
+    for q in discovered:
+        ident = _quote_ident(q)
+        if (q.get("platform"), ident) in known or q.get("probability") is None:
+            continue
+        lead = _lead_time_days(q.get("close_time"))
+        if lead is not None and not (min_discovery_lead_days <= lead <= max_discovery_lead_days):
+            continue  # outside the useful resolution window
+        targets.append(_refresh_quote_context(market_data, q))
+        known.add((q.get("platform"), ident))
+
+    # 2b) Convergence-window discovery: targeted 7-14d pass with a higher limit.
+    if convergence_per_venue > 0:
+        known = {(q.get("platform"), _quote_ident(q)) for q in targets}
+        for lister in (market_data.list_polymarket, market_data.list_kalshi):
+            try:
+                kwargs: Dict[str, Any] = dict(
+                    limit=convergence_per_venue,
+                    min_close_days=7.0,
+                    max_close_days=14.0,
+                )
+                if lister is market_data.list_kalshi:
+                    kwargs["paginate"] = True
+                conv_markets = lister(**kwargs)[:convergence_per_venue]
+            except market_data.MarketDataError:
+                continue
+            for q in conv_markets:
+                ident = _quote_ident(q)
+                if (q.get("platform"), ident) in known or q.get("probability") is None:
+                    continue
+                lead = _lead_time_days(q.get("close_time"))
+                if lead is None or not (7.0 <= lead <= 14.0):
+                    continue
+                targets.append(_refresh_quote_context(market_data, q))
+                known.add((q.get("platform"), ident))
+
+    # 2c) Short-dated discovery: all models, no lead-time floor.
+    if "crowd-follow" in model_list:
+        intraday: List[Dict[str, Any]] = []
+        for lister in (market_data.list_polymarket, market_data.list_kalshi):
+            try:
+                intraday.extend(lister(
+                    limit=per_venue * 2,
+                    min_close_days=0,
+                    max_close_days=min_discovery_lead_days,
+                )[:per_venue * 2])
+            except market_data.MarketDataError:
+                continue
+        for q in intraday:
+            ident = _quote_ident(q)
+            if (q.get("platform"), ident) in known or q.get("probability") is None:
+                continue
+            lead = _lead_time_days(q.get("close_time"))
+            if lead is None or lead < 0:
+                continue  # already past close
+            targets.append(_refresh_quote_context(market_data, q))
+            known.add((q.get("platform"), ident))
+
+    targets = _select_target_shard(
+        targets,
+        count=target_shard_count,
+        index=target_shard_index,
+        max_targets=max_targets,
+    )
+
+    # Real venue candle history
+    venue_candles_by_market: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    if fetch_venue_candles is not None:
+        refs = []
+        for q in targets:
+            extra = q.get("series_ticker") or q.get("token_id")
+            ident = _quote_ident(q)
+            platform = str(q.get("platform") or "").lower()
+            if extra and ident and platform:
+                refs.append(f"{platform}:{ident}:{extra}")
+        if refs:
+            try:
+                venue_candles_by_market = fetch_venue_candles(refs) or {}
+            except Exception:
+                venue_candles_by_market = {}
+
+    # Merge candles and optional evidence directly into quote dicts
+    for quote in targets:
+        ident = _quote_ident(quote)
+        platform = str(quote.get("platform") or "").lower()
+        if not quote.get("market_price_history"):
+            local_history = _get_price_history(client, ident) if client is not None else []
+            candles = venue_candles_by_market.get((platform, ident), [])
+            quote["market_price_history"] = _merge_price_history(local_history, candles)
+
+        if fetch_evidence_fn is not None and not quote.get("news_articles"):
+            question = quote.get("question")
+            if question:
+                try:
+                    articles = fetch_evidence_fn(question, evidence_top_k)
+                    if articles:
+                        quote["news_articles"] = articles
+                except Exception:
+                    pass
+
+    return targets
+
+
 async def record_snapshots(
     client,
     market_data,
     forecast_fn: ForecastFn,
     *,
+    prepared_targets: Optional[List[Dict[str, Any]]] = None,
     models: Optional[List[str]] = None,
     default_model: str = "gpt-oss-120b",
     per_venue: int = 3,
@@ -681,6 +863,10 @@ async def record_snapshots(
     re-forecast so the edge board reflects the new information rather than a
     stale model opinion paired with a current price.
 
+    ``prepared_targets``: optional pre-discovered target contexts. When supplied,
+    external venue discovery, target sharding, and candle fetching are skipped,
+    enabling multiple parallel model runners to share identical market context.
+
     ``fetch_venue_candles``: optional ``refs -> {(platform, ident): candles}``
     callable (dependency-injected so this stays unit-testable with fakes, same
     as ``market_data``/``forecast_fn``). Called once for the whole tick's final
@@ -691,126 +877,25 @@ async def record_snapshots(
     tick_now = _now()
     today = tick_now.strftime("%Y-%m-%d")
 
-    # 1) Markets we're already tracking that are still open → re-fetch live quote.
-    targets: List[Dict[str, Any]] = []
-    for meta in _open_idents(client).values():
-        quote = _fetch_current_quote(market_data, meta["platform"] or "", meta["ident"] or "")
-        if quote and quote.get("probability") is not None:
-            targets.append(quote)
-
-    # 1.5) Agent-enrolled seeds (explicit agent forecasts via the evolution-loop
-    #      bridge). Added before discovery so user-driven markets are included,
-    #      and tracked even if short-dated — an agent explicitly asked.
-    seen = {(q.get("platform"), _quote_ident(q)) for q in targets}
-    for plat, ident in (seed_idents or []):
-        if not ident:
-            continue
-        quote = _fetch_current_quote(market_data, plat or "", ident or "")
-        if not quote or quote.get("probability") is None:
-            continue
-        key = (quote.get("platform"), _quote_ident(quote))
-        if key in seen:
-            continue
-        targets.append(quote)
-        seen.add(key)
-
-    # 2) Discover new markets within the resolution-horizon window (skip
-    #    ultra-short ones — no room for a trajectory — and multi-year ones that
-    #    would never resolve during the experiment).
-    discovered: List[Dict[str, Any]] = []
-    for lister in (market_data.list_polymarket, market_data.list_kalshi):
-        try:
-            discovered.extend(lister(
-                limit=per_venue,
-                min_close_days=min_discovery_lead_days,
-                max_close_days=max_discovery_lead_days,
-            )[:per_venue])
-        except market_data.MarketDataError:
-            continue
-    known = {(q.get("platform"), _quote_ident(q)) for q in targets}
-    for q in discovered:
-        ident = _quote_ident(q)
-        if (q.get("platform"), ident) in known or q.get("probability") is None:
-            continue
-        lead = _lead_time_days(q.get("close_time"))
-        if lead is not None and not (min_discovery_lead_days <= lead <= max_discovery_lead_days):
-            continue  # outside the useful resolution window
-        targets.append(_refresh_quote_context(market_data, q))
-        known.add((q.get("platform"), ident))
-
-    # 2b) Convergence-window discovery: targeted 7-14d pass with a higher limit.
-    #     These markets are the data-collection target for the convergence trade study.
-    if convergence_per_venue > 0:
-        known = {(q.get("platform"), _quote_ident(q)) for q in targets}
-        for lister in (market_data.list_polymarket, market_data.list_kalshi):
-            try:
-                kwargs: Dict[str, Any] = dict(
-                    limit=convergence_per_venue,
-                    min_close_days=7.0,
-                    max_close_days=14.0,
-                )
-                if lister is market_data.list_kalshi:
-                    kwargs["paginate"] = True
-                conv_markets = lister(**kwargs)[:convergence_per_venue]
-            except market_data.MarketDataError:
-                continue
-            for q in conv_markets:
-                ident = _quote_ident(q)
-                if (q.get("platform"), ident) in known or q.get("probability") is None:
-                    continue
-                lead = _lead_time_days(q.get("close_time"))
-                if lead is None or not (7.0 <= lead <= 14.0):
-                    continue
-                targets.append(_refresh_quote_context(market_data, q))
-                known.add((q.get("platform"), ident))
-
-    # 2c) Short-dated discovery: all models, no lead-time floor. Captures intraday
-    #     and same-day markets that the standard discovery window skips.
-    if "crowd-follow" in model_list:
-        intraday: List[Dict[str, Any]] = []
-        for lister in (market_data.list_polymarket, market_data.list_kalshi):
-            try:
-                intraday.extend(lister(
-                    limit=per_venue * 2,
-                    min_close_days=0,
-                    max_close_days=min_discovery_lead_days,
-                )[:per_venue * 2])
-            except market_data.MarketDataError:
-                continue
-        for q in intraday:
-            ident = _quote_ident(q)
-            if (q.get("platform"), ident) in known or q.get("probability") is None:
-                continue
-            lead = _lead_time_days(q.get("close_time"))
-            if lead is None or lead < 0:
-                continue  # already past close
-            targets.append(_refresh_quote_context(market_data, q))
-            known.add((q.get("platform"), ident))
-
-    targets = _select_target_shard(
-        targets,
-        count=target_shard_count,
-        index=target_shard_index,
-        max_targets=max_targets,
-    )
-
-    # Real venue candle history to supplement each market's self-observed price
-    # history with -- one call for the whole tick's target list (fetch_venue_candles
-    # is expected to batch/chunk internally), not one per market.
     venue_candles_by_market: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
-    if fetch_venue_candles is not None:
-        refs = []
-        for q in targets:
-            extra = q.get("series_ticker") or q.get("token_id")
-            ident = _quote_ident(q)
-            platform = str(q.get("platform") or "").lower()
-            if extra and ident and platform:
-                refs.append(f"{platform}:{ident}:{extra}")
-        if refs:
-            try:
-                venue_candles_by_market = fetch_venue_candles(refs) or {}
-            except Exception:
-                venue_candles_by_market = {}
+    if prepared_targets is not None:
+        targets = list(prepared_targets)
+    else:
+        targets = discover_forecast_targets(
+            client,
+            market_data,
+            models=models,
+            default_model=default_model,
+            per_venue=per_venue,
+            min_discovery_lead_days=min_discovery_lead_days,
+            max_discovery_lead_days=max_discovery_lead_days,
+            seed_idents=seed_idents,
+            convergence_per_venue=convergence_per_venue,
+            target_shard_count=target_shard_count,
+            target_shard_index=target_shard_index,
+            max_targets=max_targets,
+            fetch_venue_candles=fetch_venue_candles,
+        )
 
     import asyncio as _asyncio
 
@@ -881,7 +966,7 @@ async def record_snapshots(
         # Once per market, not once per (market, model): _get_price_history is a
         # local read so this was harmless before, but venue_candles_by_market
         # came from a network call and must not be re-merged per model.
-        price_history = _merge_price_history(
+        price_history = quote.get("market_price_history") or _merge_price_history(
             _get_price_history(client, ident),
             venue_candles_by_market.get((str(quote.get("platform") or "").lower(), ident), []),
         )

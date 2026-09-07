@@ -57,8 +57,60 @@ jobs:
           matrix="$(PYTHONPATH=src python -c "import json; from pathlib import Path; from analyzing_llm_rationale.config import scads_agent_trading_model_labels; labels = ['crowd-follow', 'council', *scads_agent_trading_model_labels(Path('configs/models.yaml'))]; print(json.dumps({'include': [{'model': label, 'artifact': label} for label in labels]}, separators=(',', ':'))) ")"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
-  forecast:
+  prepare-targets:
     needs: roster
+    name: prepare unified forecast targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: >-
+          pip install --quiet -e ".[serve,pipeline]"
+          requests duckdb pyyaml
+          opentelemetry-sdk
+          opentelemetry-instrumentation-requests
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Prepare isolated read-only store for target discovery
+        run: |
+          mkdir -p tmp/prepare-targets
+          gcloud storage cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" "tmp/prepare-targets/store.duckdb" || true
+
+      - name: Discover and prepare unified target contexts
+        env:
+          FORESEA_BASE_URL: https://foresea.ink
+          TRACK_STORE_PATH: tmp/prepare-targets/store.duckdb
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+          TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '4' }}
+          TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
+          TRACK_TARGET_SHARD_SLOT_MINUTES: "5"
+          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '8' }}
+          PER_VENUE: "2"
+          CONVERGENCE_PER_VENUE: "100"
+          REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}
+        run: |
+          python scripts/track_record_tick.py --prepare-targets-only tmp/prepare-targets/targets.json
+
+      - name: Upload prepared forecast targets
+        uses: actions/upload-artifact@v4
+        with:
+          name: forecast-targets
+          path: tmp/prepare-targets/targets.json
+          retention-days: 2
+
+  forecast:
+    needs: [roster, prepare-targets]
     name: forecast (${{ matrix.model }})
     runs-on: ubuntu-latest
     # 35 minutes cut off models that were up on SCADS but slow, leaving them
@@ -113,10 +165,18 @@ jobs:
           mkdir -p tmp/model-forecast
           gcloud storage cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" "tmp/model-forecast/${{ matrix.artifact }}.duckdb"
 
+      - name: Download prepared forecast targets
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: forecast-targets
+          path: tmp/prepared
+
       - name: Advance model forecast snapshots
         env:
           FORESEA_BASE_URL: https://foresea.ink
           TRACK_STORE_PATH: tmp/model-forecast/${{ matrix.artifact }}.duckdb
+          TRACK_TARGETS_FILE: tmp/prepared/targets.json
           SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
           TRACK_RECORD_PREDICT_MODE: "local"

@@ -259,6 +259,15 @@ cycle_duration = meter.create_histogram(
 )
 
 
+def _extract_cli_arg(flag: str) -> Optional[str]:
+    for idx, arg in enumerate(sys.argv):
+        if arg == flag and idx + 1 < len(sys.argv) and not sys.argv[idx + 1].startswith("-"):
+            return sys.argv[idx + 1]
+        if arg.startswith(f"{flag}="):
+            return arg.split("=", 1)[1]
+    return None
+
+
 def _model_backstop_chars(model: str) -> int:
     """The backstop scales with THIS model's actual context window rather
     than a single arbitrary constant. SCADS AI's own /v1/models listing
@@ -2909,7 +2918,30 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
 
     held_quotes = _requote_held(held_positions)
     known = {q.get("ident") for q in held_quotes if q.get("ident")}
-    new_quotes = _discover_candidates(known)
+    candidates_file = (
+        os.environ.get("AGENT_TRADING_CANDIDATES_FILE")
+        or _extract_cli_arg("--candidates-file")
+    )
+    new_quotes: List[Dict[str, Any]] = []
+    if candidates_file:
+        cand_path = Path(candidates_file)
+        if cand_path.exists():
+            try:
+                cached_candidates = json.loads(cand_path.read_text(encoding="utf-8"))
+                if isinstance(cached_candidates, list):
+                    new_quotes = [
+                        q for q in cached_candidates
+                        if q.get("ident") and q.get("ident") not in known
+                    ][:CANDIDATE_COUNT]
+                    logger.info("loaded %d candidate quotes from %s", len(new_quotes), cand_path)
+            except Exception as exc:
+                logger.warning(
+                    "failed to load candidates file %s: %s, falling back to live discovery",
+                    cand_path,
+                    exc,
+                )
+    if not new_quotes:
+        new_quotes = _discover_candidates(known)
     weather_candidates_offered = _weather_candidate_count(new_quotes)
 
     # Every agent-trading risk guard scales off FORESEA_AGENT_ACCOUNT_VALUE,
@@ -3058,6 +3090,21 @@ def _broadcast_cycle_trades(model: str, report: Any) -> None:
 
 
 def main() -> int:
+    if "--discover-candidates-only" in sys.argv:
+        out_arg = (
+            _extract_cli_arg("--discover-candidates-only")
+            or _extract_cli_arg("--output")
+            or _extract_cli_arg("--out")
+            or "tmp/agent_candidates.json"
+        )
+        out_path = Path(out_arg)
+        print("discovering candidates for agent trading tick...")
+        candidates = _discover_candidates(set())
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(candidates, indent=2, default=str), encoding="utf-8")
+        print(f"saved {len(candidates)} candidate quotes to {out_path}")
+        return 0
+
     if not MODEL:
         print("AGENT_TRADING_MODEL must be set", file=sys.stderr)
         return 1

@@ -1997,6 +1997,90 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(by_model["loser"]["recommended_weight"], 0.0)
         self.assertGreater(by_model["winner"]["recommended_weight"], 0.0)
 
+    def test_discover_forecast_targets_bundles_quotes_and_candles(self):
+        close_iso = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(close_iso)
+        md._poly["token_id"] = "tok-123"
+        fake_client = FakeClient()
+
+        candles_called = []
+        def fake_candles(refs):
+            candles_called.append(refs)
+            return {("polymarket", "slug-a"): [{"end_time": "2026-09-01T00:00:00Z", "close": 0.40}]}
+
+        targets = trl.discover_forecast_targets(
+            fake_client,
+            md,
+            per_venue=2,
+            fetch_venue_candles=fake_candles,
+        )
+        self.assertGreater(len(targets), 0)
+        self.assertTrue(len(candles_called) > 0)
+        poly = next(t for t in targets if str(t.get("platform")).lower() == "polymarket")
+        self.assertIn("market_price_history", poly)
+        self.assertEqual(poly["market_price_history"], [{"ts": "2026-09-01T00:00:00Z", "probability": 0.40}])
+
+    def test_serialize_and_deserialize_forecast_targets(self):
+        targets = [
+            {
+                "platform": "polymarket",
+                "ident": "test-ident-1",
+                "question": "Will X occur?",
+                "probability": 0.55,
+                "close_time": datetime(2026, 10, 1, 12, 0, 0, tzinfo=timezone.utc),
+                "market_price_history": [{"ts": "2026-09-01T00:00:00Z", "p": 0.50}],
+                "news_articles": [{"title": "News 1", "summary": "Summary 1"}],
+            }
+        ]
+        serialized = trl.serialize_forecast_targets(targets)
+        self.assertIn("test-ident-1", serialized)
+        self.assertIn("2026-10-01T12:00:00+00:00", serialized)
+
+        deserialized = trl.deserialize_forecast_targets(serialized)
+        self.assertEqual(len(deserialized), 1)
+        self.assertEqual(deserialized[0]["ident"], "test-ident-1")
+        self.assertEqual(deserialized[0]["probability"], 0.55)
+        self.assertEqual(len(deserialized[0]["news_articles"]), 1)
+
+    def test_record_snapshots_uses_prepared_targets_without_venue_calls(self):
+        fake_client = FakeClient()
+        fake_client.Entity = FakeEntity
+        # Create market_data whose methods fail if called
+        md = types.ModuleType("failing_market_data")
+        md.list_polymarket = mock.MagicMock(side_effect=AssertionError("Should not call list_polymarket"))
+        md.list_kalshi = mock.MagicMock(side_effect=AssertionError("Should not call list_kalshi"))
+        md.fetch_polymarket = mock.MagicMock(side_effect=AssertionError("Should not call fetch_polymarket"))
+        md.fetch_kalshi = mock.MagicMock(side_effect=AssertionError("Should not call fetch_kalshi"))
+
+        close_iso = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        prepared_targets = [
+            {
+                "platform": "Polymarket",
+                "ident": "prepared-market-1",
+                "question": "Will A happen?",
+                "probability": 0.40,
+                "close_time": close_iso,
+                "market_price_history": [{"ts": "2026-09-01T00:00:00Z", "p": 0.40}],
+            }
+        ]
+
+        async def fake_forecast_fn(quote, top_k, model=None):
+            return {"model_probability": 0.70, "market_probability": quote["probability"], "evidence_count": 2}
+
+        async def _run():
+            return await trl.record_snapshots(
+                fake_client,
+                md,
+                fake_forecast_fn,
+                prepared_targets=prepared_targets,
+                models=["gpt-oss-120b"],
+            )
+
+        recorded = asyncio.run(_run())
+        self.assertEqual(recorded, 1)
+        md.list_polymarket.assert_not_called()
+        md.list_kalshi.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
