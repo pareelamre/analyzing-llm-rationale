@@ -7502,7 +7502,10 @@ function _renderWatchTable() {
 
 async function loadLandingPanels() {
   try {
-    const r = await _liveJsonFetch('/radar?limit=6');
+    // include_track_record=false: this panel renders three market rows and
+    // reads nothing else from the response, but the default payload carries
+    // the track-record ledgers: 2.1 MB to draw a 31 KB table, every load.
+    const r = await _liveJsonFetch('/radar?limit=6&include_track_record=false');
     if (!r.ok) return;
     const d = await _readJson(r);
     _renderLandingMarketTable((d.markets || []).slice(0, 3));
