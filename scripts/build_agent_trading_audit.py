@@ -31,6 +31,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import benchmark_tools  # noqa: E402
+from analyzing_llm_rationale.agent_trading_stats import (  # noqa: E402
+    classify_ledger_action,
+)
 from analyzing_llm_rationale.config import (  # noqa: E402
     load_model_configs,
     scads_agent_trading_model_labels,
@@ -83,6 +86,10 @@ PER_MODEL_LIMIT = max(
     min(2_000, int(os.environ.get("AGENT_TRADING_AUDIT_PER_MODEL_LIMIT", str(DEFAULT_PER_MODEL_LIMIT)))),
 )
 _AUDITED_ACTIONS = ("trade", "rejected_trade", "settlement")
+# "unfilled_order" is how a zero-fill trade row is presented; it carries
+# cash_delta 0 and notional 0, so including it leaves the replayed balance
+# unchanged while keeping those rows inside the verified count.
+_REPLAYED_EVENT_TYPES = frozenset({"trade", "settlement", "unfilled_order"})
 
 
 def _agent_trading_models() -> List[str]:
@@ -163,7 +170,7 @@ def _record_from_row(row: sqlite3.Row) -> Dict[str, Any]:
         "recorded_at": str(row["ts"]),
         "agent_id": str(row["agent_id"]),
         "cycle_id": str(row["cycle_id"] or ""),
-        "event_type": str(row["action_type"]),
+        "event_type": classify_ledger_action(row["action_type"], row["quantity"]),
         "mode": str(row["mode"] or "shadow"),
         "outcome": str(row["outcome"] or "recorded"),
         "market": {
@@ -314,7 +321,7 @@ def _archived_account_snapshot(records: Iterable[Dict[str, Any]]) -> Optional[Di
     for record in ordered:
         event_type = str(record.get("event_type") or "")
         execution = record.get("execution")
-        if event_type not in {"trade", "settlement"} or not isinstance(execution, dict):
+        if event_type not in _REPLAYED_EVENT_TYPES or not isinstance(execution, dict):
             continue
         outcome = str(record.get("outcome") or "")
         if event_type == "trade" and outcome == "rejected":

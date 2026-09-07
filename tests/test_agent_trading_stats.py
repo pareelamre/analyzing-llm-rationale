@@ -90,6 +90,26 @@ def _insert_cycle(conn, agent_id, *, cycle_id="15m:1", ts="2026-08-11T00:00:00+0
     )
 
 
+class ClassifyLedgerActionTests(unittest.TestCase):
+    def test_only_a_zero_fill_trade_is_relabelled(self):
+        cases = [
+            (("trade", 0), "unfilled_order"),
+            (("trade", 0.0), "unfilled_order"),
+            (("trade", -1), "unfilled_order"),
+            (("trade", 25), "trade"),
+            (("trade", None), "trade"),
+            (("trade", "not-a-number"), "trade"),
+            (("settlement", 0), "settlement"),
+            (("rejected_trade", 0), "rejected_trade"),
+        ]
+        for (action_type, quantity), expected in cases:
+            with self.subTest(action_type=action_type, quantity=quantity):
+                self.assertEqual(
+                    agent_trading_stats.classify_ledger_action(action_type, quantity),
+                    expected,
+                )
+
+
 class LeaderboardTests(unittest.TestCase):
     def test_marks_open_positions_to_market_using_quotes(self):
         with _fixture_conn() as conn:
