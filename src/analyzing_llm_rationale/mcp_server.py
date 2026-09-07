@@ -188,10 +188,24 @@ def build_agent_analyze_payload(
 # do. The fields its own description promises are 5,363 characters, 0.27% of
 # what it sends.
 #
-# Dropping those three keys leaves ~31K: every summary block, calibration,
-# every segmentation, the methodology note. Named rather than allow-listed so
-# a new summary field is published automatically instead of silently omitted.
-_TRACK_RECORD_BULK_KEYS = ("models_comparison", "paper_pnl", "primary_paper_pnl")
+# Dropping those keys leaves ~31K: every summary block, calibration, every
+# segmentation, the methodology note. Named rather than allow-listed so a new
+# summary field is published automatically instead of silently omitted.
+#
+# foresea_edge_board has the same shape and the same problem -- 881,216
+# characters, also over the limit -- because it is built from the same
+# aggregate. There the three above are 59.9% and the per-model ledger blocks
+# below are another 28%, while ``edge_board`` itself, the ranked markets the
+# tool is named for, is 9.5%.
+_TRACK_RECORD_BULK_KEYS = (
+    "models_comparison",
+    "paper_pnl",
+    "primary_paper_pnl",
+    "mark_to_market_by_model",
+    "quarter_kelly_by_model",
+    "growth_1pct_by_model",
+    "growth_2pct_by_model",
+)
 
 
 def _summarise_track_record(payload: Any) -> Any:
@@ -813,7 +827,7 @@ def create_mcp_server(
         model-vs-market disagreement, each with Buy YES/NO direction, implied odds,
         whether the edge is historically significant, and a multi-model comparison."""
 
-        return await _call_tool_async(client.aedge_board)
+        return _summarise_track_record(await _call_tool_async(client.aedge_board))
 
     @mcp.tool()
     async def foresea_venue_data(platform: str = "", operation: str = "",

@@ -389,3 +389,44 @@ class TrackRecordSummaryTests(unittest.TestCase):
         for value in (None, [], "text", 3):
             with self.subTest(value=value):
                 self.assertEqual(mcp._summarise_track_record(value), value)
+
+
+class EdgeBoardSummaryTests(unittest.TestCase):
+    """foresea_edge_board fails the same way, from the same aggregate.
+
+    881,216 characters, also over an MCP client's limit. The three
+    track-record bulk keys are 59.9% of it and the per-model ledger blocks
+    another 28%, while ``edge_board`` -- the ranked markets the tool is
+    named for -- is 9.5%.
+    """
+
+    def _payload(self):
+        return {
+            "generated_at": "2026-09-07T04:28:55+00:00",
+            "edge_board": [{"ticker": f"M{i}", "edge": 0.1} for i in range(25)],
+            "by_edge": [{"edge_bucket": "10-20pp", "n": 82}],
+            "mark_to_market_account": {"value": 1.0},
+            "models_comparison": ["x"] * 2000,
+            "paper_pnl": {"rows": ["y"] * 2000},
+            "primary_paper_pnl": {"rows": ["z"] * 2000},
+            "mark_to_market_by_model": {"m": ["a"] * 2000},
+            "quarter_kelly_by_model": {"m": ["b"] * 1000},
+            "growth_1pct_by_model": {"m": ["c"] * 1000},
+            "growth_2pct_by_model": {"m": ["d"] * 1000},
+        }
+
+    def test_the_ranked_markets_survive_and_the_ledgers_go(self):
+        out = mcp._summarise_track_record(self._payload())
+        self.assertEqual(len(out["edge_board"]), 25)
+        self.assertIn("by_edge", out)
+        self.assertIn("mark_to_market_account", out)
+        for gone in ("models_comparison", "paper_pnl", "primary_paper_pnl",
+                     "mark_to_market_by_model", "quarter_kelly_by_model",
+                     "growth_1pct_by_model", "growth_2pct_by_model"):
+            self.assertNotIn(gone, out)
+
+    def test_only_keys_actually_present_are_reported_as_omitted(self):
+        """track_record carries three of these; edge_board carries all seven."""
+        lean = {"overall": {"n": 1}, "paper_pnl": {"rows": []}}
+        out = mcp._summarise_track_record(lean)
+        self.assertEqual(out["omitted_for_size"]["keys"], ["paper_pnl"])
