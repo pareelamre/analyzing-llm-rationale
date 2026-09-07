@@ -21,11 +21,14 @@ from analyzing_llm_rationale.twin.models import (
     ProposalAction,
 )
 from analyzing_llm_rationale.twin.research_gateway import (
+    DatastoreResearchResultStore,
     HistoricalCalibration,
+    InMemoryResearchResultStore,
     PublicEvidence,
     PublicResearchCapture,
     PublicResearchTools,
     ResearchModelConfig,
+    ResearchResultStoreError,
     generate_research,
 )
 
@@ -97,6 +100,37 @@ class Ledger:
     def record_forecast(self, payload, *, snapshot_key):
         self.records.append((payload, snapshot_key))
         return self.accepted
+
+
+class FakeEntity(dict):
+    def __init__(self, *, key, **_kwargs):
+        super().__init__()
+        self.key = key
+
+
+class FakeTransaction:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
+class FakeDatastoreClient:
+    def __init__(self):
+        self.entities = {}
+
+    def key(self, *parts):
+        return tuple(parts)
+
+    def transaction(self):
+        return FakeTransaction()
+
+    def get(self, key):
+        return self.entities.get(key)
+
+    def put(self, entity):
+        self.entities[entity.key] = entity
 
 
 class ResearchGatewayTests(unittest.TestCase):
@@ -277,6 +311,36 @@ class ResearchGatewayTests(unittest.TestCase):
                 self.setUp()
                 self.assertIsNone(self.generate(capture=item).forecast)
                 self.assertEqual(self.provider.calls, [])
+
+    def test_durable_result_stores_round_trip_and_reject_conflicts(self):
+        memory = InMemoryResearchResultStore()
+        result = self.generate(result_store=memory)
+        self.assertEqual(memory.get_result("job-1"), result)
+        with self.assertRaisesRegex(ResearchResultStoreError, "conflicting"):
+            memory.record_result("job-1", replace(result, request_hash="a" * 64))
+
+        client = FakeDatastoreClient()
+        durable = DatastoreResearchResultStore(client)
+        with patch("google.cloud.datastore.Entity", FakeEntity):
+            self.assertTrue(durable.record_result("job-1", result))
+            self.assertTrue(durable.record_result("job-1", result))
+        self.assertEqual(durable.get_result("job-1"), result)
+        entity = client.entities[durable._key("job-1")]
+        entity["fingerprint"] = "corrupted"
+        with self.assertRaisesRegex(ResearchResultStoreError, "cannot be read"):
+            durable.get_result("job-1")
+
+    def test_durable_result_store_rejects_unfinalized_and_oversized_payloads(self):
+        result = self.generate()
+        client = FakeDatastoreClient()
+        with self.assertRaisesRegex(ResearchResultStoreError, "finalized"):
+            InMemoryResearchResultStore().record_result(
+                "job", replace(result, request_hash="")
+            )
+        with self.assertRaisesRegex(ResearchResultStoreError, "payload limit"):
+            DatastoreResearchResultStore(client, max_payload_bytes=0)
+        with self.assertRaisesRegex(ResearchResultStoreError, "exceeds"):
+            DatastoreResearchResultStore(client, max_payload_bytes=1).record_result("job", result)
 
 
 if __name__ == "__main__":
