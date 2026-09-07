@@ -242,3 +242,66 @@ class ReadJsonObjectTests(unittest.TestCase):
     def test_no_client_returns_none(self):
         with mock.patch.object(gcs_store, "_get_gcs_client", return_value=None):
             self.assertIsNone(gcs_store.read_json_object("b", "o"))
+
+
+class _MultiObjectClient:
+    """A client whose bucket/blob pair returns per-object bodies."""
+
+    def __init__(self, blobs):
+        self._blobs = blobs
+
+    def bucket(self, name):
+        outer = self
+
+        class _Bucket:
+            def blob(self, obj):
+                return outer._blobs[(name, obj)]
+
+        return _Bucket()
+
+
+class ReadJsonObjectCacheIsolationTests(unittest.TestCase):
+    """Eight payloads share one process-wide cache.
+
+    A wrong cache key would not error -- every reader would simply serve
+    whichever payload was fetched first, which is the kind of failure that
+    looks like stale data rather than a bug.
+    """
+
+    def setUp(self):
+        gcs_store._json_cache.clear()
+
+    def _expire(self):
+        for entry in gcs_store._json_cache.values():
+            entry[2] = float("-inf")
+
+    def test_two_objects_in_one_bucket_do_not_share_a_cache_entry(self):
+        blobs = {
+            ("b", "mark_to_market_live.json"): _FakeJsonBlob(1, b'{"which":"mtm"}'),
+            ("b", "track_record_live.json"): _FakeJsonBlob(1, b'{"which":"track"}'),
+        }
+        with mock.patch.object(
+            gcs_store, "_get_gcs_client", return_value=_MultiObjectClient(blobs),
+        ):
+            mtm = gcs_store.read_json_object("b", "mark_to_market_live.json")
+            track = gcs_store.read_json_object("b", "track_record_live.json")
+            self._expire()
+            # Re-read: both must still come back as themselves.
+            mtm_again = gcs_store.read_json_object("b", "mark_to_market_live.json")
+
+        self.assertEqual(mtm, {"which": "mtm"})
+        self.assertEqual(track, {"which": "track"})
+        self.assertEqual(mtm_again, {"which": "mtm"})
+
+    def test_the_same_object_name_in_two_buckets_stays_separate(self):
+        blobs = {
+            ("prod", "board.json"): _FakeJsonBlob(1, b'{"env":"prod"}'),
+            ("staging", "board.json"): _FakeJsonBlob(1, b'{"env":"staging"}'),
+        }
+        with mock.patch.object(
+            gcs_store, "_get_gcs_client", return_value=_MultiObjectClient(blobs),
+        ):
+            self.assertEqual(gcs_store.read_json_object("prod", "board.json"), {"env": "prod"})
+            self.assertEqual(
+                gcs_store.read_json_object("staging", "board.json"), {"env": "staging"}
+            )
