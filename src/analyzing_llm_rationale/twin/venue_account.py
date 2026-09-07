@@ -120,10 +120,21 @@ def _kalshi_position(row: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _kalshi_order(row: Mapping[str, Any]) -> Mapping[str, Any]:
-    return {
+    normalized = {
         "order_id": row.get("order_id"),
         "client_order_id": row.get("client_order_id"),
     }
+    # Orders are mutable. Retain the observed lifecycle and economics so the
+    # complete-generation deduper can detect an order changing mid-read.
+    for field in (
+        "ticker", "status", "side", "action", "type", "initial_count",
+        "initial_count_fp", "fill_count", "fill_count_fp", "remaining_count",
+        "remaining_count_fp", "yes_price", "yes_price_dollars", "no_price",
+        "no_price_dollars", "expiration_time",
+    ):
+        if field in row:
+            normalized[field] = row[field]
+    return normalized
 
 
 def _kalshi_fill(row: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -156,10 +167,11 @@ def _polymarket_order(row: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _polymarket_fill(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    fee = row.get("fee") if "fee" in row else row.get("fee_usdc")
     return {
         "fill_id": row.get("id") or row.get("trade_id"),
         "order_id": row.get("order_id") or row.get("taker_order_id"),
-        "fee": row.get("fee") or row.get("fee_usdc"),
+        "fee": fee,
         "client_order_id": row.get("client_order_id"),
     }
 
@@ -233,11 +245,11 @@ def complete_account_fetchers(
                 limit=min(page_limit, 500), item_normalizer=_polymarket_position,
             ),
             "orders": _cursor_collection(
-                "polymarket", "orders", item_key="orders", reader=reader, creds=creds,
+                "polymarket", "orders", item_key="data", reader=reader, creds=creds,
                 parameters={}, normalizer=_polymarket_order, cursor_parameter="next_cursor",
             ),
             "fills": _cursor_collection(
-                "polymarket", "fills", item_key="trades", reader=reader, creds=creds,
+                "polymarket", "fills", item_key="data", reader=reader, creds=creds,
                 parameters={}, normalizer=_polymarket_fill, cursor_parameter="next_cursor",
             ),
             "settlements": _unavailable("polymarket_settlement_authority_unavailable"),
