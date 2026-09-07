@@ -5503,6 +5503,69 @@ class ServerTests(unittest.TestCase):
             server_module.logger.debug.call_args_list,
         )
 
+    def test_agent_fallback_competitor_exclusions_names_the_rivals(self):
+        req = server_module.AgentAnalyzeRequest(
+            question="Will it rain?",
+            model="glm-5-3-flash",
+        )
+        with (
+            mock.patch.object(
+                server_module,
+                "_SCADS_MODEL_FALLBACKS",
+                {"glm-5-3-flash": ("zai-org/GLM-5.3", "some/neutral-model")},
+            ),
+            mock.patch.object(server_module, "_AGENT_TRADING_IDENTITIES", frozenset({"zai-org/GLM-5.3"})),
+        ):
+            self.assertEqual(
+                server_module._agent_fallback_competitor_exclusions(req),
+                ["zai-org/GLM-5.3"],
+            )
+
+    def test_agent_tool_loop_logs_when_it_runs_out_of_candidates(self):
+        """A cycle with no usable fallback used to fail silently.
+
+        chat_fn breaks on the last candidate without logging, so when the
+        whole chain was excluded as rivals the only trace was a generic
+        "agent run failed" traceback from the caller -- indistinguishable
+        from an ordinary error, and useless for counting how often a model
+        cannot retry as itself.
+        """
+        import asyncio
+
+        from fastapi import HTTPException
+
+        primary = FailingProvider("zai-org/GLM-5.3-Flash")
+        req = server_module.AgentAnalyzeRequest(
+            question="check it",
+            model="glm-5-3-flash",
+            tool_loop=True,
+            max_tool_steps=2,
+        )
+
+        with (
+            mock.patch.object(server_module, "_select_agent_provider", return_value=(primary, 0.0, 128)),
+            mock.patch.object(server_module, "_agent_fallback_providers", return_value=[]),
+            mock.patch.object(
+                server_module,
+                "_agent_fallback_competitor_exclusions",
+                return_value=["zai-org/GLM-5.3"],
+            ),
+            mock.patch.object(server_module, "_AGENT_TOOL_PROVIDER_MAX_RETRIES", 0),
+            mock.patch.object(server_module, "_AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES", 0),
+        ):
+            server_module.logger.reset_mock()
+            with self.assertRaises(HTTPException):
+                asyncio.run(
+                    server_module._agent_tool_loop(req, None, "check it", None, None)
+                )
+
+        exhausted = [
+            call for call in server_module.logger.warning.call_args_list
+            if "agent tool loop exhausted" in str(call.args[0])
+        ]
+        self.assertTrue(exhausted, server_module.logger.warning.call_args_list)
+        self.assertIn("zai-org/GLM-5.3", exhausted[0].args)
+
     def test_agent_tool_loop_falls_back_when_primary_fails(self):
         import asyncio
 
