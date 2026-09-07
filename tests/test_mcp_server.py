@@ -745,7 +745,8 @@ class PolymarketMetaSizeTests(unittest.TestCase):
         """profile and reactions measured at 74.7% of a live response."""
         import json
 
-        size = lambda obj: len(json.dumps(obj, separators=(",", ":")))
+        def size(obj):
+            return len(json.dumps(obj, separators=(",", ":")))
         rows = [dict(self._COMMENTS[0], id=str(n)) for n in range(182)]
         self.assertLess(size(mcp._summarise_comments(rows)), size(rows) // 4)
 
@@ -778,7 +779,8 @@ class PolymarketMetaSizeTests(unittest.TestCase):
         """Proportions taken from the live responses that were rejected."""
         import json
 
-        size = lambda obj: len(json.dumps(obj, separators=(",", ":")))
+        def size(obj):
+            return len(json.dumps(obj, separators=(",", ":")))
         series = [dict(self._SERIES[0], id=str(n),
                        events=[{"id": f"e{i}", "blob": "x" * 2000}
                                for i in range(14)]) for n in range(20)]
