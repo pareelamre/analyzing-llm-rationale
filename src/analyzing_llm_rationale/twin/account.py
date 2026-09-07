@@ -91,10 +91,14 @@ def portfolio_pages_from_complete_read(payload: Mapping[str, Any]) -> dict[str, 
     for key in required:
         value = payload[key]
         if key == "balance":
-            rows = [value] if isinstance(value, Mapping) else []
+            if not isinstance(value, Mapping):
+                raise SchemaValidationError("complete portfolio balance collection is malformed")
+            rows = [value]
         else:
-            rows = list(value) if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) else []
-        if (key == "balance" and not rows) or any(not isinstance(row, Mapping) for row in rows):
+            if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+                raise SchemaValidationError(f"complete portfolio {key} collection is malformed")
+            rows = list(value)
+        if any(not isinstance(row, Mapping) for row in rows):
             raise SchemaValidationError(f"complete portfolio {key} collection is malformed")
         collections[f"{key}s" if key == "balance" else key] = ({"complete": True, "items": rows},)
     return collections
@@ -347,11 +351,15 @@ def synchronize_account(
     external: list[str] = []
     for order in deduped["orders"]:
         command_id = str(order.get("client_order_id") or order.get("command_id") or "").strip()
-        if command_id and command_id not in local_command_ids:
+        if not command_id:
+            external.append(f"unattributed_order:{order['order_id']}")
+        elif command_id not in local_command_ids:
             external.append(command_id)
     for fill in deduped["fills"]:
         command_id = str(fill.get("client_order_id") or fill.get("command_id") or "").strip()
-        if command_id and command_id not in local_command_ids:
+        if not command_id:
+            external.append(f"unattributed_fill:{fill.get('fill_id') or fill.get('trade_id') or fill['id']}")
+        elif command_id not in local_command_ids:
             external.append(command_id)
     snapshot = AccountSnapshot(
         scope_id=scope_id, generation=generation, received_at=received_at, completeness=Completeness.COMPLETE,

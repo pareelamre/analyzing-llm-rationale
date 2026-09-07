@@ -3,7 +3,9 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
+from analyzing_llm_rationale import trading, venue_api
 from analyzing_llm_rationale.twin.account import (
     AccountTolerance,
     portfolio_pages_from_complete_read,
@@ -41,7 +43,10 @@ def inputs(**updates):
         "balances": [page([{"available": "7", "total": "10", "reserved": "3", "settled_cash": "10"}])],
         "positions": [page([{"position_id": "position-001", "quantity": "2", "average_price": "0.4", "liquidation_value": "0.6"}])],
         "orders": [page([{"order_id": "order-001", "client_order_id": "command-001"}])],
-        "fills": [page([{"fill_id": "fill-001", "order_id": "order-001", "fee": "0.1"}])],
+        "fills": [page([{
+            "fill_id": "fill-001", "order_id": "order-001",
+            "client_order_id": "command-001", "fee": "0.1",
+        }])],
         "settlements": [page([{"settlement_id": "settlement-001", "amount": "1", "fee": "0", "status": "settled"}])],
         "local_command_ids": {"command-001"},
     }
@@ -74,6 +79,17 @@ class TwinAccountTests(unittest.TestCase):
         result = self.sync(orders=[page([{"order_id": "external-order", "client_order_id": "manual-order"}])])
         self.assertTrue(result.snapshot.divergence)
         self.assertEqual(result.snapshot.external_activity_ids, ("manual-order",))
+
+    def test_unattributed_order_and_fill_mark_account_drift(self):
+        result = self.sync(
+            orders=[page([{"order_id": "manual-order"}])],
+            fills=[page([{"fill_id": "manual-fill", "fee": "0"}])],
+        )
+        self.assertTrue(result.snapshot.divergence)
+        self.assertEqual(
+            result.snapshot.external_activity_ids,
+            ("unattributed_fill:manual-fill", "unattributed_order:manual-order"),
+        )
 
     def test_unavailable_or_inconsistent_balance_never_increases_spending(self):
         good = self.sync().snapshot
@@ -181,6 +197,15 @@ class TwinAccountTests(unittest.TestCase):
             "settlements": [{"settlement_id": "settlement-001", "fee": "0", "status": "settled"}],
         })
         self.assertTrue(pages["balances"][0]["complete"])
+        for key, malformed in (("positions", None), ("orders", {}), ("fills", "bad")):
+            payload = {
+                "complete": True,
+                "balance": {"available": "7"},
+                "positions": [], "orders": [], "fills": [], "settlements": [],
+            }
+            payload[key] = malformed
+            with self.assertRaisesRegex(SchemaValidationError, key):
+                portfolio_pages_from_complete_read(payload)
 
     def test_cursor_reader_collects_all_pages_and_rejects_a_repeated_cursor(self):
         pages = {
@@ -338,8 +363,7 @@ class TwinAccountTests(unittest.TestCase):
                 return {"data": [{
                     "asset": "token-1", "size": "2", "initialValue": "0.6", "currentValue": "1.9",
                 }], "next_offset": None}
-            key = "orders" if operation == "orders" else "trades"
-            return {"data": {key: []}, "next_cursor": None}
+            return {"data": {"data": []}, "next_cursor": None}
 
         fetchers = complete_account_fetchers("polymarket", reader=reader, creds={"api": "secret"})
         positions = read_complete_collection("positions", fetchers["positions"])
@@ -360,6 +384,48 @@ class TwinAccountTests(unittest.TestCase):
             ("polymarket_cash_authority_unavailable", "polymarket_settlement_authority_unavailable"),
         )
         self.assertTrue(all(call[3] == "account" for call in calls))
+
+    def test_native_polymarket_clob_pages_flow_through_venue_api_read(self):
+        client = MagicMock(host="https://clob.polymarket.com")
+        client._get.side_effect = [
+            {"data": [{"id": "order-1", "client_order_id": "command-001"}], "next_cursor": "order-2"},
+            {"data": [{"id": "order-2", "client_order_id": "command-002"}], "next_cursor": "LTE="},
+            {"data": [{"id": "fill-1", "order_id": "order-1", "fee": 0}], "next_cursor": "fill-2"},
+            {"data": [{"id": "fill-2", "order_id": "order-2", "fee_usdc": "0.1"}], "next_cursor": "LTE="},
+        ]
+        with (
+            patch.object(trading, "_polymarket_client", return_value=client),
+            patch.object(trading, "_polymarket_account_address", return_value="0x" + "a" * 40),
+        ):
+            fetchers = complete_account_fetchers(
+                "polymarket", reader=venue_api.read, creds={"api": "secret"}
+            )
+            orders = read_complete_collection("orders", fetchers["orders"])
+            fills = read_complete_collection("fills", fetchers["fills"])
+        self.assertEqual([row["order_id"] for row in orders.items], ["order-1", "order-2"])
+        self.assertEqual([row["fill_id"] for row in fills.items], ["fill-1", "fill-2"])
+        self.assertEqual(fills.items[0]["fee"], 0)
+        self.assertEqual(client._get.call_args_list[1].kwargs["params"], {"next_cursor": "order-2"})
+        self.assertEqual(client._get.call_args_list[3].kwargs["params"]["next_cursor"], "fill-2")
+
+    def test_kalshi_order_change_during_pagination_is_rejected(self):
+        def reader(_venue, operation, parameters, **_kwargs):
+            self.assertEqual(operation, "orders")
+            remaining = "2.0000" if parameters.get("cursor") is None else "1.0000"
+            return {
+                "data": {"orders": [{
+                    "order_id": "order-1", "client_order_id": "command-001",
+                    "remaining_count_fp": remaining,
+                }]},
+                "next_cursor": "page-2" if parameters.get("cursor") is None else None,
+            }
+
+        fetcher = complete_account_fetchers(
+            "kalshi", reader=reader, creds={"api": "secret"}
+        )["orders"]
+        collection = read_complete_collection("orders", fetcher)
+        result = self.sync(orders=collection.account_pages())
+        self.assertEqual(result.issues, ("orders_duplicate_conflict",))
 
     def test_documented_venue_capabilities_do_not_claim_live_cash_authority(self):
         self.assertEqual(account_capability("kalshi"), KALSHI_ACCOUNT_CAPABILITY)
