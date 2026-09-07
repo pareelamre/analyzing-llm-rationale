@@ -45,3 +45,65 @@ jobs:
         run: ruff check scripts --select F821,F811,F632,F502,F522,F701,B002
       - name: Test
         run: python -m unittest discover -s tests
+
+  # The durable-store concurrency checks need a Datastore emulator, so they
+  # skip everywhere except a developer's machine with one running -- see
+  # docs/autonomous-twin/DATASTORE_EMULATOR.md. They prove that two processes
+  # cannot consume the same final account allocation, that a manual and an
+  # autonomous command share durable capacity, and that an expired lease is
+  # refenced while the stale worker cannot progress. Nothing else covers any
+  # of that.
+  #
+  # Separate job so a flaky emulator cannot fail the main suite, and so the
+  # extra ~2 minutes runs in parallel rather than adding to it.
+  datastore-integration:
+    runs-on: ubuntu-latest
+    env:
+      # Any gcloud prompt on a runner is a hang or an abort, never a question
+      # someone answers.
+      CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # The emulator is a Java program. The runner's default JDK is older than
+      # it accepts, and gcloud reports that as a failure to start rather than
+      # as a version check, so pin a JRE it will run on.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Install the Datastore emulator
+        # `beta` is installed explicitly. Without it, `gcloud beta emulators
+        # datastore start` below pulls it in on demand and prompts -- which on
+        # a runner is not answerable, so gcloud aborts and the emulator never
+        # binds. The failure then surfaces as "emulator did not come up",
+        # naming the symptom rather than the prompt that caused it.
+        run: gcloud components install beta cloud-datastore-emulator --quiet
+      - name: Install dependencies
+        run: pip install -e ".[dev,serve]" httpx
+      - name: Run the durable-store checks against the emulator
+        env:
+          DATASTORE_DATASET: foresea-twin-test
+          GOOGLE_CLOUD_PROJECT: foresea-twin-test
+        run: |
+          # Keep the emulator's own output. "did not come up" describes the
+          # symptom; the cause is always in here -- the first failure of this
+          # job was gcloud prompting to install `beta`, which the summary line
+          # could not have told anyone.
+          # --project explicitly: gcloud reads CLOUDSDK_CORE_PROJECT, not the
+          # GOOGLE_CLOUD_PROJECT the client libraries below use, and with
+          # neither set it refuses to start.
+          gcloud beta emulators datastore start             --project="$GOOGLE_CLOUD_PROJECT"             --host-port=127.0.0.1:8765 --consistency=1.0 --no-store-on-disk             >emulator.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8765/ >/dev/null && break
+            sleep 2
+          done
+          if ! curl -sf http://127.0.0.1:8765/ >/dev/null; then
+            echo "Datastore emulator did not come up. Its output:" >&2
+            cat emulator.log >&2 || echo "(no output captured)" >&2
+            exit 1
+          fi
+          DATASTORE_EMULATOR_HOST=127.0.0.1:8765             python -m unittest tests.test_twin_store_integration -v
