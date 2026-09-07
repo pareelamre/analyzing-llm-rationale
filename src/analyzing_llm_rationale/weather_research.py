@@ -12,7 +12,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
@@ -77,32 +77,117 @@ def _json_get(http_get: Callable[..., Any], url: str) -> Mapping[str, Any]:
     return payload
 
 
-def _forecast_periods(http_get: Callable[..., Any], geometry: Mapping[str, Any]) -> List[Dict[str, Any]]:
-    coordinates = geometry.get("coordinates")
-    if not isinstance(coordinates, list) or len(coordinates) < 2:
-        return []
+_STATION_COORDINATES: Dict[str, Tuple[float, float]] = {
+    "KNYC": (40.7829, -73.9654),  # New York Central Park
+    "KMDW": (41.7868, -87.7522),  # Chicago Midway
+    "KORD": (41.9742, -87.9073),  # Chicago O'Hare
+    "KMIA": (25.7959, -80.2870),  # Miami International
+    "KAUS": (30.1975, -97.6664),  # Austin Bergstrom
+    "KDEN": (39.8561, -104.6737), # Denver International
+    "KPHL": (39.8721, -75.2411), # Philadelphia International
+    "KSFO": (37.6213, -122.3790), # San Francisco
+    "KLAX": (33.9416, -118.4085), # Los Angeles
+    "KBOS": (42.3656, -71.0096),  # Boston Logan
+    "KDFW": (32.8998, -97.0403),  # Dallas/Fort Worth
+    "KATL": (33.6407, -84.4277),  # Atlanta Hartsfield
+    "KSEA": (47.4502, -122.3088), # Seattle Tacoma
+    "KDCA": (38.8512, -77.0402),  # Washington Reagan
+}
+_OPEN_METEO_API = "https://api.open-meteo.com/v1/forecast"
+
+
+def _extract_coordinates(
+    geometry: Mapping[str, Any], station: Optional[str] = None
+) -> Optional[Tuple[float, float]]:
+    coordinates = geometry.get("coordinates") if isinstance(geometry, Mapping) else None
+    if isinstance(coordinates, list) and len(coordinates) >= 2:
+        try:
+            lon, lat = float(coordinates[0]), float(coordinates[1])
+            return lat, lon
+        except (TypeError, ValueError):
+            pass
+    if station and station.upper() in _STATION_COORDINATES:
+        return _STATION_COORDINATES[station.upper()]
+    return None
+
+
+def _fetch_model_forecast(
+    http_get: Callable[..., Any], lat: float, lon: float
+) -> Optional[Dict[str, Any]]:
+    """Fetch high-resolution global numerical / AI forecast via Open-Meteo for comparison.
+
+    Returns projected diurnal high/low and sampled hourly curve. Returns None on network error.
+    """
     try:
-        lon, lat = float(coordinates[0]), float(coordinates[1])
-    except (TypeError, ValueError):
+        url = (
+            f"{_OPEN_METEO_API}?latitude={lat:.4f}&longitude={lon:.4f}&"
+            f"hourly=temperature_2m&temperature_unit=fahrenheit&forecast_days=2"
+        )
+        response = http_get(url, timeout=_REQUEST_TIMEOUT_S)
+        if hasattr(response, "raise_for_status"):
+            response.raise_for_status()
+        payload = response.json() if hasattr(response, "json") else None
+        if not isinstance(payload, Mapping):
+            return None
+        hourly = payload.get("hourly") or {}
+        times = hourly.get("time") or []
+        temps = hourly.get("temperature_2m") or []
+        if not times or not temps or len(times) != len(temps):
+            return None
+        valid_pairs = [(t, float(temp)) for t, temp in zip(times[:24], temps[:24]) if temp is not None]
+        if not valid_pairs:
+            return None
+        valid_temps = [p[1] for p in valid_pairs]
+        return {
+            "provider": "open-meteo",
+            "model": "high_res_multi_model",
+            "forecast_start": valid_pairs[0][0],
+            "forecast_end": valid_pairs[-1][0],
+            "projected_high_f": round(max(valid_temps), 1),
+            "projected_low_f": round(min(valid_temps), 1),
+            "hourly_curve": [
+                {"time": t, "temperature_f": temp}
+                for t, temp in valid_pairs[::2][:8]
+            ],
+            "notice": (
+                "Predictive multi-model numerical/AI forecast reference. "
+                "Official settlement is governed strictly by the contract's named settlement source."
+            ),
+        }
+    except Exception as exc:
+        logger.debug("Model forecast fetch unavailable: %s", exc)
+        return None
+
+
+def _forecast_periods(
+    http_get: Callable[..., Any], geometry: Mapping[str, Any], station: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    coords = _extract_coordinates(geometry, station)
+    if not coords:
         return []
-    point = _json_get(http_get, f"{_NWS_API}/points/{lat:.4f},{lon:.4f}")
-    hourly_url = (point.get("properties") or {}).get("forecastHourly")
-    if not isinstance(hourly_url, str) or not hourly_url.startswith("https://"):
+    lat, lon = coords
+    try:
+        point = _json_get(http_get, f"{_NWS_API}/points/{lat:.4f},{lon:.4f}")
+        hourly_url = (point.get("properties") or {}).get("forecastHourly")
+        if not isinstance(hourly_url, str) or not hourly_url.startswith("https://"):
+            return []
+        hourly = _json_get(http_get, hourly_url)
+        periods = (hourly.get("properties") or {}).get("periods") or []
+        result: List[Dict[str, Any]] = []
+        for period in periods[:8]:
+            if not isinstance(period, Mapping):
+                continue
+            precip = period.get("probabilityOfPrecipitation") or {}
+            result.append({
+                "start_time": period.get("startTime"),
+                "temperature_f": period.get("temperature"),
+                "short_forecast": period.get("shortForecast"),
+                "precipitation_probability": precip.get("value") if isinstance(precip, Mapping) else None,
+            })
+        return result
+    except Exception as exc:
+        logger.debug("NWS forecast periods unavailable: %s", exc)
         return []
-    hourly = _json_get(http_get, hourly_url)
-    periods = (hourly.get("properties") or {}).get("periods") or []
-    result: List[Dict[str, Any]] = []
-    for period in periods[:8]:
-        if not isinstance(period, Mapping):
-            continue
-        precip = period.get("probabilityOfPrecipitation") or {}
-        result.append({
-            "start_time": period.get("startTime"),
-            "temperature_f": period.get("temperature"),
-            "short_forecast": period.get("shortForecast"),
-            "precipitation_probability": precip.get("value") if isinstance(precip, Mapping) else None,
-        })
-    return result
 
 
 def _cached_nws_research(station: str) -> Optional[Dict[str, Any]]:
@@ -187,6 +272,7 @@ def research_weather_market(
                     "source_status": "not_applicable",
                     "observations": [],
                     "forecast_periods": [],
+                    "model_forecast": None,
                     "notice": "This contract is not classified as weather.",
                 }
                 outcome = "not_applicable"
@@ -196,6 +282,7 @@ def research_weather_market(
                     "source_status": "official_source_not_integrated",
                     "observations": [],
                     "forecast_periods": [],
+                    "model_forecast": None,
                     "notice": (
                         "The Weather Company is the named settlement source. Foresea has no licensed "
                         "Weather Company feed, so no proxy is represented as official settlement data."
@@ -209,6 +296,7 @@ def research_weather_market(
                     "source_status": reason,
                     "observations": [],
                     "forecast_periods": [],
+                    "model_forecast": None,
                     "notice": "No source-matched NWS lookup was performed; the contract data is incomplete for this research pass.",
                 }
                 outcome = reason
@@ -227,6 +315,7 @@ def research_weather_market(
                         "source_status": "nws_circuit_open",
                         "observations": [],
                         "forecast_periods": [],
+                        "model_forecast": None,
                         "research_cached": False,
                         "notice": "NWS research is temporarily paused after repeated upstream failures; retry later.",
                     }
@@ -254,12 +343,19 @@ def research_weather_market(
                         "precipitation_last_hour_mm": _value(props, "precipitationLastHour"),
                         "authority": "preliminary_observation_not_final_daily_settlement",
                     }
-                    periods = _forecast_periods(http_get, geometry if isinstance(geometry, Mapping) else {})
+                    periods = _forecast_periods(http_get, geometry if isinstance(geometry, Mapping) else {}, brief.station)
+                    coords = _extract_coordinates(geometry if isinstance(geometry, Mapping) else {}, brief.station)
+                    model_forecast = (
+                        _fetch_model_forecast(http_get, coords[0], coords[1])
+                        if coords
+                        else None
+                    )
                     result = {
                         "weather_market": brief.as_dict(),
                         "source_status": "nws_observation_available",
                         "observations": [observation],
                         "forecast_periods": periods,
+                        "model_forecast": model_forecast,
                         "research_cached": False,
                         "notice": (
                             "NWS observations and forecast are source-matched research inputs. The final NWS Daily "
@@ -278,6 +374,7 @@ def research_weather_market(
                         "source_status": "nws_temporarily_unavailable",
                         "observations": [],
                         "forecast_periods": [],
+                        "model_forecast": None,
                         "research_cached": False,
                         "notice": (
                             "NWS source-matched research is temporarily unavailable; no proxy data was used. "
