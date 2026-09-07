@@ -966,3 +966,59 @@ class FillStatusNamesTests(unittest.TestCase):
                     agent_trading_stats.fill_context(self._meta(status), 10.0),
                     {"fill_status": status},
                 )
+
+
+class LeaderboardAccountingInvariantTests(unittest.TestCase):
+    """The identities the public leaderboard implicitly claims.
+
+    Reconciled against the live board on 2026-09-07 and exact to the cent
+    for all eight agents. Pinned here because these are the numbers people
+    read as a performance claim, and a drift in any of them would look like
+    a trading result rather than an accounting error.
+    """
+
+    def _rows(self, conn, quotes):
+        return agent_trading_stats.compute_agent_leaderboard(conn, quotes)
+
+    def test_account_value_is_cash_plus_basis_plus_unrealized(self):
+        quotes = {("kalshi", "KXFOO-26"): {"yes_bid": 0.55}}
+        with _fixture_conn() as conn:
+            _insert_account(conn, "flat", cash=10_400.0)
+            _insert_account(conn, "holder", cash=9_600.0)
+            _insert_position(conn, "holder", quantity=100.0, cost_basis=40.0)
+            conn.commit()
+            rows = self._rows(conn, quotes)
+
+        self.assertTrue(rows)
+        for row in rows:
+            with self.subTest(agent=row["agent_id"]):
+                basis = sum(
+                    float(p.get("cost_basis", 0.0))
+                    for p in (row.get("open_positions") or [])
+                )
+                self.assertAlmostEqual(
+                    row["account_value"],
+                    row["cash"] + basis + row["unrealized_pnl"],
+                    places=6,
+                    msg="account_value must equal cash + open basis + unrealized",
+                )
+
+    def test_total_pnl_and_return_pct_follow_from_account_value(self):
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-p", starting_cash=10_000.0, cash=8_500.0)
+            conn.commit()
+            rows = self._rows(conn, {})
+
+        for row in rows:
+            with self.subTest(agent=row["agent_id"]):
+                self.assertAlmostEqual(
+                    row["total_pnl"],
+                    row["account_value"] - row["starting_cash"],
+                    places=6,
+                )
+                if row["starting_cash"]:
+                    self.assertAlmostEqual(
+                        row["return_pct"],
+                        row["total_pnl"] / row["starting_cash"] * 100.0,
+                        places=3,
+                    )
