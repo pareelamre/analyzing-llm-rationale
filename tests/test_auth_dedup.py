@@ -4,6 +4,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale import server  # noqa: E402
@@ -48,6 +50,30 @@ class _Client:
 
     def put(self, entity):
         self.store[entity.key.name] = entity
+
+
+@pytest.fixture(autouse=True)
+def _restore_patched_globals():
+    """Undo _setup's global patches after every test in this module.
+
+    _setup reassigns server._get_datastore and installs a fake
+    google.cloud.datastore into sys.modules, and nothing put them back. The
+    fake outlived this file: _Client.key takes (kind, name), while
+    server._rag_add calls client.key("User", user_id, "VectorChunk"), so
+    tests/test_rag.py failed with a TypeError whenever it ran after this
+    module -- passing in isolation and failing in the suite.
+    """
+    original_getter = server._get_datastore
+    had_module = "google.cloud.datastore" in sys.modules
+    original_module = sys.modules.get("google.cloud.datastore")
+    try:
+        yield
+    finally:
+        server._get_datastore = original_getter
+        if had_module:
+            sys.modules["google.cloud.datastore"] = original_module
+        else:
+            sys.modules.pop("google.cloud.datastore", None)
 
 
 def _setup(monkey_store):
