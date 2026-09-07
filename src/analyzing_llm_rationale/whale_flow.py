@@ -13,9 +13,88 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger("foresea-whale-flow")
+
+
+def _first(mapping: Dict[str, Any], *keys: str) -> Any:
+    """First key present and not blank."""
+    for key in keys:
+        value = mapping.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _platform_of(t: Dict[str, Any]) -> str:
+    """The venue, inferred from the tape when the row does not carry it.
+
+    fetch_recent_trades returns each venue's own rows unchanged, and neither
+    carries a `platform`. Every print therefore read "Venue".
+    """
+    stated = t.get("platform")
+    if stated:
+        return str(stated)
+    if "taker_side" in t or "count_fp" in t:
+        return "Kalshi"
+    if "conditionId" in t or "asset" in t or "proxyWallet" in t:
+        return "Polymarket"
+    return "Venue"
+
+
+def _ticker_of(t: Dict[str, Any]) -> str:
+    """Kalshi publishes `ticker`; Polymarket publishes `slug` and `asset`."""
+    return str(_first(t, "ticker", "market", "token_id", "slug", "asset", "conditionId") or "")
+
+
+def _title_of(t: Dict[str, Any]) -> str:
+    """Polymarket publishes `title`. Kalshi's trade tape carries no title, so
+    the ticker names the market rather than the word "Market"."""
+    return str(
+        _first(t, "market_title", "question", "title", "eventSlug", "ticker") or "Market"
+    )
+
+
+def _price_size_side(t: Dict[str, Any]) -> Tuple[float, float, str]:
+    """Price, contracts and position side, in each venue's own vocabulary.
+
+    Kalshi's tape has yes_price_dollars / no_price_dollars and count_fp, all
+    strings; it has no `price` or `size`. The old parser looked only for
+    price/size, so every Kalshi row priced at the 0.50 default with a size of
+    0 -- a notional of 0, which no min_notional can clear. Kalshi trades could
+    not appear in this endpoint at all.
+
+    Polymarket's tape has price and size, which did resolve, but its `side` is
+    BUY/SELL and the position is in `outcome`. Reading BUY as bullish counted
+    a buy of NO as YES.
+    """
+    taker = str(t.get("taker_side") or "").strip().lower()
+    if taker in ("yes", "no"):
+        side = taker.upper()
+        raw_price = t.get("yes_price_dollars") if side == "YES" else t.get("no_price_dollars")
+        price = _as_float(raw_price, _as_float(t.get("price"), 0.50))
+        return price, _as_float(_first(t, "count_fp", "size", "quantity", "count"), 0.0), side
+
+    price = _as_float(_first(t, "price", "yes_price"), 0.50)
+    size = _as_float(_first(t, "size", "quantity", "count", "count_fp"), 0.0)
+
+    outcome = str(t.get("outcome") or "").strip().upper()
+    action = str(t.get("side") or t.get("action") or "YES").upper()
+    if outcome in ("YES", "NO"):
+        # Selling YES is the same exposure as buying NO.
+        selling = "SELL" in action
+        side = outcome if not selling else ("NO" if outcome == "YES" else "YES")
+        return price, size, side
+
+    return price, size, ("YES" if ("YES" in action or "BUY" in action) else "NO")
+
+
+def _as_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def analyze_whale_trades(
@@ -29,13 +108,11 @@ def analyze_whale_trades(
     total_no_usd = 0.0
 
     for t in trades:
-        price = float(t.get("price") or t.get("yes_price") or 0.50)
-        size = float(t.get("size") or t.get("quantity") or t.get("count") or 0)
-        side = str(t.get("side") or t.get("action") or "YES").upper()
+        price, size, side = _price_size_side(t)
 
         notional_usd = round(price * size, 2)
         if notional_usd >= min_notional_usd:
-            if "YES" in side or "BUY" in side:
+            if side == "YES":
                 total_yes_usd += notional_usd
                 clean_side = "YES"
             else:
@@ -43,9 +120,9 @@ def analyze_whale_trades(
                 clean_side = "NO"
 
             whale_prints.append({
-                "platform": t.get("platform", "Venue"),
-                "ticker": t.get("ticker") or t.get("market") or t.get("token_id", ""),
-                "market_title": t.get("market_title") or t.get("question", "Market"),
+                "platform": _platform_of(t),
+                "ticker": _ticker_of(t),
+                "market_title": _title_of(t),
                 "side": clean_side,
                 "price": round(price, 2),
                 "size": int(size),
@@ -85,13 +162,11 @@ def fetch_live_whale_flow(min_notional_usd: float = 250.0, limit: int = 50) -> D
         from analyzing_llm_rationale import market_data
         trades: List[Dict[str, Any]] = []
 
-        # Fetch sample of Polymarket trades
-        poly_trades = market_data.fetch_recent_trades("polymarket", limit=40)
-        trades.extend(poly_trades or [])
-
-        # Fetch sample of Kalshi trades
-        kalshi_trades = market_data.fetch_recent_trades("kalshi", limit=40)
-        trades.extend(kalshi_trades or [])
+        # Tag the venue here rather than inferring it downstream: this is the
+        # only place that knows for certain, and neither tape carries it.
+        for venue in ("Polymarket", "Kalshi"):
+            rows = market_data.fetch_recent_trades(venue.lower(), limit=40) or []
+            trades.extend({**row, "platform": venue} for row in rows if isinstance(row, dict))
 
         return analyze_whale_trades(trades, min_notional_usd=min_notional_usd, limit=limit)
     except Exception as exc:
