@@ -61,6 +61,19 @@ jobs:
       - name: Upload track record store
         run: gcloud storage cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"
 
+      # Additive for now: the payload is published to GCS *and* still
+      # committed. Once the server is reading the GCS copy (set
+      # MARK_TO_MARKET_GCS_BUCKET on Cloud Run) and it is verifiably fresh,
+      # the commit step below goes away -- which is the point, since it is
+      # ~5,400 revisions of a 2.4MB file and the largest single contributor
+      # to repository size.
+      - name: Publish MTM payload to GCS
+        if: env.MTM_PAYLOAD_BUCKET != ''
+        env:
+          MTM_PAYLOAD_BUCKET: ${{ vars.MTM_PAYLOAD_BUCKET }}
+        run: |
+          gcloud storage cp static/mark_to_market_live.json             "gs://$MTM_PAYLOAD_BUCKET/mark_to_market_live.json"             --cache-control="no-cache, max-age=0"
+
       - name: Commit updated MTM artifact
         env:
           GIT_REBASE_KEEP_THEIRS: "static/mark_to_market_live.json"

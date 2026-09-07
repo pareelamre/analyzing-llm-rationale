@@ -16,6 +16,7 @@ how both callers already handle a missing file.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -128,3 +129,82 @@ def _log_sync_failure(message: str) -> None:
         logger.error("%s (no successful sync in %.0fs)", message, stale_for, exc_info=True)
     else:
         logger.warning(message, exc_info=True)
+
+
+# --- Live JSON payloads -----------------------------------------------------
+#
+# static/mark_to_market_live.json is regenerated every 5 minutes and committed
+# to main, which is why it has ~5,400 revisions of a 2.4MB file behind it. The
+# read path below lets the server take it from GCS instead, so the publisher
+# can stop committing it.
+#
+# The naive migration -- point the existing reader's URL at a public GCS
+# object -- re-downloads 2.4MB on every 30s cache miss, because the reader has
+# no way to ask "has this changed?". Against raw.githubusercontent.com that is
+# free; against GCS it is egress, and the write cadence is 5 minutes, so nine
+# of every ten downloads would fetch bytes the process already had. Checking
+# the generation first costs one metadata call and downloads only on a change.
+
+_JSON_CHECK_INTERVAL_S = float(os.environ.get("GCS_JSON_CHECK_INTERVAL_S", "30"))
+
+# (bucket, object) -> [generation, payload, last_check_monotonic]
+_json_cache: dict = {}
+_json_lock = Lock()
+
+
+def read_json_object(bucket_name: str, object_name: str) -> Optional[Any]:
+    """Return a JSON payload from GCS, re-downloading only on a new generation.
+
+    Returns None when GCS is unreachable, the object is missing, or the body
+    does not parse -- callers fall back to their existing HTTP/bundled path,
+    so a failure here degrades to today's behaviour rather than an error.
+    Never raises.
+    """
+    key = (bucket_name, object_name)
+    try:
+        with _json_lock:
+            entry = _json_cache.get(key)
+            now = time.monotonic()
+            if entry is not None and (now - entry[2]) < _JSON_CHECK_INTERVAL_S:
+                return entry[1]
+
+            client = _get_gcs_client()
+            if client is None:
+                return entry[1] if entry else None
+
+            try:
+                blob = client.bucket(bucket_name).blob(object_name)
+                blob.reload()
+            except Exception:
+                logger.warning(
+                    "GCS metadata check failed for %s/%s", bucket_name, object_name,
+                    exc_info=True,
+                )
+                # Keep serving the last good payload rather than falling back to
+                # a staler committed copy over a single failed metadata call.
+                if entry is not None:
+                    entry[2] = now
+                    return entry[1]
+                return None
+
+            if entry is not None and blob.generation == entry[0]:
+                entry[2] = now
+                return entry[1]
+
+            try:
+                payload = json.loads(blob.download_as_bytes())
+            except Exception:
+                logger.warning(
+                    "GCS download/parse failed for %s/%s", bucket_name, object_name,
+                    exc_info=True,
+                )
+                if entry is not None:
+                    entry[2] = now
+                    return entry[1]
+                return None
+
+            _json_cache[key] = [blob.generation, payload, now]
+            return payload
+    except Exception:
+        logger.warning("read_json_object failed unexpectedly", exc_info=True)
+        return None

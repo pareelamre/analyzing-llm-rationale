@@ -171,3 +171,74 @@ class GcsStoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _FakeJsonBlob:
+    def __init__(self, generation, body=b'{"v":1}'):
+        self.generation = generation
+        self.body = body
+        self.downloads = 0
+
+    def reload(self):
+        pass
+
+    def download_as_bytes(self):
+        self.downloads += 1
+        return self.body
+
+
+class ReadJsonObjectTests(unittest.TestCase):
+    def setUp(self):
+        gcs_store._json_cache.clear()
+
+    def _expire(self):
+        for entry in gcs_store._json_cache.values():
+            entry[2] = float("-inf")
+
+    def test_an_unchanged_generation_is_not_downloaded_again(self):
+        """The whole reason for this path instead of a plain URL fetch.
+
+        The payload is rewritten every 5 minutes but read every 30 seconds,
+        so without a generation check most reads would re-download 2.4MB the
+        process already had -- free from raw GitHub, egress from GCS.
+        """
+        blob = _FakeJsonBlob(generation=11)
+        with mock.patch.object(gcs_store, "_get_gcs_client", return_value=_FakeClient(blob)):
+            first = gcs_store.read_json_object("b", "o")
+            self._expire()
+            second = gcs_store.read_json_object("b", "o")
+
+        self.assertEqual(first, {"v": 1})
+        self.assertEqual(second, {"v": 1})
+        self.assertEqual(blob.downloads, 1)
+
+    def test_a_new_generation_is_picked_up(self):
+        blob = _FakeJsonBlob(generation=11)
+        with mock.patch.object(gcs_store, "_get_gcs_client", return_value=_FakeClient(blob)):
+            self.assertEqual(gcs_store.read_json_object("b", "o"), {"v": 1})
+            blob.generation = 12
+            blob.body = b'{"v":2}'
+            self._expire()
+            self.assertEqual(gcs_store.read_json_object("b", "o"), {"v": 2})
+        self.assertEqual(blob.downloads, 2)
+
+    def test_a_metadata_failure_keeps_serving_the_last_good_payload(self):
+        blob = _FakeJsonBlob(generation=11)
+        with mock.patch.object(gcs_store, "_get_gcs_client", return_value=_FakeClient(blob)):
+            gcs_store.read_json_object("b", "o")
+
+            def _boom():
+                raise RuntimeError("metadata unavailable")
+
+            blob.reload = _boom
+            self._expire()
+            self.assertEqual(gcs_store.read_json_object("b", "o"), {"v": 1})
+
+    def test_unparseable_json_returns_none_rather_than_raising(self):
+        blob = _FakeJsonBlob(generation=11, body=b"not json")
+        with mock.patch.object(gcs_store, "_get_gcs_client", return_value=_FakeClient(blob)):
+            self.assertIsNone(gcs_store.read_json_object("b", "o"))
+
+    def test_no_client_returns_none(self):
+        with mock.patch.object(gcs_store, "_get_gcs_client", return_value=None):
+            self.assertIsNone(gcs_store.read_json_object("b", "o"))
