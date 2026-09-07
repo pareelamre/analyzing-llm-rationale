@@ -20,7 +20,7 @@ Env:
   FORESEA_AGENT_ACCOUNT_DB_PATH    local SQLite path (GCS-synced by the workflow)
   FORESEA_AGENT_NOTES_PATH         local notes JSON path (GCS-synced by the workflow)
   FORESEA_AGENT_PLACE_TRADE_MODE   must be "shadow" (the default) -- hard-checked
-  CANDIDATE_COUNT                  new markets to consider per cycle (default 8)
+  CANDIDATE_COUNT                  new markets to consider per cycle (default 24)
   MAX_TOOL_STEPS                   tool-loop step cap per cycle (default 10, 12 for flash/minimax)
   AGENT_TRADING_MIN_CLOSE_DAYS     candidate discovery window, days (default 1)
   AGENT_TRADING_MAX_CLOSE_DAYS     candidate discovery window, days (default 90)
@@ -167,7 +167,7 @@ VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 # that hurdle, so a wider menu means more genuinely actionable markets
 # rather than more noise -- and the merit gate still decides what is worth
 # trading, so nothing here forces a position.
-CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "8")))
+CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "24")))
 # Flash and MiniMax models have higher output TPM (30,000) and can sustain deeper 12-step cycles
 _DEFAULT_MAX_TOOL_STEPS = 12 if any(k in MODEL.lower() for k in ("flash", "minimax")) else 10
 MAX_TOOL_STEPS = max(1, int(os.environ.get("MAX_TOOL_STEPS", str(_DEFAULT_MAX_TOOL_STEPS))))

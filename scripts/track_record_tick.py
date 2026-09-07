@@ -26,7 +26,7 @@ Env:
   TRACK_MODEL       stable primary model for public metrics (default council)
   TRACK_VARIANT     variant label            (default variant0_neutral_baseline)
   TRACK_TEMPERATURE temperature label        (default 0.0)
-  PER_VENUE         new markets per venue     (default 3, clamped 1..5)
+  PER_VENUE         new markets per venue     (default 5, clamped 1..25)
   TRACK_RECORD_PREDICT_MODE  remote|local     (default remote)
   SCADS_AI_API_KEY   model credential; used by Cloud Run in remote mode and by
                     GitHub Actions in local mode
@@ -207,7 +207,7 @@ if TRACK_FORECAST_MAX_TARGETS <= 0:
     TRACK_FORECAST_MAX_TARGETS = None
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 TEMPERATURE = float(os.environ.get("TRACK_TEMPERATURE", "0.0") or 0.0)
-PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "3") or 3), 5))
+PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "5") or 5), 25))
 # Dedicated convergence-window discovery: markets specifically at 7-14d lead time.
 # Higher limit than PER_VENUE since this is the target data-collection window.
 CONVERGENCE_PER_VENUE = max(0, int(os.environ.get("CONVERGENCE_PER_VENUE", "20") or 20))
