@@ -32,3 +32,38 @@ jobs:
         run: ruff check src tests
       - name: Test
         run: python -m unittest discover -s tests
+
+  # The durable-store concurrency checks need a Datastore emulator, so they
+  # skip everywhere except a developer's machine with one running -- see
+  # docs/autonomous-twin/DATASTORE_EMULATOR.md. They prove that two processes
+  # cannot consume the same final account allocation, that a manual and an
+  # autonomous command share durable capacity, and that an expired lease is
+  # refenced while the stale worker cannot progress. Nothing else covers any
+  # of that.
+  #
+  # Separate job so a flaky emulator cannot fail the main suite, and so the
+  # extra ~2 minutes runs in parallel rather than adding to it.
+  datastore-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Install the Datastore emulator
+        run: gcloud components install cloud-datastore-emulator --quiet
+      - name: Install dependencies
+        run: pip install -e ".[dev,serve]" httpx
+      - name: Run the durable-store checks against the emulator
+        env:
+          DATASTORE_DATASET: foresea-twin-test
+          GOOGLE_CLOUD_PROJECT: foresea-twin-test
+        run: |
+          gcloud beta emulators datastore start             --host-port=127.0.0.1:8765 --consistency=1.0 --no-store-on-disk &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8765/ >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8765/ >/dev/null             || { echo "Datastore emulator did not come up." >&2; exit 1; }
+          DATASTORE_EMULATOR_HOST=127.0.0.1:8765             python -m unittest tests.test_twin_store_integration -v
