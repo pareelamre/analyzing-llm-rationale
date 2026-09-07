@@ -210,24 +210,31 @@
       "dependencies": [
         "T04"
       ],
-      "status": "complete",
-      "substep": "durable daily Datastore budgets, atomic worst-case reservations, uncertain timeout handling, explicit pricing configuration, and a pre-call budget boundary are complete",
-      "branch": "codex/autonomous-twin",
+      "status": "in_progress",
+      "substep": "durable atomic reserve-and-claim, duplicate-dispatch prevention, conservative uncertain token and USD accounting, strict persisted-counter validation, and audited late reconciliation are implemented; production model pricing, timeouts, cancellation, stale-call recovery, and worker wiring remain",
+      "branch": "codex/research-budget-integrity",
       "commit": "174cc3d3",
       "pr_url": null,
       "checks": [
         "PYTHONPATH=src py -m unittest tests.test_twin_budget (pass: 4 tests)",
         "py -m ruff check src/analyzing_llm_rationale/twin/budget.py tests/test_twin_budget.py (pass)",
         "git diff --check (pass)",
-        "DATASTORE_EMULATOR_HOST=127.0.0.1:8765 GOOGLE_CLOUD_PROJECT=foresea-twin-test PYTHONPATH=src py -m unittest tests.test_twin_store_integration (pass: 4 tests)"
+        "DATASTORE_EMULATOR_HOST=127.0.0.1:8765 GOOGLE_CLOUD_PROJECT=foresea-twin-test PYTHONPATH=src py -m unittest tests.test_twin_store_integration (pass: 4 tests)",
+        "PYTHONPATH=src py -m unittest tests.test_twin_budget tests.test_twin_store_integration (pass: 13 tests; 6 Datastore emulator tests skipped when emulator unavailable)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass)",
+        "py -m ruff check src tests (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/budget.py",
         "configs/twin.yaml",
-        "tests/test_twin_budget.py"
+        "tests/test_twin_budget.py",
+        "docs/autonomous-twin/BUDGET_INTEGRITY.md"
       ],
-      "blockers": [],
-      "handoff": "T08 is ready. Generate evidence-backed, non-executing forecasts only through the budget pre-call boundary."
+      "blockers": [
+        "Production research worker does not yet load approved model prices and bounded timeout settings.",
+        "Stale claimed-call recovery and evidence-cache integration remain unwired."
+      ],
+      "handoff": "Wire approved model pricing, provider timeouts, capture acquisition, and durable research results into the private worker; keep live trading disabled."
     },
     {
       "id": "T08",
@@ -236,14 +243,25 @@
         "T07"
       ],
       "status": "in_progress",
-      "substep": "bounded evidence filtering, one budgeted schema repair, and prospective ledger persistence implemented; provider/tool integration remains pending",
-      "branch": "codex/autonomous-twin-followup",
+      "substep": "strict closed public-capture gateway, bounded ChatProvider dispatch, exact forecast schema, one separately budgeted repair, prompt/model/config/input hashes, prospective ledger acceptance, durable-result protocol, and persisted PASS behavior are implemented; production capture acquisition and durable result-store/worker wiring remain",
+      "branch": "codex/research-budget-integrity",
       "commit": null,
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/445",
-      "checks": [],
-      "evidence": [],
-      "blockers": [],
-      "handoff": null
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_research_gateway tests.test_twin_budget tests.test_twin_research tests.test_forecast_ledger (pass: 43 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1571 tests; 6 Datastore emulator tests skipped)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/research_gateway.py",
+        "tests/test_twin_research_gateway.py"
+      ],
+      "blockers": [
+        "Production public capture acquisition is not wired to the private research worker.",
+        "A durable ResearchResultStore implementation is still required before worker deployment."
+      ],
+      "handoff": "Implement durable research-result persistence and construct validated PublicResearchCapture records from frozen market/evidence artifacts in the private worker."
     },
     {
       "id": "T09",
