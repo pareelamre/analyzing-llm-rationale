@@ -255,3 +255,54 @@ class LiveTrackRecordTests(unittest.TestCase):
 
         self.assertEqual(name, "flat")
         self.assertEqual(data["roi"], 0.01)
+
+
+class GcsPayloadSourceTests(unittest.TestCase):
+    """_gcs_payload_source is the opt-in switch for every published payload.
+
+    Each payload opts in on its own env var so a bucket can be proven on one
+    before the rest follow; an unset bucket has to leave that reader exactly
+    where it was, on raw GitHub.
+    """
+
+    def _factory(self):
+        from analyzing_llm_rationale import server as server_module
+
+        return server_module._gcs_payload_source
+
+    def test_no_bucket_means_no_source(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("UNSET_PREFIX_GCS_BUCKET", None)
+            self.assertIsNone(self._factory()("UNSET_PREFIX", "x.json"))
+
+    def test_a_blank_bucket_is_treated_as_unset(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {"BLANK_GCS_BUCKET": "   "}, clear=False):
+            self.assertIsNone(self._factory()("BLANK", "x.json"))
+
+    def test_the_object_name_defaults_and_can_be_overridden(self):
+        import os
+        from unittest import mock
+        from analyzing_llm_rationale import gcs_store
+
+        seen = []
+
+        def _fake(bucket, obj):
+            seen.append((bucket, obj))
+            return {"ok": True}
+
+        with mock.patch.object(gcs_store, "read_json_object", _fake):
+            with mock.patch.dict(os.environ, {"P_GCS_BUCKET": "b"}, clear=False):
+                os.environ.pop("P_GCS_OBJECT", None)
+                self.assertEqual(self._factory()("P", "default.json")(), {"ok": True})
+            with mock.patch.dict(
+                os.environ, {"P_GCS_BUCKET": "b", "P_GCS_OBJECT": "custom.json"}, clear=False
+            ):
+                self._factory()("P", "default.json")()
+
+        self.assertEqual(seen, [("b", "default.json"), ("b", "custom.json")])
