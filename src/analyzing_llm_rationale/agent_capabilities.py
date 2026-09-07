@@ -811,6 +811,28 @@ async def run_tool_loop(
             return {"answer": answer, "transcript": transcript,
                     "steps": step, "truncated": False}
         if action is None:
+            raw_answer = (out or "").strip()
+            # If required_final_sections is specified and the model directly provided
+            # a complete, valid markdown thesis matching all mandated headings,
+            # accept it directly rather than wasting a turn complaining that it wasn't
+            # wrapped in {"final": ...}.
+            if (
+                required_final_sections
+                and not _missing_sections(raw_answer, required_final_sections)
+            ):
+                if (
+                    not transcript
+                    and tools
+                    and not substantive_retry_used
+                    and step < max_steps - 1
+                ):
+                    substantive_retry_used = True
+                    messages.append({"role": "assistant", "content": out})
+                    messages.append({"role": "user", "content": substantive_hint})
+                    continue
+                return {"answer": raw_answer, "transcript": transcript,
+                        "steps": step, "truncated": False}
+
             # No JSON found at all -- could be an incomplete/foreign-format
             # tool-call attempt (prose, or a different tool-call dialect)
             # rather than a genuine final answer, so give the model one
@@ -820,7 +842,6 @@ async def run_tool_loop(
                 messages.append({"role": "assistant", "content": out})
                 messages.append({"role": "user", "content": reformat_hint})
                 continue
-            raw_answer = (out or "").strip()
             if required_final_sections and _missing_sections(raw_answer, required_final_sections):
                 raw_answer = _synthesise_thesis(raw_answer, transcript)
             return {"answer": raw_answer, "transcript": transcript,

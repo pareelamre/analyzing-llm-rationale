@@ -1114,6 +1114,71 @@ class ThesisTemplateConformanceTests(unittest.TestCase):
             ("Research Delta", "Decision & Execution", "Model Edge"))
         self.assertEqual(missing, ["Decision & Execution", "Model Edge"])
 
+    def test_direct_markdown_thesis_without_json_wrapper_is_accepted_first_time(self):
+        # When a model outputs its final thesis directly in markdown conforming to
+        # the required template after calling research tools, run_tool_loop must
+        # accept it immediately without sending "That reply could not be parsed".
+        seen_prompts: list[str] = []
+        raw_markdown = (
+            "### 0. Research Delta\n- Strategy: EVIDENCE_EDGE\n"
+            "### 1. Decision & Execution\n- Action: PASS\n"
+            "### 3. Model Edge & Valuation\n- Model Probability: 35%"
+        )
+        turns = iter([
+            '{"thought":"researching","action":"web_search","args":{"q":"fed"}}',
+            raw_markdown,  # Direct markdown, no {"final": ...} JSON wrapper
+        ])
+
+        async def web_search(_args):
+            return "obs"
+
+        async def chat_fn(messages):
+            seen_prompts.append(str(messages[-1].get("content", "")))
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"web_search": web_search},
+            [{"name": "web_search", "description": "d"}], chat_fn, max_steps=5,
+            required_final_sections=("Research Delta", "Decision & Execution", "Model Edge")
+        ))
+        self.assertEqual(res["answer"], raw_markdown)
+        self.assertEqual(len(res["transcript"]), 1)
+        # Verify it was NOT rejected with "could not be parsed"
+        for prompt in seen_prompts:
+            self.assertNotIn("could not be parsed", prompt)
+
+    def test_direct_markdown_thesis_without_prior_tools_still_triggers_substantive_retry(self):
+        # Even if the markdown conforms to the template, a zero-tool answer on turn 0
+        # must still trigger substantive_hint so models do not skip research.
+        seen_prompts: list[str] = []
+        raw_markdown = (
+            "### 0. Research Delta\n- Strategy: EVIDENCE_EDGE\n"
+            "### 1. Decision & Execution\n- Action: PASS\n"
+            "### 3. Model Edge & Valuation\n- Model Probability: 35%"
+        )
+        turns = iter([
+            raw_markdown,  # Turn 0 direct markdown with no tools called
+            '{"thought":"researching","action":"web_search","args":{"q":"fed"}}',
+            raw_markdown,  # Turn 2 direct markdown after research
+        ])
+
+        async def web_search(_args):
+            return "obs"
+
+        async def chat_fn(messages):
+            seen_prompts.append(str(messages[-1].get("content", "")))
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"web_search": web_search},
+            [{"name": "web_search", "description": "d"}], chat_fn, max_steps=5,
+            required_final_sections=("Research Delta", "Decision & Execution", "Model Edge")
+        ))
+        self.assertEqual(res["answer"], raw_markdown)
+        self.assertEqual(len(res["transcript"]), 1)
+        # Check that substantive hint was sent after turn 0
+        self.assertTrue(any("That is a verdict with no analysis behind it" in p for p in seen_prompts))
+
 
 if __name__ == "__main__":
     unittest.main()
