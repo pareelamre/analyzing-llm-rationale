@@ -757,3 +757,47 @@ class RejectionContextTests(unittest.TestCase):
         for meta in (None, "", "not json", json.dumps([1, 2]), json.dumps({})):
             with self.subTest(meta=meta):
                 self.assertEqual(agent_trading_stats.rejection_context(meta), {})
+
+
+class FillContextTests(unittest.TestCase):
+    """A fill of 100 reads as a chosen size unless the target is beside it."""
+
+    def _meta(self, *, target=None, status=None):
+        audit = {"version": 1}
+        if target is not None:
+            audit["sizing"] = {"target_quantity": target}
+        if status is not None:
+            audit["execution"] = {"fill_status": status}
+        return json.dumps({"audit": audit})
+
+    def test_a_partial_fill_reports_the_target_and_the_fraction(self):
+        """llama's real numbers from the 04:18 tick."""
+        ctx = agent_trading_stats.fill_context(
+            self._meta(target=6533.986210065798, status="shadow_filled_partial"),
+            100.0,
+        )
+        self.assertEqual(ctx["fill_status"], "shadow_filled_partial")
+        self.assertEqual(ctx["target_quantity"], 6533.98621)
+        self.assertAlmostEqual(ctx["filled_fraction"], 0.015304, places=5)
+
+    def test_a_full_fill_adds_nothing(self):
+        self.assertEqual(
+            agent_trading_stats.fill_context(self._meta(target=50.0), 50.0), {},
+        )
+
+    def test_a_rounding_shortfall_is_not_a_liquidity_story(self):
+        # 99.5% filled: rounding, not the book refusing size.
+        self.assertEqual(
+            agent_trading_stats.fill_context(self._meta(target=100.0), 99.5), {},
+        )
+
+    def test_missing_or_unreadable_metadata_adds_nothing(self):
+        for meta in (None, "", "not json", json.dumps({}), json.dumps({"audit": 5})):
+            with self.subTest(meta=meta):
+                self.assertEqual(agent_trading_stats.fill_context(meta, 10.0), {})
+
+    def test_a_non_numeric_quantity_still_yields_the_status(self):
+        ctx = agent_trading_stats.fill_context(
+            self._meta(target=10.0, status="shadow_filled_partial"), None,
+        )
+        self.assertEqual(ctx, {"fill_status": "shadow_filled_partial"})
