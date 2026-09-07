@@ -270,8 +270,8 @@
       "status": "complete",
       "substep": "calibration_v1, immutable account/market risk evaluation, cumulative portfolio limits, reduce-only exits, venue rounding, and atomic reservation preconditions implemented",
       "branch": "codex/risk-reservation-preconditions",
-      "commit": null,
-      "pr_url": null,
+      "commit": "24964c97",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/520",
       "checks": [
         "py -m unittest tests.test_twin_risk tests.test_twin_store tests.test_twin_manual tests.test_twin_execution tests.test_twin_recovery tests.test_twin_store_integration",
         "py -m unittest discover -s tests",
@@ -293,15 +293,23 @@
         "T06",
         "T09"
       ],
-      "status": "in_progress",
-      "substep": "seeded depth-limited submit, partial fills, cancel-fill races, and one-time settlement implemented; adapter parity integration remains pending",
-      "branch": "codex/autonomous-twin-followup",
+      "status": "complete",
+      "substep": "typed preview/submit/status/cancel/account parity, versioned captured depth, seeded adverse scenarios, exact fill/fee/settlement events, and canonical account snapshots implemented",
+      "branch": "codex/shadow-venue-adapter",
       "commit": null,
-      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/445",
-      "checks": [],
-      "evidence": [],
+      "pr_url": null,
+      "checks": [
+        "py -m unittest tests.test_twin_simulator",
+        "py -m unittest discover -s tests",
+        "py -m ruff check src tests",
+        "git diff --check"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/simulator.py",
+        "tests/test_twin_simulator.py"
+      ],
       "blockers": [],
-      "handoff": null
+      "handoff": "T11 can inject ShadowVenue behind submit_claimed_command while reusing TradeIntent, RiskResult, ExecutionCommand, and AccountSnapshot."
     },
     {
       "id": "T11",
