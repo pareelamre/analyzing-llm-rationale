@@ -223,6 +223,51 @@ def _edge_board_rows(board: Any) -> List[Dict[str, Any]]:
     return rows if isinstance(rows, list) else []
 
 
+# polymarket_meta exceeded the MCP response limit outright on two of its four
+# targets, so both were unusable rather than merely wasteful:
+#
+#   series  746,932 chars -- 99.0% of it the nested ``events`` array
+#   sports  147,844 chars -- 38.5% image URLs, 13.7% createdAt, 10.5% a tag CSV
+#   teams     ~9,000 chars -- returns
+#   comments               -- per-market, not measured here
+#
+# Series carries every event in the series inline, each with its own markets.
+# A caller asking for a series listing is asking which series exist, not for
+# the whole tree; the count tells them where to look next.
+_SERIES_BULK_KEYS = ("events", "image", "icon")
+
+# Of a league row -- image, resolution (the league's homepage), a tags CSV,
+# ordering and createdAt -- only the identity and the ids that cross-reference
+# other tools survive. 465 leagues at once is a listing, not a dossier.
+_SPORTS_IDENTITY_KEYS = ("id", "sport", "name", "series", "primaryTagId")
+
+
+def _summarise_series(rows: Any) -> List[Dict[str, Any]]:
+    """Replace each series' inline event tree with a count of it."""
+    if not isinstance(rows, list):
+        return []
+    summarised = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        series = {k: v for k, v in row.items() if k not in _SERIES_BULK_KEYS}
+        events = row.get("events")
+        series["event_count"] = len(events) if isinstance(events, list) else 0
+        summarised.append(series)
+    return summarised
+
+
+def _summarise_sports(rows: Any) -> List[Dict[str, Any]]:
+    """Keep what names a league and what links it to other tools."""
+    if not isinstance(rows, list):
+        return []
+    return [
+        {k: row[k] for k in _SPORTS_IDENTITY_KEYS if k in row}
+        for row in rows
+        if isinstance(row, dict)
+    ]
+
+
 _TAG_IDENTITY_KEYS = ("id", "label", "slug")
 
 
@@ -539,8 +584,8 @@ class ForeseaClient:
         if target_l == "teams":
             return market_data.fetch_polymarket_teams()
         if target_l == "sports":
-            return market_data.fetch_polymarket_sports()
-        return market_data.fetch_polymarket_series()
+            return _summarise_sports(market_data.fetch_polymarket_sports())
+        return _summarise_series(market_data.fetch_polymarket_series())
 
     async def apolymarket_meta(self, target: str = "series", market_id: str = "") -> List[Dict[str, Any]]:
         loop = asyncio.get_running_loop()
@@ -948,7 +993,12 @@ def create_mcp_server(
     @mcp.tool()
     async def foresea_polymarket_meta(target: str = "series", market_id: str = "") -> List[Dict[str, Any]]:
         """Call this to fetch Polymarket metadata: event series listings, community
-        discussion comments for a market, or sports league metadata (target: 'series', 'comments', 'sports', 'teams')."""
+        discussion comments for a market, or sports league metadata (target: 'series',
+        'comments', 'sports', 'teams').
+
+        'series' lists the series and how many events each holds, not the events
+        themselves -- fetch a series by slug for those. 'sports' lists every league
+        with the ids that link it to other tools, not league artwork or homepages."""
 
         return await _call_tool_async(client.apolymarket_meta, target, market_id)
 
