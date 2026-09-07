@@ -19,11 +19,18 @@ import collections
 import unittest
 from pathlib import Path
 
-_SRC = Path(__file__).resolve().parents[1] / "src" / "analyzing_llm_rationale"
+_ROOT = Path(__file__).resolve().parents[1]
+# scripts/ too: it holds build_agent_trading_board.py and
+# agent_trading_tick.py, which publish the board and run the trades. Both are
+# production code by any measure, and CI did not lint them at all until #502.
+_SCANNED = (_ROOT / "src" / "analyzing_llm_rationale", _ROOT / "scripts")
 
 
 def _typo_reads(path: Path) -> list[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+    except SyntaxError:  # pragma: no cover - a file ruff would already reject
+        return []
     out: list[str] = []
     for cls in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
         assigned: set[str] = set()
@@ -57,8 +64,9 @@ def _typo_reads(path: Path) -> list[str]:
 class AttributeTypoTests(unittest.TestCase):
     def test_no_class_reads_a_near_miss_of_an_attribute_it_assigns(self):
         found: list[str] = []
-        for path in sorted(_SRC.glob("*.py")):
-            found.extend(_typo_reads(path))
+        for directory in _SCANNED:
+            for path in sorted(directory.glob("*.py")):
+                found.extend(_typo_reads(path))
         self.assertEqual(
             found,
             [],
