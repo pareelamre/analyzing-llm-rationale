@@ -35,6 +35,14 @@ _WEATHER_MARKERS = (
     "weather", "temperature", "temp", "rain", "snow", "precipitation",
     "wind", "hurricane", "tornado", "storm", "heatwave", "freeze",
 )
+# "weather" is the one marker that routinely appears in a contract's rules
+# without the contract being about weather -- almost always in an exclusion.
+# A live geopolitics market read "airspace closures which occur solely due to
+# weather conditions will not qualify", and that sentence alone gated it.
+_GENERIC_WEATHER_MARKERS = ("weather",)
+_SPECIFIC_WEATHER_MARKERS = tuple(
+    m for m in _WEATHER_MARKERS if m not in _GENERIC_WEATHER_MARKERS
+)
 _DAILY_TEMPERATURE_MARKERS = (
     "highest temperature", "high temperature", "lowest temperature", "low temperature",
     "daily temperature", "daily high", "daily low", "daily climate report",
@@ -82,7 +90,10 @@ class WeatherMarketBrief:
 
 
 def _contract_text(quote: Mapping[str, Any]) -> Tuple[str, str, str]:
-    question = str(quote.get("question") or "")
+    # `title` too: weather-radar rows key the subject as title, and a quote
+    # whose subject never reaches the classifier can only fail open -- the
+    # dangerous direction for a gate that exists to withhold trading.
+    question = str(quote.get("question") or quote.get("title") or "")
     category = str(quote.get("category") or "")
     parts = [
         str(quote.get(field) or "")
@@ -102,13 +113,32 @@ def _contract_text(quote: Mapping[str, Any]) -> Tuple[str, str, str]:
     # weather-trading gates merely from their category, so classification is
     # driven by the contract text; only the exact ``Weather`` category is a
     # fallback for an otherwise terse contract.
-    return f"{question}\n{contract_text}".lower(), contract_text, category.lower().strip()
+    return (
+        f"{question}\n{contract_text}".lower(),
+        contract_text,
+        category.lower().strip(),
+        question.lower(),
+    )
 
 
-def _looks_like_weather_contract(text: str, category: str) -> bool:
+def _looks_like_weather_contract(text: str, category: str, question: str = "") -> bool:
+    """Whether this contract is about weather.
+
+    A specific marker -- temperature, snow, hurricane -- means what it says
+    wherever it appears. The generic word "weather" does not: contract rules
+    routinely name it in order to exclude it, so it only counts in the title.
+    """
     if category == "weather":
         return True
-    return any(re.search(rf"\b{re.escape(marker)}\b", text) for marker in _WEATHER_MARKERS)
+    if any(
+        re.search(rf"\b{re.escape(m)}\b", text)
+        for m in _SPECIFIC_WEATHER_MARKERS
+    ):
+        return True
+    return any(
+        re.search(rf"\b{re.escape(m)}\b", question)
+        for m in _GENERIC_WEATHER_MARKERS
+    )
 
 
 def _market_type(text: str) -> str:
@@ -155,8 +185,8 @@ def classify_weather_market(quote: Mapping[str, Any]) -> WeatherMarketBrief:
     started = time.perf_counter()
     with tracer.start_as_current_span("weather_markets.classify") as span:
         try:
-            text, contract_text, category = _contract_text(quote)
-            is_weather = _looks_like_weather_contract(text, category)
+            text, contract_text, category, question = _contract_text(quote)
+            is_weather = _looks_like_weather_contract(text, category, question)
             if not is_weather:
                 result = WeatherMarketBrief(
                     is_weather=False,
