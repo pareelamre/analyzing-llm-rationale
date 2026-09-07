@@ -58,6 +58,51 @@ class RiskResult:
     calibration_hash: Optional[str] = None
     reservation_preconditions: Optional[ReservationPreconditions] = None
 
+    def to_storage(self) -> dict[str, Any]:
+        preconditions = self.reservation_preconditions
+        return {
+            "quantity": str(self.quantity), "cash": str(self.cash), "max_loss": str(self.max_loss),
+            "reason": self.reason, "cash_delta": str(self.cash_delta),
+            "expected_account_revision": self.expected_account_revision,
+            "account_generation": self.account_generation,
+            "market_snapshot_id": self.market_snapshot_id,
+            "calibration_hash": self.calibration_hash,
+            "reservation_preconditions": ({
+                "account_revision": preconditions.account_revision,
+                "market_version": preconditions.market_version,
+                "market_received_at": preconditions.market_received_at.isoformat(),
+                "market_stale_after_seconds": preconditions.market_stale_after_seconds,
+            } if preconditions is not None else None),
+        }
+
+    @classmethod
+    def from_storage(cls, payload: Mapping[str, Any]) -> "RiskResult":
+        allowed = {
+            "quantity", "cash", "max_loss", "reason", "cash_delta",
+            "expected_account_revision", "account_generation", "market_snapshot_id",
+            "calibration_hash", "reservation_preconditions",
+        }
+        if set(payload) != allowed:
+            raise ValueError("stored risk result schema is invalid")
+        precondition_payload = payload.get("reservation_preconditions")
+        preconditions = None
+        if precondition_payload is not None:
+            if not isinstance(precondition_payload, Mapping):
+                raise ValueError("stored risk preconditions are invalid")
+            preconditions = ReservationPreconditions(
+                int(precondition_payload["account_revision"]),
+                str(precondition_payload["market_version"]),
+                datetime.fromisoformat(str(precondition_payload["market_received_at"]).replace("Z", "+00:00")),
+                int(precondition_payload["market_stale_after_seconds"]),
+            )
+        return cls(
+            _finite("quantity", payload["quantity"]), _finite("cash", payload["cash"]),
+            _finite("max_loss", payload["max_loss"]), payload.get("reason"),
+            _finite("cash_delta", payload["cash_delta"]), payload.get("expected_account_revision"),
+            payload.get("account_generation"), payload.get("market_snapshot_id"),
+            payload.get("calibration_hash"), preconditions,
+        )
+
 
 @dataclass(frozen=True)
 class CalibrationResult:
