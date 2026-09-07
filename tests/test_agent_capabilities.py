@@ -1097,6 +1097,23 @@ class ThesisTemplateConformanceTests(unittest.TestCase):
         self.assertIn("**Action**: PASS", res["answer"])
         self.assertIn("No new position", res["answer"])
         self.assertIn("web_search", res["answer"])
+        self.assertNotIn("**Model Probability**: **Model Probability**:", res["answer"])
+        self.assertIn("- **Model Probability**: not stated in a parseable form", res["answer"])
+
+    def test_synthesise_thesis_extracts_model_probability_and_ticker_when_pass(self):
+        answer = (
+            "Let me analyze this carefully.\n"
+            "Current state: KXHIGHNY-26SEP07-B77.5: My estimate ~13% YES vs market 10.5%.\n"
+            "Edge +2pp vs ask, below fee hurdle. PASS."
+        )
+        transcript = [
+            {"action": "weather_market_research", "args": {"ticker": "KXHIGHNY-26SEP07-B77.5"}},
+        ]
+        synth = ac._synthesise_thesis(answer, transcript)
+        self.assertNotIn("**Model Probability**: **Model Probability**:", synth)
+        self.assertIn("- **Model Probability**: 13% YES vs **Market Price**: 10.5%", synth)
+        self.assertIn("- **Market & Venue**: KXHIGHNY-26SEP07-B77.5 on Kalshi", synth)
+        self.assertIn("- **Action**: PASS", synth)
 
     def test_it_asks_more_than_once_before_giving_up(self):
         # One retry is a coin flip for a model that rambles.

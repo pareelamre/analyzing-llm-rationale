@@ -462,6 +462,139 @@ def _trade_call_from_transcript(transcript: Sequence[Dict[str, Any]]) -> Optiona
     return None
 
 
+def _format_prob_display(val: Any) -> Optional[str]:
+    """Format a probability value cleanly for thesis display."""
+    if val is None:
+        return None
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        s = str(val).strip()
+        return s if s else None
+    if 0.0 <= f <= 1.0:
+        pct = round(f * 100, 1)
+        pct_str = f"{int(pct)}%" if pct.is_integer() else f"{pct}%"
+        return f"{pct_str} ({round(f, 4)})"
+    return f"{round(f, 1)}%"
+
+
+def _extract_synthesis_metadata(
+    answer: str, transcript: Sequence[Dict[str, Any]]
+) -> tuple[str, str, Optional[str], Optional[str]]:
+    """Extract (action, market, model_prob_str, market_price_str) from answer and transcript.
+
+    Recovers researched tickers, actions (HOLD/PASS), and explicit probabilities
+    when a model failed to format them into the mandated 4-section markdown.
+    """
+    ans = str(answer or "").strip()
+
+    # 1. Action
+    action = "PASS"
+    act_match = re.search(r"(?im)^\s*[-*]?\s*\**action\**\s*:\s*\[?\s*([^\]\n\r]+)", ans)
+    if act_match:
+        cand_act = act_match.group(1).strip().upper()
+        if cand_act.startswith("BUY ") or cand_act in ("PASS", "HOLD", "CLOSE"):
+            action = cand_act
+    elif re.search(r"(?i)\bHOLD\b", ans):
+        action = "HOLD"
+
+    # 2. Market & Venue
+    market = "No new position"
+    mkt_match = re.search(r"(?im)^\s*[-*]?\s*\**market\s*&\s*venue\**\s*:\s*\[?\s*([^\]\n\r]+)", ans)
+    if mkt_match:
+        cand_mkt = mkt_match.group(1).strip()
+        if cand_mkt.lower() not in {"no new position", "n/a", "none", "no contract assessed"}:
+            market = cand_mkt
+    if market == "No new position":
+        ticker_match = re.search(r"\b(KX[A-Z0-9._-]{3,})\b", ans)
+        if ticker_match:
+            market = f"{ticker_match.group(1)} on Kalshi"
+        else:
+            poly_match = re.search(r"\b(will-[a-z0-9._-]{3,})\b", ans, re.IGNORECASE)
+            if poly_match:
+                market = f"{poly_match.group(1)} on Polymarket"
+
+    if market == "No new position":
+        for step in reversed(list(transcript or [])):
+            if not isinstance(step, dict):
+                continue
+            args = step.get("args") if isinstance(step.get("args"), dict) else {}
+            step_ticker = str(args.get("ticker") or args.get("market_id") or "").strip()
+            if step_ticker:
+                step_platform = str(
+                    args.get("platform") or ("kalshi" if step_ticker.startswith("KX") else "polymarket")
+                ).lower()
+                market = f"{step_ticker} on {step_platform}"
+                break
+
+    # 3. Probabilities
+    model_p_str: Optional[str] = None
+    market_p_str: Optional[str] = None
+
+    prob_line_match = re.search(
+        r"(?i)\*{0,2}model\s+probability\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
+        r"(?P<model>\d+(?:\.\d+)?)\s*%\s*\]?"
+        r"(?P<model_side>\s+(?:YES|NO)\b)?"
+        r"(?:\s*\([^)]{0,60}\))?"
+        r"(?P<model_side_alt>\s+(?:YES|NO)\b)?"
+        r"(?:\s*(?:vs\.?|versus)\s+"
+        r"\*{0,2}market\s+price\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
+        r"(?P<market>\d+(?:\.\d+)?)\s*%"
+        r"(?P<market_side>\s+(?:YES|NO)\b)?)?",
+        ans,
+    )
+    if prob_line_match:
+        m_val = prob_line_match.group("model")
+        m_side = (prob_line_match.group("model_side") or prob_line_match.group("model_side_alt") or "").strip().upper()
+        model_p_str = f"{m_val}% {m_side}".strip()
+        if prob_line_match.group("market"):
+            mk_val = prob_line_match.group("market")
+            mk_side = (prob_line_match.group("market_side") or "").strip().upper()
+            market_p_str = f"{mk_val}% {mk_side}".strip()
+
+    if not model_p_str:
+        est_match = re.search(
+            r"(?i)(?:my\s+estimate|estimate|forecast|probability)\s*(?:is|of|=|:)?\s*(?:about|maybe|~)?\s*"
+            r"(?P<val>\d+(?:\.\d+)?)\s*%\s*(?P<side>YES|NO)?(?:\s*(?:vs\.?|versus|vs\s+market)\s*(?:market)?\s*(?:about|~)?\s*(?P<market>\d+(?:\.\d+)?)\s*%)?",
+            ans,
+        )
+        if est_match:
+            val = est_match.group("val")
+            side = (est_match.group("side") or "").strip().upper()
+            model_p_str = f"{val}% {side}".strip()
+            if est_match.group("market"):
+                market_p_str = f"{est_match.group('market')}%"
+
+    if not model_p_str:
+        p_side_match = re.search(
+            r"(?i)\bP\((?P<side>YES|NO)\)\b[^\n\r%]{0,60}?(?:is|=|:|~|\s)\s*~?\s*(?P<val>\d+(?:\.\d+)?)\s*%",
+            ans,
+        )
+        if p_side_match:
+            model_p_str = f"{p_side_match.group('val')}% {p_side_match.group('side').upper()}"
+
+    if not model_p_str:
+        for step in reversed(list(transcript or [])):
+            if not isinstance(step, dict):
+                continue
+            obs = step.get("observation")
+            if isinstance(obs, str) and ("bracket_probability" in obs or "forecast_probability" in obs):
+                try:
+                    obs_json = json.loads(obs)
+                    if isinstance(obs_json, dict):
+                        bp = obs_json.get("bracket_probability") or obs_json.get("forecast_probability")
+                        if bp is not None:
+                            model_p_str = _format_prob_display(bp)
+                            mp = obs_json.get("market_price")
+                            if mp is not None:
+                                market_p_str = _format_prob_display(mp)
+                            break
+                except Exception:
+                    pass
+
+    return action, market, model_p_str, market_p_str
+
+
 def _synthesise_thesis(answer: str, transcript: Sequence[Dict[str, Any]]) -> str:
     """Build a parseable thesis from what the cycle actually did.
 
@@ -496,13 +629,22 @@ def _synthesise_thesis(answer: str, transcript: Sequence[Dict[str, Any]]) -> str
         market = f"{ticker} on {platform}"
         sizing = f"{quantity if quantity is not None else 'tool-sized'} contracts @ {price}"
         observation = str(call.get("observation") or "")[:200].replace("\n", " ")
-        edge = (f"**Model Probability**: {model_p} vs **Market Price**: {price}"
-                if model_p is not None else
-                "**Model Probability**: not stated in a parseable form")
+        if model_p is not None:
+            m_disp = _format_prob_display(model_p)
+            p_disp = _format_prob_display(price)
+            edge = f"{m_disp} vs **Market Price**: {p_disp}" if p_disp else m_disp
+        else:
+            edge = "not stated in a parseable form"
     else:
-        action, market, sizing = "PASS", "No new position", "No new order"
+        action, market, model_p_str, market_p_str = _extract_synthesis_metadata(answer, transcript)
+        sizing = "No new order"
         observation = "No place_trade call was made this cycle."
-        edge = "**Model Probability**: not stated in a parseable form"
+        if model_p_str and market_p_str:
+            edge = f"{model_p_str} vs **Market Price**: {market_p_str}"
+        elif model_p_str:
+            edge = model_p_str
+        else:
+            edge = "not stated in a parseable form"
 
     return "\n".join([
         "### 0. Research Delta",

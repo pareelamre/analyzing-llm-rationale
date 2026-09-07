@@ -637,6 +637,15 @@ class RecentActivityTests(unittest.TestCase):
         self.assertNotIn("The model's own answer, unmodified", display)
         self.assertNotIn("scratchpad internal monologue", display)
 
+    def test_clean_thesis_display_deduplicates_model_probability_prefix(self):
+        thesis = (
+            "### 3. Model Edge & Valuation\n"
+            "- **Model Probability**: **Model Probability**: not stated in a parseable form"
+        )
+        display = agent_trading_stats.clean_thesis_display(thesis)
+        self.assertNotIn("**Model Probability**: **Model Probability**:", display)
+        self.assertIn("- **Model Probability**: not stated in a parseable form", display)
+
     def test_merges_trades_theses_and_notes_sorted_newest_first(self):
         with _fixture_conn() as conn:
             _insert_account(conn, "model-a")

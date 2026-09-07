@@ -935,6 +935,17 @@ class DeclaredThesisProbabilityTests(unittest.TestCase):
                 self.assertIsNotNone(match, text)
                 self.assertEqual(match.group(1), "37")
 
+    def test_parses_probability_with_duplicate_model_probability_prefix(self):
+        thesis = chr(10).join([
+            "- **Action**: BUY YES",
+            "- **Market & Venue**: KXTEST on Kalshi",
+            "- **Order Sizing**: Edge Kelly",
+            "- **Model Probability**: **Model Probability**: 62% vs **Market Price**: 50%",
+        ])
+        declared = agent_trading_tick._declared_thesis_execution(thesis)
+        self.assertIsNotNone(declared)
+        self.assertEqual(declared["model_probability"], 0.62)
+
 
 class EventMeritGateTests(unittest.TestCase):
     def test_prompt_requires_event_merit_not_just_a_price_gap(self):
