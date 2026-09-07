@@ -1,53 +1,65 @@
 # What the scheduled workflows actually run at
 
-GitHub does not deliver every `schedule` slot, and how much it drops depends
-on how often you ask. Measured over the most recent 30 runs of each workflow
-on 2026-09-07:
+GitHub does not deliver every `schedule` slot, and in this repository it
+delivers a small minority of them. Measured 2026-09-07 by counting runs whose
+`event` is `schedule` against the number the cron declares over the same span:
 
-| workflow | declared cron | interval | `schedule` runs | delivered |
-| --- | --- | ---: | ---: | ---: |
-| `track-record-tick.yml` | `*/5 * * * *` | 5 min | 2 / 30 | ~7% |
-| `agent-trading-board-publish.yml` | `27,57 * * * *` | 30 min | 9 / 30 | ~30% |
-| `track-record-resolved.yml` | `7 * * * *` | 60 min | 29 / 30 | ~97% |
+| workflow | declared cron | interval | schedule runs | expected | delivered |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `track-record-tick.yml` | `*/5 * * * *` | 5 min | 4 over 8.1h | ~97 | **~4%** |
+| `agent-trading-board-publish.yml` | `27,57 * * * *` | 30 min | 18 over 40.5h | ~81 | **~22%** |
+| `track-record-resolved.yml` | `7 * * * *` | 60 min | 59 over 269h | ~269 | **~22%** |
 
-The relationship is monotonic: **an hourly cron is reliable here, a
-half-hourly one is not, and a 5-minute one barely fires at all.** This matches
-GitHub's documented behaviour -- scheduled workflows are best-effort and get
-deprioritised under load -- but the size of the effect is worth knowing
-concretely before relying on a frequent schedule.
+Two things to take from this:
+
+**A 5-minute cron is close to decorative** -- roughly one slot in 25.
+
+**Raising the interval past 30 minutes does not help.** The half-hourly and
+hourly workflows both land near 22%. There is no monotonic "longer interval,
+better delivery" effect to tune against; declaring a slower cron buys a
+coarser cadence at the same delivery rate.
+
+## Correcting an earlier version of this file
+
+The first version reported ~97% for the hourly workflow and described the
+relationship as monotonic. That was a measurement error: it counted the
+proportion of *observed runs* whose event was `schedule` (29 of 30) rather
+than the proportion of *declared slots* that fired. Almost all of that
+workflow's runs are indeed scheduled ones -- there is little else triggering
+it -- but they still arrive every two to four hours, not hourly.
 
 ## What is actually keeping things running
 
-The balance of every run above is `workflow_dispatch`, on a clean cadence
-(the MTM tick fires every 15 minutes almost without exception). Something
-outside GitHub -- Cloud Scheduler -- is dispatching these, and it is doing
-essentially all of the work for the sub-hourly workflows.
+The balance is `workflow_dispatch` from Cloud Scheduler, on a clean cadence:
+the MTM tick fires every 15 minutes almost without exception. That external
+dispatcher is doing nearly all the work for the sub-hourly workflows.
 
-**This is a single point of failure that looks like redundancy.** The cron
-line in `track-record-tick.yml` reads as a fallback for the dispatcher. It is
-not: at 7% delivery it would turn a 15-minute cadence into a multi-hour one.
-If the dispatcher stops, assume the sub-hourly workloads stop with it.
+**This is a single point of failure that looks like redundancy.** The `cron:`
+line in `track-record-tick.yml` reads as a fallback for the dispatcher. At ~4%
+delivery it is not one. If the dispatcher stops, assume the sub-hourly
+workloads stop with it.
 
 ## Consequences already visible
 
-- `static/mark_to_market_live.json` republishes roughly 96x/day, not the
-  288x/day its cron implies. The repository grew more slowly than the
-  schedule suggests -- still enough for ~5,400 revisions of a 2.4MB file.
-- The agent-trading board goes stale for part of most hours against its
-  3600s threshold, because its effective publish gap is ~1 hour and the
-  even-hour dispatch runs a full agent tick (20-40 min) before publishing.
-  See the comment on `_AGENT_TRADING_BOARD_STALE_AFTER_S` in `server.py`.
-
-## If you want a sub-hourly workload to be reliable
-
-Dispatch it externally and treat the cron as documentation of intent, or
-raise the interval to hourly and accept the coarser cadence. Declaring
-`*/5` and assuming it runs is the option that does not work.
+- `static/mark_to_market_live.json` republishes on the dispatcher's 15-minute
+  cadence rather than the cron's 5-minute one -- still enough for ~5,400
+  revisions of a 2.4MB file.
+- The agent-trading board is stale for part of most hours against its 3600s
+  threshold; see the comment on `_AGENT_TRADING_BOARD_STALE_AFTER_S` in
+  `server.py`.
+- `static/track_record_live.json` declares `stale_after_seconds: 1800` and is
+  routinely hours old -- it was 20,059s old when this was written, because
+  its workflow last ran 5.6 hours earlier.
 
 ## Re-measuring
 
+Count schedule-triggered runs against the span they cover, not against the
+other events in the list:
+
 ```bash
 gh run list --repo pareelamre/analyzing-llm-rationale \
-  --workflow track-record-tick.yml --limit 30 \
-  --json event -q '[.[].event] | group_by(.) | map("\(.[0])=\(length)") | join(" ")'
+  --workflow track-record-resolved.yml --limit 60 \
+  --json createdAt,event -q '.[] | select(.event=="schedule") | .createdAt'
 ```
+
+Divide the count by (span in minutes / cron interval in minutes).
