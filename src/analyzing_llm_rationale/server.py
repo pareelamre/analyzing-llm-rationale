@@ -25,7 +25,7 @@ from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Literal, Optional
+from typing import Any, Callable, Dict, Iterable, List, Literal, Optional
 from urllib.parse import quote as url_quote
 from urllib.parse import urlparse
 

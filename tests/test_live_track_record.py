@@ -288,6 +288,7 @@ class GcsPayloadSourceTests(unittest.TestCase):
     def test_the_object_name_defaults_and_can_be_overridden(self):
         import os
         from unittest import mock
+
         from analyzing_llm_rationale import gcs_store
 
         seen = []
