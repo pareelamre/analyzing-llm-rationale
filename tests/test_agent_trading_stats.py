@@ -709,3 +709,51 @@ class RecentActivityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RejectionContextTests(unittest.TestCase):
+    """A rejection on the feed used to be a price, a quantity and no cause."""
+
+    def test_versioned_metadata_yields_reasons(self):
+        meta = json.dumps({
+            "audit": {"version": 1, "risk": {"reasons": ["drawdown_limit"]}},
+        })
+        self.assertEqual(
+            agent_trading_stats.rejection_context(meta),
+            {"reasons": ["drawdown_limit"]},
+        )
+
+    def test_a_pre_sizing_refusal_says_its_quantity_is_the_models_ask(self):
+        """This is the one that misleads.
+
+        llama's 00:12 refusal recorded quantity 7000.9 -- what the model
+        asked for, refused before _sizing_plan ever ran -- next to a filled
+        order of 7000.88862548003, which Kelly produced. Identical-looking
+        numbers, entirely different provenance.
+        """
+        meta = json.dumps({
+            "audit": {
+                "version": 1,
+                "status": "rejected_before_sizing",
+                "risk": {
+                    "reasons": ["no_executable_price"],
+                    "rejected_before_sizing": True,
+                },
+            },
+        })
+        self.assertEqual(
+            agent_trading_stats.rejection_context(meta),
+            {"reasons": ["no_executable_price"], "quantity_is_pre_sizing": True},
+        )
+
+    def test_legacy_rows_fall_back_to_risk_guard(self):
+        meta = json.dumps({"risk_guard": {"reasons": ["concentration_limit"]}})
+        self.assertEqual(
+            agent_trading_stats.rejection_context(meta),
+            {"reasons": ["concentration_limit"]},
+        )
+
+    def test_unreadable_or_empty_metadata_adds_nothing(self):
+        for meta in (None, "", "not json", json.dumps([1, 2]), json.dumps({})):
+            with self.subTest(meta=meta):
+                self.assertEqual(agent_trading_stats.rejection_context(meta), {})
