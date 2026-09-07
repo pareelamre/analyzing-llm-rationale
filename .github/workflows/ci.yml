@@ -30,5 +30,18 @@ jobs:
         run: pip install -e ".[dev,serve,analysis]" httpx
       - name: Lint
         run: ruff check src tests
+      # scripts/ holds the board publisher and the trading tick, but is not
+      # in the line above and so ships unlinted. A wrong name there reaches
+      # production: an unimported Callable in src was caught only because
+      # src IS linted -- py_compile and the whole test suite passed, since
+      # annotations are not evaluated at import.
+      #
+      # Deliberately a narrow rule set rather than the default. scripts/ has
+      # 78 default-rule findings, 15 of them E402 for the sys.path.insert
+      # -before-import pattern these scripts rely on; "fixing" those would
+      # break them. These rules catch names and references that cannot work
+      # at runtime, and scripts/ is already clean under all of them.
+      - name: Lint scripts for undefined and duplicate names
+        run: ruff check scripts --select F821,F811,F632,F502,F522,F701,B002
       - name: Test
         run: python -m unittest discover -s tests
