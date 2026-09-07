@@ -968,6 +968,45 @@ class FillStatusNamesTests(unittest.TestCase):
                 )
 
 
+class CurrentDrawdownTests(unittest.TestCase):
+    """max_drawdown says where it has been; the guard acts on where it is."""
+
+    def _pts(self, *values):
+        return [{"account_value": v} for v in values]
+
+    def test_recovery_makes_current_lower_than_max(self):
+        """llama's real shape: worst 29.67%, currently 20.13%.
+
+        Reported as one number, these look the same; they are not, and it
+        is the current one that decides whether the agent may trade.
+        """
+        pts = self._pts(10000.0, 7033.0, 7986.64)
+        self.assertAlmostEqual(
+            agent_trading_stats._current_drawdown(pts), 0.201336, places=5
+        )
+
+    def test_at_the_peak_the_drawdown_is_zero(self):
+        self.assertEqual(
+            agent_trading_stats._current_drawdown(self._pts(100.0, 90.0, 120.0)), 0.0
+        )
+
+    def test_still_at_the_low_matches_the_max(self):
+        pts = self._pts(10000.0, 5000.0)
+        self.assertAlmostEqual(agent_trading_stats._current_drawdown(pts), 0.5, places=6)
+
+    def test_unusable_curves_report_nothing(self):
+        for pts in ([], [{"account_value": None}], [{"account_value": "x"}],
+                    [{"account_value": 0.0}], [{}]):
+            with self.subTest(pts=pts):
+                self.assertIsNone(agent_trading_stats._current_drawdown(pts))
+
+    def test_the_curve_exposes_it_alongside_max_drawdown(self):
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-d", cash=8_000.0)
+            conn.commit()
+            curve = agent_trading_stats.agent_equity_curve(conn, "model-d")
+        self.assertIn("current_drawdown", curve)
+        self.assertIn("max_drawdown", curve)
 class LeaderboardAccountingInvariantTests(unittest.TestCase):
     """The identities the public leaderboard implicitly claims.
 

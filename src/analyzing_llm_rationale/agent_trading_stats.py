@@ -162,6 +162,32 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
     return rows
 
 
+def _current_drawdown(points: List[Dict[str, Any]]) -> Optional[float]:
+    """How far below its running peak the account sits right now.
+
+    max_drawdown reports the worst it has ever been; the risk guard acts on
+    where it is now, so the board published the one number that cannot tell
+    you whether an agent may trade. llama-3.3-70b-instruct makes the gap
+    concrete: 0.2967 max against 0.2013 current, and it is the 0.2013 that
+    decides -- above the old 20% cap, below the 50% one it now runs under.
+
+    None when there is no curve, or a non-positive peak to measure against.
+    """
+    values: List[float] = []
+    for point in points:
+        raw = point.get("account_value") if isinstance(point, dict) else None
+        try:
+            values.append(float(raw))
+        except (TypeError, ValueError):
+            continue
+    if not values:
+        return None
+    peak = max(values)
+    if peak <= 0:
+        return None
+    return round(max(0.0, (peak - values[-1]) / peak), 6)
+
+
 def agent_equity_curve(
     conn: sqlite3.Connection,
     agent_id: str,
@@ -272,6 +298,7 @@ def agent_equity_curve(
         "value_curve": points,
         "sharpe": risk["sharpe"],
         "max_drawdown": risk["max_drawdown"],
+        "current_drawdown": _current_drawdown(points),
     }
 
 
