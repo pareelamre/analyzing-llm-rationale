@@ -381,3 +381,43 @@ class BuildBoardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RiskLimitsTests(unittest.TestCase):
+    """Rejection reasons were published without the thresholds they mean.
+
+    The activity feed says an order hit concentration_limit or
+    drawdown_limit; nothing said what those limits are, so a reader could
+    see that an agent was refused but not how close it was.
+    """
+
+    def test_limits_come_from_benchmark_tools_not_a_local_copy(self):
+        from analyzing_llm_rationale import benchmark_tools
+
+        limits = board_script._risk_limits()
+        self.assertEqual(
+            limits["concentration_limit"], benchmark_tools.DEFAULT_CONCENTRATION_LIMIT
+        )
+        self.assertEqual(
+            limits["max_drawdown_limit"], benchmark_tools.DEFAULT_MAX_DRAWDOWN_LIMIT
+        )
+
+    def test_an_env_override_is_honoured_the_same_way_place_trade_reads_it(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.dict(
+            os.environ,
+            {"FORESEA_AGENT_CONCENTRATION_LIMIT": "0.25",
+             "FORESEA_AGENT_MAX_DRAWDOWN_LIMIT": "0.40"},
+            clear=False,
+        ):
+            limits = board_script._risk_limits()
+        self.assertAlmostEqual(limits["concentration_limit"], 0.25)
+        self.assertAlmostEqual(limits["max_drawdown_limit"], 0.40)
+
+    def test_the_published_board_carries_them(self):
+        board = board_script.build_board()
+        self.assertIn("risk_limits", board)
+        self.assertIn("concentration_limit", board["risk_limits"])
+        self.assertIn("max_drawdown_limit", board["risk_limits"])
