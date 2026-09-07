@@ -253,6 +253,21 @@ class FailingProvider:
         raise RetryableProviderError("upstream unavailable")
 
 
+# asyncio.wait_for cannot resolve a deadline finer than the platform clock:
+# 15.625 ms on Windows, ~1 ns on Linux. A budget under it expires before the
+# awaited call is scheduled at all -- measured on Windows/CPython 3.12, for a
+# call that returns immediately, as 0/20 survivals at 10 ms and 20/20 at 20 ms.
+#
+# The two chat-fallback tests below patched the budget to 10 ms. That timed out
+# the *fallback* they need to succeed, not just the primary they need to fail,
+# so both failed on Windows every run while passing on Linux CI.
+#
+# So: a patched budget must clear the coarsest clock, and anything the budget is
+# meant to outlast must clear the budget by the same kind of margin.
+_CHAT_TIMEOUT_OVER_CLOCK_S = 0.25
+_SLOWER_THAN_CHAT_TIMEOUT_S = 1.0
+
+
 class SlowStreamProvider:
     model_name = "slow-stream-model"
 
@@ -261,7 +276,7 @@ class SlowStreamProvider:
 
     def stream_chat_completion(self, messages, temperature, max_tokens, reasoning_effort=None):
         self.calls += 1
-        time.sleep(0.05)
+        time.sleep(_SLOWER_THAN_CHAT_TIMEOUT_S)
         yield "late primary"
 
 
@@ -5450,7 +5465,7 @@ class ServerTests(unittest.TestCase):
         )
 
         with (
-            mock.patch.object(server_module, "_CHAT_PROVIDER_TIMEOUT_S", 0.01),
+            mock.patch.object(server_module, "_CHAT_PROVIDER_TIMEOUT_S", _CHAT_TIMEOUT_OVER_CLOCK_S),
             mock.patch.object(server_module, "_CHAT_PROVIDER_MAX_RETRIES", 0),
             mock.patch.object(server_module, "_SCADS_MODEL_FALLBACKS", {"test-model": ("fallback-model",)}),
             mock.patch.object(server_module, "_scads_provider_for_model_name", return_value=fallback),
@@ -5670,7 +5685,7 @@ class ServerTests(unittest.TestCase):
             return chunks, used["provider"]
 
         with (
-            mock.patch.object(server_module, "_CHAT_PROVIDER_TIMEOUT_S", 0.01),
+            mock.patch.object(server_module, "_CHAT_PROVIDER_TIMEOUT_S", _CHAT_TIMEOUT_OVER_CLOCK_S),
             mock.patch.object(server_module, "_SCADS_MODEL_FALLBACKS", {"test-model": ("fallback-model",)}),
             mock.patch.object(server_module, "_scads_provider_for_model_name", return_value=fallback),
         ):
