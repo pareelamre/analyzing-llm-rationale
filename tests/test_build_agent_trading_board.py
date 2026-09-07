@@ -421,3 +421,53 @@ class RiskLimitsTests(unittest.TestCase):
         self.assertIn("risk_limits", board)
         self.assertIn("concentration_limit", board["risk_limits"])
         self.assertIn("max_drawdown_limit", board["risk_limits"])
+
+
+class StaleMaskedByFailedAttemptTests(unittest.TestCase):
+    """A dead agent must escalate even while its last attempt also failed.
+
+    The status chain resolves latest_attempt_failed before it looks at age,
+    so an agent that is both failing and long dead carries the softer label
+    and never reaches attention_required. gemma-4-26b-a4b-it sat 15308s past
+    a 14400s stale window -- top of the leaderboard on day-old numbers --
+    while the board reported attention_required: [].
+    """
+
+    def _health(self, status, age):
+        return {"status": status, "cycle_age_seconds": age}
+
+    def test_failing_and_stale_reaches_attention(self):
+        health = {
+            "gemma-4-26b-a4b-it": self._health("last_attempt_failed", 15308),
+            "gpt-oss-120b": self._health("active", 900),
+        }
+        out = board_script._operational_health(health)
+        self.assertEqual(out["status"], "attention")
+        self.assertEqual(
+            [a["agent_id"] for a in out["attention_required"]], ["gemma-4-26b-a4b-it"]
+        )
+
+    def test_failing_but_recent_stays_in_the_softer_bucket(self):
+        """A fresh failure is not the same as a dead agent."""
+        health = {"m": self._health("last_attempt_failed", 600)}
+        out = board_script._operational_health(health)
+        self.assertEqual(out["status"], "attempts_failed")
+        self.assertEqual(out["attention_required"], [])
+
+    def test_the_existing_stale_label_still_escalates(self):
+        health = {"m": self._health("stale", 20000)}
+        self.assertEqual(board_script._operational_health(health)["status"], "attention")
+
+    def test_a_healthy_fleet_is_untouched(self):
+        health = {"a": self._health("active", 300), "b": self._health("no_trade", 800)}
+        out = board_script._operational_health(health)
+        self.assertEqual(out["status"], "healthy")
+        self.assertEqual(out["attention_required"], [])
+
+    def test_a_missing_or_unusable_age_does_not_escalate(self):
+        for age in (None, "", "later", float("nan")):
+            with self.subTest(age=age):
+                health = {"m": {"status": "last_attempt_failed", "cycle_age_seconds": age}}
+                self.assertEqual(
+                    board_script._operational_health(health)["status"], "attempts_failed"
+                )
