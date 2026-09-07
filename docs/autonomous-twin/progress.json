@@ -267,15 +267,25 @@
         "T06",
         "T08"
       ],
-      "status": "in_progress",
-      "substep": "deterministic calibrated sizing, lot rounding, cumulative caps, and reduce-only clamp implemented; account snapshot and reservation recheck integration remain pending",
-      "branch": "codex/autonomous-twin-followup",
+      "status": "complete",
+      "substep": "calibration_v1, immutable account/market risk evaluation, cumulative portfolio limits, reduce-only exits, venue rounding, and atomic reservation preconditions implemented",
+      "branch": "codex/risk-reservation-preconditions",
       "commit": null,
-      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/445",
-      "checks": [],
-      "evidence": [],
+      "pr_url": null,
+      "checks": [
+        "py -m unittest tests.test_twin_risk tests.test_twin_store tests.test_twin_manual tests.test_twin_execution tests.test_twin_recovery tests.test_twin_store_integration",
+        "py -m unittest discover -s tests",
+        "py -m ruff check src tests",
+        "git diff --check"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/risk.py",
+        "src/analyzing_llm_rationale/twin/store.py",
+        "tests/test_twin_risk.py",
+        "tests/test_twin_store.py"
+      ],
       "blockers": [],
-      "handoff": null
+      "handoff": "T10 can consume version-bound RiskResult outputs and ReservationPreconditions."
     },
     {
       "id": "T10",

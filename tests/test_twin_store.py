@@ -9,6 +9,8 @@ from analyzing_llm_rationale.twin import (
     CommandState,
     InMemoryTwinStore,
     InsufficientReservationCapacity,
+    ReservationPreconditions,
+    StaleReservationPrecondition,
     TradeIntent,
     TwinStoreError,
     require_durable_store,
@@ -21,12 +23,15 @@ def scope() -> AccountScope:
     return AccountScope("scope-001", "owner-001", "kalshi", "account-ref", "demo", "USD", "connection-001", 1, NOW)
 
 
-def intent(*, quantity: str = "1", suffix: str = "001", instrument_id: str = "kalshi:demo:KXTEST") -> TradeIntent:
+def intent(
+    *, quantity: str = "1", suffix: str = "001", instrument_id: str = "kalshi:demo:KXTEST",
+    market_version: str = "market-v1",
+) -> TradeIntent:
     return TradeIntent(
         id=f"intent-{suffix}", account_scope_id="scope-001", account_epoch=1,
         instrument_id=instrument_id, action="BUY_YES", quantity=Decimal(quantity),
         limit_price=Decimal("0.40"), time_in_force="IOC", forecast_id="forecast-001", exit_reason=None,
-        policy_version="policy-v1", strategy_version="strategy-v1", market_version="market-v1",
+        policy_version="policy-v1", strategy_version="strategy-v1", market_version=market_version,
         fee_allowance=Decimal("0.01"), slippage_allowance=Decimal("0.01"),
         expires_at=NOW + timedelta(days=1), created_at=NOW,
     )
@@ -58,6 +63,48 @@ class TwinStoreTests(unittest.TestCase):
             self.store.reserve_intent(
                 intent(suffix="002", instrument_id="kalshi:demo:KXOTHER"),
                 cash=Decimal("5"), max_loss=Decimal("3"), now=NOW,
+            )
+
+    def test_reservation_rechecks_captured_account_revision_atomically(self):
+        captured = self.store.projection("scope-001").revision
+        preconditions = ReservationPreconditions(captured, "snapshot-001", NOW, 10)
+        self.store.refresh_account_capacity(
+            "scope-001", venue_available_cash=Decimal("10"), loss_limit=Decimal("6")
+        )
+        with self.assertRaisesRegex(StaleReservationPrecondition, "changed after risk validation"):
+            self.store.reserve_intent(
+                intent(market_version="snapshot-001"), cash=Decimal("1"), max_loss=Decimal("1"), now=NOW,
+                preconditions=preconditions,
+            )
+
+        current = self.store.projection("scope-001").revision
+        preconditions = ReservationPreconditions(current, "snapshot-001", NOW, 10)
+        created = self.store.reserve_intent(
+            intent(market_version="snapshot-001"), cash=Decimal("1"), max_loss=Decimal("1"), now=NOW,
+            preconditions=preconditions,
+        )
+        # An idempotent replay returns the original transition even though that
+        # transition advanced the account revision itself.
+        self.assertEqual(
+            created,
+            self.store.reserve_intent(
+                intent(market_version="snapshot-001"), cash=Decimal("1"), max_loss=Decimal("1"),
+                now=NOW + timedelta(seconds=30), preconditions=preconditions,
+            ),
+        )
+
+    def test_reservation_rechecks_market_identity_and_freshness(self):
+        revision = self.store.projection("scope-001").revision
+        with self.assertRaisesRegex(StaleReservationPrecondition, "does not match"):
+            self.store.reserve_intent(
+                intent(), cash=Decimal("1"), max_loss=Decimal("1"), now=NOW,
+                preconditions=ReservationPreconditions(revision, "snapshot-001", NOW, 10),
+            )
+        with self.assertRaisesRegex(StaleReservationPrecondition, "expired"):
+            self.store.reserve_intent(
+                intent(market_version="snapshot-001"), cash=Decimal("1"), max_loss=Decimal("1"),
+                now=NOW + timedelta(seconds=11),
+                preconditions=ReservationPreconditions(revision, "snapshot-001", NOW, 10),
             )
 
     def test_fenced_claim_rejects_stale_worker_after_lease_expiry(self):
