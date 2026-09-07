@@ -296,6 +296,12 @@ TOOL_ALIASES: Dict[str, str] = {
     "leaderboard": "market_leaderboard",
     "top_traders": "market_leaderboard",
     "trader_rankings": "market_leaderboard",
+    "weather": "weather_market_research",
+    "weather_research": "weather_market_research",
+    "research_weather": "weather_market_research",
+    "research_weather_market": "weather_market_research",
+    "weather_forecast": "weather_market_research",
+    "weather_data": "weather_market_research",
 }
 
 
