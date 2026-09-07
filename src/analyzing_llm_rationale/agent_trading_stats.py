@@ -590,6 +590,17 @@ def _metadata_dict(metadata_json: Any) -> Dict[str, Any]:
     return metadata if isinstance(metadata, dict) else {}
 
 
+# Statuses _extract_filled_quantity emits for a complete fill. Surfacing these
+# says nothing: they are the ordinary path. The shortfall statuses --
+# shadow_filled_partial, shadow_unfilled_below_market, shadow_unfilled_no_depth,
+# venue_status_assumed_zero, venue_reported_remaining -- are the point.
+_COMPLETE_FILL_STATUSES = frozenset({
+    "shadow_assumed_full",
+    "venue_status_assumed_full",
+    "venue_unknown_assumed_full",
+})
+
+
 def fill_context(metadata_json: Any, filled_quantity: Any) -> Dict[str, Any]:
     """What the sizing policy asked for, when the book could not supply it.
 
@@ -610,7 +621,7 @@ def fill_context(metadata_json: Any, filled_quantity: Any) -> Dict[str, Any]:
     context: Dict[str, Any] = {}
     execution = audit.get("execution")
     status = execution.get("fill_status") if isinstance(execution, dict) else None
-    if status and str(status) not in {"shadow_filled_full", "filled"}:
+    if status and str(status) not in _COMPLETE_FILL_STATUSES:
         context["fill_status"] = str(status)[:60]
 
     sizing = audit.get("sizing")

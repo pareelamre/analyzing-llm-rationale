@@ -922,3 +922,47 @@ class FillEfficiencyZeroFillTests(unittest.TestCase):
         self.assertEqual(row["sized_trade_count"], 1)
         self.assertEqual(row["median_fill_fraction"], 1.0)
         self.assertEqual(row["partially_filled_count"], 0)
+
+
+class FillStatusNamesTests(unittest.TestCase):
+    """The exclusion set has to name statuses that actually exist.
+
+    The first version excluded "shadow_filled_full" and "filled", neither of
+    which _extract_filled_quantity can emit -- so it excluded nothing and
+    every ordinary fill carried a fill_status. deepseek-v4-flash's routine
+    full fill was published with fill_status=shadow_assumed_full.
+    """
+
+    def _meta(self, status):
+        return json.dumps(
+            {"audit": {"version": 1, "execution": {"fill_status": status}}}
+        )
+
+    def test_every_excluded_status_is_one_the_code_can_emit(self):
+        from pathlib import Path as _P
+
+        source = (
+            _P(__file__).resolve().parents[1]
+            / "src" / "analyzing_llm_rationale" / "benchmark_tools.py"
+        ).read_text(encoding="utf-8")
+        for status in agent_trading_stats._COMPLETE_FILL_STATUSES:
+            with self.subTest(status=status):
+                self.assertIn(f'"{status}"', source)
+
+    def test_complete_fills_carry_no_status(self):
+        for status in ("shadow_assumed_full", "venue_status_assumed_full",
+                       "venue_unknown_assumed_full"):
+            with self.subTest(status=status):
+                self.assertEqual(
+                    agent_trading_stats.fill_context(self._meta(status), 10.0), {},
+                )
+
+    def test_shortfall_statuses_are_reported(self):
+        for status in ("shadow_filled_partial", "shadow_unfilled_below_market",
+                       "shadow_unfilled_no_depth", "venue_status_assumed_zero",
+                       "venue_reported_remaining"):
+            with self.subTest(status=status):
+                self.assertEqual(
+                    agent_trading_stats.fill_context(self._meta(status), 10.0),
+                    {"fill_status": status},
+                )
