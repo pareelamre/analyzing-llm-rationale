@@ -687,6 +687,7 @@ async def run_tool_loop(
     required_final_sections: Optional[Sequence[str]] = None,
     max_structure_retries: int = 2,
     token_budget: Optional[int] = None,
+    output_token_budget: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Drive the ReAct loop. Returns {answer, transcript, steps, truncated}.
 
@@ -705,13 +706,8 @@ async def run_tool_loop(
         {"role": "system", "content": system},
         {"role": "user", "content": f"Question: {question}"},
     ]
-    # A ReAct turn resends the whole conversation, so cost grows with every
-    # step. Measured on the live fleet, one cycle runs 10-21k tokens against
-    # a 10,000-token-per-minute provider quota -- a single deep cycle can
-    # spend the entire minute and 429 whichever model runs next in the serial
-    # lane. A step count cannot express that; a token budget can, and it lets
-    # a cheap cycle keep every step it wants while stopping a runaway one.
     tokens_used = 0
+    output_tokens_used = 0
     transcript: List[Dict[str, Any]] = []
     reformat_hint = (
         "That reply could not be parsed. Respond with exactly one JSON object: either "
@@ -737,15 +733,17 @@ async def run_tool_loop(
     steps_completed = 0
     for step in range(max_steps):
         turn_tokens = _estimate_message_tokens(messages)
-        # Stop before spending a turn we cannot afford, not after. The step
-        # already completed is worth finalising; the one that would blow the
-        # budget just earns a 429 for this model and the next one in line.
+        # Stop before spending a turn we cannot afford, not after.
         if token_budget and step and tokens_used + turn_tokens > token_budget:
             stop_reason = "token_budget"
+            break
+        if output_token_budget and step and output_token_budget > 0 and output_tokens_used >= output_token_budget:
+            stop_reason = "output_token_budget"
             break
         tokens_used += turn_tokens
         steps_completed = step + 1
         out = await chat_fn(messages)
+        output_tokens_used += max(1, len(str(out or "")) // 4)
         action = parse_action(out)
         if action is not None and "final" in action:
             # `final` is not guaranteed to be a string. gemma-4-26b-a4b-it
@@ -815,7 +813,8 @@ async def run_tool_loop(
                 # preserved underneath.
                 answer = _synthesise_thesis(answer, transcript)
             return {"answer": answer, "transcript": transcript,
-                    "steps": step, "truncated": False}
+                    "steps": step, "truncated": False,
+                    "tokens_used": tokens_used, "output_tokens_used": output_tokens_used}
         if action is None:
             raw_answer = (out or "").strip()
             # If required_final_sections is specified and the model directly provided
@@ -837,8 +836,8 @@ async def run_tool_loop(
                     messages.append({"role": "user", "content": substantive_hint})
                     continue
                 return {"answer": raw_answer, "transcript": transcript,
-                        "steps": step, "truncated": False}
-
+                        "steps": step, "truncated": False,
+                        "tokens_used": tokens_used, "output_tokens_used": output_tokens_used}
             # No JSON found at all -- could be an incomplete/foreign-format
             # tool-call attempt (prose, or a different tool-call dialect)
             # rather than a genuine final answer, so give the model one
@@ -851,7 +850,8 @@ async def run_tool_loop(
             if required_final_sections and _missing_sections(raw_answer, required_final_sections):
                 raw_answer = _synthesise_thesis(raw_answer, transcript)
             return {"answer": raw_answer, "transcript": transcript,
-                    "steps": step, "truncated": False}
+                    "steps": step, "truncated": False,
+                    "tokens_used": tokens_used, "output_tokens_used": output_tokens_used}
         if "action" not in action:
             # Valid JSON, but not a tool-call envelope (e.g. a model that
             # answers directly with structured fields instead of {"final":
@@ -876,7 +876,8 @@ async def run_tool_loop(
             if required_final_sections and _missing_sections(raw_answer, required_final_sections):
                 raw_answer = _synthesise_thesis(raw_answer, transcript)
             return {"answer": raw_answer, "transcript": transcript,
-                    "steps": step, "truncated": False}
+                    "steps": step, "truncated": False,
+                    "tokens_used": tokens_used, "output_tokens_used": output_tokens_used}
         name = str(action.get("action", ""))
         args = action.get("args") or {}
         if not isinstance(args, dict):
@@ -928,6 +929,7 @@ async def run_tool_loop(
     # providers emit a pasted sequence of prior tool-call envelopes instead of
     # a final thesis.
     stopped = {"stop_reason": stop_reason, "tokens_used": tokens_used,
+               "output_tokens_used": output_tokens_used,
                "steps_completed": steps_completed}
     final = await chat_fn(messages + [{"role": "user", "content": (
         "Stop calling tools. Return exactly one JSON object with a `final` field containing "
@@ -935,6 +937,9 @@ async def run_tool_loop(
         '{"final":"### 0. Research Delta\\n- **Strategy**: ...\\n\\n### 1. Decision & Execution\\n..."}. '
         "Do not include an action, args, tool call, scratch work, or any other JSON object."
     )}])
+    if final:
+        output_tokens_used += max(1, len(str(final)) // 4)
+        stopped["output_tokens_used"] = output_tokens_used
     final_text = (final or "").strip()
     parsed_final = parse_action(final_text)
     if isinstance(parsed_final, dict) and "final" in parsed_final:

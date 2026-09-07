@@ -700,6 +700,31 @@ class ToolLoopTests(unittest.TestCase):
             chat_fn, max_steps=16, token_budget=20000))
         self.assertEqual(len(calls), 3)
         self.assertIn("no edge", res["answer"])
+        self.assertGreater(res["tokens_used"], 0)
+        self.assertGreater(res["output_tokens_used"], 0)
+
+    def test_output_token_budget_stops_when_output_quota_reached(self):
+        calls = []
+
+        async def tool(args):
+            calls.append(1)
+            return "observation"
+
+        # Model emits a long response (~100 chars -> ~25 tokens per call)
+        long_action = '{"action":"t","args":{"detail":"' + ("x" * 100) + '"}}'
+
+        async def chat_fn(messages):
+            return long_action
+
+        # output_token_budget of 25 should allow step 0 (~33 tokens), and then halt at step 1 before blowing the budget
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"t": tool}, [{"name": "t", "description": "d"}],
+            chat_fn, max_steps=10, output_token_budget=25,
+        ))
+        self.assertTrue(res["truncated"])
+        self.assertEqual(res["stop_reason"], "output_token_budget")
+        self.assertEqual(len(calls), 1)
+        self.assertGreaterEqual(res["output_tokens_used"], 25)
 
     def test_keyless_json_is_retried_when_the_caller_has_no_backstop(self):
         # Live: gemma-4-26b-a4b-it and gpt-oss-120b both ended at step 0 with

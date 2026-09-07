@@ -26,6 +26,8 @@ models:
     router_model_name: meta-llama/Llama-3.3-70B-Instruct
     # Context window published by SCADS' status probe (verified 2026-09-05).
     context_window_tokens: 65536
+    # SCADS AI output quota: 6,000 output tokens/minute (output-only limit).
+    output_tpm_limit: 6000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -164,6 +166,8 @@ models:
     router_model_name: Qwen/Qwen3.8-27B
     # Context window published by SCADS' status probe (verified 2026-09-05).
     context_window_tokens: 262144
+    # SCADS AI output quota: 6,000 output tokens/minute (output-only limit).
+    output_tpm_limit: 6000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -180,6 +184,8 @@ models:
     router_model_name: MiniMaxAI/MiniMax-M3
     # Context window published by SCADS' status probe (verified 2026-09-05).
     context_window_tokens: 524288
+    # SCADS AI output quota: 30,000 output tokens/minute (output-only limit).
+    output_tpm_limit: 30000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -232,6 +238,8 @@ models:
     # Published as max_tokens for this route by the status probe (verified
     # 2026-09-04); the /v1/models listing still omits context length.
     context_window_tokens: 524288
+    # SCADS AI output quota: 6,000 output tokens/minute (output-only limit).
+    output_tpm_limit: 6000
     # The old chain pointed at MiniMaxAI/MiniMax-M3, which the same probe
     # reports as down -- a dead route falling back to a dead route.
     fallback_model_chain:
@@ -244,6 +252,8 @@ models:
     router_model_name: zai-org/GLM-5.3-Flash
     # Context window published by SCADS' status probe (verified 2026-09-05).
     context_window_tokens: 1048576
+    # SCADS AI output quota: 30,000 output tokens/minute (output-only limit).
+    output_tpm_limit: 30000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -262,6 +272,8 @@ models:
     router_model_name: deepseek-ai/DeepSeek-V4-Flash
     # Context window published by SCADS' status probe (verified 2026-09-05).
     context_window_tokens: 1048576
+    # SCADS AI output quota: 30,000 output tokens/minute (output-only limit).
+    output_tpm_limit: 30000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -308,6 +320,8 @@ models:
     router_model_name: openai/gpt-oss-120b
     # Context window published by SCADS' status probe (verified 2026-09-05).
     context_window_tokens: 131072
+    # SCADS AI output quota: 6,000 output tokens/minute (output-only limit).
+    output_tpm_limit: 6000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -322,6 +336,8 @@ models:
     router_model_name: google/gemma-4-26B-A4B-it
     # Context window published by SCADS' status probe (verified 2026-09-05).
     context_window_tokens: 262144
+    # SCADS AI output quota: 6,000 output tokens/minute (output-only limit).
+    output_tpm_limit: 6000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
