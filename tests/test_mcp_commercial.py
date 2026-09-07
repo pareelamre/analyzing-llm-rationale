@@ -7,6 +7,13 @@ from analyzing_llm_rationale.mcp_server import (
     main_cli,
 )
 
+try:  # The MCP server needs an optional extra: pip install -e '.[mcp]'
+    import mcp.server.fastmcp  # noqa: F401
+
+    _HAS_MCP_EXTRA = True
+except Exception:  # pragma: no cover - depends on how the env was installed
+    _HAS_MCP_EXTRA = False
+
 
 class TestMCPCommercial(unittest.TestCase):
     def test_client_authorization_headers(self):
@@ -22,6 +29,9 @@ class TestMCPCommercial(unittest.TestCase):
         self.assertNotIn("X-API-Key", headers)
         self.assertNotIn("Authorization", headers)
 
+    @unittest.skipUnless(
+        _HAS_MCP_EXTRA, "requires the mcp extra: pip install -e '.[mcp]'",
+    )
     def test_server_creation_and_resources(self):
         mcp = create_mcp_server(base_url="https://foresea.ink", api_key="test_key")
         self.assertIsNotNone(mcp)
