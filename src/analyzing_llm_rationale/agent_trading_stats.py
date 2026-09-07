@@ -563,6 +563,50 @@ def _same_thesis_content(left: str, right: str) -> bool:
     return len(shorter) >= 80 and shorter in longer
 
 
+def rejection_context(metadata_json: Any) -> Dict[str, Any]:
+    """Why an order was refused, for the public activity feed.
+
+    The audit trail already reports this; the feed did not, so a rejection
+    arrived on the board as a bare row -- a price, a quantity and no cause.
+    That is actively misleading for the pre-sizing refusals: their quantity
+    is what the model asked for, never what a sizing policy produced, so
+    reading it beside a filled order's Kelly-derived size compares two
+    different things.
+
+    Handles both metadata shapes, matching build_agent_trading_audit:
+    versioned rows carry audit.risk, older ones only risk_guard.
+    """
+    try:
+        metadata = json.loads(metadata_json) if metadata_json else {}
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(metadata, dict):
+        return {}
+
+    reasons: Any = None
+    pre_sizing = False
+    audit = metadata.get("audit")
+    if isinstance(audit, dict):
+        risk = audit.get("risk")
+        if isinstance(risk, dict):
+            reasons = risk.get("reasons")
+            pre_sizing = bool(risk.get("rejected_before_sizing"))
+        if not pre_sizing:
+            pre_sizing = str(audit.get("status") or "") == "rejected_before_sizing"
+    if not reasons:
+        guard = metadata.get("risk_guard")
+        if isinstance(guard, dict):
+            reasons = guard.get("reasons")
+
+    context: Dict[str, Any] = {}
+    if isinstance(reasons, list) and reasons:
+        context["reasons"] = [str(r)[:80] for r in reasons[:8]]
+    if pre_sizing:
+        # Say it explicitly rather than leave the quantity to be misread.
+        context["quantity_is_pre_sizing"] = True
+    return context
+
+
 def classify_ledger_action(action_type: Any, quantity: Any) -> str:
     """Present a ledger action under the name that describes what happened.
 
@@ -600,14 +644,14 @@ def recent_activity(
 
     for row in conn.execute(
         "SELECT ts, agent_id, action_type, mode, platform, ticker, side, "
-        "quantity, price, realized_pnl, outcome FROM agent_actions "
+        "quantity, price, realized_pnl, outcome, metadata_json FROM agent_actions "
         "WHERE action_type IN "
         "('trade', 'settlement', 'rejected_trade', 'admin_correction', 'admin_reset') "
         "ORDER BY ts DESC LIMIT ?",
         (limit * 2,),
     ):
         action_type = classify_ledger_action(row["action_type"], row["quantity"])
-        items.append({
+        item = {
             "ts": row["ts"],
             "agent_id": row["agent_id"],
             "type": action_type,
@@ -619,7 +663,10 @@ def recent_activity(
             "price": row["price"],
             "realized_pnl": row["realized_pnl"],
             "outcome": row["outcome"],
-        })
+        }
+        if action_type == "rejected_trade":
+            item.update(rejection_context(row["metadata_json"]))
+        items.append(item)
 
     for row in conn.execute(
         "SELECT agent_id, cycle_id, ts, thesis FROM agent_cycles "
