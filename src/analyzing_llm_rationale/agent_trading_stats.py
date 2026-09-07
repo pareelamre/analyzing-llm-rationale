@@ -563,6 +563,26 @@ def _same_thesis_content(left: str, right: str) -> bool:
     return len(shorter) >= 80 and shorter in longer
 
 
+def classify_ledger_action(action_type: Any, quantity: Any) -> str:
+    """Present a ledger action under the name that describes what happened.
+
+    An IOC simulation attempt with no executable fill is retained in the
+    ledger, but it opened and closed nothing. Calling it a trade overstates
+    what the agent did, and it did so inconsistently: the public activity
+    feed relabelled these while the audit trail -- the record of last
+    resort -- still called them trades. Both read the same rows, so the
+    naming lives here.
+    """
+    name = str(action_type or "")
+    if name != "trade":
+        return name
+    try:
+        zero_fill = quantity is not None and float(quantity) <= 0
+    except (TypeError, ValueError):
+        return name
+    return "unfilled_order" if zero_fill else name
+
+
 def recent_activity(
     conn: sqlite3.Connection,
     notes_by_agent: Mapping[str, List[Mapping[str, Any]]],
@@ -586,17 +606,7 @@ def recent_activity(
         "ORDER BY ts DESC LIMIT ?",
         (limit * 2,),
     ):
-        action_type = str(row["action_type"] or "")
-        quantity = row["quantity"]
-        # IOC simulation attempts with no executable fill are retained in the
-        # ledger, but they did not open or close a position. Calling them
-        # trades on the public feed was misleading.
-        try:
-            zero_fill = quantity is not None and float(quantity) <= 0
-        except (TypeError, ValueError):
-            zero_fill = False
-        if action_type == "trade" and zero_fill:
-            action_type = "unfilled_order"
+        action_type = classify_ledger_action(row["action_type"], row["quantity"])
         items.append({
             "ts": row["ts"],
             "agent_id": row["agent_id"],

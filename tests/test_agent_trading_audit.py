@@ -136,6 +136,55 @@ class AgentTradingAuditTests(unittest.TestCase):
         self.assertEqual(archive["archives"]["audit-model"][0]["records"], 1)
         self.assertEqual(archived["items"][0]["action_id"], action_id)
 
+    def test_a_zero_fill_attempt_is_not_called_a_trade_in_the_audit(self):
+        """The same ledger row was named two different things.
+
+        agent_trading_stats.recent_activity already relabelled zero-fill IOC
+        attempts as unfilled_order on the public feed, but the audit trail
+        echoed action_type verbatim and still called them trades. llama had
+        six such rows reading as trades in the audit while the board showed
+        them as unfilled -- one record, two stories.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            store_dir = Path(td) / "stores"
+            model_dir = store_dir / "zero-fill-model"
+            model_dir.mkdir(parents=True)
+            conn = sqlite3.connect(model_dir / "store.sqlite")
+            conn.row_factory = sqlite3.Row
+            benchmark_tools._ensure_account_schema(conn)
+            for quantity, outcome in ((0, "open"), (25, "open")):
+                benchmark_tools._record_account_action(
+                    conn,
+                    agent_id="zero-fill-model",
+                    action_type="trade",
+                    cycle_id="zero-fill-cycle",
+                    mode="shadow",
+                    platform="kalshi",
+                    ticker="KXTEST-26",
+                    side="yes",
+                    price=0.4,
+                    quantity=quantity,
+                    notional=0 if not quantity else 10,
+                    fee=0.0,
+                    cash_required=0.0,
+                    cash_delta=0.0 if not quantity else -10.0,
+                    outcome=outcome,
+                    metadata={"audit": {"version": 1, "risk": {"allowed": True}}},
+                )
+            conn.commit()
+            conn.close()
+
+            artifact = build_agent_trading_audit.build_audit_artifact(
+                store_dir=store_dir,
+                models=["zero-fill-model"],
+                per_model_limit=10,
+            )
+
+        records = artifact["audits"]["zero-fill-model"]
+        by_quantity = {r["execution"]["quantity"]: r["event_type"] for r in records}
+        self.assertEqual(by_quantity[0], "unfilled_order")
+        self.assertEqual(by_quantity[25], "trade")
+
     def test_retired_model_archives_remain_discoverable_without_a_live_ledger(self):
         with tempfile.TemporaryDirectory() as td:
             archive_root = Path(td) / "static" / "agent_trading_audits"
