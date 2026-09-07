@@ -80,7 +80,10 @@ jobs:
           # symptom; the cause is always in here -- the first failure of this
           # job was gcloud prompting to install `beta`, which the summary line
           # could not have told anyone.
-          gcloud beta emulators datastore start             --host-port=127.0.0.1:8765 --consistency=1.0 --no-store-on-disk             >emulator.log 2>&1 &
+          # --project explicitly: gcloud reads CLOUDSDK_CORE_PROJECT, not the
+          # GOOGLE_CLOUD_PROJECT the client libraries below use, and with
+          # neither set it refuses to start.
+          gcloud beta emulators datastore start             --project="$GOOGLE_CLOUD_PROJECT"             --host-port=127.0.0.1:8765 --consistency=1.0 --no-store-on-disk             >emulator.log 2>&1 &
           for _ in $(seq 1 30); do
             curl -sf http://127.0.0.1:8765/ >/dev/null && break
             sleep 2
