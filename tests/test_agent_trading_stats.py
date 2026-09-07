@@ -801,3 +801,48 @@ class FillContextTests(unittest.TestCase):
             self._meta(target=10.0, status="shadow_filled_partial"), None,
         )
         self.assertEqual(ctx, {"fill_status": "shadow_filled_partial"})
+
+
+class FillEfficiencyTests(unittest.TestCase):
+    """Rationing is only legible in aggregate."""
+
+    def _row(self, target, filled):
+        meta = json.dumps({"audit": {"version": 1, "sizing": {"target_quantity": target}}})
+        return (meta, filled)
+
+    def test_median_and_partial_count_across_trades(self):
+        """The three real fills from the 04:17-04:20 tick."""
+        rows = [
+            self._row(6533.986210065798, 100.0),   # 1.5%
+            self._row(475.5713145290175, 22.43),   # 4.7%
+            self._row(402.201399882214, 22.43),    # 5.6%
+        ]
+        out = agent_trading_stats.fill_efficiency(rows)
+        self.assertAlmostEqual(out["median_fill_fraction"], 0.047166, places=5)
+        self.assertEqual(out["partially_filled_count"], 3)
+        self.assertEqual(out["sized_trade_count"], 3)
+
+    def test_an_even_count_averages_the_middle_two(self):
+        rows = [self._row(100.0, 10.0), self._row(100.0, 30.0)]
+        self.assertAlmostEqual(
+            agent_trading_stats.fill_efficiency(rows)["median_fill_fraction"], 0.2,
+        )
+
+    def test_full_fills_report_one_and_no_partials(self):
+        rows = [self._row(50.0, 50.0), self._row(20.0, 20.0)]
+        out = agent_trading_stats.fill_efficiency(rows)
+        self.assertEqual(out["median_fill_fraction"], 1.0)
+        self.assertEqual(out["partially_filled_count"], 0)
+
+    def test_an_overfill_is_capped_at_one(self):
+        out = agent_trading_stats.fill_efficiency([self._row(10.0, 12.0)])
+        self.assertEqual(out["median_fill_fraction"], 1.0)
+
+    def test_nothing_reported_when_no_trade_carried_a_target(self):
+        rows = [
+            (None, 10.0),
+            ("not json", 10.0),
+            (json.dumps({"audit": {"version": 1}}), 10.0),
+            (json.dumps({"audit": {"version": 1, "sizing": {"target_quantity": 0}}}), 10.0),
+        ]
+        self.assertEqual(agent_trading_stats.fill_efficiency(rows), {})
