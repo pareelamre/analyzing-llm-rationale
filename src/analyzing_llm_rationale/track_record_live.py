@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json as _json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
@@ -329,6 +330,9 @@ def _optional_float(value: Any) -> Optional[float]:
         return None
 
 
+logger = logging.getLogger(__name__)
+
+
 def _get_price_history(client, ident: str, limit: int = 8) -> List[Dict[str, Any]]:
     """Return recent market context points (newest first), fail-open to []."""
     try:
@@ -354,8 +358,8 @@ def _get_price_history(client, ident: str, limit: int = 8) -> List[Dict[str, Any
                 }
                 for r in rows
             ]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("price history: duckdb read failed for %s (%s); trying the document store", ident, exc)
     try:
         q = client.query(kind=PRICE_KIND)
         q.add_filter("ident", "=", ident)
@@ -372,8 +376,12 @@ def _get_price_history(client, ident: str, limit: int = 8) -> List[Dict[str, Any
             }
             for p in points[:limit]
         ]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(
+            "no price history for %s: both stores failed (%s: %s). This market's "
+            "snapshot will be forecast without price context and still scored.",
+            ident, type(exc).__name__, exc,
+        )
     return []
 
 
@@ -462,8 +470,8 @@ def _get_forecast_history(
                 }
                 for r in rows
             ]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("forecast history: duckdb read failed for %s (%s); trying the document store", ident, exc)
     try:
         q = client.query(kind=SNAPSHOT_KIND)
         q.add_filter("ident", "=", ident)
@@ -487,8 +495,12 @@ def _get_forecast_history(
             }
             for s in snaps[:limit]
         ]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(
+            "no forecast history for %s: both stores failed (%s: %s). This market's "
+            "snapshot will be forecast without its own prior forecasts and still scored.",
+            ident, type(exc).__name__, exc,
+        )
     return []
 
 
