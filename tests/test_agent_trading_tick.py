@@ -246,6 +246,46 @@ class CandidateSelectionTests(unittest.TestCase):
 
         self.assertEqual([quote["ident"] for quote in found], ["KXWEATHER", "KXGENERAL"])
 
+    def test_polymarket_edge_hurdle_has_no_taker_fee(self):
+        k_quote = _quote("KXTEST", bid=0.40, ask=0.45)
+        p_quote = _poly_quote("poly-test", bid=0.40, ask=0.45)
+        k_hurdle = agent_trading_tick._edge_hurdle_pp(k_quote)
+        p_hurdle = agent_trading_tick._edge_hurdle_pp(p_quote)
+        # Polymarket hurdle is half-spread (0.025) + min_net_edge (0.02) = 0.045 exactly
+        self.assertAlmostEqual(p_hurdle, 0.045)
+        # Kalshi hurdle includes taker fee, making it strictly higher
+        self.assertGreater(k_hurdle, p_hurdle)
+
+    def test_discover_candidates_filters_markets_exceeding_max_hurdle(self):
+        tight_k = _quote("KXTIGHT", bid=0.48, ask=0.50)  # hurdle ~3.75pp
+        wide_k = _quote("KXWIDE", bid=0.10, ask=0.90)    # hurdle ~42pp
+        tight_p = _poly_quote("poly-tight", bid=0.48, ask=0.50)  # hurdle ~3.0pp
+        with (
+            mock.patch.object(market_data, "list_kalshi", return_value=[wide_k, tight_k]),
+            mock.patch.object(market_data, "list_polymarket", return_value=[tight_p]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
+            mock.patch.object(agent_trading_tick, "MAX_CANDIDATE_HURDLE", 0.08),
+        ):
+            found = agent_trading_tick._discover_candidates(set())
+        # Wide-spread Kalshi market is filtered out; tight Kalshi and tight Poly are selected
+        idents = [q["ident"] for q in found]
+        self.assertIn("KXTIGHT", idents)
+        self.assertIn("poly-tight", idents)
+        self.assertNotIn("KXWIDE", idents)
+
+    def test_discover_candidates_falls_back_when_all_markets_exceed_hurdle(self):
+        wide_k1 = _quote("KXWIDE1", bid=0.10, ask=0.90)
+        wide_k2 = _quote("KXWIDE2", bid=0.15, ask=0.85)
+        with (
+            mock.patch.object(market_data, "list_kalshi", return_value=[wide_k1, wide_k2]),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
+            mock.patch.object(agent_trading_tick, "MAX_CANDIDATE_HURDLE", 0.08),
+        ):
+            found = agent_trading_tick._discover_candidates(set())
+        # Does not starve the cycle when no tight markets exist; falls back gracefully
+        self.assertEqual(len(found), 2)
+
     def test_weather_research_count_reads_only_declared_tool_calls(self):
         transcript = [
             {"tool": "weather_market_research"},
