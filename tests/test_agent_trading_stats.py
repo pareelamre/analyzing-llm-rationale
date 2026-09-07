@@ -994,6 +994,32 @@ class CurrentDrawdownTests(unittest.TestCase):
         pts = self._pts(10000.0, 5000.0)
         self.assertAlmostEqual(agent_trading_stats._current_drawdown(pts), 0.5, places=6)
 
+    def test_it_measures_from_the_peak_not_from_where_it_started(self):
+        """An agent that made money and gave some back is in drawdown.
+
+        Every other curve here is monotonic or ends at its high, so `peak`
+        and the first point agree and nothing distinguished them: replacing
+        `max(values)` with `values[0]` passed the whole suite. On a curve
+        that rises above its start and falls back -- the profitable agent
+        giving back gains -- that reports 0.0 for an account 8.33% off its
+        peak, and the risk guard reads this number to decide who may trade.
+        """
+        pts = self._pts(1000.0, 1200.0, 1100.0)
+        self.assertAlmostEqual(
+            agent_trading_stats._current_drawdown(pts), 0.083333, places=6,
+        )
+
+    def test_a_curve_still_above_its_start_can_still_be_in_drawdown(self):
+        """The account is up 10% on the day and 8.33% off its high.
+
+        Measuring from the start would call this flat, because it only ever
+        compares against where the account began.
+        """
+        pts = self._pts(1000.0, 1200.0, 1100.0)
+        values = [p["account_value"] for p in pts]
+        self.assertGreater(values[-1], values[0])
+        self.assertGreater(agent_trading_stats._current_drawdown(pts), 0.0)
+
     def test_unusable_curves_report_nothing(self):
         for pts in ([], [{"account_value": None}], [{"account_value": "x"}],
                     [{"account_value": 0.0}], [{}]):
