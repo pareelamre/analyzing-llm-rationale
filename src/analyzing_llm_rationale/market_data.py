@@ -637,7 +637,8 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
                 max_close_days: Optional[float] = None,
                 contested_only: bool = True,
                 category: Optional[str] = None,
-                paginate: bool = False) -> List[Dict[str, Any]]:
+                paginate: bool = False,
+                series_ticker: Optional[str] = None) -> List[Dict[str, Any]]:
     """List open, priced Kalshi markets via the ``/events`` endpoint.
 
     The flat ``/markets?status=open`` listing is saturated by auto-generated
@@ -647,6 +648,7 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
     keyword; ``min_close_days``/``max_close_days`` restrict the resolution
     horizon. Results are sorted soonest-resolving first.
     Set ``paginate=True`` to follow cursors up to 1000 events (used by the tick).
+    ``series_ticker`` directly filters Kalshi events by their parent series.
     """
     limit = max(1, min(int(limit), 200))
     want = (query or "").strip().lower()
@@ -659,6 +661,8 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
         }
         if cursor:
             params["cursor"] = cursor
+        if series_ticker:
+            params["series_ticker"] = series_ticker
         data = _get_json(KALSHI_EVENTS_URL, params=params)
         if not isinstance(data, dict):
             break

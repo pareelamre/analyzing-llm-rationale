@@ -989,16 +989,26 @@ def _build_candidates_block(held_quotes: List[Dict[str, Any]], new_quotes: List[
     return "\n".join(lines)
 
 
-def _list_venue(platform: str, limit: int, *, category: Optional[str] = None) -> List[Dict[str, Any]]:
+def _list_venue(
+    platform: str,
+    limit: int,
+    *,
+    category: Optional[str] = None,
+    min_close_days: Optional[float] = None,
+    max_close_days: Optional[float] = None,
+    series_ticker: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    min_days = MIN_CLOSE_DAYS if min_close_days is None else min_close_days
+    max_days = MAX_CLOSE_DAYS if max_close_days is None else max_close_days
     try:
         if platform == "polymarket":
             return market_data.list_polymarket(
-                limit=limit, min_close_days=MIN_CLOSE_DAYS, max_close_days=MAX_CLOSE_DAYS,
+                limit=limit, min_close_days=min_days, max_close_days=max_days,
                 category=category,
             )
         return market_data.list_kalshi(
-            limit=limit, min_close_days=MIN_CLOSE_DAYS, max_close_days=MAX_CLOSE_DAYS, paginate=True,
-            category=category,
+            limit=limit, min_close_days=min_days, max_close_days=max_days, paginate=True,
+            category=category, series_ticker=series_ticker,
         )
     except market_data.MarketDataError as exc:
         print(f"  candidate discovery failed ({platform}): {exc}", file=sys.stderr)
@@ -1023,6 +1033,18 @@ def _is_researchable_weather_candidate(quote: Dict[str, Any]) -> bool:
     )
 
 
+_KALSHI_WEATHER_SERIES = (
+    "KXHIGHNY",
+    "KXHIGHCHI",
+    "KXHIGHMIA",
+    "KXHIGHAUS",
+    "KXHIGHDEN",
+    "KXHIGHPHIL",
+    "KXLOWNY",
+    "KXLOWCHI",
+)
+
+
 def _discover_weather_candidates(known_tickers: set, *, limit: int) -> List[Dict[str, Any]]:
     """Reserve a small, source-verified NWS lane without blocking ordinary discovery."""
     if limit <= 0:
@@ -1033,9 +1055,37 @@ def _discover_weather_candidates(known_tickers: set, *, limit: int) -> List[Dict
         scanned = 0
         per_venue_limit = max(6, limit * 6)
         try:
+            kalshi_quotes: List[Dict[str, Any]] = []
+            for series in _KALSHI_WEATHER_SERIES:
+                if len(kalshi_quotes) >= per_venue_limit:
+                    break
+                batch = _list_venue(
+                    "kalshi",
+                    limit=max(3, per_venue_limit - len(kalshi_quotes)),
+                    series_ticker=series,
+                    min_close_days=0.0,
+                )
+                kalshi_quotes.extend(q for q in batch if _is_researchable_weather_candidate(q))
+
+            if len(kalshi_quotes) < per_venue_limit:
+                batch = _list_venue(
+                    "kalshi",
+                    limit=per_venue_limit - len(kalshi_quotes),
+                    category="Weather",
+                    min_close_days=0.0,
+                )
+                kalshi_quotes.extend(batch)
+
+            poly_quotes = _list_venue(
+                "polymarket",
+                limit=per_venue_limit,
+                category="Weather",
+                min_close_days=0.0,
+            )
+
             iterators = [
-                iter(_list_venue(platform, per_venue_limit, category="Weather"))
-                for platform in ("kalshi", "polymarket")
+                iter(kalshi_quotes),
+                iter(poly_quotes),
             ]
             active = list(iterators)
             while active and len(selected) < limit:

@@ -38,6 +38,7 @@ _WEATHER_MARKERS = (
 _DAILY_TEMPERATURE_MARKERS = (
     "highest temperature", "high temperature", "lowest temperature", "low temperature",
     "daily temperature", "daily high", "daily low", "daily climate report",
+    "maximum temperature", "minimum temperature", "max temperature", "min temperature",
 )
 _HOURLY_TEMPERATURE_MARKERS = (
     "hourly temperature", "temperature at ", "temperature at", " at 1 pm",
@@ -47,7 +48,11 @@ _HOURLY_TEMPERATURE_MARKERS = (
 _PRECIPITATION_MARKERS = ("precipitation", "rainfall", "rain", "snowfall", "snow")
 _NWS_MARKERS = ("nws", "national weather service", "daily climate report")
 _WEATHER_COMPANY_MARKERS = ("weather company", "weather.com/kalshi", "weather.com")
-_STATION_RE = re.compile(r"\b(?:station|airport|coordinates?)\s*(?:code)?\s*[:#-]?\s*([A-Z]{4})\b|\b(K[A-Z]{3})\b")
+_STATION_RE = re.compile(
+    r"\b(?:station|airport|coordinates?)\s*(?:code)?\s*[:#-]?\s*([A-Z]{4})\b"
+    r"|\b(K[A-Z]{3})\b"
+    r"|\bCLI([A-Z]{3})\b"
+)
 
 
 @dataclass(frozen=True)
@@ -79,10 +84,19 @@ class WeatherMarketBrief:
 def _contract_text(quote: Mapping[str, Any]) -> Tuple[str, str, str]:
     question = str(quote.get("question") or "")
     category = str(quote.get("category") or "")
-    contract_text = "\n".join(
+    parts = [
         str(quote.get(field) or "")
         for field in ("resolution_criteria", "resolution_source", "description")
-    )
+    ]
+    settlement_sources = quote.get("settlement_sources")
+    if isinstance(settlement_sources, list):
+        for s in settlement_sources:
+            if isinstance(s, dict):
+                parts.append(str(s.get("name") or ""))
+                parts.append(str(s.get("url") or ""))
+            elif isinstance(s, str):
+                parts.append(s)
+    contract_text = "\n".join(parts)
     # ``Climate and Weather`` is a broad venue category containing contracts
     # such as earthquakes and EV-share targets.  Those must not inherit
     # weather-trading gates merely from their category, so classification is
@@ -109,7 +123,7 @@ def _market_type(text: str) -> str:
 
 def _official_source(contract_text: str) -> Tuple[str, str, bool]:
     lowered = contract_text.lower()
-    if any(marker in lowered for marker in _NWS_MARKERS):
+    if any(marker in lowered for marker in _NWS_MARKERS) or re.search(r"\bcli[a-z]{3}\b", lowered):
         return "nws_daily_climate_report", "NWS Daily Climate Report", True
     if any(marker in lowered for marker in _WEATHER_COMPANY_MARKERS):
         return "weather_company", "The Weather Company", True
@@ -120,7 +134,14 @@ def _station(contract_text: str) -> Optional[str]:
     match = _STATION_RE.search(contract_text)
     if not match:
         return None
-    return next((value for value in match.groups() if value), None)
+    groups = match.groups()
+    if groups[0]:
+        return groups[0]
+    if groups[1]:
+        return groups[1]
+    if groups[2]:
+        return f"K{groups[2].upper()}"
+    return None
 
 
 def classify_weather_market(quote: Mapping[str, Any]) -> WeatherMarketBrief:
