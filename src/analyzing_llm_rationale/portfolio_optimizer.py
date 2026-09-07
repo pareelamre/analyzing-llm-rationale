@@ -102,8 +102,25 @@ class KellyPortfolioOptimizer:
                 "edge": round(edge, 4),
                 "full_kelly_pct": round(full_kelly * 100, 2),
                 "allocated_pct": round(frac_kelly * 100, 2),
-                "credibility_grade": opp.get("credibility_grade", "A"),
-                "credibility_score": opp.get("credibility_score", 0.90),
+                # No defaults. An opportunity that carries no credibility
+                # assessment is unknown, not an A. The filter above lets it
+                # through (`cred_score is not None`), so inventing a grade
+                # here turned "we did not assess this" into the best grade
+                # available, on the output that sizes real capital. The
+                # server's own model already types both as Optional.
+                "credibility_grade": opp.get("credibility_grade"),
+                "credibility_score": opp.get("credibility_score"),
+                # Executability, passed through from the same row. The edge
+                # board already computes these and the optimizer read none of
+                # them: it put its largest allocation into a market published
+                # as thin_market with market_bid 0.0 and market_volume 0.0.
+                # Sizing does not use them -- that is a capital decision --
+                # but a caller can no longer be unaware of them.
+                "discrepancy_status": opp.get("discrepancy_status"),
+                "market_bid": opp.get("market_bid"),
+                "market_ask": opp.get("market_ask"),
+                "market_volume": opp.get("market_volume"),
+                "market_liquidity": opp.get("market_liquidity"),
             })
 
         # Scale down if total exposure exceeds max_total_exposure
