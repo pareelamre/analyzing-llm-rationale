@@ -14023,9 +14023,14 @@ def _agent_fallback_providers(req: "AgentAnalyzeRequest", primary_provider) -> L
         # cycle into a wasted one -- but the waste is avoidable, and a cycle
         # that simply fails is retried next tick as itself.
         if model_name in _AGENT_TRADING_IDENTITIES:
-            logger.warning(
-                "agent fallback skipped: %s would answer for %s, and both "
-                "compete on the board", model_name, label,
+            # Debug, not warning: this runs while the chain is being built at
+            # cycle start, not when a fallback is actually needed. Every agent
+            # whose configured chain names a competitor logs this and then
+            # usually completes on its primary, so at warning level it read as
+            # a failure that had not happened.
+            logger.debug(
+                "agent fallback chain for %s excludes %s: both compete on "
+                "the board", label, model_name,
             )
             continue
         prov = _scads_provider_for_model_name(
