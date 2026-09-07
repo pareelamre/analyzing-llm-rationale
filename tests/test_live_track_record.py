@@ -66,6 +66,78 @@ class LiveTrackRecordTests(unittest.TestCase):
         self.assertEqual(cache["track_record_live:v3"][1], 30)
         self.assertEqual(logger.messages[0][0], "live track record fetch failed; trying bundled copy")
 
+    def _reader_with_source(self, source, requests_get, bundled):
+        cache = {}
+        return LiveTrackRecordReader(
+            cache_key=lambda ns, v: f"{ns}:{v}",
+            cache_get=cache.get,
+            cache_set=lambda k, val, ttl: cache.__setitem__(k, (val, ttl)),
+            config=LiveTrackRecordConfig(
+                live_url="https://example.test/mtm.json",
+                ttl_seconds=30,
+                stale_after_seconds=1800,
+                bundled_path=bundled,
+            ),
+            logger=_FakeLogger(),
+            requests_get=requests_get,
+            source=source,
+        ), cache
+
+    def test_a_configured_source_is_preferred_over_the_http_copy(self):
+        def _requests_get(*args, **kwargs):
+            raise AssertionError("HTTP must not be reached when the source answers")
+
+        with tempfile.TemporaryDirectory() as td:
+            bundled = Path(td) / "mtm.json"
+            reader, cache = self._reader_with_source(
+                lambda: {"from": "gcs"}, _requests_get, bundled,
+            )
+            payload = reader.read()
+
+        self.assertEqual(payload, {"from": "gcs"})
+        self.assertEqual(cache["track_record_live:v3"][0], {"from": "gcs"})
+
+    def test_a_source_that_returns_nothing_falls_through_to_http(self):
+        def _requests_get(url, **kwargs):
+            class _Response:
+                status_code = 200
+
+                @staticmethod
+                def json():
+                    return {"from": "http"}
+
+            return _Response()
+
+        with tempfile.TemporaryDirectory() as td:
+            bundled = Path(td) / "mtm.json"
+            reader, _ = self._reader_with_source(lambda: None, _requests_get, bundled)
+            self.assertEqual(reader.read(), {"from": "http"})
+
+    def test_a_raising_source_does_not_take_the_payload_down(self):
+        """GCS being unreachable must degrade to the committed copy.
+
+        The migration only removes the git commit once the GCS object is
+        proven fresh; until then -- and after, for the bundled fallback --
+        an exception here has to be survivable.
+        """
+        def _boom():
+            raise RuntimeError("no credentials")
+
+        def _requests_get(url, **kwargs):
+            class _Response:
+                status_code = 200
+
+                @staticmethod
+                def json():
+                    return {"from": "http"}
+
+            return _Response()
+
+        with tempfile.TemporaryDirectory() as td:
+            bundled = Path(td) / "mtm.json"
+            reader, _ = self._reader_with_source(_boom, _requests_get, bundled)
+            self.assertEqual(reader.read(), {"from": "http"})
+
     def test_reader_uses_configured_remote_timeout(self):
         seen = {}
 

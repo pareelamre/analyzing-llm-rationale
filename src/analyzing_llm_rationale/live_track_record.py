@@ -42,6 +42,7 @@ class LiveTrackRecordReader:
         logger: Any,
         requests_get: RequestsGetFn = requests.get,
         time_fn: TimeFn = time.time,
+        source: Optional[Callable[[], Optional[Dict[str, Any]]]] = None,
     ) -> None:
         self._cache_key = cache_key
         self._cache_get = cache_get
@@ -50,11 +51,16 @@ class LiveTrackRecordReader:
         self._logger = logger
         self._requests_get = requests_get
         self._time = time_fn
+        # Optional origin tried ahead of the HTTP copy -- used to read a
+        # payload straight from GCS once the publisher writes it there.
+        # None keeps the original HTTP -> bundled behaviour exactly.
+        self._source = source
 
     def read(self) -> Optional[Dict[str, Any]]:
         """Return the committed live track-record aggregate, or None.
 
-        Tries (cached): raw GitHub copy -> bundled file. Synchronous; call via
+        Tries (cached): configured source, if any -> raw GitHub copy ->
+        bundled file. Synchronous; call via
         ``run_in_executor`` from async handlers. Fails open to None so callers
         can fall back to the static backtest.
         """
@@ -67,6 +73,18 @@ class LiveTrackRecordReader:
             return cached
 
         payload: Optional[Dict[str, Any]] = None
+        if self._source is not None:
+            try:
+                payload = self._source()
+            except Exception:
+                self._logger.warning(
+                    f"{self._config.resource_label} source failed; trying HTTP copy",
+                    exc_info=True,
+                )
+        if payload is not None:
+            self._cache_set(cache_key, payload, self._config.ttl_seconds)
+            return payload
+
         try:
             ttl = max(self._config.ttl_seconds, 1)
             sep = "&" if "?" in self._config.live_url else "?"

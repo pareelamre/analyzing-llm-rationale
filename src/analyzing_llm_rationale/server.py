@@ -155,6 +155,13 @@ _MARK_TO_MARKET_LIVE_TTL = int(
 _MARK_TO_MARKET_LIVE_TIMEOUT = int(
     os.environ.get("MARK_TO_MARKET_LIVE_TIMEOUT", str(_TRACK_RECORD_LIVE_TIMEOUT))
 )
+# Set MARK_TO_MARKET_GCS_BUCKET to read the payload from GCS instead of raw
+# GitHub, so the 5-minute publisher can stop committing a 2.4MB file to main.
+# Unset (the default) keeps the existing HTTP -> bundled path untouched.
+_MARK_TO_MARKET_GCS_BUCKET = os.environ.get("MARK_TO_MARKET_GCS_BUCKET", "").strip()
+_MARK_TO_MARKET_GCS_OBJECT = os.environ.get(
+    "MARK_TO_MARKET_GCS_OBJECT", "mark_to_market_live.json"
+).strip()
 _MARK_TO_MARKET_STALE_AFTER_S = int(
     os.environ.get("MARK_TO_MARKET_STALE_AFTER_S", str(_EDGE_BOARD_STALE_AFTER_S))
 )
@@ -2213,6 +2220,17 @@ _FORECAST_EVALUATION_READER = live_track_record_support.LiveTrackRecordReader(
 )
 _read_forecast_evaluation = _FORECAST_EVALUATION_READER.read
 _forecast_evaluation_freshness = _FORECAST_EVALUATION_READER.freshness
+def _read_mark_to_market_from_gcs() -> Optional[Dict[str, Any]]:
+    """Read the MTM payload from GCS. gcs_store is imported lazily here for
+    the same reason /market/history does it: google-cloud-storage is not
+    needed to import this module, only to serve requests that use it."""
+    from analyzing_llm_rationale import gcs_store
+
+    return gcs_store.read_json_object(
+        _MARK_TO_MARKET_GCS_BUCKET, _MARK_TO_MARKET_GCS_OBJECT,
+    )
+
+
 _MARK_TO_MARKET_READER = live_track_record_support.LiveTrackRecordReader(
     cache_key=_cache_key,
     cache_get=_cache_get,
@@ -2229,6 +2247,7 @@ _MARK_TO_MARKET_READER = live_track_record_support.LiveTrackRecordReader(
         user_agent="Foresea/mark-to-market-live",
     ),
     logger=logger,
+    source=_read_mark_to_market_from_gcs if _MARK_TO_MARKET_GCS_BUCKET else None,
 )
 _read_mark_to_market_record = _MARK_TO_MARKET_READER.read
 _AGENT_TRADING_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
