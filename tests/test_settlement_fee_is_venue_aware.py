@@ -86,17 +86,42 @@ class BothSettlementPathsPassTheVenueTests(unittest.TestCase):
         calls = []
         for node in ast.walk(ast.parse(source)):
             if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "_settlement_fee_rate":
-                calls.append((node.lineno, len(node.args) + len(node.keywords)))
+                supplied = list(node.args) + [kw.value for kw in node.keywords]
+                literals = [
+                    a.value for a in supplied
+                    if isinstance(a, ast.Constant) and isinstance(a.value, str)
+                ]
+                calls.append((node.lineno, len(supplied), literals))
         return calls
 
     def test_the_scan_finds_both_paths(self):
         self.assertGreaterEqual(len(self._rate_calls()), 2)
 
     def test_no_call_site_omits_the_venue(self):
-        bare = [line for line, argc in self._rate_calls() if argc == 0]
+        bare = [line for line, argc, _ in self._rate_calls() if argc == 0]
         self.assertEqual(
             bare, [],
             f"these settle at the Kalshi rate whatever the venue: lines {bare}",
+        )
+
+    def test_no_call_site_hardcodes_the_venue(self):
+        """Counting arguments let the bug back in wearing a different shape.
+
+        `_settlement_fee_rate("kalshi")` supplies an argument, so the check
+        above accepts it -- while charging every venue the Kalshi rate
+        exactly as the bare call did. Mutating the Datastore path that way
+        passed all 1,695 tests before the settlement test beside it existed.
+
+        The venue has to come from the position being settled, so a string
+        literal is wrong whatever it says.
+        """
+        hardcoded = [
+            (line, literals) for line, _, literals in self._rate_calls() if literals
+        ]
+        self.assertEqual(
+            hardcoded, [],
+            "the venue must come from the position, not a literal: "
+            + ", ".join(f"line {line} passes {lits}" for line, lits in hardcoded),
         )
 
 
