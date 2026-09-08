@@ -746,7 +746,10 @@ class DatastoreTwinStore:
             reservation_state = ReservationState(str(reservation["state"]))
             if reservation_state is ReservationState.RESERVED:
                 reservation["state"] = ReservationState.SUBMITTING.value
-            elif reservation_state is not ReservationState.SUBMISSION_UNKNOWN:
+            elif reservation_state not in {
+                ReservationState.SUBMITTING,
+                ReservationState.SUBMISSION_UNKNOWN,
+            }:
                 raise TwinStoreError("command reservation is not claimable")
             self._client.put_multi([entity, reservation])
             return claim
