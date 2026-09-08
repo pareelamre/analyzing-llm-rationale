@@ -34,6 +34,13 @@ from analyzing_llm_rationale.twin.store import (
     InsufficientReservationCapacity,
     ReservationState,
 )
+from analyzing_llm_rationale.twin.worker import (
+    DatastoreWorkerJobs,
+    WorkerJob,
+    WorkerJobError,
+    WorkerJobKind,
+    WorkerJobStatus,
+)
 
 
 def _research_in_process(key, reservation_id, result_queue):
@@ -73,6 +80,43 @@ def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, resul
 
 @unittest.skipUnless(os.environ.get("DATASTORE_EMULATOR_HOST"), "requires DATASTORE_EMULATOR_HOST")
 class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
+    def test_durable_worker_claims_survive_restart_and_fence_stale_completion(self):
+        from google.cloud import datastore
+
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")
+        client = datastore.Client(project=project)
+        store = DatastoreWorkerJobs(client)
+        now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        job_id = f"worker-{uuid4().hex}"
+        created = store.add(WorkerJob(
+            job_id, "scope-001", WorkerJobKind.RECONCILE,
+            {"account_snapshot_id": "snapshot-001"}, now + timedelta(minutes=1),
+        ))
+        self.assertEqual(store.add(created).id, job_id)
+        first = store.claim(job_id, worker_id="same-worker", now=now, lease_seconds=1)
+        self.assertIsNone(store.claim(job_id, worker_id="other", now=now, lease_seconds=1))
+        self.assertEqual(
+            [item.id for item in store.stale(now=now + timedelta(seconds=2))],
+            [job_id],
+        )
+        second = store.claim(
+            job_id, worker_id="same-worker", now=now + timedelta(seconds=2),
+            lease_seconds=10,
+        )
+        self.assertEqual(second.fence, first.fence + 1)
+        with self.assertRaisesRegex(WorkerJobError, "stale"):
+            store.complete(
+                job_id, worker_id="same-worker", fence=first.fence,
+                result={"status": "complete"}, now=now + timedelta(seconds=2),
+            )
+        completed = store.complete(
+            job_id, worker_id="same-worker", fence=second.fence,
+            result={"status": "complete"}, now=now + timedelta(seconds=2),
+        )
+        self.assertEqual(completed.status, WorkerJobStatus.COMPLETED)
+        restarted = DatastoreWorkerJobs(datastore.Client(project=project))
+        self.assertEqual(restarted.get(job_id).completed_result, {"status": "complete"})
+
     def test_datastore_budget_reservation_is_idempotent_and_unknown_spend_stays_reserved(self):
         from google.cloud import datastore
 

@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_t07_t16_t17_t19_in_progress",
+  "implementation_status": "t06_t07_t17_t19_in_progress",
   "implementation_baseline": "3202f9bfea7fcf5fd36a1c944b8e0a38e7232881",
-  "next_task": "T16",
+  "next_task": "T17",
   "live_authorized": false,
   "release_gates": {
     "G0": "not_evaluated",
@@ -474,24 +474,28 @@
         "T11",
         "T15"
       ],
-      "status": "in_progress",
-      "substep": "bounded ID-only job claims, duplicate delivery, lease recovery, startup readiness, and maintenance priority implemented; durable Cloud Tasks/Datastore job persistence and role-isolated deployment remain pending",
-      "branch": "codex/autonomous-twin-t16",
-      "commit": "0b525760",
-      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/451",
+      "status": "complete",
+      "substep": "durable Datastore jobs, fenced bounded leases, ID-only Cloud Tasks dispatch, maintenance-first ordering, role-isolated research gateway, budget authorization, startup readiness, stale detection, bounded degradation, and durable ambiguity pause are complete",
+      "branch": "codex/autonomous-durable-workers",
+      "commit": null,
+      "pr_url": null,
       "checks": [
-        "PYTHONPATH=src py -m unittest tests.test_twin_worker (pass: 4 tests)",
-        "py -m ruff check src/analyzing_llm_rationale/twin/worker.py tests/test_twin_worker.py (pass)",
+        "PYTHONPATH=src py -m unittest tests.test_twin_worker tests.test_twin_worker_auth (pass: 17 tests)",
+        "DATASTORE_EMULATOR_HOST=127.0.0.1:8765 GOOGLE_CLOUD_PROJECT=foresea-twin-test PYTHONPATH=src py -m unittest tests.test_twin_store_integration (pass: 9 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1903 tests; 9 skipped)",
+        "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . (completed; generated graph changes intentionally unstaged)"
+        "py -m graphify update . and scoped worker query (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/worker.py",
+        "src/analyzing_llm_rationale/twin/scheduler.py",
         "tests/test_twin_worker.py",
-        "GitHub Actions run 34038004924 deployed main successfully; /health and /ready returned success"
+        "tests/test_twin_store_integration.py",
+        "docs/autonomous-twin/WORKERS.md"
       ],
       "blockers": [],
-      "handoff": null
+      "handoff": "T17 is ready. Mount the private handlers, wire the durable stores and Cloud Tasks dispatcher, then validate the shadow-only IAM boundary in staging."
     },
     {
       "id": "T17",
