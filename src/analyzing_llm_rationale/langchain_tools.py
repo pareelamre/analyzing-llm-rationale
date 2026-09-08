@@ -66,6 +66,24 @@ class FeedInput(BaseModel):
     )
 
 
+def _recommendation_of(opportunity: Dict[str, Any]) -> str:
+    """The action to take, from the key the edge board actually publishes.
+
+    This read `recommendation`, which no row carries -- checked against the
+    live board: 0 of 27 rows had it, while `side` was on all 27 and was NO on
+    15 of them. Every opportunity was therefore rendered "Action: BUY",
+    including the majority the board rates NO, and the reader was an LLM
+    agent choosing a trade.
+
+    `side` is YES or NO, so say which side to buy rather than the bare verb.
+    """
+    side = str(opportunity.get("side") or "").strip().upper()
+    if side in ("YES", "NO"):
+        return f"BUY {side}"
+    stance = str(opportunity.get("stance") or "").strip()
+    return stance.upper() if stance else "REVIEW"
+
+
 class ForeseaClient:
     """Lightweight HTTP client for Foresea API endpoints."""
 
@@ -182,7 +200,7 @@ try:
                     edge = o.get("edge", 0)
                     mkt = o.get("market_probability", 0)
                     model = o.get("model_probability", 0)
-                    rec = o.get("recommendation", "BUY")
+                    rec = _recommendation_of(o)
                     out.append(
                         f"{i}. [{platform}] {q}\n"
                         f"   Action: {rec} | Market: {mkt*100:.0f}% vs Foresea: {model*100:.0f}% ({edge*100:+.1f}% Edge)"
