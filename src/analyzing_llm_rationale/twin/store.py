@@ -45,6 +45,23 @@ class ReservationState(str, Enum):
     SETTLED = "settled"
 
 
+_CLAIMABLE_COMMAND_STATES = frozenset({
+    CommandState.RESERVED,
+    CommandState.SUBMITTING,
+    CommandState.SUBMISSION_UNKNOWN,
+    CommandState.ACKNOWLEDGED,
+    CommandState.PARTIALLY_FILLED,
+    CommandState.FILLED,
+    CommandState.CANCEL_REQUESTED,
+    CommandState.CANCELLED,
+})
+_RECONCILABLE_RESERVATION_STATES = frozenset({
+    ReservationState.SUBMITTING,
+    ReservationState.SUBMISSION_UNKNOWN,
+    ReservationState.SETTLED,
+})
+
+
 @dataclass(frozen=True)
 class ReservationPreconditions:
     """Captured risk inputs that must still be valid during reservation."""
@@ -195,6 +212,10 @@ class TwinStore(Protocol):
     def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30) -> Optional[CommandClaim]: ...
 
     def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str) -> ExecutionCommand: ...
+
+    def release_reservation(self, reservation_id: str, *, confirmed_no_order: bool) -> Reservation: ...
+
+    def settle_reservation(self, scope_id: str, reservation_id: str, *, settlement_ref: str) -> Reservation: ...
 
 
 class InMemoryTwinStore:
@@ -411,17 +432,24 @@ class InMemoryTwinStore:
             old_claim = command.claim
             if old_claim is not None and old_claim.lease_expires_at > now:
                 return None
-            if command.state not in {CommandState.RESERVED, CommandState.SUBMITTING, CommandState.SUBMISSION_UNKNOWN}:
+            if command.state not in _CLAIMABLE_COMMAND_STATES:
                 return None
             fence = (old_claim.fence if old_claim is not None else 0) + 1
             claim = CommandClaim(command_id, worker_id, fence, now + timedelta(seconds=lease_seconds))
             state = CommandState.SUBMITTING if command.state is CommandState.RESERVED else command.state
             if state is not command.state and not can_transition_command(command.state, state):
                 raise TwinStoreError("command cannot enter submitting state")
-            self._commands[command_id] = replace(command, state=state, claim=claim)
             reservation = self._reservations[command.reservation_id]
             if reservation.state is ReservationState.RESERVED:
-                self._reservations[reservation.id] = replace(reservation, state=ReservationState.SUBMITTING)
+                if command.state is not CommandState.RESERVED:
+                    raise TwinStoreError("command and reservation submission states diverged")
+                updated_reservation = replace(reservation, state=ReservationState.SUBMITTING)
+            elif reservation.state not in _RECONCILABLE_RESERVATION_STATES:
+                raise TwinStoreError("command reservation is not claimable")
+            else:
+                updated_reservation = reservation
+            self._commands[command_id] = replace(command, state=state, claim=claim)
+            self._reservations[reservation.id] = updated_reservation
             return claim
 
     def transition_command(
@@ -436,10 +464,24 @@ class InMemoryTwinStore:
             if not can_transition_command(command.state, target):
                 raise TwinStoreError(f"invalid command transition {command.state.value}->{target.value}")
             updated = replace(command, state=target)
-            self._commands[command_id] = updated
             reservation = self._reservations[command.reservation_id]
             if target is CommandState.SUBMISSION_UNKNOWN:
                 self._reservations[reservation.id] = replace(reservation, state=ReservationState.SUBMISSION_UNKNOWN)
+            elif target is CommandState.REJECTED:
+                if reservation.state not in {
+                    ReservationState.SUBMITTING, ReservationState.SUBMISSION_UNKNOWN,
+                }:
+                    raise TwinStoreError("rejected command reservation is not releasable")
+                projection = self.projection(reservation.scope_id)
+                self._reservations[reservation.id] = replace(
+                    reservation, state=ReservationState.RELEASED,
+                )
+                self._projections[reservation.scope_id] = replace(
+                    projection, revision=projection.revision + 1,
+                    reserved_cash=projection.reserved_cash - reservation.cash,
+                    reserved_max_loss=projection.reserved_max_loss - reservation.max_loss,
+                )
+            self._commands[command_id] = updated
             return updated
 
     def release_reservation(self, reservation_id: str, *, confirmed_no_order: bool) -> Reservation:
@@ -460,6 +502,36 @@ class InMemoryTwinStore:
                 reserved_max_loss=projection.reserved_max_loss - reservation.max_loss,
             )
             return released
+
+    def settle_reservation(
+        self, scope_id: str, reservation_id: str, *, settlement_ref: str,
+    ) -> Reservation:
+        if not settlement_ref.strip():
+            raise TwinStoreError("settlement reference is required")
+        with self._lock:
+            reservation = self.reservation(scope_id, reservation_id)
+            if reservation.state is ReservationState.SETTLED:
+                if reservation.reconciliation_ref == settlement_ref:
+                    return reservation
+                updated = replace(reservation, reconciliation_ref=settlement_ref)
+                self._reservations[reservation_id] = updated
+                return updated
+            if reservation.state not in {
+                ReservationState.SUBMITTING, ReservationState.SUBMISSION_UNKNOWN,
+            }:
+                raise TwinStoreError("reservation is not eligible for settlement")
+            projection = self.projection(scope_id)
+            settled = replace(
+                reservation, state=ReservationState.SETTLED,
+                reconciliation_ref=settlement_ref,
+            )
+            self._reservations[reservation_id] = settled
+            self._projections[scope_id] = replace(
+                projection, revision=projection.revision + 1,
+                reserved_cash=projection.reserved_cash - reservation.cash,
+                reserved_max_loss=projection.reserved_max_loss - reservation.max_loss,
+            )
+            return settled
 
     def receive_inbox(self, scope_id: str, message_id: str) -> bool:
         """Return true once per delivery; repeated task/event IDs are ignored."""
@@ -644,6 +716,7 @@ class DatastoreTwinStore:
                     intent_hash=str(existing["intent_hash"]), cash=Decimal(str(existing["cash"])),
                     max_loss=Decimal(str(existing["max_loss"])), account_revision=int(existing["account_revision"]),
                     state=ReservationState(str(existing["state"])), created_at=existing["created_at"],
+                    reconciliation_ref=existing.get("reconciliation_ref"),
                 )
             if preconditions is not None:
                 preconditions.assert_current(intent, projection, now)
@@ -732,9 +805,10 @@ class DatastoreTwinStore:
                 return None
             old_fence = int(entity.get("fence", 0))
             state = CommandState(str(entity["state"]))
+            original_state = state
             if state is CommandState.RESERVED:
                 state = CommandState.SUBMITTING
-            elif state not in {CommandState.SUBMITTING, CommandState.SUBMISSION_UNKNOWN}:
+            elif state not in _CLAIMABLE_COMMAND_STATES:
                 return None
             claim = CommandClaim(command_id, worker_id, old_fence + 1, now + timedelta(seconds=lease_seconds))
             entity.update({"state": state.value, "claim_worker_id": worker_id, "fence": claim.fence, "lease_expires_at": claim.lease_expires_at})
@@ -745,11 +819,10 @@ class DatastoreTwinStore:
                 raise TwinStoreError("command reservation was not found")
             reservation_state = ReservationState(str(reservation["state"]))
             if reservation_state is ReservationState.RESERVED:
+                if original_state is not CommandState.RESERVED:
+                    raise TwinStoreError("command and reservation submission states diverged")
                 reservation["state"] = ReservationState.SUBMITTING.value
-            elif reservation_state not in {
-                ReservationState.SUBMITTING,
-                ReservationState.SUBMISSION_UNKNOWN,
-            }:
+            elif reservation_state not in _RECONCILABLE_RESERVATION_STATES:
                 raise TwinStoreError("command reservation is not claimable")
             self._client.put_multi([entity, reservation])
             return claim
@@ -769,10 +842,32 @@ class DatastoreTwinStore:
             entity["state"] = target.value
             reservation_key = self._key(scope_id, "TwinReservation", str(entity["reservation_id"]))
             reservation = self._client.get(reservation_key)
-            if reservation is not None and target is CommandState.SUBMISSION_UNKNOWN:
+            if reservation is None:
+                raise TwinStoreError("command reservation was not found")
+            if target is CommandState.SUBMISSION_UNKNOWN:
                 reservation["state"] = ReservationState.SUBMISSION_UNKNOWN.value
-                self._client.put(reservation)
-            self._client.put(entity)
+                self._client.put_multi([entity, reservation])
+            elif target is CommandState.REJECTED:
+                reservation_state = ReservationState(str(reservation["state"]))
+                if reservation_state not in {
+                    ReservationState.SUBMITTING, ReservationState.SUBMISSION_UNKNOWN,
+                }:
+                    raise TwinStoreError("rejected command reservation is not releasable")
+                account = self._client.get(self._key(scope_id))
+                if account is None:
+                    raise TwinStoreError("account scope was not found")
+                projection = self._projection(account)
+                self._write_projection(account, replace(
+                    projection, revision=projection.revision + 1,
+                    reserved_cash=projection.reserved_cash - Decimal(str(reservation["cash"])),
+                    reserved_max_loss=(
+                        projection.reserved_max_loss - Decimal(str(reservation["max_loss"]))
+                    ),
+                ))
+                reservation["state"] = ReservationState.RELEASED.value
+                self._client.put_multi([entity, reservation, account])
+            else:
+                self._client.put(entity)
         return self.command_for_intent_by_id(scope_id, command_id)
 
     def command_for_intent_by_id(self, scope_id: str, command_id: str) -> ExecutionCommand:
@@ -818,6 +913,41 @@ class DatastoreTwinStore:
             self._client.put_multi([account, reservation])
             return self._reservation_from_entity(scope_id, local_id, reservation)
 
+    def settle_reservation(
+        self, scope_id: str, reservation_id: str, *, settlement_ref: str,
+    ) -> Reservation:
+        if not settlement_ref.strip():
+            raise TwinStoreError("settlement reference is required")
+        key = self._key(scope_id, "TwinReservation", reservation_id)
+        with self._client.transaction():
+            reservation = self._client.get(key)
+            account = self._client.get(self._key(scope_id))
+            if reservation is None or account is None:
+                raise TwinStoreError("reservation or account scope was not found")
+            state = ReservationState(str(reservation["state"]))
+            if state is ReservationState.SETTLED:
+                if reservation.get("reconciliation_ref") != settlement_ref:
+                    reservation["reconciliation_ref"] = settlement_ref
+                    self._client.put(reservation)
+                return self._reservation_from_entity(scope_id, reservation_id, reservation)
+            if state not in {
+                ReservationState.SUBMITTING, ReservationState.SUBMISSION_UNKNOWN,
+            }:
+                raise TwinStoreError("reservation is not eligible for settlement")
+            projection = self._projection(account)
+            updated = replace(
+                projection, revision=projection.revision + 1,
+                reserved_cash=projection.reserved_cash - Decimal(str(reservation["cash"])),
+                reserved_max_loss=projection.reserved_max_loss - Decimal(str(reservation["max_loss"])),
+            )
+            self._write_projection(account, updated)
+            reservation.update({
+                "state": ReservationState.SETTLED.value,
+                "reconciliation_ref": settlement_ref,
+            })
+            self._client.put_multi([account, reservation])
+            return self._reservation_from_entity(scope_id, reservation_id, reservation)
+
     @staticmethod
     def _reservation_from_entity(scope_id: str, reservation_id: str, entity: Any) -> Reservation:
         return Reservation(
@@ -830,6 +960,7 @@ class DatastoreTwinStore:
             account_revision=int(entity["account_revision"]),
             state=ReservationState(str(entity["state"])),
             created_at=entity["created_at"],
+            reconciliation_ref=entity.get("reconciliation_ref"),
         )
 
     def receive_inbox(self, scope_id: str, message_id: str) -> bool:

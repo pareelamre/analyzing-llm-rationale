@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
-from analyzing_llm_rationale.twin import AccountScope, TradeIntent
+from analyzing_llm_rationale.twin import AccountScope, CommandState, TradeIntent
 from analyzing_llm_rationale.twin.budget import (
     BudgetAlreadyClaimed,
     BudgetExceeded,
@@ -22,7 +22,18 @@ from analyzing_llm_rationale.twin.budget import (
     call_with_budget,
 )
 from analyzing_llm_rationale.twin.manual import reserve_confirmed_manual_order
-from analyzing_llm_rationale.twin.store import DatastoreTwinStore, InsufficientReservationCapacity
+from analyzing_llm_rationale.twin.recovery import (
+    DatastoreLifecycleStore,
+    FillObservation,
+    LifecycleProjection,
+    RecoveryBlocked,
+    apply_lifecycle_observations,
+)
+from analyzing_llm_rationale.twin.store import (
+    DatastoreTwinStore,
+    InsufficientReservationCapacity,
+    ReservationState,
+)
 
 
 def _research_in_process(key, reservation_id, result_queue):
@@ -178,9 +189,89 @@ class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
         command = store.command_for_intent(order)
         first = store.claim_command(command.id, worker_id="worker-a", now=now, lease_seconds=5)
         self.assertIsNotNone(first)
+        self.assertEqual(
+            store.reservation(scope_id, command.reservation_id).state,
+            ReservationState.SUBMITTING,
+        )
         self.assertIsNone(store.claim_command(command.id, worker_id="worker-b", now=now, lease_seconds=5))
         second = store.claim_command(command.id, worker_id="worker-b", now=now + timedelta(seconds=6), lease_seconds=5)
         self.assertEqual(second.fence, first.fence + 1)
+        store.transition_command(
+            command.id, target=CommandState.ACKNOWLEDGED,
+            fence=second.fence, worker_id=second.worker_id,
+        )
+        third = store.claim_command(
+            command.id, worker_id="worker-c", now=now + timedelta(seconds=12),
+            lease_seconds=5,
+        )
+        self.assertEqual(third.fence, second.fence + 1)
+        store.transition_command(
+            command.id, target=CommandState.PARTIALLY_FILLED,
+            fence=third.fence, worker_id=third.worker_id,
+        )
+        fourth = store.claim_command(
+            command.id, worker_id="worker-d", now=now + timedelta(seconds=18),
+            lease_seconds=5,
+        )
+        self.assertEqual(fourth.fence, third.fence + 1)
+
+    def test_confirmed_rejection_atomically_releases_datastore_reservation(self):
+        from google.cloud import datastore
+
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")
+        scope_id = f"reject-{uuid4().hex}"
+        now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        store = DatastoreTwinStore(datastore.Client(project=project))
+        store.register_account(
+            AccountScope(
+                scope_id, "owner-001", "kalshi", "account-ref", "demo", "USD",
+                "connection-001", 1, now,
+            ),
+            venue_available_cash=Decimal("10"), loss_limit=Decimal("6"),
+        )
+        order = TradeIntent(
+            "reject-intent", scope_id, 1, "kalshi:demo:KXREJECT", "BUY_YES",
+            Decimal("1"), Decimal("0.4"), "IOC", "forecast-001", None,
+            "policy-v1", "strategy-v1", "market-v1", Decimal("0"), Decimal("0"),
+            now + timedelta(days=1), now,
+        )
+        reservation = store.reserve_intent(
+            order, cash=Decimal("1"), max_loss=Decimal("1"), now=now,
+        )
+        command = store.command_for_intent(order)
+        claim = store.claim_command(command.id, worker_id="worker", now=now)
+        store.transition_command(
+            command.id, target=CommandState.REJECTED,
+            fence=claim.fence, worker_id=claim.worker_id,
+        )
+        self.assertEqual(store.projection(scope_id).reserved_cash, Decimal("0"))
+        self.assertEqual(
+            store.reservation(scope_id, reservation.id).state,
+            ReservationState.RELEASED,
+        )
+
+    def test_lifecycle_projection_is_integrity_checked_and_compare_and_swapped(self):
+        from google.cloud import datastore
+
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")
+        scope_id = f"lifecycle-{uuid4().hex}"
+        store = DatastoreLifecycleStore(datastore.Client(project=project))
+        base = LifecycleProjection(
+            "command-1", scope_id, "venue-order-1", "client-1",
+            "kalshi:demo:KX", Decimal("2"),
+        )
+        fill = FillObservation(
+            "fill-1", 1, "venue-order-1", "client-1", base.instrument_id,
+            Decimal("1"), datetime(2025, 1, 1, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        updated = apply_lifecycle_observations(
+            base, fills=[fill], observed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        self.assertEqual(store.save(updated, expected_revision=0), updated)
+        self.assertEqual(store.load(scope_id, base.command_id), updated)
+        with self.assertRaisesRegex(RecoveryBlocked, "changed"):
+            store.save(updated, expected_revision=0)
 
     def test_two_processes_compete_for_last_account_capacity(self):
         from google.cloud import datastore

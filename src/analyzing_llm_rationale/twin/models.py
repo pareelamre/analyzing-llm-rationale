@@ -77,10 +77,10 @@ _COMMAND_TRANSITIONS: Mapping[CommandState, frozenset[CommandState]] = {
         {CommandState.ACKNOWLEDGED, CommandState.REJECTED, CommandState.SUBMISSION_UNKNOWN}
     ),
     CommandState.ACKNOWLEDGED: frozenset(
-        {CommandState.PARTIALLY_FILLED, CommandState.FILLED, CommandState.CANCEL_REQUESTED}
+        {CommandState.PARTIALLY_FILLED, CommandState.FILLED, CommandState.CANCEL_REQUESTED, CommandState.CANCELLED}
     ),
     CommandState.PARTIALLY_FILLED: frozenset(
-        {CommandState.PARTIALLY_FILLED, CommandState.FILLED, CommandState.CANCEL_REQUESTED}
+        {CommandState.PARTIALLY_FILLED, CommandState.FILLED, CommandState.CANCEL_REQUESTED, CommandState.CANCELLED}
     ),
     CommandState.CANCEL_REQUESTED: frozenset(
         {CommandState.PARTIALLY_FILLED, CommandState.FILLED, CommandState.CANCELLED}
@@ -92,7 +92,9 @@ _COMMAND_TRANSITIONS: Mapping[CommandState, frozenset[CommandState]] = {
     CommandState.BLOCKED: frozenset(),
     CommandState.EXPIRED: frozenset(),
     CommandState.REJECTED: frozenset(),
-    CommandState.CANCELLED: frozenset(),
+    # A venue can report a fill after acknowledging cancellation. Preserve it
+    # rather than treating the earlier cancellation observation as immutable.
+    CommandState.CANCELLED: frozenset({CommandState.PARTIALLY_FILLED, CommandState.FILLED}),
 }
 
 
