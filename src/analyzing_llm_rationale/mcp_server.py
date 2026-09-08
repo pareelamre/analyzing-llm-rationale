@@ -16,11 +16,25 @@ from analyzing_llm_rationale.market_data import MarketDataError, MarketDataInput
 logger = logging.getLogger(__name__)
 
 
-def _log_mcp_tool_call(tool: str, context: Optional[Dict[str, Any]] = None) -> None:
-    """Write a structured JSON line to stdout so Cloud Run indexes it as jsonPayload."""
+def _log_mcp_tool_call(
+    tool: str,
+    context: Optional[Dict[str, Any]] = None,
+    *,
+    kind: str = "tool",
+) -> None:
+    """Write a structured JSON line to stdout so Cloud Run indexes it as jsonPayload.
+
+    ``kind`` separates a tool call from a resource read. Four of the five
+    resources are backed by the same client method as a tool of the same
+    name -- reading foresea://track-record and calling foresea_track_record
+    both logged tool "foresea_track_record" -- so grouping by tool alone
+    could not say whether resources were being used at all, and counted
+    every resource read as a tool call.
+    """
     record: Dict[str, Any] = {
         "event": "mcp_tool_call",
         "tool": tool,
+        "kind": kind,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     if context:
@@ -784,9 +798,11 @@ def create_mcp_server(
     def _tool_name(fn) -> str:
         return _TOOL_NAMES.get(getattr(fn, "__name__", ""), getattr(fn, "__name__", "?"))
 
-    def _call_tool(fn, *args, **kwargs) -> Dict[str, Any]:
+    def _call_tool(fn, *args, _kind: str = "tool", **kwargs) -> Dict[str, Any]:
         fn_name = getattr(fn, "__name__", "")
-        _log_mcp_tool_call(_tool_name(fn), _mcp_tool_context(fn_name, args, kwargs))
+        _log_mcp_tool_call(
+            _tool_name(fn), _mcp_tool_context(fn_name, args, kwargs), kind=_kind
+        )
         try:
             return fn(*args, **kwargs)
         except ForeseaApiError as exc:
@@ -794,9 +810,11 @@ def create_mcp_server(
         except (MarketDataError, MarketDataInputError) as exc:
             raise ToolError(str(exc)) from exc
 
-    async def _call_tool_async(fn, *args, **kwargs) -> Dict[str, Any]:
+    async def _call_tool_async(fn, *args, _kind: str = "tool", **kwargs) -> Dict[str, Any]:
         fn_name = getattr(fn, "__name__", "")
-        _log_mcp_tool_call(_tool_name(fn), _mcp_tool_context(fn_name, args, kwargs))
+        _log_mcp_tool_call(
+            _tool_name(fn), _mcp_tool_context(fn_name, args, kwargs), kind=_kind
+        )
         try:
             return await fn(*args, **kwargs)
         except ForeseaApiError as exc:
@@ -1108,7 +1126,7 @@ def create_mcp_server(
     async def weather_radar_resource() -> str:
         """Live weather prediction market radar with neural model mispricings."""
 
-        return json.dumps(await _call_tool_async(client.aweather_radar), sort_keys=True)
+        return json.dumps(await _call_tool_async(client.aweather_radar, _kind="resource"), sort_keys=True)
 
     @mcp.resource(
         "foresea://track-record",
@@ -1119,7 +1137,9 @@ def create_mcp_server(
         """Foresea's public resolved-forecast track record."""
 
         return json.dumps(
-            _summarise_track_record(await _call_tool_async(client.atrack_record)),
+            _summarise_track_record(
+                await _call_tool_async(client.atrack_record, _kind="resource")
+            ),
             sort_keys=True,
         )
 
@@ -1131,7 +1151,7 @@ def create_mcp_server(
     async def edge_board_resource() -> str:
         """Live prediction market edge board with model-vs-market mispricings."""
 
-        return json.dumps(await _call_tool_async(client.aedge_board), sort_keys=True)
+        return json.dumps(await _call_tool_async(client.aedge_board, _kind="resource"), sort_keys=True)
 
     @mcp.resource(
         "foresea://markets/trending",
@@ -1141,7 +1161,7 @@ def create_mcp_server(
     async def trending_markets_resource() -> str:
         """Top trending and active prediction markets across Polymarket and Kalshi."""
 
-        return json.dumps(await _call_tool_async(client.afeed_latest, 10, 0.05), sort_keys=True)
+        return json.dumps(await _call_tool_async(client.afeed_latest, 10, 0.05, _kind="resource"), sort_keys=True)
 
     @mcp.resource(
         "foresea://openapi.json",
@@ -1151,7 +1171,7 @@ def create_mcp_server(
     async def openapi_resource() -> str:
         """Foresea's public OpenAPI schema."""
 
-        return json.dumps(await _call_tool_async(client.aopenapi), sort_keys=True)
+        return json.dumps(await _call_tool_async(client.aopenapi, _kind="resource"), sort_keys=True)
 
     @mcp.prompt()
     def foresea_forecast_prompt(question: str) -> str:
