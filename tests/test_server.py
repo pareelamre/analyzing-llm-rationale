@@ -2239,6 +2239,79 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Total Registered Users", response.text)
         self.assertIn("export_trader@example.com", response.text)
 
+    def test_analytics_export_survives_a_hostile_display_name(self):
+        """The export is parsed back, not substring-matched.
+
+        A display name is self-service and only stripped on the way in, so
+        it can carry the quotes, commas and newlines that CSV reserves.
+        Building the file with f-strings let a name close its own field
+        and shift every column after it.
+        """
+        import csv
+        import io
+
+        hostile = 'Ann", "admin@evil.test", "pwned\nsecond line'
+        server_module._sync_user_duckdb(
+            "user_hostile_789",
+            "hostile@example.com",
+            hostile,
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        response = self.client.get("/analytics/export")
+        self.assertEqual(response.status_code, 200)
+
+        rows = list(csv.reader(io.StringIO(response.text)))
+        row = next((r for r in rows if r and r[0] == "user_hostile_789"), None)
+        self.assertIsNotNone(row, "the hostile user is missing from the export")
+        self.assertEqual(len(row), 5, "the name spilled into extra columns")
+        self.assertEqual(row[1], "hostile@example.com")
+        self.assertEqual(row[2], hostile)
+
+    def test_analytics_export_defuses_a_formula_display_name(self):
+        """Quoting does not stop this -- a spreadsheet unquotes first."""
+        import csv
+        import io
+
+        server_module._sync_user_duckdb(
+            "user_formula_790",
+            "formula@example.com",
+            '=HYPERLINK("http://evil","claim your refund")',
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        response = self.client.get("/analytics/export")
+        rows = list(csv.reader(io.StringIO(response.text)))
+        row = next((r for r in rows if r and r[0] == "user_formula_790"), None)
+        self.assertIsNotNone(row)
+        self.assertTrue(row[2].startswith("'="), row[2])
+
+    def test_analytics_export_defuses_a_formula_model_label(self):
+        """`model` comes from the event metadata dict, unvalidated."""
+        import csv
+        import io
+
+        self.client.post(
+            "/analytics/event",
+            json={
+                "event_name": "forecast_completed",
+                "path": "/",
+                "metadata": {"model": '=HYPERLINK("http://evil","x")'},
+            },
+        )
+        response = self.client.get("/analytics/export")
+        rows = list(csv.reader(io.StringIO(response.text)))
+        cells = [c for r in rows for c in r]
+        self.assertTrue(
+            any("HYPERLINK" in c for c in cells), "the model label is missing"
+        )
+        for cell in cells:
+            self.assertFalse(
+                cell.startswith("="), f"cell would evaluate as a formula: {cell!r}"
+            )
+
     def test_share_forecast_creates_public_page(self):
         response = self.client.post(
             "/forecasts/share",
