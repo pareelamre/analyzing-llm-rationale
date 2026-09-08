@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import socket
 from datetime import datetime, timezone
+from hashlib import sha256
 
 from ..observability import init_observability
 from .budget import BudgetAlreadyClaimed, BudgetExceeded, DatastoreResearchBudget
@@ -55,6 +56,13 @@ def _assert_shadow_only() -> None:
         raise RuntimeConfigurationError("private twin runtime cannot receive a live mandate")
 
 
+def _runtime_worker_id(role: WorkerRole, hostname: str) -> str:
+    """Return a bounded stable ID without exposing a platform hostname."""
+    if not hostname.strip():
+        raise RuntimeConfigurationError("private twin runtime requires an instance hostname")
+    return f"{role.value}-{sha256(hostname.encode()).hexdigest()[:24]}"
+
+
 def _maintenance_operation(jobs: DatastoreWorkerJobs, job: WorkerJob) -> dict[str, object]:
     """Safe staging operation until venue/account adapters are configured."""
     if job.kind is WorkerJobKind.RECOVERY:
@@ -86,7 +94,7 @@ def create_environment_app():
         _accounts("FORESEA_TWIN_DISPATCHER_ACCOUNTS"),
         _accounts("FORESEA_TWIN_RESEARCH_ACCOUNTS", required=role is WorkerRole.MAINTENANCE),
     )
-    worker_id = f"{role.value}-{socket.gethostname()}"
+    worker_id = _runtime_worker_id(role, socket.gethostname())
 
     if role is WorkerRole.MAINTENANCE:
         from google.cloud import datastore

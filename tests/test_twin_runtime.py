@@ -10,7 +10,7 @@ from analyzing_llm_rationale.twin.runtime import (
     RuntimeIdentityPolicy,
     create_private_worker_app,
 )
-from analyzing_llm_rationale.twin.runtime_app import _assert_shadow_only
+from analyzing_llm_rationale.twin.runtime_app import _assert_shadow_only, _runtime_worker_id
 from analyzing_llm_rationale.twin.worker import (
     InMemoryWorkerJobs,
     MaintenanceResearchJobGateway,
@@ -132,6 +132,26 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
                 "os.environ", {**base, **override}, clear=True,
             ), self.assertRaises(RuntimeError):
                 _assert_shadow_only()
+
+    def test_runtime_worker_id_is_bounded_stable_and_hides_hostname(self):
+        worker_id = _runtime_worker_id(WorkerRole.MAINTENANCE, "instance.private.example")
+        self.assertEqual(worker_id, _runtime_worker_id(
+            WorkerRole.MAINTENANCE, "instance.private.example",
+        ))
+        self.assertRegex(worker_id, r"^maintenance-[0-9a-f]{24}$")
+        self.assertNotIn("instance", worker_id)
+        with self.assertRaises(RuntimeError):
+            _runtime_worker_id(WorkerRole.RESEARCH, "  ")
+
+    def test_research_status_rejects_maintenance_job_ids(self):
+        runtime, _ = self.maintenance_runtime()
+        with TestClient(create_private_worker_app(runtime)) as client:
+            response = client.get(
+                "/internal/twin/research-jobs/maintenance-job",
+                headers=self.auth("research-token"),
+            )
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json()["detail"], "job is not a research assignment")
 
     def test_startup_reconciliation_failure_keeps_readiness_closed(self):
         runtime, _ = self.maintenance_runtime(startup=False)

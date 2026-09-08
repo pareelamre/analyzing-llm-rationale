@@ -255,10 +255,11 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
         async def research_status(job_id: str, request: Request):
             try:
                 runtime.authenticate(request, runtime.identities.research_accounts)
+                completed_result = runtime.research_gateway.completed_result(job_id)
                 job = runtime.jobs.get(job_id)
                 return {
                     "status": job.status.value,
-                    "completed_result": job.completed_result,
+                    "completed_result": completed_result,
                 }
             except Exception as exc:
                 raise _http_error(exc) from exc
