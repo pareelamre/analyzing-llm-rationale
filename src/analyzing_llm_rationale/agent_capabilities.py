@@ -705,22 +705,6 @@ def _coerce_answer_text(value: Any) -> str:
     return str(value).strip()
 
 
-_CONTENT_FREE_ANSWERS = {
-    "pass", "hold", "no action", "n/a", "none", "no trade", "no trades",
-    "nothing", "skip", "wait",
-}
-
-
-def _is_content_free_answer(answer: str) -> bool:
-    """True when a final answer carries a verdict but no reasoning at all.
-
-    Deliberately narrow: only a bare one-liner counts. Any answer that
-    actually explains itself -- even briefly -- is left alone.
-    """
-    stripped = (answer or "").strip().strip(".!*_# ").lower()
-    return not stripped or stripped in _CONTENT_FREE_ANSWERS
-
-
 OnStep = Callable[[Dict[str, Any]], Awaitable[None]]
 
 

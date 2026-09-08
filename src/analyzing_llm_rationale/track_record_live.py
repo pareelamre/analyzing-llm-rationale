@@ -151,10 +151,6 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _today() -> str:
-    return _now().strftime("%Y-%m-%d")
-
-
 def _snapshot_slot(lead_days: Optional[float],
                    *,
                    now: Optional[datetime] = None,

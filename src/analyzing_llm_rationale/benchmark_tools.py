@@ -1987,29 +1987,6 @@ def _ds_load_guard_account(
     return account, usage
 
 
-def _iter_ledger_events() -> Iterable[Dict[str, Any]]:
-    path = _ledger_path()
-    if path is None or not path.exists():
-        return []
-    events: List[Dict[str, Any]] = []
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError:
-                    logger.warning("skipping malformed agent trade ledger line")
-                    continue
-                if isinstance(event, dict):
-                    events.append(event)
-    except Exception:
-        logger.warning("agent trade ledger could not be read; starting empty", exc_info=True)
-    return events
-
-
 def _market_cost_basis(account: Any, ticker: str, *, platform: str = "kalshi") -> float:
     return sum(
         float(pos.cost_basis)
