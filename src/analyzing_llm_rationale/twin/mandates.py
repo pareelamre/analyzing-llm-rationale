@@ -278,9 +278,6 @@ class DatastoreMandateStore:
     def __init__(self, client: Any) -> None:
         self._client = client
 
-    def _owner(self, owner_id: str):
-        return self._client.key("User", owner_id)
-
     def _version_key(self, owner_id: str, mandate_id: str, version: int):
         return self._client.key("User", owner_id, "TwinMandate", f"{mandate_id}:v{version}")
 
