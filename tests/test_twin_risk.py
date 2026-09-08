@@ -88,6 +88,54 @@ def evaluate(**changes):
     return evaluate_binary_candidate(**values)
 
 
+class ReduceOnlyNeverGoesNegativeTests(unittest.TestCase):
+    """A close can shrink to nothing, never to a buy.
+
+    size_reduce_only promises to "clamp a verified close to existing
+    inventory so it cannot flip exposure". Availability is floored at zero:
+
+        available = max(_ZERO, held - pending)
+
+    Without that floor an over-committed account -- pending sells exceeding
+    holdings, which is what a stale or racing reservation looks like --
+    returns a negative quantity. On a reduce-only order a negative quantity
+    is a buy, the one thing the function exists to prevent.
+
+    The reason field is set either way, so a caller that checks it is safe.
+    This asserts the quantity itself, because the promise in the docstring
+    is about the order and not about caller discipline.
+    """
+
+    def _reduce(self, held: str, requested: str, pending: str = "0", depth=None):
+        return size_reduce_only(
+            held_quantity=Decimal(held), requested_quantity=Decimal(requested),
+            min_quantity=Decimal("1"), pending_sell_quantity=Decimal(pending),
+            available_depth=None if depth is None else Decimal(depth),
+        )
+
+    def test_an_over_committed_account_closes_nothing_rather_than_buying(self):
+        result = self._reduce("5", "10", pending="8")
+        self.assertEqual(result.quantity, Decimal("0"))
+        self.assertEqual(result.reason, "insufficient_inventory")
+
+    def test_the_quantity_is_never_negative(self):
+        """Across the states that produce a negative without the floor."""
+        for held, pending in (("5", "8"), ("0", "1"), ("2", "100")):
+            with self.subTest(held=held, pending=pending):
+                self.assertGreaterEqual(
+                    self._reduce(held, "10", pending=pending).quantity, Decimal("0"),
+                )
+
+    def test_a_close_is_capped_by_what_is_actually_held(self):
+        self.assertEqual(self._reduce("3", "10").quantity, Decimal("3"))
+
+    def test_pending_sells_are_reserved_against_the_close(self):
+        self.assertEqual(self._reduce("10", "10", pending="4").quantity, Decimal("6"))
+
+    def test_depth_caps_it_too(self):
+        self.assertEqual(self._reduce("10", "10", depth="2").quantity, Decimal("2"))
+
+
 class CalibrationTopBinTests(unittest.TestCase):
     """A forecast of exactly 1.0 belongs in the top bin, like any other.
 
