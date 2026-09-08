@@ -1373,6 +1373,28 @@ _DEFAULT_FEE_COEFF = float(os.environ.get("DEFAULT_FEE_COEFF", "0.0"))
 _EXTRA_FEE_RATE = float(os.environ.get("PAPER_EXTRA_FEE_RATE", "0.0"))
 
 
+def _published_round(value: float, places: int = 4) -> float:
+    """Round a signed money figure for publication without a signed zero.
+
+    A bet sized at zero edge that lost computes ``0.0 * -1.0 - 0.0``,
+    which is ``-0.0``. That is exactly zero -- ``-0.0 == 0.0`` is True,
+    and so is ``not (-0.0 < 0)`` -- but it serialises to JSON as "-0.0",
+    and 128 of the bets on the published track record read that way: a
+    column of apparent tiny losses that were in fact no position at all.
+
+    Adding zero collapses the sign under IEEE 754 (``-0.0 + 0.0`` is
+    ``+0.0``) and leaves every other value bit-for-bit alone.
+
+    Deliberately not applied to skill_ci_high, which also publishes
+    ``-0.0``. That one is a genuinely negative bound of around -1e-5
+    rounded to four places, so its sign carries information: it says the
+    interval does not reach zero. Collapsing it would assert the
+    opposite. The rule is narrow on purpose -- it is for figures whose
+    sign comes from multiplying a zero, not for small negatives.
+    """
+    return round(value, places) + 0.0
+
+
 def _bet_fee(platform: Any, stake: float, p_side: float) -> float:
     """Trading cost for one paper bet: venue taker fee (price-dependent) plus a
     flat slippage assumption, both as a fraction of stake."""
@@ -1550,8 +1572,8 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "stake_flat": 1.0,
             "stake_edge": round(s_edge, 4),
             "in_validated": _edge_label(edge) in sig_buckets,
-            "profit_flat": round(1.0 * (payout if win else -1.0) - fee_flat, 4),
-            "profit_edge": round(s_edge * (payout if win else -1.0) - fee_edge, 4),
+            "profit_flat": _published_round(1.0 * (payout if win else -1.0) - fee_flat),
+            "profit_edge": _published_round(s_edge * (payout if win else -1.0) - fee_edge),
             "fee_flat": round(fee_flat, 4),
             "fee_edge": round(fee_edge, 4),
             "resolved_ts": _ts(r.get("resolved_ts")),
