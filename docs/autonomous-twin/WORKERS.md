@@ -13,6 +13,7 @@ The research role receives only a `ResearchJobGateway`. It cannot receive a trad
 - `market_snapshot_id`
 - `evidence_set_id`
 - `model_config_id`
+- `budget_key_id`
 
 It returns only a typed durable research-result ID and usage-record ID, or a stable degradation reason. Maintenance validates and stores that response through the narrow gateway.
 

@@ -133,7 +133,7 @@ _STABLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,254}$")
 _MAX_RESULT_BYTES = 64 * 1024
 _RESEARCH_PAYLOAD_FIELDS = frozenset({
     "research_assignment_id", "budget_reservation_id", "market_snapshot_id",
-    "evidence_set_id", "model_config_id",
+    "evidence_set_id", "model_config_id", "budget_key_id",
 })
 
 
@@ -627,6 +627,7 @@ class ResearchAssignment:
     market_snapshot_id: str
     evidence_set_id: str
     model_config_id: str
+    budget_key_id: str
 
     @classmethod
     def from_job(cls, job: WorkerJob) -> "ResearchAssignment":
@@ -638,7 +639,7 @@ class ResearchAssignment:
             job.id, job.worker_id, job.fence, job.deadline,
             job.payload["research_assignment_id"], job.payload["budget_reservation_id"],
             job.payload["market_snapshot_id"], job.payload["evidence_set_id"],
-            job.payload["model_config_id"],
+            job.payload["model_config_id"], job.payload["budget_key_id"],
         )
 
 

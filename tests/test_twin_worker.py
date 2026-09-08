@@ -39,6 +39,7 @@ def job(job_id="job-001", *, kind=WorkerJobKind.RECONCILE, deadline=NOW + timede
             "market_snapshot_id": "snapshot-001",
             "evidence_set_id": "evidence-001",
             "model_config_id": "model-001",
+            "budget_key_id": "foresea-edge:scope-001:2025-01-01",
         }
     return WorkerJob(job_id, "scope-001", kind, payload, deadline)
 
