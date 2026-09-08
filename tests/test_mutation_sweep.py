@@ -30,8 +30,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.mutation_sweep import (  # noqa: E402
     RULES,
     candidates,
-    code_lines,
     has_local_changes,
+    literal_spans,
+    parses,
 )
 
 
@@ -44,37 +45,91 @@ def _module(source):
     return Path(handle.name)
 
 
-class CodeLineTests(unittest.TestCase):
-    def setUp(self):
-        self.path = _module(
-            'def f(a, b):\n'
-            '    """Return max(a, b) when a >= b."""\n'
-            '    # prefer max() here\n'
-            '    label = "a >= b and more"\n'
-            '    if a >= b:\n'
-            '        return max(a, b)\n'
-            '    return label\n'
+class LiteralTextIsNeverMutatedTests(unittest.TestCase):
+    """The contract is per-column, not per-line.
+
+    A line can hold both code and prose. `label = "a >= b"` is a real
+    assignment, so any line-level filter keeps it -- and then a regex
+    finds the >= inside the quotes. Python 3.12 makes this sharper: an
+    f-string is no longer one STRING token, so its literal text arrives
+    as FSTRING_MIDDLE with real code around it. A line-level filter kept
+    those and reported the prose `+` in
+
+        f"BUY YES @ {p:.1f}% + BUY NO @ {k:.1f}%"
+
+    as a surviving mutation. Two of those came out of an
+    arbitrage_scanner sweep, which is what prompted working in columns.
+    """
+
+    def _sweep(self, source):
+        handle = tempfile.NamedTemporaryFile(
+            "w", suffix=".py", delete=False, encoding="utf-8"
         )
-        self.addCleanup(self.path.unlink)
+        handle.write(source)
+        handle.close()
+        path = Path(handle.name)
+        self.addCleanup(path.unlink)
+        found = list(candidates(path, rules=list(RULES), start=1, end=10**9))
+        return found, path
 
-    def test_operators_in_code_are_found(self):
-        lines = code_lines(self.path)
-        self.assertIn(5, lines, "the real comparison")
-        self.assertIn(6, lines, "the real max()")
+    def test_an_operator_inside_a_plain_string_is_not_a_candidate(self):
+        found, _ = self._sweep('label = "a >= b and more"\n')
+        self.assertEqual(found, [])
 
-    def test_a_docstring_is_not_a_finding(self):
-        self.assertNotIn(2, code_lines(self.path))
+    def test_an_operator_inside_f_string_text_is_not_a_candidate(self):
+        """The 3.12 case: prose and code share the line."""
+        found, _ = self._sweep('msg = f"BUY YES @ {p:.1f}% + BUY NO @ {k:.1f}%"\n')
+        self.assertEqual(found, [])
 
-    def test_a_comment_is_not_a_finding(self):
-        self.assertNotIn(3, code_lines(self.path))
+    def test_an_operator_inside_an_f_string_expression(self):
+        """How precise this is depends on the interpreter, safely.
 
-    def test_a_string_literal_is_not_a_finding(self):
-        self.assertNotIn(4, code_lines(self.path))
+        From 3.12 an f-string is tokenised in pieces, so the code inside
+        the braces is visible as code and is a candidate. Before that the
+        whole f-string is a single STRING token and the sweep skips all
+        of it.
+
+        The direction of the difference is the point: the older
+        behaviour loses a candidate, it does not invent one. A sweep on
+        3.11 is less thorough inside f-strings and never noisier, which
+        is the safe way round for a tool whose output is a shortlist to
+        read by hand. CI runs 3.11 and this was written on 3.12, so the
+        two genuinely disagree and both are correct.
+        """
+        found, _ = self._sweep('msg = f"total {a + b}"\n')
+        if sys.version_info >= (3, 12):
+            self.assertEqual(len(found), 1)
+            self.assertIn("a - b", found[0][3])
+        else:
+            self.assertEqual(found, [])
+
+    def test_a_docstring_is_not_a_candidate(self):
+        found, _ = self._sweep(
+            'def f(a, b):\n    """Return max(a, b) when a >= b."""\n    return 1\n'
+        )
+        self.assertEqual(found, [])
+
+    def test_a_comment_is_not_a_candidate(self):
+        found, _ = self._sweep("x = 1\n# prefer max() here\n")
+        self.assertEqual(found, [])
+
+    def test_real_code_on_the_same_line_as_a_string_is_still_found(self):
+        """Skipping the whole line would lose this."""
+        found, _ = self._sweep('if a >= b: label = "note >= here"\n')
+        self.assertEqual(len(found), 1)
+        self.assertIn("if a > b", found[0][3])
+        self.assertIn('"note >= here"', found[0][3])
 
     def test_a_file_that_does_not_parse_yields_nothing(self):
-        broken = _module("def f(:\n")
-        self.addCleanup(broken.unlink)
-        self.assertEqual(code_lines(broken), set())
+        found, path = self._sweep("def f(:\n")
+        self.assertEqual(found, [])
+        self.assertFalse(parses(path))
+
+    def test_a_triple_quoted_block_is_prose_on_every_line_it_covers(self):
+        source = "x = " + '"""' + "\nmax(a, b) and a >= b\n" + '"""' + "\n"
+        found, path = self._sweep(source)
+        self.assertEqual(found, [])
+        self.assertIn(2, literal_spans(path))
 
 
 class CandidateTests(unittest.TestCase):
