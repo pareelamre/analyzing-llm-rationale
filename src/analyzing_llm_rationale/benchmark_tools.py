@@ -2863,6 +2863,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 return {
                     "ok": False,
                     "tool": tool,
+                    "rejected": True,
                     "error_type": "risk_guard",
                     "reason": "no_executable_price",
                     "message": (
@@ -2893,12 +2894,24 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "trade.sizing_reason": str(sizing.get("reason") or "no_positive_kelly"),
                 })
                 _finish_tool(tool, start, "skipped")
+                reason = str(sizing.get("reason") or "no_positive_kelly")
+                edge_val = sizing.get("edge")
+                min_edge_val = sizing.get("min_edge")
+                policy_label = str(sizing.get("label") or "Kelly")
+                if reason == "edge_below_threshold" and edge_val is not None and min_edge_val is not None:
+                    msg = (
+                        f"No trade: the selected Kelly sizing policy found no eligible stake "
+                        f"({policy_label}: edge {edge_val:+.1%} below required {min_edge_val:.1%})."
+                    )
+                else:
+                    msg = f"No trade: the selected Kelly sizing policy found no eligible stake ({reason})."
                 return {
                     "ok": False,
                     "tool": tool,
                     "skipped": True,
-                    "reason": sizing.get("reason") or "no_positive_kelly",
-                    "message": "No trade: the selected Kelly sizing policy found no eligible stake.",
+                    "rejected": True,
+                    "reason": reason,
+                    "message": msg,
                     "mode": mode,
                     "submitted": False,
                     "sizing": sizing,
