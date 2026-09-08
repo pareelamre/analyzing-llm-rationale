@@ -18,6 +18,8 @@ plumbing, which mutation_check's own tests already cover.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -25,7 +27,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.mutation_sweep import RULES, candidates, code_lines  # noqa: E402
+from scripts.mutation_sweep import (  # noqa: E402
+    RULES,
+    candidates,
+    code_lines,
+    has_local_changes,
+)
 
 
 def _module(source):
@@ -106,6 +113,89 @@ class CandidateTests(unittest.TestCase):
         """A rule that cannot change anything would pad every sweep."""
         for name, (pattern, replacement) in RULES.items():
             self.assertNotEqual(pattern, replacement, name)
+
+
+class InterruptionGuardTests(unittest.TestCase):
+    """A killed sweep must not leave a mutation behind.
+
+    SIGKILL cannot be caught, so the restore alone is not enough. The
+    refusal to start on a dirty target is the second half: an interrupted
+    run leaves the file looking exactly that way, so the next sweep stops
+    and asks rather than restoring to the mutated state.
+    """
+
+    def _repo(self):
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+
+        def run(*args):
+            return subprocess.run(args, cwd=directory, capture_output=True, text=True)
+
+        run("git", "init", "-q")
+        run("git", "config", "user.email", "t@example.com")
+        run("git", "config", "user.name", "t")
+        (directory / "mod.py").write_text("x = 1\n", encoding="utf-8")
+        run("git", "add", "-A")
+        run("git", "commit", "-qm", "initial")
+        return directory
+
+    def test_a_clean_target_is_not_reported_dirty(self):
+        self.assertFalse(has_local_changes(self._repo(), "mod.py"))
+
+    def test_a_modified_target_is_reported_dirty(self):
+        directory = self._repo()
+        (directory / "mod.py").write_text("x = 2\n", encoding="utf-8")
+        self.assertTrue(has_local_changes(directory, "mod.py"))
+
+    def test_an_unrelated_modification_does_not_count(self):
+        """The check is per-file, so other work in progress does not block."""
+        directory = self._repo()
+        (directory / "other.py").write_text("y = 1\n", encoding="utf-8")
+        self.assertFalse(has_local_changes(directory, "mod.py"))
+
+    def test_somewhere_without_git_is_not_treated_as_dirty(self):
+        """No checkout means nothing to compare, not a refusal to run."""
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        (directory / "mod.py").write_text("x = 1\n", encoding="utf-8")
+        self.assertFalse(has_local_changes(directory, "mod.py"))
+
+    def test_no_git_binary_at_all_is_not_treated_as_dirty(self):
+        """Missing git is not evidence of a mutation, so it must not block.
+
+        The temp-directory case above exits non-zero; this is the other
+        branch, where the executable is absent and the call raises.
+        """
+        import scripts.mutation_sweep as sweep
+
+        def explode(*_args, **_kwargs):
+            raise FileNotFoundError("git")
+
+        original = sweep.subprocess.run
+        sweep.subprocess.run = explode
+        self.addCleanup(setattr, sweep.subprocess, "run", original)
+        self.assertFalse(has_local_changes(Path("."), "mod.py"))
+
+    def test_the_file_is_put_back_when_the_process_exits(self):
+        """guard_the_file restores through atexit, not only on success."""
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        target = directory / "mod.py"
+        target.write_text("original\n", encoding="utf-8")
+
+        repo_root = str(Path(__file__).resolve().parents[1])
+        script = "\n".join([
+            "import sys",
+            "sys.path.insert(0, %r)" % repo_root,
+            "from pathlib import Path",
+            "from scripts.mutation_sweep import guard_the_file",
+            "p = Path(%r)" % str(target),
+            "guard_the_file(p)",
+            "p.write_text('MUTATED', encoding='utf-8')",
+            "raise SystemExit(1)",
+        ])
+        subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+        self.assertEqual(target.read_text(encoding="utf-8"), "original\n")
 
 
 if __name__ == "__main__":
