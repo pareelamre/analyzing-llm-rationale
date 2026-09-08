@@ -2736,6 +2736,83 @@
       "outcome": "yes",
       "record_hash": "9fb506e1adedaf7833a21100b69daf564a0e56984b2b71382df568b94b860743",
       "recorded_at": "2026-09-08T12:28:11.352658+00:00"
+    },
+    {
+      "action_id": "4633477d-575c-4018-ad2e-70d945161f7c",
+      "agent_id": "gpt-oss-120b",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "marketable": true,
+          "observed_ask": 0.91,
+          "source": "live_venue_quote",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.91,
+          "quantity": 50
+        },
+        "risk": {
+          "allowed": false,
+          "cash_before": 9211.469355,
+          "cash_required": 45.78665,
+          "concentration_cap": 1381.720403,
+          "cycle_id": "30m:993820",
+          "cycle_spend_after": 45.78665,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 847.54711,
+          "daily_risk_before": 801.76046,
+          "daily_risk_limit": 2763.440806,
+          "drawdown_after": 0.082964,
+          "fee": 0.28665,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 45.5,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 45.5,
+          "open_markets_after": 1,
+          "per_cycle_spend_limit": 1842.293871,
+          "reasons": [
+            "close_exceeds_open_position"
+          ],
+          "risk_reducing": true
+        },
+        "sizing": {
+          "applied": false,
+          "mode": "close"
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:993820",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 45.78665,
+        "fee": 0.28665,
+        "netting_payout": 0.0,
+        "notional": 45.5,
+        "price": 0.91,
+        "quantity": 50.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXHIGHNY-26SEP08-T80"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "dda455d783b6d6dcb6b59365802008c10100011b47fd759b4c1f7bfdd4d0e690",
+      "recorded_at": "2026-09-08T14:29:56.484515+00:00"
     }
   ],
   "month": "2026-09",
