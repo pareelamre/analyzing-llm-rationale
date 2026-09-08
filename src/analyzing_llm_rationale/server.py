@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import csv
 import hashlib
 import hmac
 import html
+import io
 import ipaddress
 import json
 import logging
@@ -8528,6 +8530,26 @@ async def list_registered_users(
     return RegisteredUsersResponse(total=len(users), users=users)
 
 
+#: Characters that make a spreadsheet treat a cell as a formula rather than
+#: text. Quoting does not stop this -- Excel and Sheets look at the first
+#: character of the decoded value, so it has to be neutralised before the
+#: CSV writer ever sees it.
+_CSV_FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_cell(value: Any) -> str:
+    """One CSV cell that is safe to open in a spreadsheet.
+
+    csv.writer handles separators, quotes and newlines. It does not handle
+    formula injection, because that is a spreadsheet behaviour rather than
+    a CSV one. Display names are self-service and event metadata is a
+    free-form dict from the browser, so both reach this export under the
+    caller's control.
+    """
+    text = "" if value is None else str(value)
+    return "'" + text if text.startswith(_CSV_FORMULA_LEAD) else text
+
+
 @app.get(
     "/analytics/export",
     tags=["System"],
@@ -8541,36 +8563,59 @@ async def export_analytics_csv(request: Request) -> Response:
     users_task = list_registered_users(request, limit=500)
     visits, events, users = await asyncio.gather(visits_task, events_task, users_task)
 
-    lines = ["# Foresea Analytics Summary Export", ""]
-    lines.append("Metric,Value")
-    lines.append(f"Total Visits (30d),{visits.total_visits}")
-    lines.append(f"Unique Visitors (30d),{visits.unique_visitors}")
-    lines.append(f"Visits (24h),{visits.visits_24h}")
-    lines.append(f"Total Events (30d),{events.total_events}")
-    lines.append(f"Events (24h),{events.events_24h}")
-    lines.append(f"Active Accounts (24h),{events.active_accounts_24h}")
-    lines.append(f"Active Accounts (7d),{events.active_accounts_7d}")
-    lines.append(f"Total Registered Users,{events.attribution.total_registered_users}")
-    lines.append(f"Authenticated Records (30d),{events.attribution.authenticated_records}")
-    lines.append(f"Anonymous Records (30d),{events.attribution.anonymous_records}")
-    lines.append("")
-    lines.append("Day,Visits,Unique Visitors")
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(["# Foresea Analytics Summary Export"])
+    writer.writerow([])
+    writer.writerow(["Metric", "Value"])
+    for label, value in (
+        ("Total Visits (30d)", visits.total_visits),
+        ("Unique Visitors (30d)", visits.unique_visitors),
+        ("Visits (24h)", visits.visits_24h),
+        ("Total Events (30d)", events.total_events),
+        ("Events (24h)", events.events_24h),
+        ("Active Accounts (24h)", events.active_accounts_24h),
+        ("Active Accounts (7d)", events.active_accounts_7d),
+        ("Total Registered Users", events.attribution.total_registered_users),
+        ("Authenticated Records (30d)", events.attribution.authenticated_records),
+        ("Anonymous Records (30d)", events.attribution.anonymous_records),
+    ):
+        writer.writerow([label, value])
+    writer.writerow([])
+    writer.writerow(["Day", "Visits", "Unique Visitors"])
     for row in visits.by_day:
-        lines.append(f"{row.get('day')},{row.get('visits', 0)},{row.get('unique_visitors', 0)}")
-    lines.append("")
-    lines.append("Event Name,Total Count,Authenticated,Anonymous")
+        writer.writerow(
+            [_csv_cell(row.get("day")), row.get("visits", 0), row.get("unique_visitors", 0)]
+        )
+    writer.writerow([])
+    writer.writerow(["Event Name", "Total Count", "Authenticated", "Anonymous"])
     for row in events.by_event:
-        lines.append(f"{row.get('event_name')},{row.get('count', 0)},{row.get('authenticated', 0)},{row.get('anonymous', 0)}")
-    lines.append("")
-    lines.append("Model,Forecast Count")
+        writer.writerow(
+            [
+                _csv_cell(row.get("event_name")),
+                row.get("count", 0),
+                row.get("authenticated", 0),
+                row.get("anonymous", 0),
+            ]
+        )
+    writer.writerow([])
+    writer.writerow(["Model", "Forecast Count"])
     for row in events.by_model:
-        lines.append(f"{row.get('model')},{row.get('count', 0)}")
-    lines.append("")
-    lines.append("User ID,Email,Name,Created At,Last Login")
+        writer.writerow([_csv_cell(row.get("model")), row.get("count", 0)])
+    writer.writerow([])
+    writer.writerow(["User ID", "Email", "Name", "Created At", "Last Login"])
     for u in users.users:
-        lines.append(f'"{u.user_id}","{u.email}","{u.name}","{u.created_at or ""}","{u.last_login or ""}"')
+        writer.writerow(
+            [
+                _csv_cell(u.user_id),
+                _csv_cell(u.email),
+                _csv_cell(u.name),
+                _csv_cell(u.created_at),
+                _csv_cell(u.last_login),
+            ]
+        )
 
-    csv_content = "\n".join(lines)
+    csv_content = buf.getvalue()
     filename = f"foresea_analytics_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
     return Response(
         content=csv_content,
