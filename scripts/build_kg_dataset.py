@@ -364,9 +364,8 @@ def _fetch_kalshi(after_dt: datetime, limit: int) -> List[Dict[str, Any]]:
 
                 sub = (m.get("yes_sub_title") or "").strip()
                 question = f"{title} — {sub}" if sub and sub.lower() not in title.lower() else title
-                et = m.get("event_ticker") or event_ticker
-                url = (f"https://kalshi.com/markets/{et}/{ticker}" if et
-                       else f"https://kalshi.com/markets/{ticker}")
+                series = (m.get("series_ticker") or m.get("event_ticker") or event_ticker or ticker or "").split("-")[0].lower()
+                url = f"https://kalshi.com/markets/{series}" if series else "https://kalshi.com"
 
                 if _is_noise(question):
                     continue

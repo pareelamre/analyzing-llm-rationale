@@ -470,19 +470,45 @@ def list_polymarket(limit: int = 5, query: Optional[str] = None,
     return quotes
 
 
-def _kalshi_series_ticker(market: Dict[str, Any]) -> str:
+def clean_market_url(url: Optional[str], platform: Optional[str] = None) -> str:
+    """Normalize and fix market URLs for Polymarket and Kalshi.
+
+    - For Polymarket: replaces /event/<slug> with /market/<slug> so binary market links
+      redirect cleanly to the active market page instead of 404ing.
+    - For Kalshi: routes to /markets/<series_ticker> by extracting root series ticker.
+    """
+    if not url:
+        return ""
+    cleaned = str(url).strip()
+    plat = (platform or "").strip().lower()
+    if "polymarket.com" in cleaned or plat == "polymarket":
+        if "/event/" in cleaned:
+            cleaned = cleaned.replace("/event/", "/market/")
+        return cleaned
+    if "kalshi.com" in cleaned or plat == "kalshi":
+        if "/markets/" in cleaned:
+            parts = cleaned.split("/markets/", 1)
+            target = parts[1].split("/")[0].split("?")[0].split("#")[0]
+            series = target.split("-")[0].lower()
+            return f"{parts[0]}/markets/{series}"
+        return cleaned
+    return cleaned
+
+
+def _kalshi_series_ticker(market: Dict[str, Any], event: Optional[Dict[str, Any]] = None) -> str:
     """The series ticker — the root of a Kalshi web market URL.
 
     Kalshi web pages live at ``/markets/<series_ticker>`` (lowercase), NOT at the
     raw event ticker (which carries a date suffix and 404s). Prefer the explicit
-    ``series_ticker``; else strip the event ticker's trailing ``-<date>`` segment;
-    else fall back to the market ticker's first segment.
+    ``series_ticker``; else strip the event ticker's trailing segments to reach
+    the root series ticker; else fall back to the market ticker's first segment.
     """
-    series = (market.get("series_ticker") or "").strip()
+    event = event or {}
+    series = (market.get("series_ticker") or event.get("series_ticker") or "").strip()
     if not series:
-        event = (market.get("event_ticker") or "").strip()
-        base = event or (market.get("ticker") or "").strip()
-        series = base.rsplit("-", 1)[0] if "-" in base else base
+        event_ticker = (market.get("event_ticker") or event.get("ticker") or "").strip()
+        base = event_ticker or (market.get("ticker") or "").strip()
+        series = base.split("-")[0] if "-" in base else base
     return series.lower()
 
 
@@ -542,7 +568,7 @@ def _kalshi_quote(
         "platform": "Kalshi",
         "question": market.get("title") or market.get("yes_sub_title") or market.get("subtitle") or ticker,
         "market_url": (lambda s: f"https://kalshi.com/markets/{s}" if s else "")(
-            _kalshi_series_ticker(market)),
+            _kalshi_series_ticker(market, event)),
         "ident": ticker,
         "outcome": "Yes",
         "probability": probability,

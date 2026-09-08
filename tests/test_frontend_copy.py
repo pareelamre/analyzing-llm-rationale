@@ -522,7 +522,7 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                 helper = index.split("function _agenticMarketUrl(platform, ident) {", 1)[1].split(
                     "// ── Lightweight", 1
                 )[0]
-                self.assertIn("polymarket.com/event", helper)
+                self.assertIn("polymarket.com/market", helper)
                 self.assertIn("kalshi.com/markets", helper)
                 self.assertIn("encodeURIComponent", helper)
 
@@ -658,7 +658,7 @@ function escHtml(s) {
                 )
                 out = result.stdout
                 self.assertIn(
-                    f'<a href="https://kalshi.com/markets/KXAGICO-COMP-26Q3" {attrs} class="agentic-contract-link" title="Open on Kalshi"><code>KXAGICO-COMP-26Q3</code></a>',
+                    f'<a href="https://kalshi.com/markets/kxagico" {attrs} class="agentic-contract-link" title="Open on Kalshi"><code>KXAGICO-COMP-26Q3</code></a>',
                     out,
                 )
                 self.assertIn(
@@ -666,7 +666,7 @@ function escHtml(s) {
                     out,
                 )
                 self.assertIn(
-                    f'<a href="https://polymarket.com/event/russia-x-ukraine-ceasefire-agreement-by-october-31-2026" {attrs} class="agentic-contract-link" title="Open on Polymarket"><code>russia-x-ukraine-ceasefire-agreement-by-october-31-2026</code></a>',
+                    f'<a href="https://polymarket.com/market/russia-x-ukraine-ceasefire-agreement-by-october-31-2026" {attrs} class="agentic-contract-link" title="Open on Polymarket"><code>russia-x-ukraine-ceasefire-agreement-by-october-31-2026</code></a>',
                     out,
                 )
                 self.assertIn(
