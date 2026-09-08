@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_t07_t17_t19_in_progress",
+  "implementation_status": "t06_t07_t18_t19_in_progress",
   "implementation_baseline": "3202f9bfea7fcf5fd36a1c944b8e0a38e7232881",
-  "next_task": "T17",
+  "next_task": "T18",
   "live_authorized": false,
   "release_gates": {
     "G0": "not_evaluated",
@@ -502,18 +502,24 @@
       "dependencies": [
         "T16"
       ],
-      "status": "in_progress",
-      "substep": "standalone role-scoped FastAPI worker apps, exact route identity enforcement, narrow HTTP research gateway, durable budget claim, immutable image command, private queues, Scheduler, IAM, shadow-only configuration, cost and cleanup definitions are implemented; staging deployment and venue/research adapter wiring remain",
-      "branch": "codex/autonomous-twin-t17",
-      "commit": "0dfffb10",
-      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/591",
+      "status": "complete",
+      "substep": "private role-scoped Cloud Run workers, queues, Scheduler, least-privilege IAM, fail-closed startup, exact OIDC audiences, durable duplicate suppression, budget claims, restart recovery, and research/maintenance capacity isolation are deployed and staging-verified",
+      "branch": "codex/t17-staging-evidence",
+      "commit": "a21e6bf9",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/592",
       "checks": [
         "PYTHONPATH=src py -m unittest tests.test_twin_runtime tests.test_twin_worker_auth tests.test_twin_worker (pass: 24 tests)",
         "PYTHONPATH=src py -m unittest discover -s tests (pass: 1910 tests; 9 skipped)",
         "py -m ruff check src tests (pass)",
         "PowerShell parser and infra/twin/deploy.ps1 dry run (pass; no GCP mutation)",
         "git diff --check (pass)",
-        "py -m graphify update . and scoped private-runtime query (pass)"
+        "py -m graphify update . and scoped private-runtime query (pass)",
+        "Cloud Run twin-maintenance and twin-research immutable sha-a21e6bf revisions ready after explicit restart",
+        "anonymous/spoofed/wrong-audience/unauthorized/expired-shaped identity probes rejected; valid route identities accepted",
+        "research identity direct Datastore and KMS decrypt probes rejected with HTTP 403",
+        "stable Cloud Tasks duplicate name suppressed; durable recovery completed exactly once",
+        "budgeted research reservation claimed exactly once and fail-closed adapter result persisted",
+        "maintenance dispatch returned HTTP 200 during 20 concurrent research requests"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/runtime.py",
@@ -521,13 +527,11 @@
         "tests/test_twin_runtime.py",
         "tests/test_twin_worker_auth.py",
         "infra/twin/deploy.ps1",
-        "infra/twin/README.md"
+        "infra/twin/README.md",
+        "docs/autonomous-twin/STAGING_EVIDENCE.md"
       ],
-      "blockers": [
-        "Staging IAM, restart, queue saturation and duplicate-delivery evidence has not yet been captured.",
-        "Venue-account maintenance and research-capture loaders remain fail-closed until they are wired."
-      ],
-      "handoff": "Merge the private runtime PR, deploy the exact immutable image to shadow staging, verify IAM/duplicate/restart behavior, then wire the real account and research adapters."
+      "blockers": [],
+      "handoff": "T18 is next. Release the owner-scoped operator control API and desk, then wire the real research and venue-account adapters before the forward shadow trial."
     },
     {
       "id": "T18",
