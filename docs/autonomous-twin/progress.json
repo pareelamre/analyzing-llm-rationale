@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_t07_t15_t17_t19_in_progress",
-  "implementation_baseline": "0944bdc83b8c71d639fd09f2b5ad3cfa6d06e15e",
-  "next_task": "T15",
+  "implementation_status": "t06_t07_t16_t17_t19_in_progress",
+  "implementation_baseline": "3202f9bfea7fcf5fd36a1c944b8e0a38e7232881",
+  "next_task": "T16",
   "live_authorized": false,
   "release_gates": {
     "G0": "not_evaluated",
@@ -413,7 +413,7 @@
       "status": "complete",
       "substep": "manual and autonomous orders share one durable reservation, stable client identity, request fingerprint, lease fence, immediate pre-send authority and budget checks, single venue dispatch, and submission-unknown recovery state",
       "branch": "codex/autonomous-durable-submission",
-      "commit": "82bf4295",
+      "commit": "3202f9bf",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/544",
       "checks": [
         "PYTHONPATH=src py -m unittest tests.test_twin_execution tests.test_twin_manual tests.test_twin_store tests.test_trading_control tests.test_trading plus focused server routes (pass: 42 tests)",
@@ -421,7 +421,9 @@
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
         "py -m graphify update . (pass; generated graph changes intentionally unstaged)",
-        "raw new-order audit: only private Kalshi/Polymarket adapters call venue write methods"
+        "raw new-order audit: only private Kalshi/Polymarket adapters call venue write methods",
+        "PR #544 CI test (pass)",
+        "PR #544 datastore-integration (pass after expired-lease takeover fix)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/execution.py",
@@ -441,23 +443,29 @@
         "T06",
         "T14"
       ],
-      "status": "in_progress",
-      "substep": "identity-bound recovery requires complete matching order/fill evidence and two distinct absence observations before release; lifecycle fill/cancel/settlement integration remains pending",
-      "branch": "codex/autonomous-twin-t15",
-      "commit": "cc256855",
+      "status": "complete",
+      "substep": "identity-bound submission recovery, venue-specific absence proof, durable versioned fills and settlements, lifecycle re-fencing, fresh confirmed cancellation, late-fill preservation, atomic rejection release, restart classification, and operator runbook are complete",
+      "branch": "codex/autonomous-lifecycle-recovery",
+      "commit": "ceecca42",
       "pr_url": null,
       "checks": [
-        "PYTHONPATH=src py -m unittest tests.test_twin_recovery (pass: 5 tests)",
-        "py -m ruff check src/analyzing_llm_rationale/twin/recovery.py tests/test_twin_recovery.py (pass)",
+        "PYTHONPATH=src py -m unittest tests.test_twin_recovery tests.test_twin_execution tests.test_twin_store (pass: 39 tests)",
+        "DATASTORE_EMULATOR_HOST=127.0.0.1:8765 GOOGLE_CLOUD_PROJECT=foresea-twin-test PYTHONPATH=src py -m unittest tests.test_twin_store_integration -v (pass: 8 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass)",
+        "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . (completed; generated graph changes intentionally unstaged)"
+        "py -m graphify update . and focused recovery query (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/recovery.py",
-        "tests/test_twin_recovery.py"
+        "src/analyzing_llm_rationale/twin/store.py",
+        "src/analyzing_llm_rationale/twin/models.py",
+        "tests/test_twin_recovery.py",
+        "tests/test_twin_store_integration.py",
+        "docs/autonomous-twin/RECOVERY.md"
       ],
       "blockers": [],
-      "handoff": null
+      "handoff": "T16 is next. Wire durable ID-only jobs to Datastore and Cloud Tasks, mount private authenticated handlers, and exercise duplicate delivery, lease takeover, maintenance priority, and shutdown recovery."
     },
     {
       "id": "T16",
