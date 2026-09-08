@@ -73,16 +73,20 @@ Ensure-Queue "twin-maintenance" "10" "86400s" "5s" "300s" "5" "1"
 
 # Both services use the exact same immutable image.  There is no public
 # invoker, no live capital, and no mandate supplied by this deployment path.
+$workerArgs = "-m,uvicorn,analyzing_llm_rationale.twin.runtime_app:create_environment_app,--factory,--host,0.0.0.0,--port,8000"
+$bootstrapUrl = "https://bootstrap.invalid"
 Invoke-Gcloud @("run", "deploy", "twin-research", "--image", $Image, "--region", $Region, "--project", $ProjectId,
     "--no-allow-unauthenticated", "--service-account", $researchServiceAccount,
+    "--command", "python", "--args", $workerArgs,
     "--port", "8000", "--timeout", "120", "--cpu", "1", "--memory", "512Mi",
     "--min-instances", "0", "--max-instances", "2", "--concurrency", "2",
-    "--set-env-vars", "FORESEA_TWIN_WORKER_ROLE=research,FORESEA_TWIN_MODE=shadow,FORESEA_TWIN_LIVE_CAPITAL=0,FORESEA_TWIN_LIVE_MANDATE=")
+    "--set-env-vars", "FORESEA_TWIN_WORKER_ROLE=research,FORESEA_TWIN_MODE=shadow,FORESEA_TWIN_LIVE_CAPITAL=0,FORESEA_TWIN_LIVE_MANDATE=,FORESEA_TWIN_MAINTENANCE_URL=$bootstrapUrl,FORESEA_TWIN_MAINTENANCE_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_DISPATCHER_ACCOUNTS=$taskDispatcherServiceAccount")
 Invoke-Gcloud @("run", "deploy", "twin-maintenance", "--image", $Image, "--region", $Region, "--project", $ProjectId,
     "--no-allow-unauthenticated", "--service-account", $maintenanceServiceAccount,
+    "--command", "python", "--args", $workerArgs,
     "--port", "8000", "--timeout", "120", "--cpu", "1", "--memory", "512Mi",
     "--min-instances", "0", "--max-instances", "1", "--concurrency", "1",
-    "--set-env-vars", "FORESEA_TWIN_WORKER_ROLE=maintenance,FORESEA_TWIN_MODE=shadow,FORESEA_TWIN_LIVE_CAPITAL=0,FORESEA_TWIN_LIVE_MANDATE=")
+    "--set-env-vars", "FORESEA_TWIN_WORKER_ROLE=maintenance,FORESEA_TWIN_MODE=shadow,FORESEA_TWIN_LIVE_CAPITAL=0,FORESEA_TWIN_LIVE_MANDATE=,GOOGLE_CLOUD_PROJECT=$ProjectId,FORESEA_TWIN_TASKS_LOCATION=$Region,FORESEA_TWIN_MAINTENANCE_QUEUE=twin-maintenance,FORESEA_TWIN_RESEARCH_QUEUE=twin-research,FORESEA_TWIN_MAINTENANCE_URL=$bootstrapUrl,FORESEA_TWIN_RESEARCH_URL=$bootstrapUrl,FORESEA_TWIN_MAINTENANCE_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_DISPATCHER_SERVICE_ACCOUNT=$taskDispatcherServiceAccount,FORESEA_TWIN_SCHEDULER_ACCOUNTS=$schedulerServiceAccount,FORESEA_TWIN_DISPATCHER_ACCOUNTS=$taskDispatcherServiceAccount,FORESEA_TWIN_RESEARCH_ACCOUNTS=$researchServiceAccount")
 
 # Research receives only its model secret.  It is intentionally never granted
 # Datastore, Cloud Tasks enqueue, or KMS decrypt permissions below.
@@ -113,6 +117,8 @@ else {
 $cloudTasksServiceAgent = "service-$projectNumber@gcp-sa-cloudtasks.iam.gserviceaccount.com"
 Invoke-Gcloud @("iam", "service-accounts", "add-iam-policy-binding", $taskDispatcherServiceAccount, "--project", $ProjectId,
     "--member", "serviceAccount:$cloudTasksServiceAgent", "--role", "roles/iam.serviceAccountTokenCreator")
+Invoke-Gcloud @("iam", "service-accounts", "add-iam-policy-binding", $taskDispatcherServiceAccount, "--project", $ProjectId,
+    "--member", "serviceAccount:$maintenanceServiceAccount", "--role", "roles/iam.serviceAccountUser")
 
 foreach ($service in @("twin-research", "twin-maintenance")) {
     Invoke-Gcloud @("run", "services", "add-iam-policy-binding", $service, "--region", $Region, "--project", $ProjectId,
@@ -133,9 +139,9 @@ else {
     Write-Host "+ resolve private service URLs and set exact OIDC audiences"
 }
 Invoke-Gcloud @("run", "services", "update", "twin-maintenance", "--region", $Region, "--project", $ProjectId,
-    "--update-env-vars", "FORESEA_TWIN_MAINTENANCE_AUDIENCE=$maintenanceUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$researchUrl")
+    "--update-env-vars", "FORESEA_TWIN_MAINTENANCE_URL=$maintenanceUrl,FORESEA_TWIN_RESEARCH_URL=$researchUrl,FORESEA_TWIN_MAINTENANCE_AUDIENCE=$maintenanceUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$researchUrl")
 Invoke-Gcloud @("run", "services", "update", "twin-research", "--region", $Region, "--project", $ProjectId,
-    "--update-env-vars", "FORESEA_TWIN_RESEARCH_AUDIENCE=$researchUrl")
+    "--update-env-vars", "FORESEA_TWIN_MAINTENANCE_URL=$maintenanceUrl,FORESEA_TWIN_MAINTENANCE_AUDIENCE=$maintenanceUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$researchUrl")
 
 $schedulerFlags = @("--schedule", "*/5 * * * *", "--time-zone", "UTC",
     "--uri", "$maintenanceUrl/internal/twin/dispatch", "--http-method", "POST",

@@ -503,27 +503,31 @@
         "T16"
       ],
       "status": "in_progress",
-      "substep": "Google OIDC principal validation and a shadow-only private Cloud Run, Tasks, Scheduler, IAM, cost, and cleanup definition implemented; durable Cloud Tasks/Datastore jobs, private handler mounting, and staging IAM evidence remain pending",
+      "substep": "standalone role-scoped FastAPI worker apps, exact route identity enforcement, narrow HTTP research gateway, durable budget claim, immutable image command, private queues, Scheduler, IAM, shadow-only configuration, cost and cleanup definitions are implemented; staging deployment and venue/research adapter wiring remain",
       "branch": "codex/autonomous-twin-t17",
-      "commit": null,
-      "pr_url": null,
+      "commit": "0dfffb10",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/591",
       "checks": [
-        "PYTHONPATH=src py -m unittest tests.test_twin_worker tests.test_twin_worker_auth (pass: 9 tests)",
-        "py -m ruff check src/analyzing_llm_rationale/twin/worker.py tests/test_twin_worker.py tests/test_twin_worker_auth.py (pass)",
-        "PowerShell parser and deploy.ps1 dry run (pass; no Google Cloud mutation)",
-        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1388 tests in 219.822s; 4 emulator skips)",
+        "PYTHONPATH=src py -m unittest tests.test_twin_runtime tests.test_twin_worker_auth tests.test_twin_worker (pass: 24 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1910 tests; 9 skipped)",
         "py -m ruff check src tests (pass)",
+        "PowerShell parser and infra/twin/deploy.ps1 dry run (pass; no GCP mutation)",
         "git diff --check (pass)",
-        "py -m graphify update . (completed; generated graph changes intentionally unstaged)"
+        "py -m graphify update . and scoped private-runtime query (pass)"
       ],
       "evidence": [
-        "src/analyzing_llm_rationale/twin/worker.py",
+        "src/analyzing_llm_rationale/twin/runtime.py",
+        "src/analyzing_llm_rationale/twin/runtime_app.py",
+        "tests/test_twin_runtime.py",
         "tests/test_twin_worker_auth.py",
         "infra/twin/deploy.ps1",
         "infra/twin/README.md"
       ],
-      "blockers": [],
-      "handoff": null
+      "blockers": [
+        "Staging IAM, restart, queue saturation and duplicate-delivery evidence has not yet been captured.",
+        "Venue-account maintenance and research-capture loaders remain fail-closed until they are wired."
+      ],
+      "handoff": "Merge the private runtime PR, deploy the exact immutable image to shadow staging, verify IAM/duplicate/restart behavior, then wire the real account and research adapters."
     },
     {
       "id": "T18",
