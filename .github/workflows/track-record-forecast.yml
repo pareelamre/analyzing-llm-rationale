@@ -23,7 +23,7 @@ on:
       max_targets:
         description: "Maximum markets to forecast in this run"
         required: false
-        default: "24"
+        default: "12"
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
@@ -95,7 +95,7 @@ jobs:
           TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '4' }}
           TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
           TRACK_TARGET_SHARD_SLOT_MINUTES: "5"
-          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '8' }}
+          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '12' }}
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
           REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}
