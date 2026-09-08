@@ -94,10 +94,15 @@ class TheToolRendersTheSideTests(unittest.TestCase):
     """
 
     def setUp(self):
-        try:
-            from analyzing_llm_rationale.langchain_tools import ForeseaEdgeBoardTool
-        except ImportError:  # langchain not installed
-            raise unittest.SkipTest("langchain-core is not available") from None
+        # The module degrades by binding the tool names to None rather than
+        # leaving them undefined, so the import succeeds without langchain and
+        # only the value says so. Catching ImportError here never fired, and
+        # CI -- which has no langchain -- got `'NoneType' object is not
+        # callable` instead of a skip.
+        from analyzing_llm_rationale.langchain_tools import ForeseaEdgeBoardTool
+
+        if ForeseaEdgeBoardTool is None:
+            raise unittest.SkipTest("langchain-core is not available")
         self.tool_cls = ForeseaEdgeBoardTool
 
     def _render(self, rows):
