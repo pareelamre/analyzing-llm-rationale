@@ -672,6 +672,40 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertLessEqual(capped["target_notional"], 800.0)
         self.assertEqual(capped["max_position_fraction"], 0.08)
 
+    def test_place_trade_returns_skipped_and_rejected_when_kelly_sizing_ineligible(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXKELLY": 0.50}),
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {
+                        "ticker": "KXKELLY",
+                        "side": "yes",
+                        "price": 0.50,
+                        "sizing_mode": "edge_kelly",
+                        "model_probability": 0.52,
+                    },
+                    ctx,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["skipped"])
+        self.assertTrue(result["rejected"])
+        self.assertEqual(result["reason"], "edge_below_threshold")
+        self.assertIn("below required", result["message"])
+        self.assertIn("No trade", result["message"])
+        self.assertFalse(result["submitted"])
+
     def test_kelly_sizing_missing_model_probability_raises_required_error(self):
         # When an agent calls with Kelly sizing but omits model_probability the
         # error message must say "is required" (not just "between 0 and 1") so

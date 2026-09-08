@@ -57,7 +57,7 @@ jobs:
   trade:
     name: trade (${{ inputs.lane }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -122,11 +122,8 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           KALSHI_ACCESS_KEY_ID: ${{ secrets.KALSHI_ACCESS_KEY_ID }}
           KALSHI_PRIVATE_KEY_FILE: tmp/agent-trading/kalshi_private_key.pem
-          # Research-heavy cycles need room to research AND execute: at 4,
-          # 489 live cycles hit the ceiling and 38 described a BUY the model
-          # never got to place. The loop exits as soon as the model answers,
-          # so a high ceiling costs nothing on cycles that finish early.
-          MAX_TOOL_STEPS: "16"
+          # Model-aware defaults in scripts/agent_trading_tick.py apply (12 steps
+          # for fast flash/minimax, 8 steps for standard models like Qwen/Llama).
           # Retry one provider turn (never a completed tool loop) with a
           # slightly longer bounded budget. This recovers short 503s without
           # duplicating an already-recorded paper trade.
@@ -138,8 +135,8 @@ jobs:
           # down models are deferred (not marked failed) and resume on the
           # next healthy probe; a status-probe outage fails open.
           AGENT_TRADING_SCADS_STATUS_PRECHECK: "true"
-          MAX_TOKENS: "4096"
-          AGENT_MAX_TOKENS: "4096"
+          MAX_TOKENS: "2048"
+          AGENT_MAX_TOKENS: "2048"
         run: |
           hard_failures=0
           provider_degradations=0

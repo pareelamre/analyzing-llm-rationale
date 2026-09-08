@@ -169,7 +169,7 @@ VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 # trading, so nothing here forces a position.
 CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "12")))
 # Flash and MiniMax models have higher output TPM (30,000) and can sustain deeper 12-step cycles
-_DEFAULT_MAX_TOOL_STEPS = 12 if any(k in MODEL.lower() for k in ("flash", "minimax")) else 10
+_DEFAULT_MAX_TOOL_STEPS = 12 if any(k in MODEL.lower() for k in ("flash", "minimax")) else 8
 MAX_TOOL_STEPS = max(1, int(os.environ.get("MAX_TOOL_STEPS", str(_DEFAULT_MAX_TOOL_STEPS))))
 MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
 # Kalshi Research measures Brier at ~0.02 by close but 0.08-0.09 at a 3-month
@@ -2110,8 +2110,18 @@ def _recorded_trade_attempt_result(transcript: List[Dict[str, Any]]) -> tuple[st
             return "filled", "The agent called the guarded paper-trade tool and its recorded order filled."
         if bool(observation.get("ok")):
             return "unfilled", "The agent called the guarded paper-trade tool, but no executable paper fill was recorded."
+        if bool(observation.get("skipped")):
+            return "skipped", str(
+                observation.get("message")
+                or observation.get("reason")
+                or "The paper trade was skipped by sizing or risk guards."
+            )
         if bool(observation.get("rejected")):
-            return "rejected", str(observation.get("reason") or "risk_guard")
+            return "rejected", str(
+                observation.get("message")
+                or observation.get("reason")
+                or "risk_guard"
+            )
         detail = str(
             observation.get("message")
             or observation.get("reason")
@@ -2202,6 +2212,7 @@ def _reconcile_thesis_execution(
             status = {
                 "filled": "PAPER ORDER FILLED",
                 "rejected": "PAPER ORDER REJECTED",
+                "skipped": "PAPER ORDER SKIPPED",
                 "unfilled": "PAPER ORDER UNFILLED",
                 "error": "PAPER ORDER ERROR",
                 "attempted_unknown": "PAPER ORDER RESULT UNAVAILABLE",
@@ -2216,6 +2227,7 @@ def _reconcile_thesis_execution(
         status = {
             "filled": "PAPER ORDER FILLED",
             "rejected": "PAPER ORDER REJECTED",
+            "skipped": "PAPER ORDER SKIPPED",
             "unfilled": "PAPER ORDER UNFILLED",
             "error": "PAPER ORDER ERROR",
             "attempted_unknown": "PAPER ORDER RESULT UNAVAILABLE",
@@ -2327,9 +2339,13 @@ def _reconcile_thesis_execution(
                 f"at ${float(result.get('normalized_order', {}).get('price') or price):.3f}."
             )
             status = "PAPER ORDER FILLED"
+        elif bool(result.get("skipped")):
+            outcome = "skipped"
+            detail = str(result.get("message") or result.get("reason") or "trade_skipped")
+            status = "PAPER ORDER SKIPPED"
         elif bool(result.get("rejected")):
             outcome = "rejected"
-            detail = str(result.get("reason") or "risk_guard")
+            detail = str(result.get("message") or result.get("reason") or "risk_guard")
             status = "PAPER ORDER REJECTED"
         else:
             outcome = "unfilled"

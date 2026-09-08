@@ -2149,6 +2149,100 @@ class CandidatesFileTests(unittest.TestCase):
                 self.assertEqual(data[0]["ident"], "KXDISCOVERED")
 
 
+class ThesisReconciliationTests(unittest.TestCase):
+    def test_recorded_trade_attempt_result_detects_skipped(self):
+        transcript = [
+            {
+                "tool": "place_trade",
+                "observation": {
+                    "tool": "place_trade",
+                    "ok": False,
+                    "skipped": True,
+                    "rejected": True,
+                    "reason": "edge_below_threshold",
+                    "message": "No trade: the selected Kelly sizing policy found no eligible stake (Quarter-Kelly: edge -3.0% below required 0.0%).",
+                },
+            }
+        ]
+        outcome, detail = agent_trading_tick._recorded_trade_attempt_result(transcript)
+        self.assertEqual(outcome, "skipped")
+        self.assertIn("Quarter-Kelly", detail)
+
+    def test_recorded_trade_attempt_result_detects_rejected(self):
+        transcript = [
+            {
+                "tool": "place_trade",
+                "observation": {
+                    "tool": "place_trade",
+                    "ok": False,
+                    "rejected": True,
+                    "reason": "risk_guard",
+                    "message": "Order notional exceeds max allowed per-order risk limit.",
+                },
+            }
+        ]
+        outcome, detail = agent_trading_tick._recorded_trade_attempt_result(transcript)
+        self.assertEqual(outcome, "rejected")
+        self.assertIn("exceeds max allowed", detail)
+
+    def test_reconcile_thesis_execution_stamps_paper_order_skipped_from_transcript(self):
+        transcript = [
+            {
+                "tool": "place_trade",
+                "observation": {
+                    "tool": "place_trade",
+                    "ok": False,
+                    "skipped": True,
+                    "rejected": True,
+                    "reason": "edge_below_threshold",
+                    "message": "No trade: the selected Kelly sizing policy found no eligible stake (Quarter-Kelly: edge -3.0% below required 0.0%).",
+                },
+            }
+        ]
+        thesis = (
+            "- **Action**: BUY NO\n"
+            "- **Market & Venue**: KXTEST on Kalshi\n"
+            "- **Order Sizing**: Quarter Kelly\n"
+            "- **Model Probability**: 40% vs **Market Price**: 50%"
+        )
+        reconciled, result_dict = agent_trading_tick._reconcile_thesis_execution(
+            agent_id="model-a",
+            thesis=thesis,
+            transcript=transcript,
+            candidates=[],
+        )
+        self.assertIn("**Paper execution**: PAPER ORDER SKIPPED", reconciled)
+        self.assertIn("Quarter-Kelly: edge -3.0% below required 0.0%", reconciled)
+        self.assertNotIn("PAPER ORDER ERROR", reconciled)
+        self.assertEqual(result_dict["outcome"], "skipped")
+
+    def test_reconcile_thesis_execution_stamps_paper_order_skipped_from_direct_execution(self):
+        skip_result = {
+            "ok": False,
+            "skipped": True,
+            "rejected": True,
+            "reason": "edge_below_threshold",
+            "message": "No trade: the selected Kelly sizing policy found no eligible stake.",
+        }
+        thesis = (
+            "- **Action**: BUY YES\n"
+            "- **Market & Venue**: KXTEST on Kalshi\n"
+            "- **Order Sizing**: Quarter Kelly\n"
+            "- **Model Probability**: 60% vs **Market Price**: 50%"
+        )
+        with mock.patch.object(benchmark_tools, "place_trade", return_value=skip_result):
+            reconciled, result_dict = agent_trading_tick._reconcile_thesis_execution(
+                agent_id="model-a",
+                thesis=thesis,
+                transcript=[],
+                candidates=[{"platform": "Kalshi", "ident": "KXTEST", "yes_ask": 0.50, "close_time": "2026-09-01T00:00:00Z"}],
+            )
+        self.assertIn("**Paper execution**: PAPER ORDER SKIPPED", reconciled)
+        self.assertIn("No trade: the selected Kelly sizing policy found no eligible stake.", reconciled)
+        self.assertNotIn("PAPER ORDER ERROR", reconciled)
+        self.assertEqual(result_dict["outcome"], "skipped")
+
+
 if __name__ == "__main__":
     unittest.main()
 
