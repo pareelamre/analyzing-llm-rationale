@@ -15,12 +15,10 @@ putting 4dp back passed the whole suite.
 This asserts the invariant rather than the constant, so it survives a
 change of precision as long as the two stay consistent.
 
-Not covered here: the codebase has four max-drawdown implementations.
-crypto_5m has two and both are held; this one and _current_drawdown are
-held by the tests below. The fourth is inline in
-crypto_kalshi.kalshi_btc_equity and is unpinned -- it reads a JSONL log,
-so exercising it needs a fixture rather than a curve, and it is left for
-its own change.
+The codebase has four max-drawdown implementations. crypto_5m has two and
+both were already held; the two here and the fourth, inline in
+crypto_kalshi.kalshi_btc_equity, are held below. That last one reads a
+JSONL log, so it takes a written fixture rather than a curve.
 """
 
 from __future__ import annotations
@@ -59,7 +57,8 @@ class TheInvariantTests(unittest.TestCase):
                 self.assertIsNotNone(current)
                 self.assertIsNotNone(worst)
                 self.assertLessEqual(
-                    current, worst,
+                    current,
+                    worst,
                     f"current {current} exceeds max {worst} on {values}",
                 )
 
@@ -95,6 +94,66 @@ class TheInvariantTests(unittest.TestCase):
                 worst = _sharpe_and_max_drawdown(curve)["max_drawdown"]
                 self.assertEqual(round(current, 6), current)
                 self.assertEqual(round(worst, 6), worst)
+
+
+class KalshiEquityDrawdownTests(unittest.TestCase):
+    """The fourth implementation, inline in the Kalshi BTC equity report.
+
+    It runs over a cumulative pnl-per-contract curve rather than account
+    values, so the drawdown is an absolute figure rather than a ratio --
+    a different convention from the two above, and worth stating.
+    """
+
+    PNLS = (10.0, -6.0, 2.0)  # cumulative: 10, 4, 6
+
+    def _equity(self, pnls):
+        import json
+        import tempfile
+
+        rows = [
+            {
+                "type": "kalshi_btc_edge",
+                "status": "resolved",
+                "outcome": 1,
+                "is_trade": True,
+                "pnl_per_contract": pnl,
+                "entry_price": 0.5,
+                "won": pnl > 0,
+                "model_p": 0.6,
+                "close_time": f"2026-09-{i + 1:02d}T00:00:00Z",
+            }
+            for i, pnl in enumerate(pnls)
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "kalshi_edge.jsonl"
+            log.write_text(
+                "\n".join(json.dumps(row) for row in rows),
+                encoding="utf-8",
+            )
+            from analyzing_llm_rationale.crypto_kalshi import kalshi_btc_equity
+
+            return kalshi_btc_equity(path=log)["paper_trades"]
+
+    def test_it_measures_from_the_running_peak(self):
+        """Curve 10, 4, 6: the peak is 10 and the trough after it is 4."""
+        trades = self._equity(self.PNLS)
+        self.assertEqual(trades["equity_curve"], [10.0, 4.0, 6.0])
+        self.assertAlmostEqual(trades["max_drawdown"], 6.0)
+
+    def test_a_curve_that_only_rises_has_no_drawdown(self):
+        self.assertAlmostEqual(
+            self._equity((1.0, 1.0, 1.0))["max_drawdown"],
+            0.0,
+        )
+
+    def test_the_peak_is_remembered_after_a_recovery(self):
+        """Recovering to 6 does not reduce the worst gap already seen."""
+        deeper = self._equity((10.0, -8.0, 4.0))  # 10, 2, 6
+        self.assertAlmostEqual(deeper["max_drawdown"], 8.0)
+
+    def test_a_loss_from_the_start_still_counts(self):
+        """The peak begins at zero, so an immediate loss is a drawdown."""
+        self.assertAlmostEqual(self._equity((-3.0, 1.0))["max_drawdown"], 3.0)
 
 
 if __name__ == "__main__":
