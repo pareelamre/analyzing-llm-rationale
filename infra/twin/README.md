@@ -48,9 +48,15 @@ Both Cloud Run services are private, scale from zero, use the same image, and re
 
 `twin-due-work` invokes maintenance every five minutes using a scheduler OIDC token. Side-effecting maintenance code must use stable job IDs, durable claims, and its own deadline; scheduler or queue retries are never permission to replay a venue submission.
 
+The deployment overrides the public image command with the standalone factory in `twin/runtime_app.py`. The research revision contains only `/health`, `/ready`, and `/internal/twin/research`. The maintenance revision contains only health/readiness, dispatch, maintenance, and the narrow research-job status/claim/result interface. Public application and trading routes are absent from both private apps.
+
+Research calls maintenance with a metadata-issued Google ID token. Maintenance derives the worker identity from the verified service-account claim, loads the registered durable job, and claims its exact `budget_reservation_id` under `budget_key_id` before returning the assignment. A prior or uncertain budget claim degrades the job and cannot dispatch the model again.
+
+The initial staging adapter intentionally degrades account maintenance and research jobs until their venue-account and research-capture loaders are configured. Recovery scans and durable queue behavior remain available. This fail-closed state is expected during infrastructure verification and cannot be described as a trading-ready shadow trial.
+
 ## Staging evidence checklist
 
-T17 remains incomplete until the private handlers and durable queue backend are mounted. Once they are present, record command output for all of the following:
+Private handlers and the durable queue backend are mounted. T17 remains incomplete until the deployed IAM and restart evidence below is recorded:
 
 ```powershell
 gcloud run services get-iam-policy twin-research --region us-central1 --project <staging-project>
