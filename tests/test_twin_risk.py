@@ -88,6 +88,72 @@ def evaluate(**changes):
     return evaluate_binary_candidate(**values)
 
 
+class DrawdownHaltBoundaryTests(unittest.TestCase):
+    """An account exactly at its drawdown limit must stop.
+
+    Both gates read `drawdown >= limits.max_drawdown`. Making either
+    exclusive lets an account sitting precisely on its limit keep trading,
+    and nothing failed: with max_drawdown 0.20 and a drawdown of exactly
+    0.20, size_binary_entry went from refusing to sizing 208 contracts.
+
+    FORESEA_ENABLE_BYO_TRADING is true on the deployed service, so these
+    caps govern real connected accounts rather than the shadow book.
+    """
+
+    def _entry(self, drawdown: str, max_drawdown: str = "0.20"):
+        return size_binary_entry(
+            probability=Decimal("0.60"), ask=Decimal("0.40"),
+            fee_per_share=Decimal("0"), slippage_per_share=Decimal("0"),
+            available_cash=Decimal("1000"), current_market_loss=Decimal("0"),
+            current_cluster_loss=Decimal("0"), drawdown=Decimal(drawdown),
+            tick_size=Decimal("0.01"), min_quantity=Decimal("1"),
+            limits=RiskLimits(
+                kelly_fraction=Decimal("0.25"), max_order_cash=Decimal("100"),
+                max_market_loss=Decimal("500"), max_cluster_loss=Decimal("500"),
+                max_drawdown=Decimal(max_drawdown),
+            ),
+        )
+
+    def test_exactly_at_the_limit_refuses_to_size(self):
+        result = self._entry("0.20")
+        self.assertEqual(result.quantity, Decimal("0"))
+        self.assertEqual(result.reason, "drawdown_limit")
+
+    def test_just_under_the_limit_still_trades(self):
+        self.assertGreater(self._entry("0.19").quantity, Decimal("0"))
+
+    def test_past_the_limit_refuses(self):
+        self.assertEqual(self._entry("0.21").reason, "drawdown_limit")
+
+    def test_the_boundary_is_the_configured_limit_not_a_constant(self):
+        """Moving the cap moves the halt with it."""
+        self.assertEqual(self._entry("0.10", max_drawdown="0.10").reason, "drawdown_limit")
+        self.assertGreater(self._entry("0.10", max_drawdown="0.50").quantity, Decimal("0"))
+
+    def test_the_candidate_evaluator_halts_at_the_same_boundary(self):
+        """peak 100 against equity 80 is a drawdown of exactly 0.20.
+
+        This pins the behaviour, not the line. evaluate_binary_candidate
+        has its own `drawdown >= max_drawdown` check, but it is redundant
+        here: the call reaches size_binary_entry, whose gate refuses first.
+        Making the evaluator's copy exclusive changes nothing observable
+        through this path, so no test can distinguish it -- what matters,
+        that an account exactly at its limit stops, is asserted either way.
+        """
+        at_limit = evaluate(peak_equity=Decimal("100"), current_equity=Decimal("80"))
+        self.assertEqual(at_limit.reason, "drawdown_limit")
+
+        under = evaluate(peak_equity=Decimal("100"), current_equity=Decimal("81"))
+        self.assertNotEqual(under.reason, "drawdown_limit")
+
+    def test_the_daily_loss_halt_is_also_inclusive(self):
+        at_limit = evaluate(realized_losses=Decimal("5"))
+        self.assertEqual(at_limit.reason, "realized_loss_limit")
+
+        under = evaluate(realized_losses=Decimal("4.99"))
+        self.assertNotEqual(under.reason, "realized_loss_limit")
+
+
 class TwinRiskTests(unittest.TestCase):
     def test_costs_depth_limits_and_currency_rounding_bind_size(self):
         result = size_binary_entry(
