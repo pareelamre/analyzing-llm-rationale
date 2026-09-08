@@ -88,6 +88,89 @@ def evaluate(**changes):
     return evaluate_binary_candidate(**values)
 
 
+class CalibrationTopBinTests(unittest.TestCase):
+    """A forecast of exactly 1.0 belongs in the top bin, like any other.
+
+    calibrate_probability picks its bin with `min(int(raw / bin_width), 9)`
+    and then keeps only observations whose own bin matches. The observations
+    are clamped the same way, so removing the clamp on the forecast side
+    alone leaves it looking for bin 10, which nothing can be in: the sample
+    collapses to zero and a certain forecast silently comes back
+    uncalibrated rather than calibrated on the top bin.
+
+    Same clamp, same reason, as the one in metrics.ece.
+    """
+
+    NOW = datetime(2026, 9, 7, tzinfo=timezone.utc)
+
+    def _observations(self, count: int, probability: str = "0.95", outcome: int = 1):
+        return [
+            {
+                "id": f"row-{i}", "instrument_id": f"instrument-{i}",
+                "cluster_id": f"cluster-{i}", "probability": probability,
+                "forecast_at": (self.NOW - timedelta(days=30)).isoformat(),
+                "resolved_at": (self.NOW - timedelta(days=1)).isoformat(),
+                "outcome": outcome,
+            }
+            for i in range(count)
+        ]
+
+    def _calibrate(self, raw: str, side: str = "YES"):
+        return calibrate_probability(
+            Decimal(raw), self._observations(40), as_of=self.NOW, outcome_side=side,
+        )
+
+    def test_total_certainty_is_calibrated_not_discarded(self):
+        result = self._calibrate("1.0")
+        self.assertIsNone(result.reason)
+        self.assertEqual(result.sample_size, 40)
+        self.assertIsNotNone(result.probability)
+
+    def test_it_lands_in_the_same_bin_as_the_next_forecast_down(self):
+        """0.95 and 1.0 are both top-bin, so they calibrate identically."""
+        self.assertEqual(self._calibrate("1.0").probability,
+                         self._calibrate("0.95").probability)
+
+    def test_the_conservative_bound_is_still_below_the_raw_forecast(self):
+        """The point of calibrating a 100% claim is that it comes back under
+        100%."""
+        result = self._calibrate("1.0")
+        self.assertLess(result.probability, Decimal("1"))
+
+    def test_a_past_forecast_of_certainty_is_kept_in_the_sample(self):
+        """The observation side is clamped too, and for a sharper reason.
+
+        Without it, every historical forecast of exactly 1.0 falls into a
+        bin nothing queries, so calibration silently drops the most
+        confident forecasts on record -- the ones it exists to correct.
+        """
+        certain = self._observations(40, probability="1.0", outcome=1)
+        result = calibrate_probability(
+            Decimal("0.95"), certain, as_of=self.NOW, outcome_side="YES",
+        )
+        self.assertIsNone(result.reason)
+        self.assertEqual(result.sample_size, 40)
+
+    def test_certain_forecasts_that_were_wrong_pull_the_bound_down(self):
+        """The correction only happens if those rows are in the sample."""
+        right = calibrate_probability(
+            Decimal("0.95"), self._observations(40, probability="1.0", outcome=1),
+            as_of=self.NOW, outcome_side="YES",
+        )
+        half_wrong = calibrate_probability(
+            Decimal("0.95"),
+            self._observations(20, probability="1.0", outcome=1)
+            + [dict(row, id=f"w-{i}", instrument_id=f"wi-{i}", cluster_id=f"wc-{i}")
+               for i, row in enumerate(self._observations(20, probability="1.0", outcome=0))],
+            as_of=self.NOW, outcome_side="YES",
+        )
+        self.assertLess(half_wrong.probability, right.probability)
+
+    def test_the_no_side_still_inverts_the_upper_bound(self):
+        no_side = self._calibrate("1.0", side="NO")
+        self.assertEqual(no_side.probability, Decimal("1") - no_side.upper_bound)
+
+
 class DrawdownHaltBoundaryTests(unittest.TestCase):
     """An account exactly at its drawdown limit must stop.
 
