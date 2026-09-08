@@ -79,6 +79,25 @@ class TwinWorkerTests(unittest.TestCase):
         worker = TwinWorker(jobs, worker_id="new", reconcile_startup=lambda: False)
         self.assertFalse(worker.start())
 
+    def test_startup_dependency_failure_keeps_health_process_alive_but_unready(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job())
+        worker = TwinWorker(
+            jobs,
+            worker_id="new",
+            reconcile_startup=lambda: (_ for _ in ()).throw(PermissionError("datastore unavailable")),
+        )
+
+        with self.assertLogs("analyzing_llm_rationale.twin.worker", level="ERROR"):
+            self.assertFalse(worker.start())
+
+        self.assertFalse(worker.execution_ready)
+        self.assertFalse(worker.accepting_work)
+        self.assertEqual(
+            worker.handle("job-001", now=NOW, maintain=lambda _: {"status": "unsafe"}),
+            {"status": "draining"},
+        )
+
     def test_priority_and_payload_constraints_keep_maintenance_ahead_of_research(self):
         jobs = InMemoryWorkerJobs()
         jobs.add(job("research", kind=WorkerJobKind.RESEARCH))

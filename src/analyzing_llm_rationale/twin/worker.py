@@ -539,7 +539,14 @@ class TwinWorker:
         self.accepting_work = False
 
     def start(self) -> bool:
-        self.execution_ready = bool(self._reconcile_startup())
+        try:
+            self.execution_ready = bool(self._reconcile_startup())
+        except Exception:
+            self.execution_ready = False
+            self.accepting_work = False
+            logger.exception("Twin maintenance startup reconciliation failed")
+            worker_operations.add(1, {"role": "maintenance", "outcome": "startup_failed"})
+            return False
         self.accepting_work = True
         return self.execution_ready
 
