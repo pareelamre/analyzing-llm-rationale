@@ -15,10 +15,30 @@ It is a presentation defect in a public artifact, and the only test that
 can see it is one that looks at the sign bit -- assertEqual(0.0, -0.0)
 passes, so the obvious assertion is blind to exactly this.
 
-Scope note: skill_ci_high also publishes -0.0 and is deliberately left
-alone. That value is a genuinely negative bound of around -1e-5 rounded
-to four places, so its sign is information -- it says the confidence
-interval does not reach zero. Collapsing it would assert the opposite.
+Scanning every committed static/*.json for a signed zero found four
+producers, and only one of them is this bug:
+
+    profit_edge     128 + 67   the sign of a zero          FIXED
+    edge                    1   a real small negative       left
+    skill_ci_high           1   a real small negative       left
+    open_exposure           2   a real zero, but see below  left
+
+The distinction is the whole point, and it is not visible from the
+value: every one of them prints as "-0.0". It has to be recovered from
+where the number came from.
+
+edge and skill_ci_high are genuinely negative, just smaller than their
+own rounding. Collapsing those would not tidy them, it would state
+something false. edge is the sharper case: the same row publishes
+stance "model_below_market", which is computed from the unrounded
+`signed < 0`. Publish edge as 0.0 and the row contradicts itself.
+
+open_exposure is a true zero, like profit_edge -- a residual of about
+-1e-15 left by adding each stake back at settlement. Fixing it is
+correct but it changes docs/autonomous-twin/REPLAY_BASELINE.json, a
+documented reproducibility baseline whose value is that it does not
+drift. Rewriting that hash for two cosmetic zeros is not a trade to
+make quietly, so it is left for a decision rather than folded in here.
 """
 
 from __future__ import annotations
@@ -107,6 +127,47 @@ class PaperPnlTests(unittest.TestCase):
         result = paper_pnl([self._row(0.70, 0.40, 0, "REAL-EDGE-LOSS")])
         bet = result["bets"][0]
         self.assertTrue(is_negative(bet["profit_edge"]))
+
+
+class TheOtherSignedZerosAreRealTests(unittest.TestCase):
+    """Guard the scope: these must NOT be collapsed.
+
+    Without this, the obvious follow-up is to apply _published_round
+    everywhere a -0.0 was seen, which would be wrong three times out of
+    four.
+    """
+
+    def test_a_small_negative_edge_is_not_the_same_as_agreement(self):
+        """The board publishes edge and stance from the same number.
+
+        stance reads the unrounded value, so a row with a genuinely
+        negative edge says "model_below_market" while the rounded edge
+        prints as -0.0. Collapsing the edge would leave the row
+        disagreeing with itself.
+        """
+        signed = -0.0004
+        stance = (
+            "model_above_market" if signed > 0
+            else "model_below_market" if signed < 0 else "agree"
+        )
+        self.assertEqual(stance, "model_below_market")
+        self.assertTrue(
+            is_negative(round(signed, 3)),
+            "rounding must keep the sign of a real negative",
+        )
+        self.assertFalse(
+            is_negative(_published_round(signed, 3)),
+            "which is exactly why _published_round is not used here",
+        )
+
+    def test_the_sign_of_a_zero_is_the_only_thing_being_dropped(self):
+        """A true zero and a small negative both print -0.0 at 4dp."""
+        artefact = 0.0 * -1.0
+        genuine = -0.00001
+        self.assertEqual(json.dumps(round(artefact, 4)), "-0.0")
+        self.assertEqual(json.dumps(round(genuine, 4)), "-0.0")
+        self.assertEqual(artefact, 0.0)
+        self.assertNotEqual(genuine, 0.0)
 
 
 if __name__ == "__main__":
