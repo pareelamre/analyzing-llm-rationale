@@ -18,7 +18,31 @@ Features:
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+#: How many times a year the annualised figure assumes the book turns over.
+#: Named rather than inline because it is the whole content of that number:
+#: the growth rate is compounded this many times, so the result is
+#: exponential in a constant nothing checks against the markets held.
+_ASSUMED_TURNOVERS_PER_YEAR = 52
+
+
+def _implied_turnovers_per_year(allocations: List[Dict[str, Any]]) -> Optional[float]:
+    """What the held markets' own resolution dates imply, if they say.
+
+    Returned beside the assumption rather than substituted for it: changing
+    the published figure is a decision about a metric people may already be
+    reading, while showing both costs nothing and makes the gap legible.
+    """
+    leads = [
+        float(a["lead_days"]) for a in allocations
+        if isinstance(a.get("lead_days"), (int, float)) and float(a["lead_days"]) > 0
+    ]
+    if not leads:
+        return None
+    leads.sort()
+    median = leads[len(leads) // 2]
+    return round(365.0 / median, 1)
 
 
 class KellyPortfolioOptimizer:
@@ -125,6 +149,12 @@ class KellyPortfolioOptimizer:
                 # as thin_market with market_bid 0.0 and market_volume 0.0.
                 # Sizing does not use them -- that is a capital decision --
                 # but a caller can no longer be unaware of them.
+                # The board publishes when each market resolves. Without it on
+                # the allocation, nothing downstream can judge how often this
+                # capital actually turns over -- see the annualisation below.
+                "lead_days": opp.get("lead_days"),
+                "horizon": opp.get("horizon"),
+                "resolve_time": opp.get("resolve_time"),
                 "discrepancy_status": opp.get("discrepancy_status"),
                 "market_bid": opp.get("market_bid"),
                 "market_ask": opp.get("market_ask"),
@@ -161,7 +191,10 @@ class KellyPortfolioOptimizer:
             final_allocations.append(a)
 
         cash_reserve_usd = round(self.bankroll_usd - total_allocated_usd, 2)
-        portfolio_cagr_est = round((math.exp(expected_portfolio_growth * 52) - 1.0) * 100, 2) if expected_portfolio_growth > 0 else 0.0
+        portfolio_cagr_est = round(
+            (math.exp(expected_portfolio_growth * _ASSUMED_TURNOVERS_PER_YEAR) - 1.0) * 100, 2,
+        ) if expected_portfolio_growth > 0 else 0.0
+        implied = _implied_turnovers_per_year(final_allocations)
 
         return {
             "bankroll_usd": self.bankroll_usd,
@@ -171,6 +204,20 @@ class KellyPortfolioOptimizer:
             "kelly_fraction": self.kelly_fraction,
             "expected_weekly_growth_rate_pct": round(expected_portfolio_growth * 100, 3),
             "estimated_annualized_cagr_pct": portfolio_cagr_est,
+            # The figure above compounds the weekly growth 52 times. Whether
+            # that is the right number is a question about these markets, and
+            # they carry the answer: the median allocation below resolves in
+            # weeks, not days. Published beside it so the reader can see the
+            # assumption instead of inferring it.
+            "cagr_assumptions": {
+                "turnovers_per_year_assumed": _ASSUMED_TURNOVERS_PER_YEAR,
+                "turnovers_per_year_implied_by_horizons": implied,
+                "basis": (
+                    "estimated_annualized_cagr_pct = exp(weekly_growth x "
+                    f"{_ASSUMED_TURNOVERS_PER_YEAR}) - 1, which assumes the whole "
+                    "book resolves and is redeployed that many times a year."
+                ),
+            },
             "n_positions": len(final_allocations),
             "allocations": final_allocations,
         }
