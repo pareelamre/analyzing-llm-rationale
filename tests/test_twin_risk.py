@@ -88,6 +88,83 @@ def evaluate(**changes):
     return evaluate_binary_candidate(**values)
 
 
+class HeadroomCapsTheOrderTests(unittest.TestCase):
+    """The order cash cap is the SMALLER of the per-order cap and headroom.
+
+    evaluate_binary_candidate narrows max_order_cash twice before sizing:
+
+        remaining_order = min(remaining_order, remaining_total)
+        remaining_order = min(remaining_order, remaining_additions)
+
+    Both survived the whole suite as `max`. Nothing noticed, because the
+    one test that sets max_total_loss also sets max_cluster_loss tight
+    enough to bound the result on its own -- the cluster cap masked the
+    total-loss cap, and the assertion passed either way.
+
+    These put the headroom in the only binding position: the exposure
+    sits in a different instrument and cluster, so the market and cluster
+    caps are slack and the total-loss cap is the only thing left.
+
+    That distinction matters because size_binary_entry is told
+    current_market_loss and current_cluster_loss but not total loss. The
+    total-loss limit reaches it solely through this narrowed
+    max_order_cash. If the narrowing goes the wrong way the limit is not
+    enforced anywhere.
+    """
+
+    FOREIGN_CLUSTER = "cluster-999"
+    UNCONSTRAINED_QUANTITY = Decimal("9")
+
+    def _elsewhere(self, loss):
+        return (
+            RiskExposure(
+                "instrument-999", self.FOREIGN_CLUSTER, "kalshi", Decimal(loss), "inventory"
+            ),
+        )
+
+    def test_an_order_is_held_under_the_remaining_total_loss(self):
+        held = self._elsewhere("18")   # of a 20 cap, so 2 is left
+        result = evaluate(exposures=held, limits=limits(max_total_loss=Decimal("20")))
+        self.assertIsNone(result.reason)
+        self.assertLessEqual(result.max_loss, Decimal("2"))
+        self.assertLess(result.quantity, self.UNCONSTRAINED_QUANTITY)
+
+    def test_slack_total_loss_does_not_widen_the_per_order_cap(self):
+        """The narrowing is a floor on nothing -- it can only tighten."""
+        held = self._elsewhere("18")
+        generous = evaluate(exposures=held, limits=limits(max_total_loss=Decimal("500")))
+        self.assertEqual(generous.quantity, self.UNCONSTRAINED_QUANTITY)
+
+    def test_an_order_is_held_under_the_remaining_trailing_additions(self):
+        result = evaluate(trailing_additions=Decimal("9"))   # of a 10 cap
+        self.assertIsNone(result.reason)
+        self.assertLessEqual(result.max_loss, Decimal("1"))
+        self.assertLess(result.quantity, self.UNCONSTRAINED_QUANTITY)
+
+    def test_the_tighter_of_the_two_wins(self):
+        """Both narrowings apply, so the smaller headroom is the one felt."""
+        both = evaluate(
+            exposures=self._elsewhere("18"),      # 2 of total left
+            trailing_additions=Decimal("9"),      # 1 of additions left
+            limits=limits(max_total_loss=Decimal("20")),
+        )
+        self.assertLessEqual(both.max_loss, Decimal("1"))
+
+    def test_exhausted_headroom_blocks_rather_than_sizing_to_zero(self):
+        """Exactly spent is spent: the guards are <=, not <."""
+        self.assertEqual(
+            evaluate(
+                exposures=self._elsewhere("20"),
+                limits=limits(max_total_loss=Decimal("20")),
+            ).reason,
+            "total_loss_limit",
+        )
+        self.assertEqual(
+            evaluate(trailing_additions=Decimal("10")).reason,
+            "trailing_additions_limit",
+        )
+
+
 class ReduceOnlyNeverGoesNegativeTests(unittest.TestCase):
     """A close can shrink to nothing, never to a buy.
 
