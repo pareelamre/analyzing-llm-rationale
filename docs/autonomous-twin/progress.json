@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_t07_t14_t17_t19_in_progress",
+  "implementation_status": "t06_t07_t15_t17_t19_in_progress",
   "implementation_baseline": "0944bdc83b8c71d639fd09f2b5ad3cfa6d06e15e",
-  "next_task": "T14",
+  "next_task": "T15",
   "live_authorized": false,
   "release_gates": {
     "G0": "not_evaluated",
@@ -381,7 +381,7 @@
       "status": "complete",
       "substep": "immutable owner-scoped draft/revise/approve/revoke API, exact authority hashes, server-derived account and release bindings, durable versioned storage, expiry/revocation and four-scope execution pauses implemented",
       "branch": "codex/autonomous-mandates",
-      "commit": "919a9937",
+      "commit": "9bd93c2c",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/542",
       "checks": [
         "PYTHONPATH=src py -m unittest tests.test_twin_mandates tests.test_twin_execution tests.test_twin_store (pass: 24 tests)",
@@ -410,26 +410,30 @@
         "T09",
         "T13"
       ],
-      "status": "in_progress",
-      "substep": "fenced single-dispatch boundary, stable client identity/fingerprint, conservative acknowledgement, and ambiguity handling implemented; shared route integration and complete venue adapter review remain pending",
-      "branch": "codex/autonomous-twin-t14",
-      "commit": "9f8321d4",
-      "pr_url": null,
+      "status": "complete",
+      "substep": "manual and autonomous orders share one durable reservation, stable client identity, request fingerprint, lease fence, immediate pre-send authority and budget checks, single venue dispatch, and submission-unknown recovery state",
+      "branch": "codex/autonomous-durable-submission",
+      "commit": "82bf4295",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/544",
       "checks": [
-        "PYTHONPATH=src py -m unittest tests.test_twin_store tests.test_twin_store_integration tests.test_twin_manual tests.test_twin_execution tests.test_twin_mandates (pass: 22 tests, 4 emulator skips)",
+        "PYTHONPATH=src py -m unittest tests.test_twin_execution tests.test_twin_manual tests.test_twin_store tests.test_trading_control tests.test_trading plus focused server routes (pass: 42 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . (completed; generated graph changes intentionally unstaged)",
-        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1372 tests in 240.453s; 4 emulator skips)"
+        "py -m graphify update . (pass; generated graph changes intentionally unstaged)",
+        "raw new-order audit: only private Kalshi/Polymarket adapters call venue write methods"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/execution.py",
+        "src/analyzing_llm_rationale/twin/manual.py",
         "src/analyzing_llm_rationale/twin/store.py",
+        "src/analyzing_llm_rationale/trading.py",
+        "src/analyzing_llm_rationale/server.py",
         "tests/test_twin_execution.py",
-        "tests/test_twin_manual.py"
+        "docs/autonomous-twin/EXECUTION_AUDIT.md"
       ],
       "blockers": [],
-      "handoff": null
+      "handoff": "T15 can reconcile acknowledgements, partial fills, cancellations, unknown submissions, and settlements using the stable command and venue identities now enforced at every submission path."
     },
     {
       "id": "T15",

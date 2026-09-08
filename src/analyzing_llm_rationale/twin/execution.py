@@ -10,12 +10,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 from typing import Any, Callable, Mapping, Optional
 
 from .mandates import Mandate, PauseState, authorize_mandate
 from .models import AccountScope, CommandState, TradeIntent
-from .store import CommandClaim, ExecutionCommand, TwinStore, TwinStoreError, require_durable_store
+from .store import (
+    CommandClaim,
+    ExecutionCommand,
+    Reservation,
+    ReservationState,
+    TwinStore,
+    TwinStoreError,
+    require_durable_store,
+)
 
 
 class ExecutionBlocked(RuntimeError):
@@ -69,6 +78,7 @@ def _assert_authorized(
     command: ExecutionCommand,
     intent: TradeIntent,
     claim: CommandClaim,
+    reservation: Reservation,
     context: ExecutionContext,
     now: datetime,
 ) -> None:
@@ -78,6 +88,15 @@ def _assert_authorized(
         raise ExecutionBlocked("command claim does not match the active account scope")
     if command.intent_id != intent.id or command.intent_hash != intent.intent_hash:
         raise ExecutionBlocked("command is not bound to the supplied immutable intent")
+    if (
+        reservation.id != command.reservation_id
+        or reservation.scope_id != command.scope_id
+        or reservation.intent_id != intent.id
+        or reservation.intent_hash != intent.intent_hash
+    ):
+        raise ExecutionBlocked("reservation is not bound to the supplied command and intent")
+    if reservation.state is not ReservationState.SUBMITTING:
+        raise ExecutionBlocked("reservation is not in the current submission state")
     if not command.request_fingerprint:
         raise ExecutionBlocked("command has no persisted request fingerprint")
     if command.claim is None or command.claim.worker_id != claim.worker_id or command.claim.fence != claim.fence:
@@ -95,6 +114,11 @@ def _assert_authorized(
         )
     except Exception as exc:
         raise ExecutionBlocked(str(exc)) from exc
+
+    if intent.action.value.startswith("BUY_"):
+        required = intent.quantity * intent.limit_price + intent.fee_allowance + intent.slippage_allowance
+        if reservation.cash < required or reservation.max_loss < required:
+            raise ExecutionBlocked("reservation does not cover notional, fees, and slippage")
 
     mandate = context.mandate
     if context.autonomous:
@@ -115,6 +139,10 @@ def _assert_authorized(
             raise ExecutionBlocked("mandate does not allow this trade action")
         if not context.readiness_hash or context.readiness_hash != mandate.readiness_hash:
             raise ExecutionBlocked("autonomous strategy readiness is missing or stale")
+        if reservation.cash > Decimal(mandate.max_capital):
+            raise ExecutionBlocked("reservation exceeds mandate capital budget")
+        if reservation.max_loss > Decimal(mandate.max_loss):
+            raise ExecutionBlocked("reservation exceeds mandate loss budget")
     elif mandate is not None:
         # A manual confirmation may carry an audit mandate reference, but it
         # must never silently become autonomous authority.
@@ -131,7 +159,10 @@ def _classify_venue_response(response: Mapping[str, Any]) -> SubmissionDispositi
     """Accept only a normalized acknowledgement; never infer a fill here."""
     if not isinstance(response, Mapping):
         return SubmissionDisposition.UNKNOWN
-    acknowledgement = response.get("acknowledgement", response)
+    envelope = response.get("venue_response", response)
+    if not isinstance(envelope, Mapping):
+        return SubmissionDisposition.UNKNOWN
+    acknowledgement = envelope.get("acknowledgement", envelope)
     if not isinstance(acknowledgement, Mapping):
         return SubmissionDisposition.UNKNOWN
     status = str(acknowledgement.get("status") or acknowledgement.get("venue_status") or "").lower()
@@ -178,7 +209,11 @@ def submit_claimed_command(
             return SubmissionResult(current, SubmissionDisposition.ALREADY_PROCESSED)
         raise ExecutionBlocked(f"command is not dispatchable from state {current.state.value}")
 
-    _assert_authorized(command=current, intent=intent, claim=claim, context=context, now=now)
+    reservation = store.reservation(current.scope_id, current.reservation_id)
+    _assert_authorized(
+        command=current, intent=intent, claim=claim, reservation=reservation,
+        context=context, now=now,
+    )
     try:
         response = submit(current)
     except Exception as exc:

@@ -190,6 +190,8 @@ class TwinStore(Protocol):
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand: ...
 
+    def reservation(self, scope_id: str, reservation_id: str) -> Reservation: ...
+
     def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30) -> Optional[CommandClaim]: ...
 
     def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str) -> ExecutionCommand: ...
@@ -387,6 +389,16 @@ class InMemoryTwinStore:
                 raise TwinStoreError("intent has no reservation")
             command_id = f"command-{intent.intent_hash[:24]}"
             return self._commands[command_id]
+
+    def reservation(self, scope_id: str, reservation_id: str) -> Reservation:
+        with self._lock:
+            try:
+                reservation = self._reservations[reservation_id]
+            except KeyError as exc:
+                raise TwinStoreError("reservation was not found") from exc
+            if reservation.scope_id != scope_id:
+                raise TwinStoreError("reservation does not belong to the account scope")
+            return reservation
 
     def claim_command(
         self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30
@@ -699,6 +711,12 @@ class DatastoreTwinStore:
             created_at=entity["created_at"], request_fingerprint=str(entity.get("request_fingerprint") or ""), claim=claim,
         )
 
+    def reservation(self, scope_id: str, reservation_id: str) -> Reservation:
+        entity = self._client.get(self._key(scope_id, "TwinReservation", reservation_id))
+        if entity is None:
+            raise TwinStoreError("reservation was not found")
+        return self._reservation_from_entity(scope_id, reservation_id, entity)
+
     def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30) -> Optional[CommandClaim]:
         if lease_seconds <= 0:
             raise TwinStoreError("lease_seconds must be positive")
@@ -720,7 +738,20 @@ class DatastoreTwinStore:
                 return None
             claim = CommandClaim(command_id, worker_id, old_fence + 1, now + timedelta(seconds=lease_seconds))
             entity.update({"state": state.value, "claim_worker_id": worker_id, "fence": claim.fence, "lease_expires_at": claim.lease_expires_at})
-            self._client.put(entity)
+            reservation = self._client.get(
+                self._key(scope_id, "TwinReservation", str(entity["reservation_id"]))
+            )
+            if reservation is None:
+                raise TwinStoreError("command reservation was not found")
+            reservation_state = ReservationState(str(reservation["state"]))
+            if reservation_state is ReservationState.RESERVED:
+                reservation["state"] = ReservationState.SUBMITTING.value
+            elif reservation_state not in {
+                ReservationState.SUBMITTING,
+                ReservationState.SUBMISSION_UNKNOWN,
+            }:
+                raise TwinStoreError("command reservation is not claimable")
+            self._client.put_multi([entity, reservation])
             return claim
 
     def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str) -> ExecutionCommand:

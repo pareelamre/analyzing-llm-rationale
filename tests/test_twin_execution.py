@@ -46,19 +46,21 @@ def intent(active_scope):
     )
 
 
-def reserved(*, environment="shadow", autonomous=True):
+def reserved(*, environment="shadow", autonomous=True, reserved_cash="2.70", mandate_capital="20"):
     active_scope = scope(environment=environment)
     store = DurableMemoryStore() if environment == "live" else InMemoryTwinStore()
     store.register_account(active_scope, venue_available_cash=Decimal("20"), loss_limit=Decimal("20"))
     trade_intent = intent(active_scope)
-    store.reserve_intent(trade_intent, cash=Decimal("2.70"), max_loss=Decimal("2.70"), now=NOW)
+    store.reserve_intent(
+        trade_intent, cash=Decimal(reserved_cash), max_loss=Decimal(reserved_cash), now=NOW,
+    )
     command = store.command_for_intent(trade_intent)
     claim = store.claim_command(command.id, worker_id="worker-001", now=NOW, lease_seconds=30)
     assert claim is not None
     draft = Mandate(
             "mandate-001", "owner-001", active_scope.id, "strategy-v1", NOW + timedelta(days=1),
             live=environment == "live", account_epoch=active_scope.account_epoch, venue="kalshi",
-            max_capital="20", max_loss="20", model_hash=MODEL_HASH, config_hash=CONFIG_HASH,
+            max_capital=mandate_capital, max_loss="20", model_hash=MODEL_HASH, config_hash=CONFIG_HASH,
             readiness_hash=READINESS_HASH,
         )
     mandate = (
@@ -145,6 +147,33 @@ class TwinExecutionTests(unittest.TestCase):
         )
         self.assertEqual(rejected.disposition, SubmissionDisposition.REJECTED)
         self.assertEqual(rejected.command.state, CommandState.REJECTED)
+
+    def test_shared_manual_service_envelope_is_classified_as_acknowledged(self):
+        store, _, trade_intent, command, claim, context = reserved(autonomous=False)
+        result = submit_claimed_command(
+            store, command=command, intent=trade_intent, claim=claim,
+            context=context, now=NOW,
+            submit=lambda _: {
+                "submitted": True,
+                "venue_response": {"acknowledgement": {"status": "acknowledged"}},
+            },
+        )
+        self.assertEqual(result.disposition, SubmissionDisposition.ACKNOWLEDGED)
+
+    def test_precise_cost_reservation_and_mandate_cap_are_rechecked_before_send(self):
+        for kwargs, message in (
+            ({"reserved_cash": "2.69"}, "notional, fees, and slippage"),
+            ({"mandate_capital": "2.69"}, "capital budget"),
+        ):
+            with self.subTest(kwargs=kwargs):
+                store, _, trade_intent, command, claim, context = reserved(**kwargs)
+                writes = []
+                with self.assertRaisesRegex(ExecutionBlocked, message):
+                    submit_claimed_command(
+                        store, command=command, intent=trade_intent, claim=claim,
+                        context=context, now=NOW, submit=lambda _, sink=writes: sink.append("sent"),
+                    )
+                self.assertEqual(writes, [])
 
     def test_live_runtime_gate_blocks_before_write_and_manual_confirmation_needs_no_strategy_gate(self):
         store, _, trade_intent, command, claim, context = reserved(environment="live")

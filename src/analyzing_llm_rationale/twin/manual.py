@@ -13,7 +13,7 @@ from hashlib import sha256
 from typing import Any, Mapping
 
 from .models import AccountScope, ProposalAction, TradeIntent, canonical_instrument_id
-from .store import ExecutionCommand, TwinStore, TwinStoreError
+from .store import CommandClaim, ExecutionCommand, TwinStore, TwinStoreError
 
 
 class ManualReservationConflict(TwinStoreError):
@@ -25,8 +25,15 @@ class ManualCommandClaim:
     command: ExecutionCommand
     intent: TradeIntent
     scope: AccountScope
-    fence: int
-    worker_id: str
+    claim: CommandClaim
+
+    @property
+    def fence(self) -> int:
+        return self.claim.fence
+
+    @property
+    def worker_id(self) -> str:
+        return self.claim.worker_id
 
 
 def _digest(*values: str) -> str:
@@ -122,4 +129,6 @@ def reserve_confirmed_manual_order(
     claim = store.claim_command(command.id, worker_id=worker_id, now=now)
     if claim is None:
         raise ManualReservationConflict("manual order already has an active execution claim")
-    return ManualCommandClaim(command=command, intent=intent, scope=scope, fence=claim.fence, worker_id=worker_id)
+    return ManualCommandClaim(
+        command=store.command_for_intent(intent), intent=intent, scope=scope, claim=claim,
+    )

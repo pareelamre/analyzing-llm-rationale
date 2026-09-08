@@ -692,6 +692,14 @@ def _require_execution_enabled(normalized: Mapping[str, Any], *, byo: bool = Fal
         )
 
 
+def require_execution_enabled(preview: Mapping[str, Any], creds: Creds = None) -> None:
+    """Recheck live switches from a validated preview without touching a venue."""
+    normalized = preview.get("normalized_order")
+    if not isinstance(normalized, Mapping):
+        raise TradingValidationError("A validated normalized order is required before execution.")
+    _require_execution_enabled(normalized, byo=_is_byo(creds))
+
+
 def _kalshi_private_key_pem(creds: Creds = None) -> str:
     pem = _cv(creds, "kalshi_private_key")
     if pem:
