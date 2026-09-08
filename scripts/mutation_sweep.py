@@ -81,46 +81,94 @@ RULES: dict[str, tuple[str, str]] = {
 CAUGHT, SURVIVED, NOT_APPLIED = 0, 1, 2
 
 
-def code_lines(path: pathlib.Path) -> set[int]:
-    """Line numbers holding real code, not comments or string contents.
+def literal_spans(path: pathlib.Path) -> dict[int, list[tuple[int, int]]]:
+    """Column ranges on each line that are literal text, not code.
 
     A regex sweep over raw text mutates the inside of docstrings and log
-    messages, which produces noise rather than findings. Tokenising is the
-    only reliable way to tell an operator from the same characters inside
-    a literal.
+    messages, which is noise rather than a finding. Tokenising is the only
+    way to tell an operator from the same characters inside a literal.
+
+    Skipping whole lines is not enough, and Python 3.12 is why. It no
+    longer emits an f-string as a single STRING token: the literal text
+    arrives as FSTRING_MIDDLE with the interpolations around it as
+    ordinary tokens. So a line like
+
+        strategy = f"BUY YES @ {p:.1f}% + BUY NO @ {k:.1f}%"
+
+    genuinely contains code, a line-level filter keeps it, and the regex
+    then finds the first `+` -- which is prose. Two junk survivors came
+    out of an arbitrage_scanner sweep that way.
+
+    This records where the prose is, and a match is rejected when it
+    overlaps any of it. Recording where the *code* is does not work: a
+    pattern like " + " or "max(" spans a token boundary, so it fits
+    inside no single code span.
     """
     source = path.read_text(encoding="utf-8")
-    skip: set[int] = set()
-    keep: set[int] = set()
+    spans: dict[int, list[tuple[int, int]]] = {}
+    kinds = {tokenize.STRING, tokenize.COMMENT}
+    # FSTRING_MIDDLE exists from 3.12; before that an f-string is one
+    # STRING token and is already covered.
+    kinds.add(getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING))
     try:
-        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-        for token in tokens:
-            start, end = token.start[0], token.end[0]
-            if token.type in (tokenize.STRING, tokenize.COMMENT):
-                skip.update(range(start, end + 1))
-            elif token.type == tokenize.OP:
-                keep.add(start)
-            elif token.type == tokenize.NAME and token.string in ("max", "min", "and", "or"):
-                keep.add(start)
+        for token in tokenize.generate_tokens(io.StringIO(source).readline):
+            if token.type not in kinds:
+                continue
+            if token.start[0] == token.end[0]:
+                spans.setdefault(token.start[0], []).append(
+                    (token.start[1], token.end[1])
+                )
+            else:
+                # A triple-quoted block: every line it covers is prose.
+                for line in range(token.start[0], token.end[0] + 1):
+                    spans.setdefault(line, []).append((0, 10**6))
     except (tokenize.TokenError, IndentationError, SyntaxError):
-        return set()
-    return keep - skip
+        return {}
+    return spans
+
+
+def parses(path: pathlib.Path) -> bool:
+    """Whether the file tokenises at all. An unparseable file has no findings."""
+    try:
+        for _ in tokenize.generate_tokens(
+            io.StringIO(path.read_text(encoding="utf-8")).readline
+        ):
+            pass
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return False
+    return True
+
+
+def _first_match_in_code(pattern, text, prose):
+    """The first match of `pattern` that does not run through literal text."""
+    for match in re.finditer(pattern, text):
+        if not any(match.start() < hi and lo < match.end() for lo, hi in prose):
+            return match
+    return None
 
 
 def candidates(path: pathlib.Path, rules: list[str], start: int, end: int):
     """One mutation per eligible line -- the first rule that matches."""
-    eligible = code_lines(path)
+    if not parses(path):
+        return
+    prose = literal_spans(path)
     lines = path.read_text(encoding="utf-8").splitlines()
     for number, text in enumerate(lines, 1):
-        if number not in eligible or not (start <= number <= end):
+        if not (start <= number <= end):
             continue
         for name in rules:
             pattern, replacement = RULES[name]
-            if re.search(pattern, text):
-                mutated = re.sub(pattern, replacement, text, count=1)
-                if mutated != text:
-                    yield number, name, text.strip(), mutated.strip()
-                break
+            match = _first_match_in_code(pattern, text, prose.get(number, ()))
+            if match is None:
+                continue
+            mutated = (
+                text[: match.start()]
+                + match.expand(replacement)
+                + text[match.end():]
+            )
+            if mutated != text:
+                yield number, name, text.strip(), mutated.strip()
+            break
 
 
 def guard_the_file(path: pathlib.Path) -> None:
