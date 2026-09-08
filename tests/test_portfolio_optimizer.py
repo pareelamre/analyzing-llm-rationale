@@ -1,6 +1,7 @@
 """Unit tests for Foresea Quantitative Kelly Portfolio Optimizer."""
 from __future__ import annotations
 
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -11,6 +12,83 @@ from analyzing_llm_rationale.portfolio_optimizer import (  # noqa: E402
     KellyPortfolioOptimizer,
     optimize_portfolio_allocation,
 )
+
+
+class ExpectedGrowthTermTests(unittest.TestCase):
+    """The loss half of the Kelly growth term, and the floor guarding it.
+
+    Per position the optimizer accumulates
+
+        p * log(1 + f*b) + (1 - p) * log(max(0.001, 1 - f))
+
+    The max() is a guard: it only exists so that a fraction at or above
+    1.0 cannot reach log of zero or a negative. For every allocation the
+    optimizer will actually produce, f is far below 1 and the guard is
+    inert -- which is exactly why turning it into min() survived the
+    whole suite. Under min() the loss term collapses to the constant
+    log(0.001) for every position.
+
+    That is not a rounding difference. On the single-position case below
+    the published weekly growth goes from +3.585% to -269.246%, and
+    because the annualised figure is only computed when growth is
+    positive, estimated_annualized_cagr_pct would quietly read 0.0
+    instead of raising anything.
+
+    Both numbers are returned to callers, so this pins the arithmetic
+    against an independent hand computation rather than against itself.
+    """
+
+    OPPORTUNITY = {
+        "question": "Will CPI exceed 3.0% in Q3?",
+        "platform": "Kalshi",
+        "market_probability": 0.40,
+        "model_probability": 0.60,
+        "credibility_score": 0.90,
+        "credibility_grade": "A",
+    }
+
+    def _result(self, **kw):
+        return optimize_portfolio_allocation(
+            [dict(self.OPPORTUNITY)], bankroll_usd=1000.0, kelly_fraction=0.25, **kw
+        )
+
+    def test_the_published_growth_matches_the_kelly_formula(self):
+        res = self._result()
+        position = res["allocations"][0]
+        f = position["effective_fraction_pct"] / 100.0
+        price = position["entry_price"]
+        p = self.OPPORTUNITY["model_probability"]
+        b = (1.0 - price) / price
+
+        expected = p * math.log(1.0 + f * b) + (1.0 - p) * math.log(1.0 - f)
+        self.assertAlmostEqual(
+            res["expected_weekly_growth_rate_pct"], expected * 100.0, places=3
+        )
+
+    def test_the_loss_term_is_not_a_constant(self):
+        """Under the collapsed form every position contributes log(0.001)."""
+        res = self._result()
+        position = res["allocations"][0]
+        f = position["effective_fraction_pct"] / 100.0
+        price = position["entry_price"]
+        p = self.OPPORTUNITY["model_probability"]
+        b = (1.0 - price) / price
+
+        collapsed = (p * math.log(1.0 + f * b) + (1.0 - p) * math.log(0.001)) * 100.0
+        self.assertLess(collapsed, -100.0, "the collapsed form should be far negative")
+        self.assertNotAlmostEqual(
+            res["expected_weekly_growth_rate_pct"], collapsed, places=1
+        )
+
+    def test_a_sound_book_reports_positive_growth_and_a_real_cagr(self):
+        """The annualised figure is only computed while growth is positive."""
+        res = self._result()
+        self.assertGreater(res["expected_weekly_growth_rate_pct"], 0.0)
+        self.assertGreater(res["estimated_annualized_cagr_pct"], 0.0)
+
+    def test_the_floor_keeps_a_full_bankroll_fraction_finite(self):
+        """What the guard is actually for: log(1 - f) at f = 1."""
+        self.assertAlmostEqual(math.log(max(0.001, 1.0 - 1.0)), math.log(0.001))
 
 
 class PortfolioOptimizerTests(unittest.TestCase):
