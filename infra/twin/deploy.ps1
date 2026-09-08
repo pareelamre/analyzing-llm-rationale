@@ -32,9 +32,9 @@ function Ensure-ServiceAccount {
     param([string]$Name, [string]$DisplayName)
     $email = "$Name@$ProjectId.iam.gserviceaccount.com"
     if ($Apply) {
-        & gcloud iam service-accounts describe $email --project $ProjectId 2>$null
+        $null = & gcloud iam service-accounts describe $email --project $ProjectId 2>$null
         if ($LASTEXITCODE -ne 0) {
-            Invoke-Gcloud @("iam", "service-accounts", "create", $Name, "--display-name", $DisplayName, "--project", $ProjectId)
+            Invoke-Gcloud @("iam", "service-accounts", "create", $Name, "--display-name", $DisplayName, "--project", $ProjectId) | Out-Host
         }
     }
     else {
@@ -71,31 +71,10 @@ $schedulerServiceAccount = Ensure-ServiceAccount "twin-scheduler" "Foresea twin 
 Ensure-Queue "twin-research" "5" "3600s" "10s" "300s" "2" "2"
 Ensure-Queue "twin-maintenance" "10" "86400s" "5s" "300s" "5" "1"
 
-# Both services use the exact same immutable image.  There is no public
-# invoker, no live capital, and no mandate supplied by this deployment path.
-$workerArgs = "-m,uvicorn,analyzing_llm_rationale.twin.runtime_app:create_environment_app,--factory,--host,0.0.0.0,--port,8000"
-$bootstrapUrl = "https://bootstrap.invalid"
-Invoke-Gcloud @("run", "deploy", "twin-research", "--image", $Image, "--region", $Region, "--project", $ProjectId,
-    "--no-allow-unauthenticated", "--service-account", $researchServiceAccount,
-    "--command", "python", "--args", $workerArgs,
-    "--port", "8000", "--timeout", "120", "--cpu", "1", "--memory", "512Mi",
-    "--min-instances", "0", "--max-instances", "2", "--concurrency", "2",
-    "--set-env-vars", "FORESEA_TWIN_WORKER_ROLE=research,FORESEA_TWIN_MODE=shadow,FORESEA_TWIN_LIVE_CAPITAL=0,FORESEA_TWIN_LIVE_MANDATE=,FORESEA_TWIN_MAINTENANCE_URL=$bootstrapUrl,FORESEA_TWIN_MAINTENANCE_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_DISPATCHER_ACCOUNTS=$taskDispatcherServiceAccount")
-Invoke-Gcloud @("run", "deploy", "twin-maintenance", "--image", $Image, "--region", $Region, "--project", $ProjectId,
-    "--no-allow-unauthenticated", "--service-account", $maintenanceServiceAccount,
-    "--command", "python", "--args", $workerArgs,
-    "--port", "8000", "--timeout", "120", "--cpu", "1", "--memory", "512Mi",
-    "--min-instances", "0", "--max-instances", "1", "--concurrency", "1",
-    "--set-env-vars", "FORESEA_TWIN_WORKER_ROLE=maintenance,FORESEA_TWIN_MODE=shadow,FORESEA_TWIN_LIVE_CAPITAL=0,FORESEA_TWIN_LIVE_MANDATE=,GOOGLE_CLOUD_PROJECT=$ProjectId,FORESEA_TWIN_TASKS_LOCATION=$Region,FORESEA_TWIN_MAINTENANCE_QUEUE=twin-maintenance,FORESEA_TWIN_RESEARCH_QUEUE=twin-research,FORESEA_TWIN_MAINTENANCE_URL=$bootstrapUrl,FORESEA_TWIN_RESEARCH_URL=$bootstrapUrl,FORESEA_TWIN_MAINTENANCE_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_DISPATCHER_SERVICE_ACCOUNT=$taskDispatcherServiceAccount,FORESEA_TWIN_SCHEDULER_ACCOUNTS=$schedulerServiceAccount,FORESEA_TWIN_DISPATCHER_ACCOUNTS=$taskDispatcherServiceAccount,FORESEA_TWIN_RESEARCH_ACCOUNTS=$researchServiceAccount")
-
-# Research receives only its model secret.  It is intentionally never granted
-# Datastore, Cloud Tasks enqueue, or KMS decrypt permissions below.
+# Grant startup dependencies before creating a revision. Maintenance performs a
+# fail-closed recovery scan in ASGI lifespan, so a later IAM grant is too late.
 Invoke-Gcloud @("secrets", "add-iam-policy-binding", $ResearchModelSecret, "--project", $ProjectId,
     "--member", "serviceAccount:$researchServiceAccount", "--role", "roles/secretmanager.secretAccessor")
-Invoke-Gcloud @("run", "services", "update", "twin-research", "--region", $Region, "--project", $ProjectId,
-    "--update-secrets", "SCADS_AI_API_KEY=$ResearchModelSecret`:latest")
-
-# Maintenance alone owns durable state and the exchange-connection decrypt key.
 Invoke-Gcloud @("projects", "add-iam-policy-binding", $ProjectId, "--member", "serviceAccount:$maintenanceServiceAccount", "--role", "roles/datastore.user")
 Invoke-Gcloud @("kms", "keys", "add-iam-policy-binding", $TradingKmsKey, "--project", $ProjectId,
     "--member", "serviceAccount:$maintenanceServiceAccount", "--role", "roles/cloudkms.cryptoKeyDecrypter")
@@ -104,9 +83,6 @@ Invoke-Gcloud @("tasks", "queues", "add-iam-policy-binding", "twin-research", "-
 Invoke-Gcloud @("tasks", "queues", "add-iam-policy-binding", "twin-maintenance", "--location", $Region, "--project", $ProjectId,
     "--member", "serviceAccount:$maintenanceServiceAccount", "--role", "roles/cloudtasks.enqueuer")
 
-# Queue and scheduler delivery receive a service-account OIDC token.  Cloud Run
-# IAM rejects anonymous callers; the application additionally checks issuer,
-# audience, and the caller identity on each narrow internal handler.
 $projectNumber = "<resolved-project-number>"
 if ($Apply) {
     $projectNumber = (& gcloud projects describe $ProjectId --format="value(projectNumber)").Trim()
@@ -120,6 +96,27 @@ Invoke-Gcloud @("iam", "service-accounts", "add-iam-policy-binding", $taskDispat
 Invoke-Gcloud @("iam", "service-accounts", "add-iam-policy-binding", $taskDispatcherServiceAccount, "--project", $ProjectId,
     "--member", "serviceAccount:$maintenanceServiceAccount", "--role", "roles/iam.serviceAccountUser")
 
+# Both services use the exact same immutable image.  There is no public
+# invoker, no live capital, and no mandate supplied by this deployment path.
+$workerArgs = "-m,uvicorn,analyzing_llm_rationale.twin.runtime_app:create_environment_app,--factory,--host,0.0.0.0,--port,8000"
+$bootstrapUrl = "https://bootstrap.invalid"
+Invoke-Gcloud @("run", "deploy", "twin-research", "--image", $Image, "--region", $Region, "--project", $ProjectId,
+    "--no-allow-unauthenticated", "--service-account", $researchServiceAccount,
+    "--command", "python", "--args=$workerArgs",
+    "--port", "8000", "--timeout", "120", "--cpu", "1", "--memory", "512Mi",
+    "--min-instances", "0", "--max-instances", "2", "--concurrency", "2",
+    "--update-secrets", "SCADS_AI_API_KEY=$ResearchModelSecret`:latest",
+    "--set-env-vars", "FORESEA_TWIN_WORKER_ROLE=research,FORESEA_TWIN_MODE=shadow,FORESEA_TWIN_LIVE_CAPITAL=0,FORESEA_TWIN_LIVE_MANDATE=,FORESEA_TWIN_MAINTENANCE_URL=$bootstrapUrl,FORESEA_TWIN_MAINTENANCE_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_DISPATCHER_ACCOUNTS=$taskDispatcherServiceAccount")
+Invoke-Gcloud @("run", "deploy", "twin-maintenance", "--image", $Image, "--region", $Region, "--project", $ProjectId,
+    "--no-allow-unauthenticated", "--service-account", $maintenanceServiceAccount,
+    "--command", "python", "--args=$workerArgs",
+    "--port", "8000", "--timeout", "120", "--cpu", "1", "--memory", "512Mi",
+    "--min-instances", "0", "--max-instances", "1", "--concurrency", "1",
+    "--set-env-vars", "FORESEA_TWIN_WORKER_ROLE=maintenance,FORESEA_TWIN_MODE=shadow,FORESEA_TWIN_LIVE_CAPITAL=0,FORESEA_TWIN_LIVE_MANDATE=,GOOGLE_CLOUD_PROJECT=$ProjectId,FORESEA_TWIN_TASKS_LOCATION=$Region,FORESEA_TWIN_MAINTENANCE_QUEUE=twin-maintenance,FORESEA_TWIN_RESEARCH_QUEUE=twin-research,FORESEA_TWIN_MAINTENANCE_URL=$bootstrapUrl,FORESEA_TWIN_RESEARCH_URL=$bootstrapUrl,FORESEA_TWIN_MAINTENANCE_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$bootstrapUrl,FORESEA_TWIN_DISPATCHER_SERVICE_ACCOUNT=$taskDispatcherServiceAccount,FORESEA_TWIN_SCHEDULER_ACCOUNTS=$schedulerServiceAccount,FORESEA_TWIN_DISPATCHER_ACCOUNTS=$taskDispatcherServiceAccount,FORESEA_TWIN_RESEARCH_ACCOUNTS=$researchServiceAccount")
+
+# Queue and scheduler delivery receive a service-account OIDC token.  Cloud Run
+# IAM rejects anonymous callers; the application additionally checks issuer,
+# audience, and the caller identity on each narrow internal handler.
 foreach ($service in @("twin-research", "twin-maintenance")) {
     Invoke-Gcloud @("run", "services", "add-iam-policy-binding", $service, "--region", $Region, "--project", $ProjectId,
         "--member", "serviceAccount:$taskDispatcherServiceAccount", "--role", "roles/run.invoker")
