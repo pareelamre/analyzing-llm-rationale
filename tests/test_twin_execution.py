@@ -3,7 +3,13 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from analyzing_llm_rationale.twin import AccountScope, CommandState, InMemoryTwinStore, TradeIntent
+from analyzing_llm_rationale.twin import (
+    AccountScope,
+    CommandState,
+    InMemoryTwinStore,
+    ReservationState,
+    TradeIntent,
+)
 from analyzing_llm_rationale.twin.execution import (
     ExecutionBlocked,
     ExecutionContext,
@@ -147,6 +153,11 @@ class TwinExecutionTests(unittest.TestCase):
         )
         self.assertEqual(rejected.disposition, SubmissionDisposition.REJECTED)
         self.assertEqual(rejected.command.state, CommandState.REJECTED)
+        self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal("0"))
+        self.assertEqual(
+            store.reservation(command.scope_id, command.reservation_id).state,
+            ReservationState.RELEASED,
+        )
 
     def test_shared_manual_service_envelope_is_classified_as_acknowledged(self):
         store, _, trade_intent, command, claim, context = reserved(autonomous=False)
