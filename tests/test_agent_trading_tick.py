@@ -1373,7 +1373,7 @@ class ThesisForecastLearningTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertNotIn("CANDIDATE_COUNT", workflow)
-        self.assertEqual(agent_trading_tick.CANDIDATE_COUNT, 24)
+        self.assertEqual(agent_trading_tick.CANDIDATE_COUNT, 32)
 
     def test_a_no_side_probability_is_stored_as_p_yes_not_inverted(self):
         """A "95% NO" is a 5% P(YES); storing 0.95 would invert calibration."""
