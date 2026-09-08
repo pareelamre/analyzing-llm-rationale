@@ -5004,12 +5004,55 @@ function escAttr(s) {
   return escHtml(s).replace(/'/g,'&#39;');
 }
 
-function _agenticMarketUrl(platform, ident) {
-  const marketId = String(ident || '').trim();
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/.test(marketId)) return '';
+function _normalizeMarketUrl(url, platform) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
   const venue = String(platform || '').trim().toLowerCase();
-  if (venue === 'polymarket') return `https://polymarket.com/event/${encodeURIComponent(marketId)}`;
-  if (venue === 'kalshi') return `https://kalshi.com/markets/${encodeURIComponent(marketId)}`;
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const u = new URL(raw);
+      if (u.hostname.includes('polymarket.com')) {
+        const parts = u.pathname.split('/').filter(Boolean);
+        if (parts.length >= 2 && (parts[0] === 'event' || parts[0] === 'market')) {
+          return `https://polymarket.com/market/${encodeURIComponent(decodeURIComponent(parts[1]))}`;
+        }
+        return raw;
+      }
+      if (u.hostname.includes('kalshi.com')) {
+        const parts = u.pathname.split('/').filter(Boolean);
+        if (parts.length >= 2 && parts[0] === 'markets') {
+          const series = parts[1].split('-')[0].toLowerCase();
+          return `https://kalshi.com/markets/${encodeURIComponent(series)}`;
+        }
+        return raw;
+      }
+      return raw;
+    } catch (_) {
+      return raw;
+    }
+  }
+  return _agenticMarketUrl(venue || platform, raw);
+}
+
+function _agenticMarketUrl(platform, ident) {
+  const raw = String(ident || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) {
+    return _normalizeMarketUrl(raw, platform);
+  }
+  const venue = String(platform || '').trim().toLowerCase();
+  if (venue === 'polymarket') {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/.test(raw)) return '';
+    return `https://polymarket.com/market/${encodeURIComponent(raw)}`;
+  }
+  if (venue === 'kalshi') {
+    const token = raw.split('/')[0].split('-')[0].toLowerCase();
+    if (!/^[a-z0-9]{2,50}$/.test(token)) {
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/.test(raw)) return '';
+      return `https://kalshi.com/markets/${encodeURIComponent(raw.toLowerCase())}`;
+    }
+    return `https://kalshi.com/markets/${encodeURIComponent(token)}`;
+  }
   return '';
 }
 
@@ -6855,9 +6898,10 @@ function _formatThesisHtml(rawThesis) {
       const venueUrl = venueLower === 'kalshi' ? 'https://kalshi.com' : 'https://polymarket.com';
       let marketUrl = '';
       if (venueLower === 'polymarket') {
-        marketUrl = `https://polymarket.com/event/${encodeURIComponent(rawMarket)}`;
+        marketUrl = `https://polymarket.com/market/${encodeURIComponent(rawMarket)}`;
       } else if (venueLower === 'kalshi') {
-        marketUrl = `https://kalshi.com/markets/${encodeURIComponent(rawMarket)}`;
+        const series = rawMarket.split('/')[0].split('-')[0].toLowerCase();
+        marketUrl = `https://kalshi.com/markets/${encodeURIComponent(series)}`;
       }
       const marketHtml = marketUrl
         ? `<a href="${marketUrl}" ${linkAttrs} class="agentic-contract-link" title="Open on ${venueName}"><code>${rawMarket}</code></a>`
@@ -6871,7 +6915,8 @@ function _formatThesisHtml(rawThesis) {
 
     // 3. Standalone Kalshi contract tickers (e.g. KXAGICO-COMP-26Q3)
     s = replaceTextNodes(s, text => text.replace(/\b(KX[A-Z0-9._-]{3,})\b/g, match => {
-      const kalshiUrl = `https://kalshi.com/markets/${encodeURIComponent(match)}`;
+      const series = match.split('/')[0].split('-')[0].toLowerCase();
+      const kalshiUrl = `https://kalshi.com/markets/${encodeURIComponent(series)}`;
       return `<a href="${kalshiUrl}" ${linkAttrs} class="agentic-contract-link" title="Open on Kalshi"><code>${match}</code></a>`;
     }));
 
@@ -7019,7 +7064,7 @@ function _agentTradingActivityLine(a) {
   const platform = a.platform ? escHtml(String(a.platform).toUpperCase()) : '';
   const platformTag = platform ? `<span class="eb-badge" style="background:rgba(6,182,212,0.1);color:#0891b2;font-weight:600;font-size:10px;margin-right:4px;">${platform}</span>` : '';
 
-  const tickerUrl = _agenticMarketUrl(a.platform, a.ticker);
+  const tickerUrl = _agenticMarketUrl(a.platform, a.market_url || a.ticker);
   const tickerHtml = tickerUrl
     ? `<a href="${escAttr(tickerUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="agentic-contract-link" title="Open on ${escAttr(String(a.platform || 'venue'))}"><code>${escHtml(a.ticker || '')}</code></a>`
     : `<code>${escHtml(a.ticker || '')}</code>`;
@@ -7262,7 +7307,7 @@ function renderAgentTradingBoard(d) {
     if (openPos.length > 0) {
       const posTableLines = openPos.map(p => {
         const marketId = String(p.ticker || p.ident || '').trim();
-        const marketUrl = _agenticMarketUrl(p.platform, marketId);
+        const marketUrl = _agenticMarketUrl(p.platform, p.market_url || marketId);
         const marketName = `<code>${escHtml(marketId)}</code>`;
         const marketLink = marketUrl
           ? `<a href="${escAttr(marketUrl)}" target="_blank" rel="noopener noreferrer" title="Open this market on ${escAttr(String(p.platform || 'venue'))}">${marketName}</a>`
@@ -7488,7 +7533,7 @@ function _renderWatchTable() {
     // seed Council with the captured value so there's something before the first tick.
     const keyJson = JSON.stringify({ key: f.key }).replace(/'/g, '&#39;');
     return `<tr class="eb-row" data-key="${escAttr(f.key)}" data-q="${escAttr(f.question || f.key)}">
-      <td style="max-width:340px" class="wl-q">${_qLink(f.question || f.key, f.market_url)}</td>
+      <td style="max-width:340px" class="wl-q">${_qLink(f.question || f.key, f.market_url, f.platform)}</td>
       <td>${escHtml(f.platform || '')}</td>
       <td class="wl-model" data-model>${_modelTxt(f.model_probability)}</td>
       <td class="wl-price" data-price>${_yesNoHtml(null)}</td>
@@ -7688,8 +7733,9 @@ function _renderLandingMarketTable(items) {
     const weatherPill = isWeather
       ? `<span class="eb-fee-pill weather" style="margin-left:6px;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.3)" title="${escAttr(e.weather_brief?.model_forecast?.station_microclimate_note || 'Calibrated neural weather forecast (Google DeepMind WeatherNext / MetNet)')}">☀️ ${escHtml(e.weather_brief?.station || 'WeatherNext')}</span>`
       : '';
-    const qTarget = e.market_url
-      ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onclick="trackEvent('market_link_clicked',{source:'radar',platform:'${escAttr(e.platform || '')}'})">${escHtml(q)}</a>`
+    const resolvedUrl = _normalizeMarketUrl(e.market_url, e.platform) || _agenticMarketUrl(e.platform, e.ident);
+    const qTarget = resolvedUrl
+      ? `<a href="${escAttr(resolvedUrl)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onclick="trackEvent('market_link_clicked',{source:'radar',platform:'${escAttr(e.platform || '')}'})">${escHtml(q)}</a>`
       : escHtml(q);
     html += `<div class="market-question-cell">${qTarget}${venuePill}${weatherPill}<div class="market-actions">` +
       `<button type="button" class="market-action" onclick='startForecast(${JSON.stringify(e.question || '').replace(/'/g, "&#39;")}, ${JSON.stringify(ctx).replace(/'/g, "&#39;")});trackEvent("radar_ask_clicked",{platform:${JSON.stringify(e.platform || '')}})'>Ask</button>` +
@@ -8381,15 +8427,16 @@ function _renderBoardPage(board, page) {
     const lead = (e.lead_days != null)
       ? (e.lead_days >= 1 ? Math.round(e.lead_days) + 'd' : '<1d') + ' ahead'
       : (e.lead_bucket || '—');
-    const extLink = e.market_url
-      ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" class="eb-ext-link" title="Open on ${escHtml(e.platform||'market')}">${uiIcon('external')}</a>`
+    const resolvedExtUrl = _normalizeMarketUrl(e.market_url, e.platform) || _agenticMarketUrl(e.platform, e.ident);
+    const extLink = resolvedExtUrl
+      ? `<a href="${escAttr(resolvedExtUrl)}" target="_blank" rel="noopener" class="eb-ext-link" title="Open on ${escAttr(String(e.platform||'market'))}">${uiIcon('external')}</a>`
       : '';
-    const qIdent = escAttr(e.ident || e.market_url || '');
+    const qIdent = escAttr(e.ident || resolvedExtUrl || e.market_url || '');
     const trade = _formatEdgeSignal(e);
     const favKey = (e.platform && e.ident) ? `${String(e.platform).toLowerCase()}:${e.ident}` : '';
     const star = favKey
       ? `<button type="button" class="fav-star ${_isFav(favKey) ? 'on' : ''}" title="Watch this market"
-           onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${uiIcon('star')}</button>`
+           onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: resolvedExtUrl || e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${uiIcon('star')}</button>`
       : '';
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${_leadSkillState(tr).key}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
@@ -10342,9 +10389,10 @@ function _edgeHtml(mp, kp) {
   return `<b style="color:${e >= 0 ? '#0a7' : '#c33'}">${e >= 0 ? '+' : ''}${e}</b>`;
 }
 // A market-page link (venue) wrapping the question text.
-function _qLink(question, url) {
+function _qLink(question, url, platform) {
   const q = escHtml((question || '').slice(0, 110));
-  return url ? `<a href="${escHtml(url)}" target="_blank" rel="noopener">${q}</a>` : q;
+  const cleanUrl = _normalizeMarketUrl(url, platform);
+  return cleanUrl ? `<a href="${escAttr(cleanUrl)}" target="_blank" rel="noopener">${q}</a>` : q;
 }
 
 function renderWatchlist() {
@@ -10366,7 +10414,7 @@ function renderWatchlist() {
     const keyJson = JSON.stringify({ key: f.key }).replace(/'/g, '&#39;');
     return `<div class="wl-row" data-key="${escAttr(f.key)}" data-q="${escAttr(f.question || f.key)}">
       <div class="wl-meta">
-        <div class="wl-q">${_qLink(f.question || f.key, f.market_url)}</div>
+        <div class="wl-q">${_qLink(f.question || f.key, f.market_url, f.platform)}</div>
         <div class="wl-sub">${escHtml(f.platform || '')} · model <span class="wl-model" data-model>—</span></div>
       </div>
       <div class="wl-quote">
@@ -10467,7 +10515,7 @@ function _renderMarketResults(results) {
     const added = _isFav(key);
     const mJson = JSON.stringify(m).replace(/'/g, '&#39;');
     return `<div class="wlm-row" data-key="${escAttr(key)}">
-      <div class="wlm-q">${_qLink(m.question || m.ident, m.market_url)}
+      <div class="wlm-q">${_qLink(m.question || m.ident, m.market_url, m.platform)}
         <div class="wlm-venue">${escHtml(m.platform || '')}</div></div>
       <div class="wlm-odds">${_yesNoHtml(m.probability)}</div>
       <button type="button" class="wlm-add ${added ? 'added' : ''}" title="${added ? 'In watchlist' : 'Add to watchlist'}"
@@ -11357,7 +11405,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
         const mktPct  = Math.round((e.market_probability || 0) * 100);
         const modPct  = Math.round((e.model_probability  || 0) * 100);
         return `<tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:6px 10px 6px 0"><a href="${escHtml(e.market_url||'#')}" target="_blank" style="color:var(--accent);text-decoration:none">${escHtml((e.question||'').slice(0,60))}${(e.question||'').length>60?'…':''}</a><br><span style="font-size:11px;color:var(--text-mute)">${escHtml(e.platform||'')} · ${escHtml(e.horizon||'')}</span></td>
+          <td style="padding:6px 10px 6px 0"><a href="${escAttr(_normalizeMarketUrl(e.market_url, e.platform) || _agenticMarketUrl(e.platform, e.ident) || '#')}" target="_blank" style="color:var(--accent);text-decoration:none">${escHtml((e.question||'').slice(0,60))}${(e.question||'').length>60?'…':''}</a><br><span style="font-size:11px;color:var(--text-mute)">${escHtml(e.platform||'')} · ${escHtml(e.horizon||'')}</span></td>
           <td style="padding:6px 4px;text-align:center"><span class="${e.side==='YES'?'yes-badge':'no-badge'}" style="font-size:12px;padding:2px 8px">${escHtml(e.side||'?')}</span></td>
           <td style="padding:6px 4px;text-align:right;font-size:13px">${mktPct}% ${uiIcon('arrow-right')} ${modPct}%</td>
           <td style="padding:6px 0 6px 8px;text-align:right;font-size:13px;color:var(--accent);font-weight:600">${edgePct}pp ${proven}</td>

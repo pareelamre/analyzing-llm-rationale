@@ -412,6 +412,43 @@ class MarketDataTests(unittest.TestCase):
         sys.modules["requests"] = _fake_requests({"market": {"status": "active", "result": ""}})
         self.assertIsNone(resolve_kalshi("T1"))
 
+    def test_clean_market_url_polymarket(self):
+        from analyzing_llm_rationale.market_data import clean_market_url
+
+        self.assertEqual(
+            clean_market_url("https://polymarket.com/event/some-slug"),
+            "https://polymarket.com/market/some-slug",
+        )
+        self.assertEqual(
+            clean_market_url("https://polymarket.com/market/some-slug"),
+            "https://polymarket.com/market/some-slug",
+        )
+
+    def test_clean_market_url_kalshi(self):
+        from analyzing_llm_rationale.market_data import clean_market_url
+
+        self.assertEqual(
+            clean_market_url("https://kalshi.com/markets/KXAGICO-COMP-26Q3"),
+            "https://kalshi.com/markets/kxagico",
+        )
+        self.assertEqual(
+            clean_market_url("https://kalshi.com/markets/kxipooura"),
+            "https://kalshi.com/markets/kxipooura",
+        )
+
+    def test_kalshi_series_ticker_resolution(self):
+        from analyzing_llm_rationale.market_data import _kalshi_series_ticker
+
+        # Direct series ticker
+        self.assertEqual(_kalshi_series_ticker({"series_ticker": "KXAGICO"}), "kxagico")
+        # Derived from event ticker with suffix
+        self.assertEqual(_kalshi_series_ticker({"event_ticker": "KXAGICO-COMP"}), "kxagico")
+        # Derived from contract ticker with strike/date
+        self.assertEqual(_kalshi_series_ticker({"ticker": "KXHIGHNY-26SEP07-B77.5"}), "kxhighny")
+        # Inherited from event dict
+        self.assertEqual(_kalshi_series_ticker({}, {"series_ticker": "KXFED"}), "kxfed")
+
 
 if __name__ == "__main__":
     unittest.main()
+

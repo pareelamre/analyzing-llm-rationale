@@ -9578,7 +9578,7 @@ async def market_weather_radar(
                 "platform": quote.get("platform") or "kalshi",
                 "title": quote.get("title") or quote.get("question"),
                 "subtitle": quote.get("subtitle"),
-                "market_url": quote.get("market_url") or f"https://kalshi.com/markets/{ident}",
+                "market_url": quote.get("market_url") or f"https://kalshi.com/markets/{ident.split('-')[0].lower()}",
                 "market_price": quote.get("price") or quote.get("yes_ask") or quote.get("last_price"),
                 "station": brief.station,
                 "station_name": (mf.get("station_name") if mf else None) or profile.get("name") or brief.station,
