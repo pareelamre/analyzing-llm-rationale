@@ -192,7 +192,7 @@
         {
           "account_value": 9764.740633,
           "event_type": "mark_to_market",
-          "ts": "2026-09-09T20:26:49.127351+00:00"
+          "ts": "2026-09-09T21:05:31.634239+00:00"
         }
       ]
     },
@@ -385,7 +385,7 @@
         {
           "account_value": 10395.118531,
           "event_type": "mark_to_market",
-          "ts": "2026-09-09T20:26:49.127351+00:00"
+          "ts": "2026-09-09T21:05:31.634239+00:00"
         }
       ]
     },
@@ -413,7 +413,7 @@
         {
           "account_value": 9982.863075,
           "event_type": "mark_to_market",
-          "ts": "2026-09-09T20:26:49.127351+00:00"
+          "ts": "2026-09-09T21:05:31.634239+00:00"
         }
       ]
     },
@@ -441,7 +441,7 @@
         {
           "account_value": 9968.75,
           "event_type": "mark_to_market",
-          "ts": "2026-09-09T20:26:49.127351+00:00"
+          "ts": "2026-09-09T21:05:31.634239+00:00"
         }
       ]
     },
@@ -794,7 +794,7 @@
         {
           "account_value": 9233.562263,
           "event_type": "mark_to_market",
-          "ts": "2026-09-09T20:26:49.127351+00:00"
+          "ts": "2026-09-09T21:05:31.634239+00:00"
         }
       ]
     },
@@ -1292,7 +1292,7 @@
         {
           "account_value": 7974.84858,
           "event_type": "mark_to_market",
-          "ts": "2026-09-09T20:26:49.127351+00:00"
+          "ts": "2026-09-09T21:05:31.634239+00:00"
         }
       ]
     },
@@ -1430,7 +1430,7 @@
         {
           "account_value": 8451.462344,
           "event_type": "mark_to_market",
-          "ts": "2026-09-09T20:26:49.127351+00:00"
+          "ts": "2026-09-09T21:05:31.634239+00:00"
         }
       ]
     },
@@ -1533,7 +1533,7 @@
         {
           "account_value": 10032.465227,
           "event_type": "mark_to_market",
-          "ts": "2026-09-09T20:26:49.127351+00:00"
+          "ts": "2026-09-09T21:05:31.634239+00:00"
         }
       ]
     }
@@ -1855,7 +1855,7 @@
       ]
     }
   },
-  "generated_at": "2026-09-09T20:26:49.351582+00:00",
+  "generated_at": "2026-09-09T21:05:31.860721+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -2214,7 +2214,7 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 1173,
+      "cycle_age_seconds": 3495,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -2240,7 +2240,7 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 30095,
+      "cycle_age_seconds": 32418,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 503.",
       "expected_cycle_seconds": 1800,
@@ -2266,7 +2266,7 @@
       "store_present": true
     },
     "glm-5-3": {
-      "cycle_age_seconds": 804,
+      "cycle_age_seconds": 3127,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -2292,7 +2292,7 @@
       "store_present": true
     },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 568,
+      "cycle_age_seconds": 2890,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -2318,7 +2318,7 @@
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 494,
+      "cycle_age_seconds": 2816,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -2344,7 +2344,7 @@
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 462,
+      "cycle_age_seconds": 2784,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -2370,7 +2370,7 @@
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 28759,
+      "cycle_age_seconds": 31081,
       "delayed_after_seconds": 5400,
       "detail": "Provider status check has temporarily paused this cycle: SCADS status check reports MiniMaxAI/MiniMax-M3 as down.",
       "expected_cycle_seconds": 1800,
@@ -2396,7 +2396,7 @@
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 78,
+      "cycle_age_seconds": 2400,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -2438,9 +2438,13 @@
       {
         "agent_id": "gemma-4-26b-a4b-it",
         "status": "last_attempt_failed"
+      },
+      {
+        "agent_id": "minimax-m3",
+        "status": "provider_paused"
       }
     ],
-    "detail": "1 model ledger(s) need maintenance attention.",
+    "detail": "2 model ledger(s) need maintenance attention.",
     "last_attempt_failures": [
       {
         "agent_id": "gemma-4-26b-a4b-it",
@@ -3731,11 +3735,11 @@
     "max_drawdown_limit": 0.5
   },
   "weather_operations": {
-    "candidates_offered": 65,
-    "forecasted": 20,
-    "researched": 52,
+    "candidates_offered": 63,
+    "forecasted": 18,
+    "researched": 49,
     "resolved": 0,
-    "traded": 11,
+    "traded": 10,
     "window_hours": 24
   }
 }
