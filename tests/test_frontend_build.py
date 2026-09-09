@@ -28,11 +28,20 @@ class FrontendBuildTests(unittest.TestCase):
 
     def test_built_pages_load_vite_context_asset(self):
         asset_pattern = re.compile(r'<script type="module" crossorigin src="/static/assets/page-context-[^"]+\.js"></script>')
+        entry_pattern = re.compile(r'<script type="module" crossorigin src="/static/assets/([^"]+\.js)"></script>')
+        preload_pattern = re.compile(r'<link rel="modulepreload" crossorigin href="/static/assets/(page-context-[^"]+\.js)">')
         static = self.root / "static"
         for name in ("index.html", "trade.html", "agents.html"):
             with self.subTest(name=name):
                 built = (static / name).read_text(encoding="utf-8")
-                self.assertRegex(built, asset_pattern)
+                if asset_pattern.search(built):
+                    continue
+                preload = preload_pattern.search(built)
+                entry = entry_pattern.search(built)
+                self.assertIsNotNone(preload)
+                self.assertIsNotNone(entry)
+                module = (static / "assets" / entry.group(1)).read_text(encoding="utf-8")
+                self.assertIn(f'./{preload.group(1)}', module)
 
 
 if __name__ == "__main__":

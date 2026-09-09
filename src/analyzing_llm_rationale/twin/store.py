@@ -196,6 +196,8 @@ class TwinStore(Protocol):
 
     def account_scope(self, scope_id: str) -> AccountScope: ...
 
+    def account_scopes(self, owner_id: str, *, limit: int = 25) -> tuple[AccountScope, ...]: ...
+
     def refresh_account_capacity(self, scope_id: str, *, venue_available_cash: Decimal, loss_limit: Decimal) -> AccountProjection: ...
 
     def projection(self, scope_id: str) -> AccountProjection: ...
@@ -206,6 +208,8 @@ class TwinStore(Protocol):
     ) -> Reservation: ...
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand: ...
+
+    def commands(self, scope_id: str, *, limit: int = 100) -> tuple[ExecutionCommand, ...]: ...
 
     def reservation(self, scope_id: str, reservation_id: str) -> Reservation: ...
 
@@ -257,6 +261,15 @@ class InMemoryTwinStore:
                 return self._scopes[scope_id]
             except KeyError as exc:
                 raise TwinStoreError("account scope is not registered") from exc
+
+    def account_scopes(self, owner_id: str, *, limit: int = 25) -> tuple[AccountScope, ...]:
+        if not 1 <= limit <= 100:
+            raise TwinStoreError("account scope page limit must be within 1..100")
+        with self._lock:
+            return tuple(sorted(
+                (scope for scope in self._scopes.values() if scope.owner_id == owner_id),
+                key=lambda scope: (scope.created_at, scope.id), reverse=True,
+            )[:limit])
 
     def refresh_account_capacity(
         self, scope_id: str, *, venue_available_cash: Decimal, loss_limit: Decimal
@@ -410,6 +423,17 @@ class InMemoryTwinStore:
                 raise TwinStoreError("intent has no reservation")
             command_id = f"command-{intent.intent_hash[:24]}"
             return self._commands[command_id]
+
+    def commands(self, scope_id: str, *, limit: int = 100) -> tuple[ExecutionCommand, ...]:
+        if not 1 <= limit <= 200:
+            raise TwinStoreError("command page limit must be within 1..200")
+        with self._lock:
+            if scope_id not in self._scopes:
+                raise TwinStoreError("account scope is not registered")
+            return tuple(sorted(
+                (command for command in self._commands.values() if command.scope_id == scope_id),
+                key=lambda command: (command.created_at, command.id), reverse=True,
+            )[:limit])
 
     def reservation(self, scope_id: str, reservation_id: str) -> Reservation:
         with self._lock:
@@ -661,6 +685,28 @@ class DatastoreTwinStore:
             int(entity["account_epoch"]), entity["scope_created_at"],
         )
 
+    def account_scopes(self, owner_id: str, *, limit: int = 25) -> tuple[AccountScope, ...]:
+        if not 1 <= limit <= 100:
+            raise TwinStoreError("account scope page limit must be within 1..100")
+        from google.cloud.datastore.query import PropertyFilter
+
+        query = self._client.query(kind=self._KIND)
+        query.add_filter(filter=PropertyFilter("owner_id", "=", owner_id))
+        scopes = []
+        for entity in query.fetch(limit=limit):
+            try:
+                scopes.append(AccountScope(
+                    str(entity.key.name), str(entity["owner_id"]), str(entity["venue"]),
+                    str(entity["venue_account_ref"]), str(entity["environment"]),
+                    str(entity["collateral_asset"]), str(entity["connection_ref"]),
+                    int(entity["account_epoch"]), entity["scope_created_at"],
+                ))
+            except (KeyError, TypeError, ValueError) as exc:
+                raise TwinStoreError("account scope metadata is malformed") from exc
+        return tuple(sorted(
+            scopes, key=lambda scope: (scope.created_at, scope.id), reverse=True,
+        ))
+
     def refresh_account_capacity(
         self, scope_id: str, *, venue_available_cash: Decimal, loss_limit: Decimal
     ) -> AccountProjection:
@@ -783,6 +829,19 @@ class DatastoreTwinStore:
             reservation_id=str(entity["reservation_id"]), client_order_id=str(entity["client_order_id"]),
             created_at=entity["created_at"], request_fingerprint=str(entity.get("request_fingerprint") or ""), claim=claim,
         )
+
+    def commands(self, scope_id: str, *, limit: int = 100) -> tuple[ExecutionCommand, ...]:
+        if not 1 <= limit <= 200:
+            raise TwinStoreError("command page limit must be within 1..200")
+        if self._client.get(self._key(scope_id)) is None:
+            raise TwinStoreError("account scope is not registered")
+        query = self._client.query(kind="TwinCommand", ancestor=self._key(scope_id))
+        commands = []
+        for entity in query.fetch(limit=limit):
+            commands.append(self.command_for_intent_by_id(scope_id, str(entity.key.name)))
+        return tuple(sorted(
+            commands, key=lambda command: (command.created_at, command.id), reverse=True,
+        ))
 
     def reservation(self, scope_id: str, reservation_id: str) -> Reservation:
         entity = self._client.get(self._key(scope_id, "TwinReservation", reservation_id))

@@ -8,13 +8,25 @@ from analyzing_llm_rationale.twin import (
     InMemoryTwinStore,
     InsufficientReservationCapacity,
     TradeIntent,
+    TwinStoreError,
 )
 from analyzing_llm_rationale.twin.manual import (
     ManualReservationConflict,
+    owner_scope_ref,
     reserve_confirmed_manual_order,
 )
 
 NOW = datetime(2025, 1, 1, tzinfo=timezone.utc)
+
+
+class TwinOwnerIdentityTests(unittest.TestCase):
+    def test_owner_reference_is_stable_credential_free_and_nonempty(self):
+        first = owner_scope_ref("session-subject-001")
+        self.assertEqual(first, owner_scope_ref("session-subject-001"))
+        self.assertRegex(first, r"^owner-[0-9a-f]{32}$")
+        self.assertNotIn("session-subject", first)
+        with self.assertRaises(TwinStoreError):
+            owner_scope_ref(" ")
 
 
 def guardrails(*, available: str = "10", loss: str = "10"):
