@@ -70,6 +70,7 @@ class StrategyCycle:
     steps: tuple[StrategyStep, ...] = ()
     created_at: Optional[datetime] = None
     strategy_version: str = STRATEGY_VERSION
+    account_scope_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not str(self.key).strip() or self.decision not in {"INTENT", "HOLD", "PASS", "SHADOW_SUBMITTED"}:
@@ -80,6 +81,8 @@ class StrategyCycle:
             raise ValueError("non-INTENT cycles cannot carry execution material")
         if self.created_at is not None and self.created_at.tzinfo is None:
             raise ValueError("strategy cycle time must be timezone-aware")
+        if self.account_scope_id is not None and not str(self.account_scope_id).strip():
+            raise ValueError("strategy cycle account scope must be nonempty")
 
     def to_storage(self) -> dict[str, Any]:
         return {
@@ -90,15 +93,17 @@ class StrategyCycle:
             "steps": [step.to_storage() for step in self.steps],
             "created_at": self.created_at.isoformat() if self.created_at is not None else None,
             "strategy_version": self.strategy_version,
+            "account_scope_id": self.account_scope_id,
         }
 
     @classmethod
     def from_storage(cls, payload: Mapping[str, Any]) -> "StrategyCycle":
-        allowed = {
+        required = {
             "key", "decision", "reason", "exits_evaluated", "intent", "risk_result", "steps",
             "created_at", "strategy_version",
         }
-        if set(payload) != allowed or not isinstance(payload.get("steps"), list):
+        allowed = required | {"account_scope_id"}
+        if not required.issubset(payload) or not set(payload).issubset(allowed) or not isinstance(payload.get("steps"), list):
             raise ValueError("stored strategy cycle schema is invalid")
         intent_payload = payload.get("intent")
         intent = TradeIntent.from_storage(intent_payload) if isinstance(intent_payload, Mapping) else None
@@ -110,6 +115,7 @@ class StrategyCycle:
             bool(payload["exits_evaluated"]), intent, risk_result,
             tuple(StrategyStep(**dict(step)) for step in payload["steps"]),
             created, str(payload["strategy_version"]),
+            str(payload["account_scope_id"]) if payload.get("account_scope_id") else None,
         )
 
 
@@ -308,6 +314,8 @@ class StrategyStore(Protocol):
 
     def record_cycle(self, cycle: StrategyCycle) -> bool: ...
 
+    def cycles(self, scope_ids: frozenset[str], *, limit: int = 100) -> tuple[StrategyCycle, ...]: ...
+
     def get_candidate(self, scope_id: str, instrument_id: str) -> Optional[CandidateMemory]: ...
 
     def record_candidate(self, scope_id: str, memory: CandidateMemory) -> None: ...
@@ -332,6 +340,19 @@ class InMemoryStrategyStore:
                 return False
             self._cycles[cycle.key] = cycle
             return True
+
+    def cycles(self, scope_ids: frozenset[str], *, limit: int = 100) -> tuple[StrategyCycle, ...]:
+        if not 1 <= limit <= 200:
+            raise ValueError("strategy cycle page limit must be within 1..200")
+        with self._lock:
+            return tuple(sorted(
+                (
+                    cycle for cycle in self._cycles.values()
+                    if cycle.account_scope_id in scope_ids
+                ),
+                key=lambda cycle: (cycle.created_at or datetime.min.replace(tzinfo=timezone.utc), cycle.key),
+                reverse=True,
+            )[:limit])
 
     def get_candidate(self, scope_id: str, instrument_id: str) -> Optional[CandidateMemory]:
         with self._lock:
@@ -390,9 +411,35 @@ class DatastoreStrategyStore:
                     raise ValueError("stored strategy cycle failed integrity validation")
                 return False
             entity = datastore.Entity(key=key, exclude_from_indexes=("payload_json",))
-            entity.update({"cycle_key": cycle.key, "fingerprint": _hash(payload), "payload_json": encoded})
+            entity.update({
+                "cycle_key": cycle.key, "fingerprint": _hash(payload), "payload_json": encoded,
+                "account_scope_id": cycle.account_scope_id,
+                "created_at": cycle.created_at,
+                "decision": cycle.decision,
+                "reason": cycle.reason,
+            })
             self._client.put(entity)
             return True
+
+    def cycles(self, scope_ids: frozenset[str], *, limit: int = 100) -> tuple[StrategyCycle, ...]:
+        if not 1 <= limit <= 200:
+            raise ValueError("strategy cycle page limit must be within 1..200")
+        from google.cloud.datastore.query import PropertyFilter
+
+        cycles: list[StrategyCycle] = []
+        for scope_id in sorted(scope_ids):
+            query = self._client.query(kind="TwinStrategyCycle", namespace=self._namespace)
+            query.add_filter(filter=PropertyFilter("account_scope_id", "=", scope_id))
+            for entity in query.fetch(limit=limit):
+                payload = json.loads(str(entity["payload_json"]))
+                if entity.get("cycle_key") != payload.get("key") or entity.get("fingerprint") != _hash(payload):
+                    raise ValueError("stored strategy cycle failed integrity validation")
+                cycles.append(StrategyCycle.from_storage(payload))
+        return tuple(sorted(
+            cycles,
+            key=lambda cycle: (cycle.created_at or datetime.min.replace(tzinfo=timezone.utc), cycle.key),
+            reverse=True,
+        )[:limit])
 
     def get_candidate(self, scope_id: str, instrument_id: str) -> Optional[CandidateMemory]:
         entity = self._client.get(self._candidate_key(scope_id, instrument_id))
@@ -494,27 +541,27 @@ class ForeseaEdgeStrategy:
         except Exception as exc:
             logger.warning("Twin strategy reconciliation failed (%s)", type(exc).__name__)
             span.record_exception(exc)
-            return self._finish(key, "HOLD", "account_reconciliation_failed", steps, now, span)
+            return self._finish_with_scope(scope.id, key, "HOLD", "account_reconciliation_failed", steps, now, span)
         if (
             state is None or state.account_snapshot.completeness is not Completeness.COMPLETE
             or state.account_snapshot.blocks_new_exposure or not state.portfolio_complete
         ):
             steps.append(StrategyStep("reconcile", "hold", "account_incomplete"))
-            return self._finish(key, "HOLD", "account_incomplete", steps, now, span)
+            return self._finish_with_scope(scope.id, key, "HOLD", "account_incomplete", steps, now, span)
         if (
             state.account_snapshot.scope_id != scope.id
             or state.account_projection.scope_id != scope.id
             or state.account_projection.account_epoch != scope.account_epoch
         ):
             steps.append(StrategyStep("reconcile", "hold", "account_scope_mismatch"))
-            return self._finish(key, "HOLD", "account_scope_mismatch", steps, now, span)
+            return self._finish_with_scope(scope.id, key, "HOLD", "account_scope_mismatch", steps, now, span)
         steps.append(StrategyStep("reconcile", "ok", "complete", str(state.account_snapshot.generation)))
 
         for position in sorted(state.positions, key=lambda item: (item.instrument.id, item.outcome)):
             candidate = load_position_market(position)
             if candidate is None or candidate.instrument.id != position.instrument.id:
                 steps.append(StrategyStep("exit", "hold", "exit_market_unavailable", position.instrument.id))
-                return self._finish(key, "HOLD", "exit_market_unavailable", steps, now, span, exits=True)
+                return self._finish_with_scope(scope.id, key, "HOLD", "exit_market_unavailable", steps, now, span, exits=True)
             exit_reason = self._exit_reason(position, candidate=candidate, now=now, policy_stop=policy_stop)
             if exit_reason is None:
                 steps.append(StrategyStep("exit", "hold", "position_retained", position.instrument.id))
@@ -527,20 +574,21 @@ class ForeseaEdgeStrategy:
             )
             if result.reason is not None:
                 steps.append(StrategyStep("exit", "hold", result.reason, position.instrument.id))
-                return self._finish(key, "HOLD", "exit_risk_blocked", steps, now, span, exits=True)
+                return self._finish_with_scope(scope.id, key, "HOLD", "exit_risk_blocked", steps, now, span, exits=True)
             trade = self._intent(
                 scope, candidate, result, action=action, now=now,
                 forecast=None, exit_reason=exit_reason,
             )
             steps.append(StrategyStep("exit", "intent", exit_reason, trade.id))
-            return self._finish(
+            return self._finish_with_scope(
+                scope.id,
                 key, "INTENT", exit_reason, steps, now, span,
                 intent=trade, risk_result=result, exits=True,
             )
         steps.append(StrategyStep("exit", "ok", "positions_reviewed"))
         if len({position.instrument.id for position in state.positions}) >= self.policy.max_open_instruments:
             steps.append(StrategyStep("selection", "hold", "open_position_limit"))
-            return self._finish(key, "HOLD", "open_position_limit", steps, now, span, exits=True)
+            return self._finish_with_scope(scope.id, key, "HOLD", "open_position_limit", steps, now, span, exits=True)
 
         try:
             discovered = tuple(discover())
@@ -559,11 +607,11 @@ class ForeseaEdgeStrategy:
             logger.warning("Twin strategy discovery failed (%s)", type(exc).__name__)
             span.record_exception(exc)
             steps.append(StrategyStep("discovery", "hold", "discovery_unavailable"))
-            return self._finish(key, "HOLD", "discovery_unavailable", steps, now, span, exits=True)
+            return self._finish_with_scope(scope.id, key, "HOLD", "discovery_unavailable", steps, now, span, exits=True)
         eligible = [candidate for candidate in candidates if self._candidate_changed(scope.id, candidate, now)]
         if not eligible:
             steps.append(StrategyStep("discovery", "hold", "no_changed_candidates"))
-            return self._finish(key, "HOLD", "no_changed_candidates", steps, now, span, exits=True)
+            return self._finish_with_scope(scope.id, key, "HOLD", "no_changed_candidates", steps, now, span, exits=True)
 
         attempted = 0
         for candidate in eligible:
@@ -578,12 +626,12 @@ class ForeseaEdgeStrategy:
                 result = research(candidate)
             except BudgetExceeded:
                 steps.append(StrategyStep("research", "pass", "budget_exhausted", candidate.instrument.id))
-                return self._finish(key, "PASS", "budget_exhausted", steps, now, span, exits=True)
+                return self._finish_with_scope(scope.id, key, "PASS", "budget_exhausted", steps, now, span, exits=True)
             except Exception as exc:
                 logger.warning("Twin strategy research unavailable (%s)", type(exc).__name__)
                 span.record_exception(exc)
                 steps.append(StrategyStep("research", "pass", "research_unavailable", candidate.instrument.id))
-                return self._finish(key, "PASS", "research_unavailable", steps, now, span, exits=True)
+                return self._finish_with_scope(scope.id, key, "PASS", "research_unavailable", steps, now, span, exits=True)
             if result.forecast is None:
                 reason = result.proposal.pass_decision.reason.value if result.proposal.pass_decision else "research_pass"
                 steps.append(StrategyStep("research", "pass", reason, candidate.instrument.id))
@@ -621,12 +669,13 @@ class ForeseaEdgeStrategy:
                 StrategyStep("calibration", "ok", "calibration_v1", calibration.calibration_hash),
                 StrategyStep("risk", "intent", "accepted", trade.id),
             ))
-            return self._finish(
+            return self._finish_with_scope(
+                scope.id,
                 key, "INTENT", "entry_eligible", steps, now, span,
                 intent=trade, risk_result=risk_result, exits=True,
             )
         steps.append(StrategyStep("selection", "pass", "no_candidate_qualified"))
-        return self._finish(key, "PASS", "no_candidate_qualified", steps, now, span, exits=True)
+        return self._finish_with_scope(scope.id, key, "PASS", "no_candidate_qualified", steps, now, span, exits=True)
 
     def _candidate_changed(self, scope_id: str, candidate: StrategyCandidate, now: datetime) -> bool:
         memory = self.store.get_candidate(scope_id, candidate.instrument.id)
@@ -748,13 +797,20 @@ class ForeseaEdgeStrategy:
             candidate.fee_per_share, candidate.slippage_per_share, expiry, now,
         )
 
+    def _finish_with_scope(self, scope_id: str, *args: Any, **kwargs: Any) -> StrategyCycle:
+        kwargs["account_scope_id"] = scope_id
+        return self._finish(*args, **kwargs)
+
     def _finish(
         self, key: str, decision: str, reason: str, steps: Sequence[StrategyStep],
         now: datetime, span: Any, *, intent: Optional[TradeIntent] = None,
         risk_result: Optional[RiskResult] = None,
-        exits: bool = False,
+        exits: bool = False, account_scope_id: Optional[str] = None,
     ) -> StrategyCycle:
-        cycle = StrategyCycle(key, decision, reason, exits, intent, risk_result, tuple(steps), now)
+        cycle = StrategyCycle(
+            key, decision, reason, exits, intent, risk_result, tuple(steps), now,
+            account_scope_id=account_scope_id,
+        )
         created = self.store.record_cycle(cycle)
         if not created:
             existing = self.store.get_cycle(key)

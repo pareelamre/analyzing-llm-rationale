@@ -40,6 +40,13 @@ def _digest(*values: str) -> str:
     return sha256("\x1f".join(values).encode("utf-8")).hexdigest()
 
 
+def owner_scope_ref(user_id: str) -> str:
+    """Return the credential-free owner identity stored on twin account roots."""
+    if not str(user_id).strip():
+        raise TwinStoreError("twin account owner identity is required")
+    return f"owner-{_digest('owner', str(user_id))[:32]}"
+
+
 def reserve_confirmed_manual_order(
     store: TwinStore,
     *,
@@ -59,12 +66,11 @@ def reserve_confirmed_manual_order(
     """
     now = now or datetime.now(timezone.utc)
     venue = str(venue).lower()
-    owner = _digest("owner", user_id)
     connection = _digest("connection", user_id, venue)
     scope_id = f"manual-scope-{_digest('scope', user_id, venue)[:32]}"
     scope = AccountScope(
         id=scope_id,
-        owner_id=f"owner-{owner[:32]}",
+        owner_id=owner_scope_ref(user_id),
         venue=venue,
         venue_account_ref=f"account-{connection[:32]}",
         environment="live",

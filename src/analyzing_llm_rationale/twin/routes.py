@@ -6,7 +6,7 @@ from datetime import datetime
 from hashlib import sha256
 from typing import Any, Callable, Mapping, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from opentelemetry import metrics, trace
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,6 +20,7 @@ from .mandates import (
     revoke,
 )
 from .models import AccountScope
+from .operator import OperatorConflict, OperatorError, OperatorService
 
 tracer = trace.get_tracer(__name__)
 mandate_operations = metrics.get_meter(__name__).create_counter("twin.mandate.operations", unit="1")
@@ -54,6 +55,20 @@ class MandateTransitionRequest(BaseModel):
 
 class MandateRevisionRequest(MandateDraftRequest):
     pass
+
+
+class OperatorPauseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    paused: bool
+    reason: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:@-]*$")
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
+class OperatorCancelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    idempotency_key: str = Field(min_length=8, max_length=128)
 
 
 @dataclass(frozen=True)
@@ -216,5 +231,74 @@ def create_mandate_router(service: MandateService, *, resolve_owner: OwnerResolv
     @router.post("/{mandate_id}/revoke")
     async def revoke_route(mandate_id: str, body: MandateTransitionRequest, request: Request):
         return call(request, lambda owner: service.revoke(owner, mandate_id, body))
+
+    return router
+
+
+def create_operator_router(service: OperatorService, *, resolve_owner: OwnerResolver) -> APIRouter:
+    """Create owner-only status and control routes over the durable twin stores."""
+    router = APIRouter(prefix="/twin", tags=["Autonomous Twin"])
+
+    def call(request: Request, operation: Callable[[str], Any]) -> Any:
+        try:
+            owner_id = resolve_owner(request)
+            if not owner_id:
+                raise PermissionError("owner authentication is required")
+            return operation(owner_id)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except OperatorConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except OperatorError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Autonomous operator state is unavailable.") from exc
+
+    @router.get("/status")
+    async def status_route(request: Request):
+        return call(request, service.status)
+
+    @router.get("/portfolio")
+    async def portfolio_route(request: Request):
+        return call(request, service.portfolio)
+
+    @router.get("/decisions")
+    async def decisions_route(
+        request: Request,
+        limit: int = Query(default=25, ge=1, le=100),
+        cursor: Optional[str] = Query(default=None, max_length=512),
+    ):
+        return call(
+            request, lambda owner: service.decisions(owner, limit=limit, cursor=cursor).to_mapping(),
+        )
+
+    @router.get("/commands")
+    async def commands_route(
+        request: Request,
+        limit: int = Query(default=25, ge=1, le=100),
+        cursor: Optional[str] = Query(default=None, max_length=512),
+    ):
+        return call(
+            request, lambda owner: service.commands(owner, limit=limit, cursor=cursor).to_mapping(),
+        )
+
+    @router.get("/readiness")
+    async def readiness_route(request: Request):
+        return call(request, service.readiness)
+
+    @router.post("/pause")
+    async def pause_route(body: OperatorPauseRequest, request: Request):
+        return call(request, lambda owner: service.set_pause(
+            owner, paused=body.paused, reason=body.reason,
+            idempotency_key=body.idempotency_key,
+        ))
+
+    @router.post("/commands/{command_id}/cancel")
+    async def cancel_route(command_id: str, body: OperatorCancelRequest, request: Request):
+        return call(request, lambda owner: service.request_cancel(
+            owner, command_id, idempotency_key=body.idempotency_key,
+        ))
 
     return router

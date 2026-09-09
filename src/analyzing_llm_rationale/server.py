@@ -16354,9 +16354,85 @@ class _LazyTwinMandateStore:
     def versions(self, owner_id, mandate_id):
         return self._store().versions(owner_id, mandate_id)
 
+    def latest_for_owner(self, owner_id, *, limit=100):
+        return self._store().latest_for_owner(owner_id, limit=limit)
+
+
+def _operator_datastore():
+    client = _get_datastore()
+    if client is None:
+        raise RuntimeError("durable autonomous operator storage is unavailable")
+    return client
+
+
+class _LazyTwinOperatorStore:
+    durable = True
+
+    def account_scopes(self, owner_id, *, limit=25):
+        return _confirmed_manual_twin_store().account_scopes(owner_id, limit=limit)
+
+    def commands(self, scope_id, *, limit=100):
+        return _confirmed_manual_twin_store().commands(scope_id, limit=limit)
+
+    def projection(self, scope_id):
+        return _confirmed_manual_twin_store().projection(scope_id)
+
+
+class _LazyTwinOperatorSnapshots:
+    durable = True
+
+    def load(self, scope_id):
+        from analyzing_llm_rationale.twin.account_store import DatastoreAccountSnapshotStore
+
+        return DatastoreAccountSnapshotStore(_operator_datastore()).load(scope_id)
+
+
+class _LazyTwinOperatorStrategies:
+    durable = True
+
+    def cycles(self, scope_ids, *, limit=100):
+        from analyzing_llm_rationale.twin.strategy import DatastoreStrategyStore
+
+        return DatastoreStrategyStore(_operator_datastore()).cycles(scope_ids, limit=limit)
+
+
+class _LazyTwinOperatorPauses:
+    durable = True
+
+    @staticmethod
+    def _store():
+        from analyzing_llm_rationale.twin.operator import DatastorePauseStore
+
+        return DatastorePauseStore(_operator_datastore())
+
+    def get(self, owner_id):
+        return self._store().get(owner_id)
+
+    def set(self, owner_id, *, paused, reason, idempotency_key, now):
+        return self._store().set(
+            owner_id, paused=paused, reason=reason,
+            idempotency_key=idempotency_key, now=now,
+        )
+
+
+class _LazyTwinOperatorJobs:
+    durable = True
+
+    def add(self, job):
+        from analyzing_llm_rationale.twin.worker import DatastoreWorkerJobs
+
+        return DatastoreWorkerJobs(_operator_datastore()).add(job)
+
+    def get(self, job_id):
+        from analyzing_llm_rationale.twin.worker import DatastoreWorkerJobs
+
+        return DatastoreWorkerJobs(_operator_datastore()).get(job_id)
+
 
 def _twin_mandate_owner(request: Request) -> str:
-    return str(_require_session(request)["sub"])
+    from analyzing_llm_rationale.twin.manual import owner_scope_ref
+
+    return owner_scope_ref(str(_require_session(request)["sub"]))
 
 
 def _twin_mandate_scope(scope_id: str):
@@ -16390,6 +16466,27 @@ def _twin_mandate_runtime(owner_id: str, scope):
     )
 
 
+def _twin_operator_readiness(owner_id: str, scope):
+    runtime = _twin_mandate_runtime(owner_id, scope)
+    artifact = runtime.readiness_artifact or {}
+    gates = artifact.get("gates") if isinstance(artifact, dict) else None
+    gate_statuses = {
+        str(name): str(details.get("status", "unknown"))
+        for name, details in (gates.items() if isinstance(gates, dict) else ())
+        if isinstance(details, dict)
+    }
+    return {
+        "status": str(artifact.get("status", "unavailable")),
+        "live_eligible": bool(artifact.get("live_eligible", False)),
+        "artifact_hash": runtime.readiness_hash,
+        "release_hash": runtime.release_hash,
+        "config_hash": runtime.config_hash,
+        "model_hash": runtime.model_hash,
+        "account_epoch": scope.account_epoch,
+        "gates": gate_statuses,
+    }
+
+
 from analyzing_llm_rationale.twin import routes as _twin_routes  # noqa: E402
 
 _twin_mandate_service = _twin_routes.MandateService(
@@ -16397,5 +16494,14 @@ _twin_mandate_service = _twin_routes.MandateService(
     resolve_runtime=_twin_mandate_runtime, clock=lambda: datetime.now(timezone.utc),
 )
 
+_twin_operator_service = _twin_routes.OperatorService(
+    _LazyTwinOperatorStore(), _LazyTwinOperatorSnapshots(),
+    _LazyTwinOperatorStrategies(), _LazyTwinMandateStore(),
+    _LazyTwinOperatorPauses(), _LazyTwinOperatorJobs(),
+    readiness=_twin_operator_readiness,
+    clock=lambda: datetime.now(timezone.utc),
+)
+
 app.include_router(_twin_routes.create_mandate_router(_twin_mandate_service, resolve_owner=_twin_mandate_owner))
+app.include_router(_twin_routes.create_operator_router(_twin_operator_service, resolve_owner=_twin_mandate_owner))
 app.include_router(venue_router)

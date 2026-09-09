@@ -182,6 +182,68 @@
       border-radius: 50%;
     }
 
+    /* Autonomous twin operator desk */
+    .twin-desk { gap: 16px; }
+    .twin-desk-head, .twin-actions, .twin-mandate-review {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .twin-kicker {
+      color: var(--text-mute);
+      font: 700 9px/1 var(--font-mono);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .twin-title { color: var(--ink); font-size: 18px; margin-top: 5px; }
+    .twin-status-pill {
+      border: 1px solid var(--border-2);
+      border-radius: 999px;
+      color: var(--text-dim);
+      font: 700 10px/1 var(--font-mono);
+      padding: 7px 10px;
+      text-transform: uppercase;
+    }
+    .twin-status-pill[data-tone="good"] { background: var(--yes-bg); border-color: var(--yes-border); color: var(--yes); }
+    .twin-status-pill[data-tone="danger"] { background: var(--no-bg); border-color: var(--no-border); color: var(--no); }
+    .twin-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .twin-metric, .twin-subpanel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .twin-metric dt { color: var(--text-mute); font: 600 9px/1.2 var(--font-mono); text-transform: uppercase; }
+    .twin-metric dd { color: var(--ink); font: 700 18px/1.2 var(--font-mono); margin-top: 7px; }
+    .twin-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 12px; }
+    .twin-subpanel h3 { color: var(--ink); font-size: 12px; margin-bottom: 10px; }
+    .twin-list { display: grid; gap: 8px; list-style: none; }
+    .twin-row { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+    .twin-row-head { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
+    .twin-row-title { color: var(--ink); font: 600 11px/1.4 var(--font-mono); overflow-wrap: anywhere; }
+    .twin-row-meta { color: var(--text-dim); font-size: 10px; line-height: 1.5; margin-top: 5px; }
+    .twin-badge { border-radius: 999px; background: var(--paper); color: var(--text-dim); font: 700 8px/1 var(--font-mono); padding: 5px 7px; text-transform: uppercase; }
+    .twin-badge.unknown, .twin-badge.partial { background: #fff7ed; color: #9a3412; }
+    .twin-empty { color: var(--text-mute); font-size: 11px; padding: 12px 2px; }
+    .twin-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+    .twin-form-grid label { color: var(--text-dim); font-size: 9px; }
+    .twin-form-grid input, .twin-form-grid select { margin-top: 4px; }
+    .twin-notice { border-left: 3px solid var(--border-2); color: var(--text-dim); font-size: 10px; line-height: 1.5; padding: 7px 9px; }
+    .twin-notice.danger { border-color: var(--no); color: var(--no); }
+    .twin-action {
+      background: var(--ink); border: 1px solid var(--ink); border-radius: 9px;
+      color: #fff; cursor: pointer; font-size: 10px; font-weight: 700; padding: 8px 11px;
+    }
+    .twin-action.secondary { background: #fff; color: var(--ink); }
+    .twin-action.danger { background: var(--no); border-color: var(--no); }
+    .twin-action:disabled { cursor: not-allowed; opacity: .5; }
+    @media (max-width: 760px) {
+      .twin-metrics, .twin-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .twin-grid { grid-template-columns: 1fr; }
+    }
+
     /* ── Workspace Panels ── */
     .workspace-grid {
       display: grid;
@@ -786,7 +848,8 @@
       color: var(--no);
     }
   </style>
-  <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
+  <script type="module" crossorigin src="/static/assets/trade-DAH34sOo.js"></script>
+  <link rel="modulepreload" crossorigin href="/static/assets/page-context-DqdA1_Ps.js">
 </head>
 <body>
 
@@ -1116,6 +1179,70 @@
       </div>
 
     </div>
+
+    <section class="panel twin-desk" id="twinOperatorDesk" aria-labelledby="twinDeskTitle">
+      <div class="twin-desk-head">
+        <div>
+          <div class="twin-kicker">Autonomous trading control</div>
+          <h2 class="twin-title" id="twinDeskTitle">Twin operator desk</h2>
+        </div>
+        <div class="twin-actions">
+          <span class="twin-status-pill" id="twinModePill" role="status">Disconnected</span>
+          <button class="twin-action secondary" id="twinRefreshBtn" type="button">Refresh state</button>
+          <button class="twin-action danger" id="twinPauseBtn" type="button" disabled>Pause autonomy</button>
+        </div>
+      </div>
+      <div class="twin-notice" id="twinConnectionNotice" aria-live="polite">Sign in to load private twin state.</div>
+      <dl class="twin-metrics" aria-label="Autonomous twin status">
+        <div class="twin-metric"><dt>Available cash</dt><dd id="twinCash">—</dd></div>
+        <div class="twin-metric"><dt>Reserved risk</dt><dd id="twinReserved">—</dd></div>
+        <div class="twin-metric"><dt>Open accounts</dt><dd id="twinAccounts">—</dd></div>
+        <div class="twin-metric"><dt>Unknown orders</dt><dd id="twinUnknown">—</dd></div>
+      </dl>
+      <div class="twin-grid">
+        <div class="twin-subpanel">
+          <h3>Exposure and readiness</h3>
+          <ul class="twin-list" id="twinPortfolioList"><li class="twin-empty">No private account state loaded.</li></ul>
+        </div>
+        <div class="twin-subpanel">
+          <h3>Why new exposure is blocked</h3>
+          <ul class="twin-list" id="twinBlockerList"><li class="twin-empty">Status unavailable.</li></ul>
+        </div>
+      </div>
+      <div class="twin-grid">
+        <div class="twin-subpanel">
+          <div class="twin-row-head"><h3>Recent decisions</h3><button class="twin-action secondary" id="twinMoreDecisions" type="button" hidden>Load more</button></div>
+          <ul class="twin-list" id="twinDecisionList"><li class="twin-empty">No decisions loaded.</li></ul>
+        </div>
+        <div class="twin-subpanel">
+          <div class="twin-row-head"><h3>Order commands</h3><button class="twin-action secondary" id="twinMoreCommands" type="button" hidden>Load more</button></div>
+          <ul class="twin-list" id="twinCommandList"><li class="twin-empty">No commands loaded.</li></ul>
+        </div>
+      </div>
+      <div class="twin-subpanel">
+        <h3>Draft an expiring mandate</h3>
+        <p class="twin-notice">Every limit is absolute. The reviewed account scope, environment, expiry, strategy and authority hash must match at activation.</p>
+        <form id="twinMandateForm">
+          <div class="twin-form-grid">
+            <label>Account scope<select id="twinMandateScope" required><option value="">Load an account first</option></select></label>
+            <label>Expiry<input id="twinMandateExpiry" type="datetime-local" required></label>
+            <label>Strategy<input id="twinMandateStrategy" value="foresea_edge_v1" maxlength="128" required></label>
+            <label>Maximum capital<input id="twinMandateCapital" type="number" min="0" step="0.01" required></label>
+            <label>Maximum loss<input id="twinMandateLoss" type="number" min="0" step="0.01" required></label>
+            <label>Maximum model spend<input id="twinMandateModelUsd" type="number" min="0" step="0.01" required></label>
+            <label>Maximum model tokens<input id="twinMandateTokens" type="number" min="0" step="1" required></label>
+            <label>Maximum model requests<input id="twinMandateRequests" type="number" min="0" step="1" required></label>
+          </div>
+          <div class="twin-actions" style="margin-top:10px;">
+            <button class="twin-action" id="twinDraftBtn" type="submit">Review mandate</button>
+          </div>
+        </form>
+        <div class="twin-mandate-review twin-row" id="twinMandateReview" hidden>
+          <div><div class="twin-row-title" id="twinReviewScope"></div><div class="twin-row-meta" id="twinReviewDetails"></div></div>
+          <div class="twin-actions"><button class="twin-action" id="twinApproveBtn" type="button">Activate reviewed mandate</button><button class="twin-action danger" id="twinRevokeBtn" type="button">Revoke mandate</button></div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script>

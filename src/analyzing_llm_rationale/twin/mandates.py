@@ -217,6 +217,7 @@ class MandateStore(Protocol):
     def get(self, owner_id: str, mandate_id: str, version: int | None = None) -> Mandate | None: ...
     def save_transition(self, before: Mandate, after: Mandate, *, idempotency_key: str) -> Mandate: ...
     def versions(self, owner_id: str, mandate_id: str) -> Sequence[Mandate]: ...
+    def latest_for_owner(self, owner_id: str, *, limit: int = 100) -> Sequence[Mandate]: ...
 
 
 class InMemoryMandateStore:
@@ -268,6 +269,17 @@ class InMemoryMandateStore:
                 (item for (owner, mid, _), item in self._items.items() if owner == owner_id and mid == mandate_id),
                 key=lambda item: item.version,
             ))
+
+    def latest_for_owner(self, owner_id: str, *, limit: int = 100) -> Sequence[Mandate]:
+        if not 1 <= limit <= 200:
+            raise MandateError("mandate page limit must be within 1..200")
+        with self._lock:
+            ids = {mid for owner, mid, _ in self._items if owner == owner_id}
+            latest = [self.get(owner_id, mandate_id) for mandate_id in ids]
+            return tuple(sorted(
+                (item for item in latest if item is not None),
+                key=lambda item: (item.created_at, item.id), reverse=True,
+            )[:limit])
 
 
 class DatastoreMandateStore:
@@ -380,6 +392,25 @@ class DatastoreMandateStore:
         keys = [self._version_key(owner_id, mandate_id, version) for version in range(1, int(pointer["latest_version"]) + 1)]
         mandates = (self._entity_payload(entity) for entity in self._client.get_multi(keys) if entity is not None)
         return tuple(sorted(mandates, key=lambda mandate: mandate.version))
+
+    def latest_for_owner(self, owner_id: str, *, limit: int = 100) -> Sequence[Mandate]:
+        if not 1 <= limit <= 200:
+            raise MandateError("mandate page limit must be within 1..200")
+        ancestor = self._client.key("User", owner_id)
+        query = self._client.query(kind="TwinMandatePointer", ancestor=ancestor)
+        pointers = list(query.fetch(limit=limit))
+        keys = [
+            self._version_key(owner_id, str(pointer.key.name), int(pointer["latest_version"]))
+            for pointer in pointers
+        ]
+        mandates = tuple(
+            self._entity_payload(entity)
+            for entity in self._client.get_multi(keys)
+            if entity is not None
+        )
+        return tuple(sorted(
+            mandates, key=lambda mandate: (mandate.created_at, mandate.id), reverse=True,
+        ))
 
 
 @dataclass(frozen=True)

@@ -21,7 +21,9 @@ from analyzing_llm_rationale.twin.budget import (
     DatastoreResearchBudget,
     call_with_budget,
 )
+from analyzing_llm_rationale.twin.mandates import DatastoreMandateStore, Mandate
 from analyzing_llm_rationale.twin.manual import reserve_confirmed_manual_order
+from analyzing_llm_rationale.twin.operator import DatastorePauseStore
 from analyzing_llm_rationale.twin.recovery import (
     DatastoreLifecycleStore,
     FillObservation,
@@ -34,6 +36,7 @@ from analyzing_llm_rationale.twin.store import (
     InsufficientReservationCapacity,
     ReservationState,
 )
+from analyzing_llm_rationale.twin.strategy import DatastoreStrategyStore, StrategyCycle
 from analyzing_llm_rationale.twin.worker import (
     DatastoreWorkerJobs,
     WorkerJob,
@@ -80,6 +83,67 @@ def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, resul
 
 @unittest.skipUnless(os.environ.get("DATASTORE_EMULATOR_HOST"), "requires DATASTORE_EMULATOR_HOST")
 class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
+    def test_operator_queries_and_controls_survive_store_recreation(self):
+        from google.cloud import datastore
+
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")
+        client = datastore.Client(project=project)
+        owner_id = f"operator-{uuid4().hex}"
+        scope_id = f"scope-{uuid4().hex}"
+        now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        twin = DatastoreTwinStore(client)
+        twin.register_account(
+            AccountScope(
+                scope_id, owner_id, "kalshi", "account-ref", "shadow", "USD",
+                "connection-ref", 1, now,
+            ),
+            venue_available_cash=Decimal("10"), loss_limit=Decimal("5"),
+        )
+        order = TradeIntent(
+            id="operator-intent", account_scope_id=scope_id, account_epoch=1,
+            instrument_id="kalshi:demo:KXOPERATOR", action="BUY_YES",
+            quantity=Decimal("1"), limit_price=Decimal("0.4"), time_in_force="IOC",
+            forecast_id="forecast-001", exit_reason=None, policy_version="policy-v1",
+            strategy_version="strategy-v1", market_version="market-v1",
+            fee_allowance=Decimal("0.01"), slippage_allowance=Decimal("0.01"),
+            expires_at=now + timedelta(days=1), created_at=now,
+        )
+        twin.reserve_intent(order, cash=Decimal("1"), max_loss=Decimal("1"), now=now)
+
+        strategies = DatastoreStrategyStore(client)
+        strategies.record_cycle(StrategyCycle(
+            f"cycle-{uuid4().hex}", "PASS", "operator_fixture",
+            created_at=now, account_scope_id=scope_id,
+        ))
+        mandates = DatastoreMandateStore(client)
+        draft = Mandate(
+            f"mandate-{uuid4().hex}", owner_id, scope_id, "strategy-v1",
+            now + timedelta(days=1), account_epoch=1, venue="kalshi",
+            max_capital="10", max_loss="5", max_model_usd="1",
+            max_model_tokens=1000, max_model_requests=5,
+            model_hash="a" * 64, config_hash="b" * 64,
+            readiness_hash="c" * 64, release_hash="d" * 64,
+            identity_hash="e" * 64, created_at=now,
+        )
+        mandates.create(draft)
+        pauses = DatastorePauseStore(client)
+        pauses.set(
+            owner_id, paused=True, reason="operator_fixture",
+            idempotency_key="operator-pause-001", now=now,
+        )
+
+        recreated = DatastoreTwinStore(datastore.Client(project=project))
+        self.assertEqual([item.id for item in recreated.account_scopes(owner_id)], [scope_id])
+        self.assertEqual([item.intent_id for item in recreated.commands(scope_id)], [order.id])
+        self.assertEqual(
+            [item.account_scope_id for item in DatastoreStrategyStore(client).cycles(
+                frozenset({scope_id}), limit=10,
+            )],
+            [scope_id],
+        )
+        self.assertEqual(DatastoreMandateStore(client).latest_for_owner(owner_id), (draft,))
+        self.assertTrue(DatastorePauseStore(client).get(owner_id).paused)
+
     def test_durable_worker_claims_survive_restart_and_fence_stale_completion(self):
         from google.cloud import datastore
 
