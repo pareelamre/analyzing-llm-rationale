@@ -25,6 +25,9 @@ from .store import CommandClaim, ExecutionCommand, TwinStore, TwinStoreError
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 recovery_operations = metrics.get_meter(__name__).create_counter("twin.recovery.operations", unit="1")
+ambiguous_submissions = metrics.get_meter(__name__).create_counter(
+    "twin.submissions.ambiguous", unit="1"
+)
 _ORDER_STATUSES = frozenset({
     "acknowledged", "open", "partially_filled", "filled",
     "cancel_requested", "cancelled", "rejected",
@@ -156,7 +159,12 @@ def _recovery_result(
 ) -> RecoveryResult:
     recovery_operations.add(1, {"operation": "submission", "state": action.value})
     if action is RecoveryAction.OPERATOR_ATTENTION:
-        logger.warning("twin recovery requires operator attention command=%s", command.id)
+        ambiguous_submissions.add(1, {"venue": "unknown", "stage": "recovery"})
+        logger.warning(
+            "twin recovery requires operator attention command_ref=%s account_ref=%s",
+            sha256(command.id.encode()).hexdigest()[:16],
+            sha256(command.scope_id.encode()).hexdigest()[:16],
+        )
     return RecoveryResult(action, command, reservation_released)
 
 
@@ -630,8 +638,13 @@ def cancel_after_reconciliation(
     try:
         response = cancel(current)
     except Exception as exc:
-        logger.warning("twin cancellation outcome unknown command=%s", current.id)
+        logger.warning(
+            "twin cancellation outcome unknown command_ref=%s account_ref=%s",
+            sha256(current.id.encode()).hexdigest()[:16],
+            sha256(current.scope_id.encode()).hexdigest()[:16],
+        )
         recovery_operations.add(1, {"operation": "cancel", "state": "unknown"})
+        ambiguous_submissions.add(1, {"venue": "unknown", "stage": "cancel"})
         raise RecoveryBlocked("cancellation outcome is unknown; reconcile before another attempt") from exc
     if not isinstance(response, Mapping):
         raise RecoveryBlocked("cancellation response is malformed; reconcile before another attempt")

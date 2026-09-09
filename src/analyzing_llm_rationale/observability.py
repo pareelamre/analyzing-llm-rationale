@@ -33,6 +33,27 @@ _DECISION_KEYS = (
     "provider.state",
 )
 
+# Ordinary logs are intentionally narrower than spans.  Traces may carry
+# access-controlled audit references, while this mirror only emits bounded
+# operational fields that cannot contain request payloads, credentials, wallet
+# addresses, or venue/order identifiers.
+_LOG_ATTRIBUTE_KEYS = frozenset({
+    "outcome",
+    "trade.fill_status",
+    "trade.fill_outcome",
+    "trade.sizing_reason",
+    "trade.executable_price",
+    "risk_guard.reason",
+    "risk_guard.allowed",
+    "failure.kind",
+    "provider.state",
+    "strategy.decision",
+    "strategy.reason",
+    "twin.operation",
+    "twin.venue",
+    "worker.role",
+})
+
 
 class _DecisionSpanLogger(SpanExporter):
     """Mirror decision-carrying spans into the ordinary log.
@@ -44,12 +65,18 @@ class _DecisionSpanLogger(SpanExporter):
     """
 
     def export(self, spans) -> SpanExportResult:
-        for span in spans:
-            attrs = dict(getattr(span, "attributes", None) or {})
-            if not any(key in attrs for key in _DECISION_KEYS):
-                continue
-            detail = " ".join(f"{k}={attrs[k]}" for k in sorted(attrs))
-            logger.info("trace %s %s", getattr(span, "name", "span"), detail)
+        try:
+            for span in spans:
+                attrs = dict(getattr(span, "attributes", None) or {})
+                if not any(key in attrs for key in _DECISION_KEYS):
+                    continue
+                safe = {key: attrs[key] for key in sorted(attrs) if key in _LOG_ATTRIBUTE_KEYS}
+                detail = " ".join(f"{key}={safe[key]}" for key in safe)
+                logger.info("trace %s %s", getattr(span, "name", "span"), detail)
+        except Exception:
+            # Telemetry is diagnostic.  It must never change a risk decision,
+            # reconciliation result, or worker acknowledgement.
+            return SpanExportResult.FAILURE
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:
