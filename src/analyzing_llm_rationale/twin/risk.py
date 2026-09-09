@@ -9,12 +9,18 @@ from hashlib import sha256
 from math import sqrt
 from typing import Any, Mapping, Optional, Sequence
 
+from opentelemetry import metrics, trace
+
 from .account import AccountSnapshot
 from .models import Completeness, MarketSnapshot, ProposalAction
 from .store import AccountProjection, ReservationPreconditions
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
+tracer = trace.get_tracer(__name__)
+meter = metrics.get_meter(__name__)
+risk_decisions = meter.create_counter("twin.risk.decisions", unit="1")
+stale_data_events = meter.create_counter("twin.data.stale", unit="1")
 
 
 @dataclass(frozen=True)
@@ -171,7 +177,17 @@ def _is_tick_aligned(price: Decimal, tick: Decimal) -> bool:
 
 
 def _pass(reason: str) -> RiskResult:
+    trace.get_current_span().set_attributes({"outcome": "rejected", "risk_guard.reason": reason})
+    risk_decisions.add(1, {"outcome": "rejected", "reason": reason})
+    if reason in {"stale_account_snapshot", "stale_market_snapshot", "stale_fee_schedule"}:
+        stale_data_events.add(1, {"source": reason.removeprefix("stale_")})
     return RiskResult(_ZERO, _ZERO, _ZERO, reason)
+
+
+def _allow(result: RiskResult) -> RiskResult:
+    trace.get_current_span().set_attributes({"outcome": "allowed", "risk_guard.allowed": True})
+    risk_decisions.add(1, {"outcome": "allowed", "reason": "accepted"})
+    return result
 
 
 def size_binary_entry(
@@ -359,6 +375,7 @@ def calibrate_probability(
     )
 
 
+@tracer.start_as_current_span("twin.risk.evaluate")
 def evaluate_binary_candidate(
     *, action: ProposalAction | str, instrument_id: str, cluster_id: str, venue: str,
     market_snapshot: MarketSnapshot, account_snapshot: AccountSnapshot,
@@ -465,7 +482,7 @@ def evaluate_binary_candidate(
         if unit_proceeds <= _ZERO:
             return _pass("nonpositive_close_proceeds")
         proceeds = _cash_floor(result.quantity * unit_proceeds, currency_increment)
-        return replace(
+        return _allow(replace(
             result, cash_delta=proceeds, expected_account_revision=account_projection.revision,
             account_generation=account_snapshot.generation,
             market_snapshot_id=market_snapshot.id,
@@ -473,7 +490,7 @@ def evaluate_binary_candidate(
                 account_projection.revision, market_snapshot.id,
                 market_snapshot.received_at, market_snapshot.stale_after_seconds,
             ),
-        )
+        ))
 
     if calibration is None or calibration.probability is None or calibration.lower_bound is None or calibration.upper_bound is None:
         return _pass("missing_calibration")
@@ -506,7 +523,7 @@ def evaluate_binary_candidate(
         drawdown=drawdown, tick_size=tick_size, min_quantity=min_quantity,
         limits=bounded_limits, cash_increment=cash_increment, available_depth=available_depth,
     )
-    return replace(
+    return _allow(replace(
         result, expected_account_revision=account_projection.revision,
         account_generation=account_snapshot.generation,
         market_snapshot_id=market_snapshot.id, calibration_hash=calibration.calibration_hash,
@@ -514,7 +531,7 @@ def evaluate_binary_candidate(
             account_projection.revision, market_snapshot.id,
             market_snapshot.received_at, market_snapshot.stale_after_seconds,
         ),
-    )
+    ))
 
 
 def _parse_timestamp(value: Any) -> datetime | None:

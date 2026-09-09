@@ -11,7 +11,15 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping, Optional, Sequence
 
+from opentelemetry import metrics, trace
+
 from .models import Completeness, SchemaValidationError
+
+tracer = trace.get_tracer(__name__)
+meter = metrics.get_meter(__name__)
+account_sync_operations = meter.create_counter("twin.account.syncs", unit="1")
+account_drift_events = meter.create_counter("twin.account.drift", unit="1")
+stale_account_events = meter.create_counter("twin.data.stale", unit="1")
 
 
 @dataclass(frozen=True)
@@ -255,6 +263,7 @@ def _dedupe(label: str, rows: Sequence[Mapping[str, Any]], *, id_fields: tuple[s
     return tuple(found[key] for key in sorted(found)), None
 
 
+@tracer.start_as_current_span("twin.account.reconcile")
 def synchronize_account(
     scope_id: str,
     *,
@@ -279,6 +288,9 @@ def synchronize_account(
         if previous.scope_id != scope_id:
             raise SchemaValidationError("previous snapshot belongs to a different account scope")
         if generation <= previous.generation:
+            trace.get_current_span().set_attribute("outcome", "stale")
+            stale_account_events.add(1, {"source": "account_generation"})
+            account_sync_operations.add(1, {"outcome": "stale"})
             return AccountSyncResult(previous, True, ("stale_or_replayed_generation",))
     pages = {"balances": balances, "positions": positions, "orders": orders, "fills": fills, "settlements": settlements}
     flat: dict[str, list[Mapping[str, Any]]] = {}
@@ -370,4 +382,11 @@ def synchronize_account(
         external_activity_ids=tuple(sorted(set(external))),
         divergence=bool(external or drift_reasons), drift_reasons=drift_reasons,
     )
+    outcome = "drift" if snapshot.divergence else "complete"
+    trace.get_current_span().set_attribute("outcome", outcome)
+    account_sync_operations.add(1, {"outcome": outcome})
+    for reason in drift_reasons:
+        account_drift_events.add(1, {"reason": reason})
+    if external:
+        account_drift_events.add(1, {"reason": "external_activity"})
     return AccountSyncResult(snapshot, False, ())

@@ -39,6 +39,7 @@ from .store import AccountProjection
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 strategy_cycles = metrics.get_meter(__name__).create_counter("twin.strategy.cycles", unit="1")
+decision_reasons = metrics.get_meter(__name__).create_counter("twin.decisions", unit="1")
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
@@ -534,13 +535,14 @@ class ForeseaEdgeStrategy:
         if existing is not None:
             span.set_attribute("outcome", "reused")
             strategy_cycles.add(1, {"decision": existing.decision, "outcome": "reused"})
+            decision_reasons.add(1, {"decision": existing.decision, "reason": existing.reason})
             return existing
         steps: list[StrategyStep] = []
         try:
             state = reconcile()
         except Exception as exc:
             logger.warning("Twin strategy reconciliation failed (%s)", type(exc).__name__)
-            span.record_exception(exc)
+            span.record_exception(ValueError(type(exc).__name__))
             return self._finish_with_scope(scope.id, key, "HOLD", "account_reconciliation_failed", steps, now, span)
         if (
             state is None or state.account_snapshot.completeness is not Completeness.COMPLETE
@@ -605,7 +607,7 @@ class ForeseaEdgeStrategy:
             candidates = list(candidates_by_instrument.values())
         except Exception as exc:
             logger.warning("Twin strategy discovery failed (%s)", type(exc).__name__)
-            span.record_exception(exc)
+            span.record_exception(ValueError(type(exc).__name__))
             steps.append(StrategyStep("discovery", "hold", "discovery_unavailable"))
             return self._finish_with_scope(scope.id, key, "HOLD", "discovery_unavailable", steps, now, span, exits=True)
         eligible = [candidate for candidate in candidates if self._candidate_changed(scope.id, candidate, now)]
@@ -629,7 +631,7 @@ class ForeseaEdgeStrategy:
                 return self._finish_with_scope(scope.id, key, "PASS", "budget_exhausted", steps, now, span, exits=True)
             except Exception as exc:
                 logger.warning("Twin strategy research unavailable (%s)", type(exc).__name__)
-                span.record_exception(exc)
+                span.record_exception(ValueError(type(exc).__name__))
                 steps.append(StrategyStep("research", "pass", "research_unavailable", candidate.instrument.id))
                 return self._finish_with_scope(scope.id, key, "PASS", "research_unavailable", steps, now, span, exits=True)
             if result.forecast is None:
@@ -819,6 +821,7 @@ class ForeseaEdgeStrategy:
             cycle = existing
         span.set_attributes({"outcome": decision.lower(), "strategy.reason": reason, "strategy.steps": len(steps)})
         strategy_cycles.add(1, {"decision": decision, "outcome": "created" if created else "reused"})
+        decision_reasons.add(1, {"decision": decision, "reason": reason})
         return cycle
 
 

@@ -12,7 +12,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from hashlib import sha256
 from typing import Any, Callable, Mapping, Optional
+
+from opentelemetry import metrics, trace
 
 from .mandates import Mandate, PauseState, authorize_mandate
 from .models import AccountScope, CommandState, TradeIntent
@@ -25,6 +28,21 @@ from .store import (
     TwinStoreError,
     require_durable_store,
 )
+
+tracer = trace.get_tracer(__name__)
+meter = metrics.get_meter(__name__)
+submission_operations = meter.create_counter("twin.submissions", unit="1")
+ambiguous_submissions = meter.create_counter("twin.submissions.ambiguous", unit="1")
+duplicate_suppressions = meter.create_counter("twin.duplicate_suppressions", unit="1")
+
+
+def _venue(instrument_id: str) -> str:
+    value = str(instrument_id).split(":", 1)[0].strip().lower()
+    return value if value in {"kalshi", "polymarket", "shadow"} else "unknown"
+
+
+def _audit_ref(value: str) -> str:
+    return sha256(value.encode()).hexdigest()[:16]
 
 
 class ExecutionBlocked(RuntimeError):
@@ -173,6 +191,7 @@ def _classify_venue_response(response: Mapping[str, Any]) -> SubmissionDispositi
     return SubmissionDisposition.UNKNOWN
 
 
+@tracer.start_as_current_span("twin.execution.submit")
 def submit_claimed_command(
     store: TwinStore,
     *,
@@ -189,6 +208,14 @@ def submit_claimed_command(
     ``reserve_intent``.  Calls arriving after an acknowledgement, rejection,
     or ambiguity return the durable state without touching the venue.
     """
+    span = trace.get_current_span()
+    venue = _venue(intent.instrument_id)
+    span.set_attributes({
+        "twin.operation": "submit",
+        "twin.venue": venue,
+        "twin.account_ref": _audit_ref(context.scope.id),
+        "twin.command_ref": _audit_ref(command.id),
+    })
     if context.scope.environment == "live":
         require_durable_store(store, live=True)
     if command.intent_id != intent.id or command.intent_hash != intent.intent_hash:
@@ -206,14 +233,23 @@ def submit_claimed_command(
             CommandState.CANCEL_REQUESTED,
             CommandState.CANCELLED,
         }:
+            span.set_attribute("outcome", "duplicate")
+            duplicate_suppressions.add(1, {"operation": "submit", "venue": venue})
+            submission_operations.add(1, {"outcome": "duplicate", "venue": venue})
             return SubmissionResult(current, SubmissionDisposition.ALREADY_PROCESSED)
         raise ExecutionBlocked(f"command is not dispatchable from state {current.state.value}")
 
     reservation = store.reservation(current.scope_id, current.reservation_id)
-    _assert_authorized(
-        command=current, intent=intent, claim=claim, reservation=reservation,
-        context=context, now=now,
-    )
+    try:
+        _assert_authorized(
+            command=current, intent=intent, claim=claim, reservation=reservation,
+            context=context, now=now,
+        )
+    except Exception as exc:
+        span.set_attribute("outcome", "blocked")
+        span.record_exception(ValueError(type(exc).__name__))
+        submission_operations.add(1, {"outcome": "blocked", "venue": venue})
+        raise
     try:
         response = submit(current)
     except Exception as exc:
@@ -222,7 +258,15 @@ def submit_claimed_command(
                 current.id, target=CommandState.SUBMISSION_UNKNOWN, fence=claim.fence, worker_id=claim.worker_id
             )
         except TwinStoreError as transition_error:
+            span.set_attribute("outcome", "ambiguous")
+            span.record_exception(ValueError(type(transition_error).__name__))
+            ambiguous_submissions.add(1, {"venue": venue, "stage": "persist_unknown"})
+            submission_operations.add(1, {"outcome": "ambiguous", "venue": venue})
             raise SubmissionUnknown("venue response was lost and command state could not be recorded") from transition_error
+        span.set_attribute("outcome", "ambiguous")
+        span.record_exception(ValueError(type(exc).__name__))
+        ambiguous_submissions.add(1, {"venue": venue, "stage": "venue_response"})
+        submission_operations.add(1, {"outcome": "ambiguous", "venue": venue})
         raise SubmissionUnknown("venue response was lost; reconcile the persisted order identity") from exc
 
     disposition = _classify_venue_response(response)
@@ -236,7 +280,15 @@ def submit_claimed_command(
     except TwinStoreError as exc:
         # The venue call happened.  Do not retry it if persistence races or
         # fails; recovery must search using the stored identity/fingerprint.
+        span.set_attribute("outcome", "ambiguous")
+        span.record_exception(ValueError(type(exc).__name__))
+        ambiguous_submissions.add(1, {"venue": venue, "stage": "persist_response"})
+        submission_operations.add(1, {"outcome": "ambiguous", "venue": venue})
         raise SubmissionUnknown("venue response received but command persistence failed") from exc
+    span.set_attribute("outcome", disposition.value)
+    submission_operations.add(1, {"outcome": disposition.value, "venue": venue})
+    if disposition is SubmissionDisposition.UNKNOWN:
+        ambiguous_submissions.add(1, {"venue": venue, "stage": "malformed_response"})
     return SubmissionResult(updated, disposition, dict(response))
 
 

@@ -19,6 +19,15 @@ tracer = trace.get_tracer(__name__)
 worker_operations = metrics.get_meter(__name__).create_counter(
     "twin.worker.operations", unit="1"
 )
+duplicate_suppressions = metrics.get_meter(__name__).create_counter(
+    "twin.duplicate_suppressions", unit="1"
+)
+queue_lag_seconds = metrics.get_meter(__name__).create_histogram(
+    "twin.queue.lag", unit="s"
+)
+retry_exhaustions = metrics.get_meter(__name__).create_counter(
+    "twin.retries.exhausted", unit="1"
+)
 
 
 class WorkerAuthenticationError(PermissionError):
@@ -541,10 +550,10 @@ class TwinWorker:
     def start(self) -> bool:
         try:
             self.execution_ready = bool(self._reconcile_startup())
-        except Exception:
+        except Exception as exc:
             self.execution_ready = False
             self.accepting_work = False
-            logger.exception("Twin maintenance startup reconciliation failed")
+            logger.error("Twin maintenance startup reconciliation failed (%s)", type(exc).__name__)
             worker_operations.add(1, {"role": "maintenance", "outcome": "startup_failed"})
             return False
         self.accepting_work = True
@@ -565,6 +574,7 @@ class TwinWorker:
         existing = self._jobs.get(job_id)
         if existing.completed_result is not None:
             worker_operations.add(1, {"role": "maintenance", "outcome": "duplicate"})
+            duplicate_suppressions.add(1, {"operation": "worker_delivery", "role": "maintenance"})
             return existing.completed_result
         if existing.kind is WorkerJobKind.RESEARCH:
             raise WorkerJobError("worker role cannot process this job kind")
@@ -576,6 +586,11 @@ class TwinWorker:
                 return {"status": "expired"}
             worker_operations.add(1, {"role": "maintenance", "outcome": "in_progress"})
             return current.completed_result or {"status": "in_progress"}
+        if job.created_at is not None:
+            queue_lag_seconds.record(
+                max(0.0, (now - job.created_at).total_seconds()),
+                {"role": "maintenance", "kind": job.kind.value},
+            )
         try:
             result = maintain(job)
             degraded = False
@@ -620,6 +635,7 @@ def bounded_safe_read(
             if attempt + 1 < attempts:
                 sleep(base_delay_seconds * (2 ** attempt))
     worker_operations.add(1, {"role": "dependency_read", "outcome": "degraded"})
+    retry_exhaustions.add(1, {"operation": "dependency_read"})
     raise WorkerDegraded(degradation_reason) from last_error
 
 
@@ -759,6 +775,7 @@ class TwinResearchWorker:
         existing = self._gateway.completed_result(job_id)
         if existing is not None:
             worker_operations.add(1, {"role": "research", "outcome": "duplicate"})
+            duplicate_suppressions.add(1, {"operation": "worker_delivery", "role": "research"})
             return existing
         assignment = self._gateway.claim(job_id, worker_id=self._worker_id, now=now)
         if assignment is None:

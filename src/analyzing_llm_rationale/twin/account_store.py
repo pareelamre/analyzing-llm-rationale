@@ -260,7 +260,7 @@ class DatastoreAccountSnapshotStore:
             return snapshot
         except Exception as exc:
             snapshot_events.add(1, {"outcome": "error"})
-            span.record_exception(exc)
+            span.record_exception(ValueError(type(exc).__name__))
             span.set_status(Status(StatusCode.ERROR))
             logger.warning("Could not persist complete account snapshot")
             raise

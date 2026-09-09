@@ -7,6 +7,13 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable
 
+from opentelemetry import metrics, trace
+
+tracer = trace.get_tracer(__name__)
+meter = metrics.get_meter(__name__)
+research_budget_operations = meter.create_counter("twin.research.budget.operations", unit="1")
+research_budget_usd = meter.create_histogram("twin.research.budget.usd", unit="USD")
+research_budget_tokens = meter.create_histogram("twin.research.budget.tokens", unit="{token}")
 
 class BudgetExceeded(RuntimeError):
     pass
@@ -115,6 +122,7 @@ def estimate_request_cost(
     ) / Decimal("1000000")
 
 
+@tracer.start_as_current_span("twin.research.budget")
 def call_with_budget(
     budget: Any,
     reservation_id: str,
@@ -126,16 +134,24 @@ def call_with_budget(
     operation: Callable[[], Any],
 ) -> Any:
     """Reserve before a provider/tool call and retain unknown charges safely."""
+    span = trace.get_current_span()
+    span.set_attribute("twin.operation", "research_budget")
+    research_budget_usd.record(float(estimated_usd), {"kind": "reserved"})
+    research_budget_tokens.record(estimated_tokens, {"kind": "reserved"})
     budget.reserve(reservation_id, key=key, estimated_usd=estimated_usd, estimated_tokens=estimated_tokens, policy=policy)
     budget.claim(reservation_id, key=key)
     try:
         result = operation()
     except Exception:
         budget.reconcile(reservation_id, key=key, actual_usd=None, actual_tokens=None)
+        span.set_attribute("outcome", "uncertain")
+        research_budget_operations.add(1, {"outcome": "uncertain"})
         raise
     usage = result.get("usage") if isinstance(result, dict) else None
     if not isinstance(usage, dict):
         budget.reconcile(reservation_id, key=key, actual_usd=None, actual_tokens=None)
+        span.set_attribute("outcome", "uncertain")
+        research_budget_operations.add(1, {"outcome": "uncertain"})
         return result
     actual_tokens = usage.get("total_tokens")
     actual_usd = usage.get("cost_usd")
@@ -151,6 +167,12 @@ def call_with_budget(
     if invalid:
         # Retain valid above-estimate facts even when the other field is bad.
         budget.reconcile(reservation_id, key=key, actual_usd=amount, actual_tokens=tokens)
+        if amount is not None:
+            research_budget_usd.record(float(amount), {"kind": "actual"})
+        if tokens is not None:
+            research_budget_tokens.record(tokens, {"kind": "actual"})
+        span.set_attribute("outcome", "invalid_usage")
+        research_budget_operations.add(1, {"outcome": "invalid_usage"})
         raise ValueError("provider returned invalid budget usage") from None
     budget.reconcile(
         reservation_id,
@@ -158,6 +180,13 @@ def call_with_budget(
         actual_usd=amount,
         actual_tokens=tokens,
     )
+    if amount is not None:
+        research_budget_usd.record(float(amount), {"kind": "actual"})
+    if tokens is not None:
+        research_budget_tokens.record(tokens, {"kind": "actual"})
+    outcome = "reconciled" if amount is not None and tokens is not None else "uncertain"
+    span.set_attribute("outcome", outcome)
+    research_budget_operations.add(1, {"outcome": outcome})
     return result
 
 

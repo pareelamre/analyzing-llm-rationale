@@ -16,6 +16,8 @@ from enum import Enum
 from hashlib import sha256
 from typing import Any, Mapping, Optional, Protocol
 
+from opentelemetry import metrics, trace
+
 from .models import (
     AccountScope,
     CommandState,
@@ -23,6 +25,12 @@ from .models import (
     TradeIntent,
     can_transition_command,
 )
+
+tracer = trace.get_tracer(__name__)
+meter = metrics.get_meter(__name__)
+reservation_operations = meter.create_counter("twin.reservations", unit="1")
+duplicate_suppressions = meter.create_counter("twin.duplicate_suppressions", unit="1")
+retry_exhaustions = meter.create_counter("twin.retries.exhausted", unit="1")
 
 
 class TwinStoreError(RuntimeError):
@@ -331,6 +339,7 @@ class InMemoryTwinStore:
                 self._projections[scope_id] = replace(projection, revision=projection.revision + 1)
             return event
 
+    @tracer.start_as_current_span("twin.execution.reserve")
     def reserve_intent(
         self,
         intent: TradeIntent,
@@ -355,6 +364,8 @@ class InMemoryTwinStore:
                 existing_command = self._commands[f"command-{intent.intent_hash[:24]}"]
                 if client_order_id is not None and existing_command.client_order_id != str(client_order_id):
                     raise TwinStoreError("intent already has a different prepared client order identity")
+                reservation_operations.add(1, {"store": "memory", "outcome": "duplicate"})
+                duplicate_suppressions.add(1, {"operation": "reserve", "store": "memory"})
                 return self._reservations[existing_id]
             if preconditions is not None:
                 preconditions.assert_current(intent, projection, now)
@@ -414,6 +425,7 @@ class InMemoryTwinStore:
                 payload_hash=_payload_hash({"command_id": command.id, "intent_hash": intent.intent_hash}),
                 created_at=now,
             )
+            reservation_operations.add(1, {"store": "memory", "outcome": "created"})
             return reservation
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand:
@@ -757,6 +769,8 @@ class DatastoreTwinStore:
                 existing_command = self._client.get(self._key(intent.account_scope_id, "TwinCommand", f"{intent.account_scope_id}:command-{intent.intent_hash[:24]}"))
                 if client_order_id is not None and existing_command is not None and str(existing_command["client_order_id"]) != str(client_order_id):
                     raise TwinStoreError("intent already has a different prepared client order identity")
+                reservation_operations.add(1, {"store": "datastore", "outcome": "duplicate"})
+                duplicate_suppressions.add(1, {"operation": "reserve", "store": "datastore"})
                 return Reservation(
                     id=reservation_id, scope_id=intent.account_scope_id, intent_id=str(existing["intent_id"]),
                     intent_hash=str(existing["intent_hash"]), cash=Decimal(str(existing["cash"])),
@@ -792,8 +806,10 @@ class DatastoreTwinStore:
             outbox = datastore.Entity(key=self._key(intent.account_scope_id, "TwinOutbox", command_id))
             outbox.update({"command_id": command_id, "payload_hash": _payload_hash({"command_id": command_id}), "created_at": now, "delivered_at": None})
             self._client.put_multi([account, entity, command, event, outbox])
+            reservation_operations.add(1, {"store": "datastore", "outcome": "created"})
             return reservation
 
+    @tracer.start_as_current_span("twin.execution.reserve")
     def reserve_intent(
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
         client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
@@ -810,6 +826,7 @@ class DatastoreTwinStore:
                 )
             except Aborted as exc:
                 last_error = exc
+        retry_exhaustions.add(1, {"operation": "reserve", "store": "datastore"})
         raise TwinStoreError("Datastore contention exceeded the bounded reservation retry budget") from last_error
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand:

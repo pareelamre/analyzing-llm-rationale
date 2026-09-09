@@ -16,6 +16,12 @@ tracer = trace.get_tracer(__name__)
 dispatch_operations = metrics.get_meter(__name__).create_counter(
     "twin.worker.dispatches", unit="1"
 )
+duplicate_suppressions = metrics.get_meter(__name__).create_counter(
+    "twin.duplicate_suppressions", unit="1"
+)
+queue_lag_seconds = metrics.get_meter(__name__).create_histogram(
+    "twin.queue.lag", unit="s"
+)
 
 
 class WorkerDispatchError(RuntimeError):
@@ -104,6 +110,9 @@ class CloudTasksDispatcher:
             )
         except AlreadyExists:
             dispatch_operations.add(1, {"queue_role": "research" if research else "maintenance", "outcome": "duplicate"})
+            duplicate_suppressions.add(
+                1, {"operation": "task_enqueue", "role": "research" if research else "maintenance"},
+            )
             return task_name
         except Exception as exc:
             dispatch_operations.add(1, {"queue_role": "research" if research else "maintenance", "outcome": "error"})
@@ -122,5 +131,11 @@ def dispatch_due_jobs(
         raise WorkerDispatchError("dispatch needs an aware time")
     task_names: list[str] = []
     for job in jobs.due(now=now)[:limit]:
+        if job.created_at is not None:
+            queue_lag_seconds.record(
+                max(0.0, (now - job.created_at).total_seconds()),
+                {"role": "research" if job.kind is WorkerJobKind.RESEARCH else "maintenance",
+                 "kind": job.kind.value},
+            )
         task_names.append(dispatcher.enqueue(job))
     return tuple(task_names)
