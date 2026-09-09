@@ -52,6 +52,8 @@ jobs:
         run: ruff check scripts --select F821,F811,F632,F502,F522,F701,B002
       - name: Test
         run: python -m unittest discover -s tests
+      - name: Verify autonomous twin release contracts
+        run: python scripts/verify_twin_release.py
 
   # The durable-store concurrency checks need a Datastore emulator, so they
   # skip everywhere except a developer's machine with one running -- see
