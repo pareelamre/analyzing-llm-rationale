@@ -4552,6 +4552,89 @@
       "outcome": "realized",
       "record_hash": "73ac2f39c2d40099624fa0454029d4b55437861979945b00c9fe36273a207aa5",
       "recorded_at": "2026-09-10T14:25:01.880919+00:00"
+    },
+    {
+      "action_id": "5d504445-4510-4dc4-8e37-0b595977b984",
+      "agent_id": "gpt-oss-120b",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_assumed_full",
+          "filled_quantity": 3517.173116
+        },
+        "quote": {
+          "marketable": true,
+          "observed_ask": 0.15,
+          "source": "live_venue_quote",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.15000000000000002,
+          "quantity": 0.3
+        },
+        "risk": {
+          "allowed": true,
+          "cash_before": 8580.834495,
+          "cash_required": 545.513547,
+          "concentration_cap": 1287.442454,
+          "cycle_id": "30m:993920",
+          "cycle_spend_after": 545.513547,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 1215.234999,
+          "daily_risk_before": 669.721452,
+          "daily_risk_limit": 2574.884908,
+          "drawdown_after": 0.147216,
+          "fee": 17.93758,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 527.575967,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 527.575967,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1716.589939,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.15,
+          "eligible": true,
+          "kelly_fraction": 0.5,
+          "market_shrinkage": 0.25,
+          "max_position_fraction": 0.08,
+          "mode": "edge_kelly",
+          "reason": null,
+          "target_notional": 545.51355,
+          "target_quantity": 3517.17311584835
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:993920",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": -545.5135473772525,
+        "cash_required": 545.5135473772525,
+        "fee": 17.93758,
+        "netting_payout": 0.0,
+        "notional": 527.5759673772525,
+        "price": 0.15,
+        "quantity": 3517.17311584835,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "no",
+        "ticker": "israel-x-iran-ceasefire-continues-through-september-30"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "c262f783d88f0de74080ae19b9a6fdfd909680f499f7cdace3e33f7f46608f5c",
+      "recorded_at": "2026-09-10T16:23:30.221160+00:00"
     }
   ],
   "month": "2026-09",
