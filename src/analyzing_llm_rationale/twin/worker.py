@@ -672,6 +672,9 @@ class ResearchCompletion:
     research_result_id: Optional[str] = None
     usage_record_id: Optional[str] = None
     reason: Optional[str] = None
+    result_payload: Optional[Mapping[str, Any]] = None
+    actual_usd: Optional[str] = None
+    actual_tokens: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.status not in {"completed", "degraded"}:
@@ -682,18 +685,35 @@ class ResearchCompletion:
             ):
                 raise WorkerJobError("research completion contains an invalid identifier")
         if self.status == "completed" and (
-            self.research_result_id is None or self.usage_record_id is None or self.reason is not None
+            self.reason is not None or (
+                self.result_payload is None and (
+                    self.research_result_id is None or self.usage_record_id is None
+                )
+            )
         ):
             raise WorkerJobError("completed research requires result and usage IDs")
         if self.status == "degraded" and (self.reason is None or self.research_result_id is not None):
             raise WorkerJobError("degraded research requires only a stable reason")
+        if (self.actual_usd is None) != (self.actual_tokens is None):
+            raise WorkerJobError("research usage must include both USD and tokens")
+        if self.actual_tokens is not None and (
+            type(self.actual_tokens) is not int or self.actual_tokens < 0
+        ):
+            raise WorkerJobError("research token usage is invalid")
 
-    def to_mapping(self) -> dict[str, str]:
+    def to_mapping(self, *, include_transport: bool = False) -> dict[str, Any]:
+        values = {
+            "status": self.status, "research_result_id": self.research_result_id,
+            "usage_record_id": self.usage_record_id, "reason": self.reason,
+        }
+        if include_transport:
+            values.update({
+                "result_payload": self.result_payload,
+                "actual_usd": self.actual_usd,
+                "actual_tokens": self.actual_tokens,
+            })
         return {
-            key: value for key, value in {
-                "status": self.status, "research_result_id": self.research_result_id,
-                "usage_record_id": self.usage_record_id, "reason": self.reason,
-            }.items() if value is not None
+            key: value for key, value in values.items() if value is not None
         }
 
 
@@ -715,10 +735,14 @@ class MaintenanceResearchJobGateway:
         self, jobs: WorkerJobs, *,
         authorize_assignment: Callable[[ResearchAssignment], None],
         capture_loader: Optional[Callable[[ResearchAssignment], Mapping[str, Any]]] = None,
+        finalize_result: Optional[
+            Callable[[ResearchAssignment, ResearchCompletion], ResearchCompletion]
+        ] = None,
     ) -> None:
         self._jobs = jobs
         self._authorize_assignment = authorize_assignment
         self._capture_loader = capture_loader
+        self._finalize_result = finalize_result
 
     def completed_result(self, job_id: str) -> Optional[Mapping[str, Any]]:
         job = self._jobs.get(job_id)
@@ -749,6 +773,8 @@ class MaintenanceResearchJobGateway:
     def complete(
         self, assignment: ResearchAssignment, result: ResearchCompletion, *, now: datetime,
     ) -> Mapping[str, Any]:
+        if self._finalize_result is not None:
+            result = self._finalize_result(assignment, result)
         completed = self._jobs.complete(
             assignment.job_id, worker_id=assignment.worker_id, fence=assignment.fence,
             result=result.to_mapping(), now=now, degraded=result.status == "degraded",

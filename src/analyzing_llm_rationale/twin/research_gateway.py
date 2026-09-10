@@ -622,7 +622,15 @@ class ResearchResultStoreError(RuntimeError):
     """A research decision cannot be proven durable and intact."""
 
 
-def _result_payload(result: ResearchResult) -> dict[str, Any]:
+def research_request_hash(
+    capture: PublicResearchCapture, config: ResearchModelConfig,
+) -> str:
+    return _hash({
+        "capture": asdict(capture), "config": asdict(config), "prompt": SYSTEM_PROMPT,
+    })
+
+
+def research_result_payload(result: ResearchResult) -> dict[str, Any]:
     if not isinstance(result, ResearchResult) or not result.request_hash:
         raise ResearchResultStoreError("only finalized research decisions can be stored")
     provenance = asdict(result.provenance) if result.provenance is not None else None
@@ -636,10 +644,10 @@ def _result_payload(result: ResearchResult) -> dict[str, Any]:
 
 
 def _result_json(result: ResearchResult) -> str:
-    return _json(_result_payload(result))
+    return _json(research_result_payload(result))
 
 
-def _restore_result(payload: Any) -> ResearchResult:
+def restore_research_result(payload: Any) -> ResearchResult:
     try:
         if not isinstance(payload, dict) or set(payload) != {
             "schema_version", "request_hash", "forecast", "proposal", "provenance"
@@ -678,7 +686,7 @@ class InMemoryResearchResultStore:
             fingerprint, encoded = record
             if _hash(json.loads(encoded)) != fingerprint:
                 raise ResearchResultStoreError("stored research result fingerprint mismatch")
-            return _restore_result(json.loads(encoded))
+            return restore_research_result(json.loads(encoded))
 
     def record_result(self, reservation_id: str, result: ResearchResult) -> bool:
         key = str(reservation_id).strip()
@@ -716,7 +724,7 @@ class DatastoreResearchResultStore:
             payload = json.loads(encoded)
             if entity.get("reservation_id") != reservation_id or entity.get("fingerprint") != _hash(payload):
                 raise ResearchResultStoreError("stored research result identity or fingerprint mismatch")
-            return _restore_result(payload)
+            return restore_research_result(payload)
         except (KeyError, TypeError, ValueError, ResearchResultStoreError) as exc:
             raise ResearchResultStoreError("stored research result cannot be read") from exc
 
@@ -821,7 +829,7 @@ def generate_research(
     """
     span = trace.get_current_span()
     started = time.monotonic()
-    request_hash = _hash({"capture": asdict(capture), "config": asdict(config), "prompt": SYSTEM_PROMPT})
+    request_hash = research_request_hash(capture, config)
     if result_store is None:
         raise ValueError("research result store is required")
     existing = result_store.get_result(reservation_id)

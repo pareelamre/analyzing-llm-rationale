@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import socket
 from datetime import datetime, timezone
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 
@@ -11,11 +12,14 @@ from ..observability import init_observability
 from .budget import BudgetAlreadyClaimed, BudgetExceeded, DatastoreResearchBudget
 from .research_gateway import (
     DatastoreResearchCaptureStore,
+    DatastoreResearchResultStore,
     ResearchRuntimePolicy,
     load_research_runtime_policy,
     public_evidence_set_id,
     research_capture_payload,
+    research_request_hash,
     restore_research_capture,
+    restore_research_result,
 )
 from .runtime import (
     HttpResearchJobGateway,
@@ -163,6 +167,7 @@ def create_environment_app():
         jobs = DatastoreWorkerJobs(client)
         budget = DatastoreResearchBudget(client)
         captures = DatastoreResearchCaptureStore(client)
+        results = DatastoreResearchResultStore(client)
 
         def authorize(assignment: ResearchAssignment) -> None:
             try:
@@ -189,8 +194,52 @@ def create_environment_app():
                 raise WorkerDegraded("research_capture_identity_mismatch")
             return research_capture_payload(capture)
 
+        def finalize_result(
+            assignment: ResearchAssignment, completion: ResearchCompletion,
+        ) -> ResearchCompletion:
+            if completion.status == "degraded":
+                budget.mark_uncertain(
+                    assignment.budget_reservation_id, key=assignment.budget_key_id,
+                )
+                return ResearchCompletion("degraded", reason=completion.reason)
+            if completion.result_payload is None:
+                raise WorkerDegraded("research_result_payload_missing")
+            capture = restore_research_capture(load_capture(assignment))
+            result = restore_research_result(completion.result_payload)
+            if (
+                result.request_hash != research_request_hash(capture, research_policy.model)
+                or result.proposal.market_snapshot_id != assignment.market_snapshot_id
+                or (
+                    result.forecast is not None
+                    and result.forecast.instrument_id != capture.instrument.id
+                )
+            ):
+                raise WorkerDegraded("research_result_identity_mismatch")
+            results.record_result(assignment.budget_reservation_id, result)
+            actual_usd = (
+                None if completion.actual_usd is None
+                else Decimal(completion.actual_usd)
+            )
+            budget.reconcile(
+                assignment.budget_reservation_id, key=assignment.budget_key_id,
+                actual_usd=actual_usd, actual_tokens=completion.actual_tokens,
+            )
+            result_id = (
+                result.forecast.id if result.forecast is not None else result.proposal.id
+            )
+            usage_id = "usage-" + sha256(
+                (
+                    f"{assignment.budget_reservation_id}|"
+                    f"{completion.actual_usd}|{completion.actual_tokens}"
+                ).encode()
+            ).hexdigest()[:24]
+            return ResearchCompletion(
+                "completed", research_result_id=result_id, usage_record_id=usage_id,
+            )
+
         gateway = MaintenanceResearchJobGateway(
             jobs, authorize_assignment=authorize, capture_loader=load_capture,
+            finalize_result=finalize_result,
         )
         dispatcher = CloudTasksDispatcher(CloudTasksConfig(
             _required("GOOGLE_CLOUD_PROJECT"), _required("FORESEA_TWIN_TASKS_LOCATION"),
