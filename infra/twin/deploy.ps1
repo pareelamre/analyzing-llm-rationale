@@ -162,3 +162,11 @@ else {
 }
 
 Write-Host "Private twin runtime definition applied in shadow mode. Record IAM evidence before staging traffic."
+
+if ($Apply) {
+    & (Join-Path $PSScriptRoot "smoke.ps1") -ProjectId $ProjectId -Region $Region
+    if ($LASTEXITCODE -ne 0) { throw "Private twin smoke verification failed" }
+}
+else {
+    Write-Host "+ verify /health, /ready, promoted revision, and zero-authority shadow configuration"
+}

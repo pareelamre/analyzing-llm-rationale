@@ -3,12 +3,12 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_t07_in_progress",
+  "implementation_status": "t06_t07_t20_in_progress",
   "implementation_baseline": "3202f9bfea7fcf5fd36a1c944b8e0a38e7232881",
   "next_task": "T20",
   "live_authorized": false,
   "release_gates": {
-    "G0": "not_evaluated",
+    "G0": "pending_ci",
     "G1": "not_started",
     "G2": "not_evaluated",
     "G3": "not_authorized",
@@ -612,15 +612,33 @@
         "T18",
         "T19"
       ],
-      "status": "pending",
-      "substep": null,
-      "branch": null,
-      "commit": null,
-      "pr_url": null,
-      "checks": [],
-      "evidence": [],
+      "status": "in_progress",
+      "substep": "deterministic fail-closed G0 artifact, repository release-contract verifier, network-deny live gate, migration/rollback drill, read-only private staging smoke, and shadow-only scheduled contract are implemented; protected PR checks and merged staging evidence are pending",
+      "branch": "codex/autonomous-twin-t20",
+      "commit": "12b0cf725",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/597",
+      "checks": [
+        "py -m unittest tests.test_twin_release tests.test_twin_runtime tests.test_twin_evaluation tests.test_twin_execution tests.test_twin_store -v (pass: 39 tests)",
+        "py -m unittest discover -s tests (pass: 2120 tests; 10 skipped)",
+        "py scripts/verify_twin_release.py (pass: all 10 G0 contract checks)",
+        "py -m ruff check src tests (pass)",
+        "py -m ruff check scripts --select F821,F811,F632,F502,F522,F701,B002 (pass)",
+        "npm ci and npm run frontend:build (pass)",
+        "PowerShell parser checks and infra/twin/deploy.ps1 dry run (pass; no GCP mutation)",
+        "git diff --check (pass)",
+        "py -m graphify update . (pass)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/release.py",
+        "scripts/verify_twin_release.py",
+        "tests/test_twin_release.py",
+        "tests/fixtures/twin/release_readiness_v1.json",
+        "docs/autonomous-twin/RELEASE.md",
+        "infra/twin/smoke.ps1",
+        ".github/workflows/ci.yml"
+      ],
       "blockers": [],
-      "handoff": null
+      "handoff": "Wait for PR #597 protected checks, merge through main, capture staging smoke evidence, then close T06 and T07 production adapters before starting T21."
     },
     {
       "id": "T21",
