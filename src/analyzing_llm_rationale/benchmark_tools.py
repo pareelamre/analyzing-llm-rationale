@@ -86,6 +86,25 @@ DEFAULT_MAX_TRADES_PER_CYCLE = 6
 DEFAULT_DUPLICATE_TRADE_COOLDOWN_SECONDS = 15 * 60
 KALSHI_FEE_COEFFICIENT = 0.07
 DEFAULT_SETTLEMENT_FEE_RATE = 0.014
+POLYMARKET_CATEGORY_FEE_RATES: Dict[str, float] = {
+    "geopolitics": 0.0,
+    "world": 0.0,
+    "crypto": 0.07,
+    "sports": 0.05,
+    "economics": 0.05,
+    "culture": 0.05,
+    "entertainment": 0.05,
+    "weather": 0.05,
+    "pop culture": 0.05,
+    "finance": 0.04,
+    "politics": 0.04,
+    "tech": 0.04,
+    "mentions": 0.04,
+    "business": 0.04,
+    "other": 0.05,
+    "general": 0.05,
+}
+DEFAULT_POLYMARKET_FEE_RATE = 0.04
 IMMEDIATE_TIME_IN_FORCE = "immediate_or_cancel"
 
 
@@ -344,7 +363,7 @@ def _clean_probability(value: Any, *, name: str) -> float:
 
 def _sizing_plan(
     args: Mapping[str, Any], *, price: float, side: str, account_value: float,
-    platform: str = "kalshi",
+    platform: str = "kalshi", category: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Derive an executable stake from the agent's declared sizing choice.
 
@@ -388,8 +407,16 @@ def _sizing_plan(
     # the stake with it -- by 3.2x at a 5pp edge on a 50c contract, and worst
     # exactly where the fleet trades most. The Kalshi fee is linear in
     # quantity, so fee-per-contract is a closed form and there is no
-    # circularity between size and fee. Polymarket charges no taker fee.
-    fee_per_contract = _kalshi_fee(price, 1.0) if platform == "kalshi" else 0.0
+    # circularity between size and fee. Polymarket charges category-based
+    # dynamic taker fees (0% on geopolitics and world events).
+    trade_category = category or args.get("category")
+    fee_per_contract = (
+        _kalshi_fee(price, 1.0)
+        if platform == "kalshi"
+        else _polymarket_fee(price, 1.0, category=trade_category)
+        if platform == "polymarket"
+        else 0.0
+    )
     effective_cost = price + fee_per_contract
     if not 0.0 < effective_cost < 1.0:
         # A fee that swallows the whole contract leaves nothing to win.
@@ -509,37 +536,68 @@ def _kalshi_fee(price: float, quantity: float) -> float:
     return max(0.0, KALSHI_FEE_COEFFICIENT * quantity * price * (1.0 - price))
 
 
+def _polymarket_fee_rate(category: Optional[str] = None) -> float:
+    cat = str(category or "").strip().lower()
+    if not cat:
+        return _env_float("POLYMARKET_DEFAULT_FEE_RATE", DEFAULT_POLYMARKET_FEE_RATE)
+    if cat in POLYMARKET_CATEGORY_FEE_RATES:
+        return POLYMARKET_CATEGORY_FEE_RATES[cat]
+    if "geopolitic" in cat or "world" in cat:
+        return 0.0
+    for key, rate in POLYMARKET_CATEGORY_FEE_RATES.items():
+        if key in cat:
+            return rate
+    return _env_float("POLYMARKET_DEFAULT_FEE_RATE", DEFAULT_POLYMARKET_FEE_RATE)
+
+
+def _polymarket_fee(price: float, quantity: float, category: Optional[str] = None) -> float:
+    """Parabolic taker fee on Polymarket: quantity * fee_rate * price * (1 - price).
+
+    Geopolitical and world events markets are fee-free (0% fee). Other categories
+    incur dynamic taker fees based on category fee rates (0% maker across all markets).
+    """
+    if price <= 0.0 or price >= 1.0 or quantity <= 0.0:
+        return 0.0
+    rate = _polymarket_fee_rate(category)
+    if rate <= 0.0:
+        return 0.0
+    fee = round(quantity * rate * price * (1.0 - price), 5)
+    return fee if fee >= 0.00001 else 0.0
+
+
 def _settlement_fee_rate(platform: str = "kalshi") -> float:
     """Kalshi charges a fee on settlement payout. Polymarket does not.
 
-    _order_fee already takes a platform and zeroes the per-trade fee off
-    Kalshi; this did not, so every Polymarket settlement was charged a
-    Kalshi-shaped 1.4% of payout. Two settlements in the published audit
-    window carried 15.40 between them -- 1.40 on 100 contracts and 14.00 on
-    1000 -- against a venue whose resolution is free.
+    _order_fee already takes a platform and handles per-trade fees; this
+    computes resolution payout fee. Polymarket settlements carry no fee.
     """
     if str(platform or "").strip().lower() != "kalshi":
         return 0.0
     return _env_float("FORESEA_AGENT_SETTLEMENT_FEE_RATE", DEFAULT_SETTLEMENT_FEE_RATE)
 
 
-def _order_fee(args: Mapping[str, Any], normalized: Mapping[str, Any], *, platform: str = "kalshi") -> float:
+def _order_fee(
+    args: Mapping[str, Any],
+    normalized: Mapping[str, Any],
+    *,
+    platform: str = "kalshi",
+    category: Optional[str] = None,
+) -> float:
     for source in (args, normalized):
-        for key in ("fee", "estimated_fee", "kalshi_fee"):
+        for key in ("fee", "estimated_fee", "kalshi_fee", "polymarket_fee"):
             if source.get(key) not in (None, ""):
                 fee = float(source[key])
                 if fee < 0:
                     raise ValueError("fee must be non-negative")
                 return fee
-    if platform != "kalshi":
-        # Polymarket's CLOB charges no per-trade maker/taker fee (unlike
-        # Kalshi's tiered taker fee below) -- an explicit fee/estimated_fee
-        # arg above still overrides this if a caller ever needs to model one.
-        return 0.0
-    return _kalshi_fee(
-        _as_float(normalized.get("price")),
-        _as_float(normalized.get("quantity")),
-    )
+    price = _as_float(normalized.get("price"))
+    quantity = _as_float(normalized.get("quantity"))
+    if platform == "kalshi":
+        return _kalshi_fee(price, quantity)
+    if platform == "polymarket":
+        cat = category or normalized.get("category") or args.get("category")
+        return _polymarket_fee(price, quantity, category=cat)
+    return 0.0
 
 
 def _immediate_order_adjustments(args: Mapping[str, Any]) -> List[str]:
@@ -676,6 +734,7 @@ def _normalize_fill_for_accounting(
     shadow_unfilled_status: str = "shadow_unfilled_below_market",
     platform: str = "kalshi",
     available_depth: Optional[float] = None,
+    category: Optional[str] = None,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     filled_quantity, fill_status = _extract_filled_quantity(
         result, normalized, live=live, shadow_marketable=shadow_marketable,
@@ -688,8 +747,9 @@ def _normalize_fill_for_accounting(
     accounting_guard = dict(guard)
     price = _as_float(accounting_order.get("price"))
     venue_fee = _extract_fee_from_result(result) if live else None
+    cat = category or normalized.get("category") or args.get("category")
     fee = venue_fee if venue_fee is not None else (
-        _order_fee(args, accounting_order, platform=platform) if filled_quantity > 0 else 0.0
+        _order_fee(args, accounting_order, platform=platform, category=cat) if filled_quantity > 0 else 0.0
     )
     accounting_guard.update({
         "requested_quantity": round(_as_float(normalized.get("quantity")), 6),
@@ -2264,6 +2324,7 @@ def _check_trade_guards(
     platform: str = "kalshi",
     sizing: Optional[Mapping[str, Any]] = None,
     strict_risk_management: bool = False,
+    category: Optional[str] = None,
 ) -> tuple[bool, Dict[str, Any], RiskGuardPolicy]:
     policy = _risk_guard_policy()
     settlements = _settle_agent_open_positions(agent_id, policy)
@@ -2272,7 +2333,8 @@ def _check_trade_guards(
     )
     price = _as_float(normalized.get("price"))
     quantity = _as_float(normalized.get("quantity"))
-    fee = _order_fee(args, normalized, platform=platform)
+    cat = category or normalized.get("category") or args.get("category")
+    fee = _order_fee(args, normalized, platform=platform, category=cat)
     cash_before = float(account.cash)
     sizing_detail = dict(sizing or {"mode": "manual", "applied": False})
     # Capture the pre-trade balance. ``account.buy`` nets an opposite
@@ -2577,6 +2639,7 @@ def _resolve_shadow_marketability(
     is worse and harder to notice.
     """
     weather_brief: Optional[Dict[str, Any]] = None
+    category: Optional[str] = None
     try:
         from analyzing_llm_rationale import market_data
         from analyzing_llm_rationale.accounting import MarketQuote
@@ -2590,6 +2653,7 @@ def _resolve_shadow_marketability(
         weather_brief = classify_weather_market(raw_quote).as_dict()
         quote = MarketQuote.from_mapping(raw_quote)
         real_ask = quote.ask(side)
+        category = raw_quote.get("category")
     except Exception:
         real_ask = None
 
@@ -2600,6 +2664,7 @@ def _resolve_shadow_marketability(
             "real_ask": None,
             "status": "shadow_quote_unavailable",
             "weather_brief": weather_brief,
+            "category": category,
         }
 
     if requested_price is None:
@@ -2609,6 +2674,7 @@ def _resolve_shadow_marketability(
             "real_ask": round(real_ask, 4),
             "status": "shadow_price_from_live_quote",
             "weather_brief": weather_brief,
+            "category": category,
         }
 
     marketable = requested_price + 1e-9 >= real_ask
@@ -2618,6 +2684,7 @@ def _resolve_shadow_marketability(
         "real_ask": round(real_ask, 4),
         "status": "shadow_filled_at_market" if marketable else "shadow_unfilled_below_market",
         "weather_brief": weather_brief,
+        "category": category,
     }
 
 
@@ -2786,6 +2853,9 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             )
             shadow_marketable = market_check["marketable"]
             weather_brief = market_check.get("weather_brief")
+            trade_category = args.get("category") or market_check.get("category")
+            if trade_category and not order.get("category"):
+                order["category"] = trade_category
             if not shadow_marketable:
                 shadow_unfilled_status = market_check["status"]
             if market_check["real_ask"] is not None:
@@ -2885,6 +2955,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 side=side,
                 account_value=_risk_guard_policy().account_value,
                 platform=platform,
+                category=trade_category,
             )
             if sizing.get("applied") and not sizing.get("eligible"):
                 sizing_actions.add(1, {"mode": str(sizing["mode"]), "outcome": "skipped"})
@@ -3026,6 +3097,8 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 allow_order_notional_override=verified_reduce_only_close,
             )
             normalized = preview.get("normalized_order") or {}
+            if trade_category and not normalized.get("category"):
+                normalized["category"] = trade_category
             allowed, guard, policy = _check_trade_guards(
                 args=args,
                 normalized=normalized,
@@ -3035,6 +3108,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 platform=platform,
                 sizing=sizing,
                 strict_risk_management=ctx.require_kelly_sizing,
+                category=trade_category,
             )
             guard["gross_notional_override"] = verified_reduce_only_close
             if not allowed:
@@ -3137,6 +3211,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 # Only worth a book fetch when the order would otherwise fill:
                 # an unmarketable order fills zero regardless of depth.
                 available_depth=book_depth,
+                category=trade_category,
             )
             fill_status = str(accounting_guard.get("fill_status") or "unknown")
             filled_quantity = _as_float(accounting_guard.get("filled_quantity"))

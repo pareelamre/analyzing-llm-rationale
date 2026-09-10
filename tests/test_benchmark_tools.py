@@ -622,9 +622,9 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertLess(plan["raw_kelly"], gross_kelly / 2.0)
 
     def test_polymarket_sizing_is_not_haircut_for_a_fee_it_never_pays(self):
-        """Polymarket's CLOB charges no taker fee, so cost is the ask."""
+        """Polymarket geopolitical and world events markets charge 0% taker fee."""
         plan = benchmark_tools._sizing_plan(
-            {"sizing_mode": "quarter_kelly", "model_probability": 0.55},
+            {"sizing_mode": "quarter_kelly", "model_probability": 0.55, "category": "geopolitics"},
             price=0.50, side="yes", account_value=10_000.0, platform="polymarket",
         )
         self.assertEqual(plan["fee_per_contract"], 0.0)
@@ -632,6 +632,39 @@ class BenchmarkToolTests(unittest.TestCase):
         p_win = 0.55 + 0.50 * (0.50 - 0.55)
         expected = max(0.0, (p_win * gross_odds - (1.0 - p_win)) / gross_odds)
         self.assertAlmostEqual(plan["raw_kelly"], round(expected, 6))
+
+    def test_polymarket_crypto_sizing_deducts_parabolic_taker_fee(self):
+        """Polymarket crypto markets incur dynamic parabolic taker fees (feeRate=0.07)."""
+        plan = benchmark_tools._sizing_plan(
+            {"sizing_mode": "quarter_kelly", "model_probability": 0.55, "category": "crypto"},
+            price=0.50, side="yes", account_value=10_000.0, platform="polymarket",
+        )
+        # fee = 1.0 * 0.07 * 0.50 * (1 - 0.50) = 0.0175
+        self.assertAlmostEqual(plan["fee_per_contract"], 0.0175, places=4)
+        self.assertGreater(plan["fee_per_contract"], 0.0)
+        effective_cost = 0.50 + 0.0175
+        odds = (1.0 - effective_cost) / effective_cost
+        p_win = 0.55 + 0.50 * (0.50 - 0.55)
+        expected_raw_kelly = max(0.0, (p_win * odds - (1.0 - p_win)) / odds)
+        self.assertAlmostEqual(plan["raw_kelly"], round(expected_raw_kelly, 6))
+
+    def test_polymarket_category_fee_rates_and_calculations(self):
+        # 0% on geopolitics & world
+        self.assertEqual(benchmark_tools._polymarket_fee_rate("geopolitics"), 0.0)
+        self.assertEqual(benchmark_tools._polymarket_fee_rate("World Events"), 0.0)
+        self.assertEqual(benchmark_tools._polymarket_fee(0.50, 10.0, category="geopolitics"), 0.0)
+
+        # 0.07 on crypto (~1.75% at mid)
+        self.assertEqual(benchmark_tools._polymarket_fee_rate("crypto"), 0.07)
+        self.assertAlmostEqual(benchmark_tools._polymarket_fee(0.50, 1.0, category="crypto"), 0.0175, places=4)
+
+        # 0.05 on sports / economics / weather
+        self.assertEqual(benchmark_tools._polymarket_fee_rate("sports"), 0.05)
+        self.assertAlmostEqual(benchmark_tools._polymarket_fee(0.50, 1.0, category="sports"), 0.0125, places=4)
+
+        # 0.04 on politics / tech / finance
+        self.assertEqual(benchmark_tools._polymarket_fee_rate("politics"), 0.04)
+        self.assertAlmostEqual(benchmark_tools._polymarket_fee(0.50, 1.0, category="politics"), 0.0100, places=4)
 
     def test_a_fill_is_priced_at_the_levels_it_actually_consumes(self):
         """Deep-book size booked at the touch is a fill no real order gets."""
@@ -1811,7 +1844,7 @@ class BenchmarkToolTests(unittest.TestCase):
                 mock.patch.dict(os.environ, env, clear=False),
                 mock.patch(
                     "analyzing_llm_rationale.market_data.fetch_polymarket",
-                    return_value={"yes_ask": 0.30, "no_ask": 0.30},
+                    return_value={"yes_ask": 0.30, "no_ask": 0.30, "category": "geopolitics"},
                 ),
             ):
                 result = benchmark_tools.place_trade(
@@ -1841,7 +1874,7 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(result["normalized_order"]["token_id"], "12345")
         self.assertEqual(result["execution"]["filled_quantity"], 2.0)
         self.assertTrue(result["risk_guard"]["allowed"])
-        # Polymarket's CLOB charges no per-trade taker fee, unlike Kalshi.
+        # Polymarket geopolitical and world events markets are fee-free.
         self.assertAlmostEqual(result["risk_guard"]["fee"], 0.0)
         self.assertIn("Shadow Polymarket trade recorded", result["message"])
 
@@ -1849,6 +1882,38 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(row[0], "polymarket")
         # Case must round-trip exactly, not get uppercased like a Kalshi ticker.
         self.assertEqual(row[1], "some-poly-market-slug")
+
+    def test_place_trade_polymarket_charges_category_taker_fee(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-crypto")
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_polymarket",
+                    return_value={"yes_ask": 0.50, "no_ask": 0.50, "category": "crypto"},
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {
+                        "platform": "polymarket",
+                        "ticker": "crypto-market-slug",
+                        "side": "yes", "price": 0.50, "quantity": 100,
+                        "token_id": "12345",
+                    },
+                    ctx,
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["mode"], "shadow")
+        self.assertEqual(result["execution"]["filled_quantity"], 100.0)
+        # fee = 100 * 0.07 * 0.50 * (1 - 0.50) = 1.75
+        self.assertAlmostEqual(result["risk_guard"]["fee"], 1.75, places=4)
 
     def test_place_trade_kalshi_and_polymarket_positions_stay_independent(self):
         # Same nominal quantity/side on both venues must not net against each

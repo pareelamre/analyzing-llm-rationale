@@ -142,11 +142,11 @@ class CurrentAccountValueTests(unittest.TestCase):
 
 
 def _poly_quote(ident, question="Q?", bid=0.4, ask=0.45, close="2026-09-01T00:00:00Z",
-                 opens="2026-05-01T00:00:00Z"):
+                 opens="2026-05-01T00:00:00Z", category="geopolitics"):
     return {
         "platform": "Polymarket", "ident": ident, "question": question,
         "probability": (bid + ask) / 2, "yes_bid": bid, "yes_ask": ask,
-        "close_time": close, "created_time": opens,
+        "close_time": close, "created_time": opens, "category": category,
     }
 
 
@@ -273,13 +273,21 @@ class CandidateSelectionTests(unittest.TestCase):
 
     def test_polymarket_edge_hurdle_has_no_taker_fee(self):
         k_quote = _quote("KXTEST", bid=0.40, ask=0.45)
-        p_quote = _poly_quote("poly-test", bid=0.40, ask=0.45)
+        p_quote = _poly_quote("poly-test", bid=0.40, ask=0.45, category="geopolitics")
         k_hurdle = agent_trading_tick._edge_hurdle_pp(k_quote)
         p_hurdle = agent_trading_tick._edge_hurdle_pp(p_quote)
-        # Polymarket hurdle is half-spread (0.025) + min_net_edge (0.02) = 0.045 exactly
+        # Polymarket geopolitical hurdle is half-spread (0.025) + min_net_edge (0.02) = 0.045 exactly
         self.assertAlmostEqual(p_hurdle, 0.045)
         # Kalshi hurdle includes taker fee, making it strictly higher
         self.assertGreater(k_hurdle, p_hurdle)
+
+    def test_polymarket_crypto_edge_hurdle_includes_taker_fee(self):
+        p_quote = _poly_quote("poly-crypto", bid=0.40, ask=0.45, category="crypto")
+        p_hurdle = agent_trading_tick._edge_hurdle_pp(p_quote)
+        # YES side: fee = 0.07 * 0.45 * (1 - 0.45) = 0.017325 -> hurdle = 0.025 + 0.017325 + 0.02 = 0.062325
+        # NO side:  fee = 0.07 * 0.60 * (1 - 0.60) = 0.0168 -> hurdle = 0.025 + 0.0168 + 0.02 = 0.0618
+        # _edge_hurdle_pp returns min(hurdles) -> 0.0618
+        self.assertAlmostEqual(p_hurdle, 0.0618, places=4)
 
     def test_discover_candidates_filters_markets_exceeding_max_hurdle(self):
         tight_k = _quote("KXTIGHT", bid=0.48, ask=0.50)  # hurdle ~3.75pp

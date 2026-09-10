@@ -1362,9 +1362,9 @@ _COMPOUND_STARTING_BANKROLL = 10_000.0
 # Trading costs deducted per paper bet so ROI is net-of-fees (the "real" ROI).
 # Kalshi charges a price-dependent taker fee ≈ coeff·contracts·p·(1−p); since a
 # stake of `s` buys s/p contracts, that simplifies to coeff·s·(1−p). Polymarket
-# charges no trading fee. _EXTRA_FEE_RATE adds a flat per-stake cost on every
-# venue (a slippage/spread assumption). All env-overridable; defaults are
-# venue-accurate (Polymarket fee-free, no slippage) so ROI stays truthful.
+# charges category-based dynamic taker fees (0% on geopolitics & world events).
+# _EXTRA_FEE_RATE adds a flat per-stake cost on every venue (a slippage/spread
+# assumption). All env-overridable; defaults are venue-accurate.
 _FEE_COEFF = {
     "kalshi": float(os.environ.get("KALSHI_FEE_COEFF", "0.07")),
     "polymarket": float(os.environ.get("POLYMARKET_FEE_COEFF", "0.0")),
@@ -1395,10 +1395,18 @@ def _published_round(value: float, places: int = 4) -> float:
     return round(value, places) + 0.0
 
 
-def _bet_fee(platform: Any, stake: float, p_side: float) -> float:
+def _bet_fee(platform: Any, stake: float, p_side: float, category: Optional[str] = None) -> float:
     """Trading cost for one paper bet: venue taker fee (price-dependent) plus a
     flat slippage assumption, both as a fraction of stake."""
-    coeff = _FEE_COEFF.get(str(platform or "").lower(), _DEFAULT_FEE_COEFF)
+    plat = str(platform or "").strip().lower()
+    if plat == "polymarket":
+        if category:
+            from analyzing_llm_rationale.benchmark_tools import _polymarket_fee_rate
+            rate = _polymarket_fee_rate(category)
+            return rate * stake * (1.0 - p_side) + _EXTRA_FEE_RATE * stake
+        coeff = _FEE_COEFF.get("polymarket", 0.0)
+        return coeff * stake * (1.0 - p_side) + _EXTRA_FEE_RATE * stake
+    coeff = _FEE_COEFF.get(plat, _DEFAULT_FEE_COEFF)
     return coeff * stake * (1.0 - p_side) + _EXTRA_FEE_RATE * stake
 
 # Market-volume (USD) buckets for the niche-vs-liquid skill breakdown. The edge
@@ -1519,7 +1527,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
     market, not one return per forecast snapshot.
 
     Returns are **net of venue trading fees** (``_bet_fee``: Kalshi's
-    price-dependent taker fee; Polymarket fee-free), so ``roi`` is the real,
+    price-dependent taker fee; Polymarket category-based taker fees; 0% maker/geopolitics), so ``roi`` is the real,
     cost-adjusted return. **Paper only** otherwise — excludes slippage/liquidity
     (unless ``PAPER_EXTRA_FEE_RATE`` is set) and correlation across snapshots of
     the same market. A signal check, the evidence that would justify ever
@@ -1552,8 +1560,9 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             continue
         win = (int(r["outcome"]) == 1) == side_yes
         s_edge = min(edge, stake_cap)
-        fee_flat = _bet_fee(r.get("platform"), 1.0, p_side)
-        fee_edge = _bet_fee(r.get("platform"), s_edge, p_side)
+        cat = r.get("category") or r.get("domain")
+        fee_flat = _bet_fee(r.get("platform"), 1.0, p_side, category=cat)
+        fee_edge = _bet_fee(r.get("platform"), s_edge, p_side, category=cat)
         payout = (1.0 - p_side) / p_side
         all_bets.append({
             "question": (r.get("question") or r.get("ident") or "")[:120],
@@ -1563,6 +1572,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "snapshot_ts": _ts(r.get("snapshot_ts")),
             "model": r.get("model"),
             "domain": r.get("domain"),
+            "category": r.get("category"),
             "model_probability": round(model_p, 4),
             "market_probability": round(market_p, 4),
             "edge": round(edge, 4),
@@ -1707,7 +1717,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                 continue
 
             payout = (1.0 - p_side) / p_side
-            fee = _bet_fee(b["platform"], stake, p_side)
+            fee = _bet_fee(b["platform"], stake, p_side, category=b.get("category") or b.get("domain"))
             profit = stake * (payout if win else -1.0) - fee
             staked += stake
             pnl += profit
@@ -1826,8 +1836,8 @@ def paper_pnl(resolved: List[Dict[str, Any]],
 
     return {
         "min_edge": min_edge,
-        "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; "
-                      "Polymarket fee-free). Excludes slippage/liquidity unless configured. "
+        "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi & "
+                      "Polymarket category-based taker fees; 0% maker/geopolitics). Excludes slippage/liquidity unless configured. "
                       "Signal check, not live PnL.",
         "flat": flat,
         "half_kelly": _run(_half_kelly),
@@ -1888,7 +1898,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         outcome = int(r.get("outcome") or 0)
         win = (outcome == 1) == side_yes
         payout = (1.0 - p_side) / p_side
-        fee = _bet_fee(r.get("platform"), 1.0, p_side)
+        fee = _bet_fee(r.get("platform"), 1.0, p_side, category=r.get("category") or r.get("domain"))
         profit = 1.0 * (payout if win else -1.0) - fee
         staked += 1.0
         pnl += profit

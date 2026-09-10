@@ -7724,7 +7724,10 @@ function _renderLandingMarketTable(items) {
     };
     const venuePill = e.platform
       ? (String(e.platform).toLowerCase() === 'polymarket'
-          ? `<span class="eb-fee-pill poly" style="margin-left:6px" title="Polymarket: 0% taker fee">Poly · 0% fee</span>`
+          ? (() => {
+              const f = _polyFeeDetails(e.category || e.domain, q);
+              return `<span class="eb-fee-pill poly" style="margin-left:6px" title="${escAttr(f.title)}">${escHtml(f.label)}</span>`;
+            })()
           : String(e.platform).toLowerCase() === 'kalshi'
             ? `<span class="eb-fee-pill kalshi" style="margin-left:6px" title="Kalshi: ~1.75% taker fee at mid">Kalshi · ~1.75% fee</span>`
             : `<span class="eb-badge" style="margin-left:6px">${escHtml(e.platform)}</span>`)
@@ -8403,11 +8406,75 @@ function _discrepancyBadge(e) {
   return '';
 }
 
-function _renderVenueWithFee(platform) {
+function _polyFeeDetails(category, question) {
+  const cat = String(category || '').trim().toLowerCase();
+  const q = String(question || '').trim().toLowerCase();
+
+  // Geopolitical & World Events: 0% fee
+  const isWorld = cat.includes('geopolitic') || cat.includes('world') ||
+    /\b(ukraine|russia|israel|gaza|iran|war|nato|ceasefire|taiwan|putin|zelenskyy|netanyahu)\b/i.test(q);
+  if (isWorld) {
+    return {
+      rate: '0%',
+      short: '0% fee',
+      label: 'Poly · 0% fee',
+      title: 'Polymarket: 0% fee (geopolitical & world events are fee-free)',
+    };
+  }
+
+  // Crypto: 7% rate parameter -> ~1.75% fee at mid
+  const isCrypto = cat.includes('crypto') ||
+    /\b(bitcoin|btc|ethereum|eth|solana|sol|doge|token|crypto|binance|coinbase)\b/i.test(q);
+  if (isCrypto) {
+    return {
+      rate: '~1.75%',
+      short: '~1.75% fee',
+      label: 'Poly · ~1.75% fee',
+      title: 'Polymarket: ~1.75% taker fee at mid (0.07 × p × (1-p)), 0% maker',
+    };
+  }
+
+  // Sports, Weather, Economics, Culture, Entertainment: 5% rate parameter -> ~1.25% fee at mid
+  const is5Pct = cat.includes('sport') || cat.includes('weather') || cat.includes('economic') ||
+    cat.includes('culture') || cat.includes('entertainment') ||
+    /\b(nba|nfl|mlb|fifa|champions league|super bowl|temperature|hurricane|rainfall|gdp|inflation|fed |interest rate|cpi|box office|oscar|grammy)\b/i.test(q);
+  if (is5Pct) {
+    return {
+      rate: '~1.25%',
+      short: '~1.25% fee',
+      label: 'Poly · ~1.25% fee',
+      title: 'Polymarket: ~1.25% taker fee at mid (0.05 × p × (1-p)), 0% maker',
+    };
+  }
+
+  // Politics, Finance, Tech, Mentions: 4% rate parameter -> ~1.00% fee at mid
+  const is4Pct = cat.includes('politic') || cat.includes('finance') || cat.includes('tech') ||
+    cat.includes('mention') || cat.includes('business') ||
+    /\b(trump|biden|harris|election|senate|congress|republican|democrat|apple|google|openai|nvidia|stock|nasdaq|s&p)\b/i.test(q);
+  if (is4Pct) {
+    return {
+      rate: '~1%',
+      short: '~1% fee',
+      label: 'Poly · ~1% fee',
+      title: 'Polymarket: ~1.00% taker fee at mid (0.04 × p × (1-p)), 0% maker',
+    };
+  }
+
+  // Default / General
+  return {
+    rate: '0–1.75%',
+    short: '0–1.75% fee',
+    label: 'Poly · 0–1.75% fee',
+    title: 'Polymarket: 0% maker, 0–1.75% taker fee depending on category (0% for geopolitics/world)',
+  };
+}
+
+function _renderVenueWithFee(platform, category, question) {
   const p = String(platform || '').trim();
   const lower = p.toLowerCase();
   if (lower === 'polymarket') {
-    return `<span class="eb-venue-tag"><span style="color:#059669">${escHtml(p)}</span><span class="eb-fee-pill poly" title="Polymarket: 0% taker fee">0% fee</span></span>`;
+    const fee = _polyFeeDetails(category, question);
+    return `<span class="eb-venue-tag"><span style="color:#059669">${escHtml(p)}</span><span class="eb-fee-pill poly" title="${escAttr(fee.title)}">${escHtml(fee.short)}</span></span>`;
   }
   if (lower === 'kalshi') {
     return `<span class="eb-venue-tag"><span style="color:#2563eb">${escHtml(p)}</span><span class="eb-fee-pill kalshi" title="Kalshi: ~1.75% taker fee at mid">~1.75% fee</span></span>`;
@@ -8441,7 +8508,7 @@ function _renderBoardPage(board, page) {
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${_leadSkillState(tr).key}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
       `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}${_discrepancyBadge(e)}</td>` +
-      `<td>${_renderVenueWithFee(e.platform)}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
+      `<td>${_renderVenueWithFee(e.platform, e.category || e.domain, e.question)}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
       `<td class="eb-live-market">${pct(e.market_probability)}%</td>` +
       `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td>` +
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
@@ -8758,7 +8825,7 @@ function _renderMtmPage(d) {
     const ddVal = risk.maxDrawdown;
     const ddStr = Number.isFinite(ddVal) ? (ddVal * 100).toFixed(1) + '%' : '—';
 
-    const pnlTitle = `Net P&L: ${_usd(pnlUsd)} (Realized: ${_usd(account.realized_pnl || 0)}, Unrealized: ${_usd(account.unrealized_pnl || 0)}) · Net of venue trading fees (Kalshi 7% taker formula & Polymarket 0%)`;
+    const pnlTitle = `Net P&L: ${_usd(pnlUsd)} (Realized: ${_usd(account.realized_pnl || 0)}, Unrealized: ${_usd(account.unrealized_pnl || 0)}) · Net of venue trading fees (Kalshi 7% taker formula & Polymarket category-based taker fees)`;
 
     return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
       <td><b>${i + 1}</b></td>
