@@ -3029,6 +3029,36 @@
     ],
     "gpt-oss-120b": [
       {
+        "action_id": "ffef8313-bcc1-4bd4-9d1c-fb033e851995",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:993913",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 60555.009999999995,
+          "realized_pnl": -626.4118,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXHIGHNY-26SEP09-T84"
+        },
+        "mode": "shadow",
+        "outcome": "yes",
+        "record_hash": "ed3ed8fe681f2be0d0a63da2d1de42b8459519c01a6ee55ab23cc06be0a05232",
+        "recorded_at": "2026-09-10T12:33:14.080116+00:00"
+      },
+      {
         "action_id": "6869c12a-ced8-43ec-b158-a70770e5e48c",
         "agent_id": "gpt-oss-120b",
         "audit": {
@@ -8512,6 +8542,89 @@
       }
     ],
     "llama-3.3-70b-instruct": [
+      {
+        "action_id": "39bb4afc-9701-465d-9027-9acee1cf11ad",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 1.0
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.07,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.07,
+            "quantity": "None"
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 7974.84858,
+            "cash_required": 345.647606,
+            "concentration_cap": 1196.227287,
+            "cycle_id": "30m:993913",
+            "cycle_spend_after": 345.647606,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 345.647606,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2392.454574,
+            "drawdown_after": 0.204628,
+            "fee": 21.126335,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 324.521271,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 324.521271,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1594.969716,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.33,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 345.647606,
+            "target_quantity": 4636.018164091564
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993913",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -0.07455700000000001,
+          "cash_required": 0.07455700000000001,
+          "fee": 0.004557,
+          "netting_payout": 0.0,
+          "notional": 0.07,
+          "price": 0.07,
+          "quantity": 1.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXNCAAFCOACHLEAVE-26DSWI-120126"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "5edc05425a25da7320132ebf8f393445fac478121654e2f57c7bdf0c235607d4",
+        "recorded_at": "2026-09-10T12:34:27.609651+00:00"
+      },
       {
         "action_id": "01689ff0-6e05-4ff9-8ebb-6decc50cd4f8",
         "agent_id": "llama-3.3-70b-instruct",
@@ -17408,7 +17521,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-10T11:37:36.244832+00:00",
+  "generated_at": "2026-09-10T12:48:38.510869+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
