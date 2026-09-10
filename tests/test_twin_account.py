@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import io
+import json
 import unittest
+import zipfile
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from analyzing_llm_rationale import trading, venue_api
@@ -23,15 +27,19 @@ from analyzing_llm_rationale.twin.reconcile import (
     read_complete_collection,
     synchronize_and_persist_complete_account,
     synchronize_complete_account,
+    synchronize_venue_account,
 )
 from analyzing_llm_rationale.twin.venue_account import (
     KALSHI_ACCOUNT_CAPABILITY,
     POLYMARKET_ACCOUNT_CAPABILITY,
     account_capability,
     complete_account_fetchers,
+    complete_account_read_plan,
+    conservative_bid_liquidation,
 )
 
 NOW = datetime(2025, 1, 1, tzinfo=timezone.utc)
+FIXTURES = Path(__file__).parent / "fixtures" / "twin"
 
 
 def page(items, complete=True):
@@ -372,62 +380,154 @@ class TwinAccountTests(unittest.TestCase):
         with self.assertRaisesRegex(AccountReadError, "pagination_limit_reached"):
             read_complete_collection("positions", fetch)
 
-    def test_native_kalshi_adapter_retains_prior_snapshot_when_cash_is_only_available_balance(self):
-        prior = self.sync().snapshot
+    def test_native_kalshi_plan_normalizes_complete_fixed_point_account(self):
+        fixture = json.loads((FIXTURES / "kalshi_account_v2.json").read_text())
         calls = []
 
         def reader(venue, operation, parameters, **kwargs):
             calls.append((venue, operation, dict(parameters), kwargs["access"]))
-            if operation == "balance":
-                # Portfolio value deliberately differs from available cash.
-                return {"data": {"balance": 700, "balance_dollars": "7.00", "portfolio_value": 999}}
-            keys = {"positions": "market_positions", "orders": "orders", "fills": "fills"}
-            return {"data": {keys[operation]: []}, "next_cursor": None}
+            if operation in {"historical_orders", "historical_fills"}:
+                key = "orders" if operation.endswith("orders") else "fills"
+                return {"data": {key: [], "cursor": ""}, "next_cursor": None}
+            return {"data": fixture[operation], "next_cursor": fixture[operation].get("cursor")}
 
-        result = synchronize_complete_account(
-            "scope-001", generation=2, received_at=NOW,
-            fetchers=complete_account_fetchers("kalshi", reader=reader, creds={"key": "secret"}),
-            local_command_ids={"command-001"}, previous=prior,
+        plan = complete_account_read_plan(
+            "kalshi", reader=reader, creds={"key": "secret"},
+            liquidation_reader=lambda *_: Decimal("1.20"),
+        )
+        result = synchronize_venue_account(
+            "scope-001", generation=1, received_at=NOW, read_plan=plan,
+            local_command_ids={"command-1"},
+        )
+        self.assertFalse(result.retained_previous)
+        self.assertEqual(result.snapshot.available_cash, Decimal("9"))
+        self.assertEqual(result.snapshot.reserved_cash, Decimal("1"))
+        self.assertEqual(result.snapshot.total_cash, Decimal("10"))
+        self.assertEqual(result.snapshot.position_basis, Decimal("0.8000"))
+        self.assertEqual(result.snapshot.fees_paid, Decimal("0.0200"))
+        self.assertEqual(result.snapshot.conservative_liquidation_value, Decimal("11.20"))
+        self.assertEqual(result.snapshot.settlements[0]["settlement_id"], "kalshi:KXOLD-YES")
+        self.assertFalse(result.snapshot.divergence)
+        self.assertEqual([call[1] for call in calls].count("balance"), 3)
+
+    def test_kalshi_live_and_historical_partitions_are_both_complete(self):
+        def reader(_venue, operation, parameters, **_kwargs):
+            if operation == "fills":
+                return {
+                    "data": {"fills": [{"fill_id": "live", "fee_cost": "0"}]},
+                    "next_cursor": None,
+                }
+            self.assertEqual(operation, "historical_fills")
+            return {
+                "data": {"fills": [{"fill_id": "historical", "fee_cost": "0"}]},
+                "next_cursor": None,
+            }
+
+        fetcher = complete_account_fetchers(
+            "kalshi", reader=reader, creds={"key": "secret"},
+            liquidation_reader=lambda *_: Decimal("0"),
+        )["fills"]
+        collection = read_complete_collection("fills", fetcher)
+        self.assertEqual([row["fill_id"] for row in collection.items], ["live", "historical"])
+        self.assertEqual(collection.pages_read, 2)
+
+    def test_native_generation_fence_catches_concurrent_order_insert(self):
+        fixture = json.loads((FIXTURES / "kalshi_account_v2.json").read_text())
+        order_reads = 0
+
+        def reader(_venue, operation, _parameters, **_kwargs):
+            nonlocal order_reads
+            if operation in {"historical_orders", "historical_fills"}:
+                key = "orders" if operation.endswith("orders") else "fills"
+                return {"data": {key: []}, "next_cursor": None}
+            value = json.loads(json.dumps(fixture[operation]))
+            if operation == "orders":
+                order_reads += 1
+                if order_reads == 3:
+                    value["orders"].append({
+                        "order_id": "manual-order", "status": "resting", "action": "buy",
+                        "side": "yes", "remaining_count_fp": "1", "yes_price_dollars": "0.2",
+                    })
+            return {"data": value, "next_cursor": None}
+
+        plan = complete_account_read_plan(
+            "kalshi", reader=reader, creds={"key": "secret"},
+            liquidation_reader=lambda *_: Decimal("1.2"),
+        )
+        prior = self.sync().snapshot
+        result = synchronize_venue_account(
+            "scope-001", generation=2, received_at=NOW, read_plan=plan,
+            local_command_ids={"command-1"}, previous=prior,
         )
         self.assertTrue(result.retained_previous)
         self.assertEqual(result.snapshot, prior)
-        self.assertEqual(
-            result.issues,
-            ("kalshi_balance_cash_breakdown_unavailable", "kalshi_settlement_immutable_id_unavailable"),
+        self.assertEqual(result.issues, ("account_generation_changed",))
+
+    def test_native_polymarket_plan_uses_snapshot_cash_and_executable_bids(self):
+        fixture = json.loads((FIXTURES / "polymarket_account_v1.json").read_text())
+        snapshots = []
+
+        def snapshot_reader():
+            value = json.loads(json.dumps(fixture["accounting"]))
+            snapshots.append(value)
+            return value
+
+        def reader(_venue, operation, _parameters, **_kwargs):
+            if operation in {"orders", "fills"}:
+                return {
+                    "data": fixture[operation],
+                    "next_cursor": None,
+                }
+            return {"data": fixture["activity"], "next_offset": None}
+
+        plan = complete_account_read_plan(
+            "polymarket", reader=reader, creds={"api": "secret"},
+            accounting_snapshot_reader=snapshot_reader,
+            liquidation_reader=lambda *_: Decimal("1.30"),
         )
-        self.assertEqual([call[1] for call in calls], ["balance", "positions", "orders", "fills"])
-        self.assertTrue(all(call[3] == "account" for call in calls))
-
-    def test_native_polymarket_adapter_keeps_marks_out_of_conservative_liquidation(self):
-        calls = []
-
-        def reader(venue, operation, parameters, **kwargs):
-            calls.append((venue, operation, dict(parameters), kwargs["access"]))
-            if operation == "positions":
-                return {"data": [{
-                    "asset": "token-1", "size": "2", "initialValue": "0.6", "currentValue": "1.9",
-                }], "next_offset": None}
-            return {"data": {"data": []}, "next_cursor": None}
-
-        fetchers = complete_account_fetchers("polymarket", reader=reader, creds={"api": "secret"})
-        positions = read_complete_collection("positions", fetchers["positions"])
-        self.assertEqual(
-            positions.items,
-            ({"position_id": "token-1", "token_id": "token-1", "quantity": "2", "basis": "0.6"},),
+        result = synchronize_venue_account(
+            "scope-001", generation=1, received_at=NOW, read_plan=plan,
+            local_command_ids={"command-1"},
         )
-        self.assertNotIn("liquidation_value", positions.items[0])
+        self.assertFalse(result.retained_previous)
+        self.assertEqual(len(snapshots), 2)
+        self.assertEqual(result.snapshot.total_cash, Decimal("10.00"))
+        self.assertEqual(result.snapshot.available_cash, Decimal("9.00"))
+        self.assertEqual(result.snapshot.reserved_cash, Decimal("1.00"))
+        self.assertEqual(result.snapshot.conservative_liquidation_value, Decimal("11.30"))
+        self.assertEqual(result.snapshot.settlements[0]["transaction_hash"], "0xabc")
+        self.assertFalse(result.snapshot.divergence)
 
+    def test_native_plan_generation_change_retains_previous(self):
         prior = self.sync().snapshot
-        result = synchronize_complete_account(
-            "scope-001", generation=2, received_at=NOW, fetchers=fetchers,
-            local_command_ids={"command-001"}, previous=prior,
+        fixture = json.loads((FIXTURES / "polymarket_account_v1.json").read_text())
+        count = 0
+
+        def snapshot_reader():
+            nonlocal count
+            count += 1
+            value = json.loads(json.dumps(fixture["accounting"]))
+            if count > 1:
+                value["equity"]["cashBalance"] = "11.00"
+            return value
+
+        def reader(_venue, operation, _parameters, **_kwargs):
+            if operation in {"orders", "fills"}:
+                return {"data": fixture[operation], "next_cursor": None}
+            return {"data": fixture["activity"], "next_offset": None}
+
+        plan = complete_account_read_plan(
+            "polymarket", reader=reader, creds={"api": "secret"},
+            accounting_snapshot_reader=snapshot_reader,
+            liquidation_reader=lambda *_: Decimal("1.30"),
+        )
+        result = synchronize_venue_account(
+            "scope-001", generation=2, received_at=NOW, read_plan=plan,
+            local_command_ids={"command-1"}, previous=prior,
         )
         self.assertTrue(result.retained_previous)
-        self.assertEqual(
-            result.issues,
-            ("polymarket_cash_authority_unavailable", "polymarket_settlement_authority_unavailable"),
-        )
-        self.assertTrue(all(call[3] == "account" for call in calls))
+        self.assertEqual(result.snapshot, prior)
+        self.assertEqual(result.issues, ("account_generation_changed",))
 
     def test_native_polymarket_clob_pages_flow_through_venue_api_read(self):
         client = MagicMock(host="https://clob.polymarket.com")
@@ -454,6 +554,8 @@ class TwinAccountTests(unittest.TestCase):
 
     def test_kalshi_order_change_during_pagination_is_rejected(self):
         def reader(_venue, operation, parameters, **_kwargs):
+            if operation == "historical_orders":
+                return {"data": {"orders": []}, "next_cursor": None}
             self.assertEqual(operation, "orders")
             remaining = "2.0000" if parameters.get("cursor") is None else "1.0000"
             return {
@@ -471,13 +573,50 @@ class TwinAccountTests(unittest.TestCase):
         result = self.sync(orders=collection.account_pages())
         self.assertEqual(result.issues, ("orders_duplicate_conflict",))
 
-    def test_documented_venue_capabilities_do_not_claim_live_cash_authority(self):
+    def test_accounting_snapshot_zip_parser_requires_both_ledgers(self):
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as target:
+            target.writestr(
+                "positions.csv",
+                "conditionId,asset,size,curPrice,valuationTime\ncondition,token,2,0.7,2026-01-01T00:00:00Z\n",
+            )
+            target.writestr(
+                "equity.csv",
+                "cashBalance,positionsValue,equity,valuationTime\n10,1.4,11.4,2026-01-01T00:00:00Z\n",
+            )
+        response = MagicMock(content=archive.getvalue())
+        response.raise_for_status.return_value = None
+        with (
+            patch.object(trading, "_polymarket_client", return_value=MagicMock()),
+            patch.object(trading, "_polymarket_account_address", return_value="0x" + "a" * 40),
+            patch.object(venue_api.requests, "get", return_value=response) as get,
+        ):
+            result = venue_api.read_polymarket_accounting_snapshot(creds={"api": "secret"})
+        self.assertEqual(result["equity"]["cashBalance"], "10")
+        self.assertEqual(result["positions"][0]["asset"], "token")
+        self.assertEqual(get.call_args.kwargs["params"], {"user": "0x" + "a" * 40})
+
+    def test_conservative_liquidation_values_missing_depth_at_zero(self):
+        value = conservative_bid_liquidation(
+            {"bids": [{"price": "0.60", "size": "1"}, {"price": "0.50", "size": "0.5"}]},
+            Decimal("2"),
+        )
+        self.assertEqual(value, Decimal("0.850"))
+        with self.assertRaisesRegex(AccountReadError, "orderbook"):
+            conservative_bid_liquidation({}, Decimal("1"))
+
+    def test_documented_venue_capabilities_claim_only_supported_authority(self):
         self.assertEqual(account_capability("kalshi"), KALSHI_ACCOUNT_CAPABILITY)
         self.assertEqual(account_capability("polymarket"), POLYMARKET_ACCOUNT_CAPABILITY)
-        for capability in (KALSHI_ACCOUNT_CAPABILITY, POLYMARKET_ACCOUNT_CAPABILITY):
-            self.assertFalse(capability.cash_ledger_supported)
-            self.assertFalse(capability.settlement_identity_supported)
-            self.assertTrue(capability.blockers)
+        self.assertTrue(KALSHI_ACCOUNT_CAPABILITY.cash_ledger_supported)
+        self.assertTrue(KALSHI_ACCOUNT_CAPABILITY.settlement_identity_supported)
+        self.assertEqual(KALSHI_ACCOUNT_CAPABILITY.blockers, ())
+        self.assertTrue(POLYMARKET_ACCOUNT_CAPABILITY.cash_ledger_supported)
+        self.assertTrue(POLYMARKET_ACCOUNT_CAPABILITY.settlement_identity_supported)
+        self.assertEqual(
+            POLYMARKET_ACCOUNT_CAPABILITY.blockers,
+            ("fee_enabled_trade_without_actual_fee",),
+        )
         with self.assertRaisesRegex(SchemaValidationError, "unsupported venue"):
             account_capability("unsupported")
 

@@ -21,6 +21,7 @@ class AccountReadError(RuntimeError):
 
 
 PageFetcher = Callable[[Optional[str]], Mapping[str, Any]]
+GenerationFence = Callable[[], str]
 VenueReader = Callable[..., Mapping[str, Any]]
 RowNormalizer = Callable[[Mapping[str, Any]], Mapping[str, Any]]
 
@@ -184,6 +185,7 @@ def synchronize_complete_account(
     fetchers: Mapping[str, PageFetcher],
     local_command_ids: set[str],
     previous: Optional[AccountSnapshot] = None,
+    generation_fence: Optional[GenerationFence] = None,
 ) -> AccountSyncResult:
     """Read all required collections before atomically replacing a snapshot.
 
@@ -194,6 +196,10 @@ def synchronize_complete_account(
     required = ("balances", "positions", "orders", "fills", "settlements")
     if any(name not in fetchers for name in required):
         raise SchemaValidationError("complete account synchronization needs every collection fetcher")
+    try:
+        fence_before = generation_fence() if generation_fence is not None else None
+    except Exception:
+        return AccountSyncResult(previous, previous is not None, ("account_generation_fence_failed",))
     collections: dict[str, CompleteCollection] = {}
     issues: list[str] = []
     for name in required:
@@ -203,10 +209,17 @@ def synchronize_complete_account(
             issues.append(str(exc))
     if issues:
         return AccountSyncResult(previous, previous is not None, tuple(issues))
+    if generation_fence is not None:
+        try:
+            fence_after = generation_fence()
+        except Exception:
+            return AccountSyncResult(previous, previous is not None, ("account_generation_fence_failed",))
+        if not fence_before or fence_before != fence_after:
+            return AccountSyncResult(previous, previous is not None, ("account_generation_changed",))
     generation_tokens = {
         collection.generation_token for collection in collections.values()
     }
-    if generation_tokens != {None}:
+    if generation_fence is None and generation_tokens != {None}:
         if None in generation_tokens:
             return AccountSyncResult(
                 previous, previous is not None, ("account_generation_fence_incomplete",)
@@ -238,6 +251,7 @@ def synchronize_and_persist_complete_account(
     local_command_ids: set[str],
     snapshot_store: AccountSnapshotRepository,
     previous: Optional[AccountSnapshot] = None,
+    generation_fence: Optional[GenerationFence] = None,
 ) -> AccountSyncResult:
     """Persist a validated account generation before it becomes the new authority.
 
@@ -252,6 +266,7 @@ def synchronize_and_persist_complete_account(
         fetchers=fetchers,
         local_command_ids=local_command_ids,
         previous=previous,
+        generation_fence=generation_fence,
     )
     if result.snapshot is None or result.retained_previous:
         return result
@@ -262,3 +277,24 @@ def synchronize_and_persist_complete_account(
     if persisted.generation != result.snapshot.generation:
         return AccountSyncResult(persisted, True, ("account_snapshot_generation_superseded",))
     return AccountSyncResult(persisted, False, ())
+
+
+def synchronize_venue_account(
+    scope_id: str,
+    *,
+    generation: int,
+    received_at: datetime,
+    read_plan: Any,
+    local_command_ids: set[str],
+    previous: Optional[AccountSnapshot] = None,
+) -> AccountSyncResult:
+    """Synchronize a venue read plan without discarding its account fence."""
+    return synchronize_complete_account(
+        scope_id,
+        generation=generation,
+        received_at=received_at,
+        fetchers=read_plan.fetchers,
+        generation_fence=read_plan.generation_fence,
+        local_command_ids=local_command_ids,
+        previous=previous,
+    )
