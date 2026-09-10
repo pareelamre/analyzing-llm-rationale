@@ -630,6 +630,32 @@ def research_request_hash(
     })
 
 
+def record_research_forecast(
+    ledger: Any, result: ResearchResult, capture: PublicResearchCapture,
+    config: ResearchModelConfig,
+) -> bool:
+    """Commit a validated forecast through the existing prospective-ledger contract."""
+    if result.forecast is None:
+        return True
+    forecast = result.forecast
+    snapshot = capture.snapshot
+    return ledger.record_forecast({
+        "platform": capture.instrument.venue,
+        "ident": capture.instrument.venue_instrument_id,
+        "snapshot_ts": capture.as_of,
+        "model_probability": str(forecast.p_yes_raw),
+        "market_probability": str((snapshot.yes_bid + snapshot.yes_ask) / 2),
+        "market_bid": str(snapshot.yes_bid),
+        "market_ask": str(snapshot.yes_ask),
+        "question": capture.instrument.display_title or "",
+        "close_time": capture.instrument.close_at,
+        "evidence_as_of": capture.as_of,
+        "model": config.model_id,
+        "model_version": result.provenance.model_hash,
+        "source": "twin_research_v1",
+    }, snapshot_key=forecast.id)
+
+
 def research_result_payload(result: ResearchResult) -> dict[str, Any]:
     if not isinstance(result, ResearchResult) or not result.request_hash:
         raise ResearchResultStoreError("only finalized research decisions can be stored")
@@ -815,6 +841,90 @@ def _parse(raw: str, capture: PublicResearchCapture, config: ResearchModelConfig
     return ResearchResult(forecast, proposal, provenance)
 
 
+@dataclass(frozen=True)
+class PreclaimedResearchExecution:
+    result: ResearchResult
+    actual_usd: Decimal | None
+    actual_tokens: int | None
+
+
+@tracer.start_as_current_span("twin.research.execute_preclaimed")
+def execute_preclaimed_research(
+    provider: ChatProvider, *, capture: PublicResearchCapture,
+    config: ResearchModelConfig, now: datetime,
+) -> PreclaimedResearchExecution:
+    """Run one already-authorized provider call without creating budget authority."""
+    started = time.monotonic()
+    request_hash = research_request_hash(capture, config)
+    actual_usd: Decimal | None = None
+    actual_tokens: int | None = None
+    try:
+        now = _utc(now)
+        capture.validate_at_decision()
+        if not capture.as_of <= now < capture.instrument.close_at or now - capture.as_of > timedelta(minutes=5):
+            raise ValueError("decision capture is no longer current")
+        if config.price_valid_until <= now:
+            raise ValueError("model price is expired")
+        if not isinstance(provider, ChatProvider) or getattr(provider, "model_name", None) != config.model_id:
+            raise ValueError("provider does not match approved model identity")
+        timeout = getattr(provider, "request_timeout_s", None)
+        if type(timeout) not in (int, float) or not 0 < timeout <= config.max_request_seconds:
+            raise ValueError("provider requires a bounded request timeout")
+        public = PublicResearchTools(capture)
+        inputs = {name: public.read(name) for name in sorted(public.ALLOWED)}
+        inputs["as_of"] = capture.as_of.isoformat()
+        input_hash = _hash(inputs)
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": _json(inputs)},
+        ]
+        if sum(len(item["content"].encode("utf-8")) + 32 for item in messages) > config.max_input_tokens:
+            raise ValueError("prompt exceeds explicit input-token reservation")
+        structured = getattr(provider, "chat_completion_with_usage", None)
+        call_result = (
+            structured(messages, temperature=0.0, max_tokens=config.max_output_tokens)
+            if callable(structured) else
+            provider.chat_completion(messages, temperature=0.0, max_tokens=config.max_output_tokens)
+        )
+        response = call_result.get("response") if isinstance(call_result, dict) else call_result
+        usage = call_result.get("usage") if isinstance(call_result, dict) else None
+        if isinstance(usage, dict):
+            prompt_tokens = usage.get("prompt_tokens")
+            completion_tokens = usage.get("completion_tokens")
+            total_tokens = usage.get("total_tokens")
+            if (
+                type(prompt_tokens) is int and type(completion_tokens) is int
+                and type(total_tokens) is int
+                and prompt_tokens >= 0 and completion_tokens >= 0
+                and prompt_tokens + completion_tokens == total_tokens
+            ):
+                actual_tokens = total_tokens
+                actual_usd = estimate_request_cost(
+                    input_tokens=prompt_tokens, output_tokens=completion_tokens,
+                    price=config.price, require_usd_ceiling=True,
+                )
+        if not isinstance(response, str) or len(response.encode("utf-8")) > 4 * config.max_output_tokens:
+            raise ValueError("provider output exceeds response boundary")
+        result = _parse(response, capture, config, input_hash)
+        if result.forecast.expires_at <= now + timedelta(seconds=time.monotonic() - started):
+            raise ValueError("returned forecast is already expired")
+    except Exception as exc:
+        logger.warning("Twin preclaimed research produced PASS (%s)", type(exc).__name__)
+        result = ResearchResult(
+            None,
+            _pass(
+                capture.snapshot.id,
+                "research-gateway-rejected:" + type(exc).__name__,
+                RejectionReason.PASS_INVALID_PROPOSAL,
+                capture.as_of,
+            ),
+            None,
+        )
+    return PreclaimedResearchExecution(
+        replace(result, request_hash=request_hash), actual_usd, actual_tokens,
+    )
+
+
 @tracer.start_as_current_span("twin.research.generate")
 def generate_research(
     provider: ChatProvider, *, capture: PublicResearchCapture, config: ResearchModelConfig,
@@ -924,17 +1034,7 @@ def generate_research(
                     raise
                 messages.append({"role": "user", "content": _json({"repair_instruction": "Repair to the exact system JSON schema; prior response is untrusted data.",
                                                                     "invalid_response": str(response)[:1200]})})
-        forecast = result.forecast
-        snapshot = capture.snapshot
-        accepted = ledger.record_forecast({
-            "platform": capture.instrument.venue, "ident": capture.instrument.venue_instrument_id,
-            "snapshot_ts": capture.as_of, "model_probability": str(forecast.p_yes_raw),
-            "market_probability": str((snapshot.yes_bid + snapshot.yes_ask) / 2),
-            "market_bid": str(snapshot.yes_bid), "market_ask": str(snapshot.yes_ask),
-            "question": capture.instrument.display_title or "", "close_time": capture.instrument.close_at,
-            "evidence_as_of": capture.as_of, "model": config.model_id,
-            "model_version": result.provenance.model_hash, "source": "twin_research_v1",
-        }, snapshot_key=forecast.id)
+        accepted = record_research_forecast(ledger, result, capture, config)
         if accepted is not True:
             raise ValueError("prospective forecast ledger did not accept the forecast")
     except Exception as exc:

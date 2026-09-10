@@ -8,16 +8,20 @@ from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 
+from ..forecast_ledger import ForecastLedger
 from ..observability import init_observability
 from .budget import BudgetAlreadyClaimed, BudgetExceeded, DatastoreResearchBudget
 from .research_gateway import (
     DatastoreResearchCaptureStore,
     DatastoreResearchResultStore,
     ResearchRuntimePolicy,
+    execute_preclaimed_research,
     load_research_runtime_policy,
     public_evidence_set_id,
+    record_research_forecast,
     research_capture_payload,
     research_request_hash,
+    research_result_payload,
     restore_research_capture,
     restore_research_result,
 )
@@ -77,6 +81,34 @@ def _runtime_worker_id(role: WorkerRole, hostname: str) -> str:
     return f"{role.value}-{sha256(hostname.encode()).hexdigest()[:24]}"
 
 
+class _DatastoreLedgerAdapter:
+    """Provide ForecastLedger's immutable insert surface over Cloud Datastore."""
+
+    def __init__(self, client) -> None:
+        self._client = client
+
+    def key(self, kind: str, id_: str):
+        return self._client.key(kind, id_)
+
+    def get(self, key):
+        return self._client.get(key)
+
+    def query(self, kind: str):
+        return self._client.query(kind=kind)
+
+    def insert_immutable(self, source) -> bool:
+        from google.cloud import datastore
+
+        key = self._client.key(source.key.kind, source.key.id)
+        with self._client.transaction():
+            if self._client.get(key) is not None:
+                return False
+            entity = datastore.Entity(key=key, exclude_from_indexes=("payload",))
+            entity.update(dict(source))
+            self._client.put(entity)
+        return True
+
+
 def _recover_stale_research_budgets(
     jobs: DatastoreWorkerJobs, budget: DatastoreResearchBudget, *, now: datetime,
 ) -> int:
@@ -118,7 +150,7 @@ def _maintenance_operation(
 
 def _research_operation(
     assignment: ResearchAssignment, policy: ResearchRuntimePolicy,
-    gateway: HttpResearchJobGateway,
+    gateway: HttpResearchJobGateway, provider,
 ) -> ResearchCompletion:
     if assignment.model_config_id != policy.id:
         raise WorkerDegraded("research_model_config_mismatch")
@@ -133,7 +165,20 @@ def _research_operation(
         ) != assignment.evidence_set_id
     ):
         raise WorkerDegraded("research_capture_identity_mismatch")
-    raise WorkerDegraded("research_result_transport_unavailable")
+    execution = execute_preclaimed_research(
+        provider, capture=capture, config=policy.model,
+        now=datetime.now(timezone.utc),
+    )
+    usage = {}
+    if execution.actual_usd is not None and execution.actual_tokens is not None:
+        usage = {
+            "actual_usd": str(execution.actual_usd),
+            "actual_tokens": execution.actual_tokens,
+        }
+    return ResearchCompletion(
+        "completed", result_payload=research_result_payload(execution.result),
+        **usage,
+    )
 
 
 def create_environment_app():
@@ -168,6 +213,7 @@ def create_environment_app():
         budget = DatastoreResearchBudget(client)
         captures = DatastoreResearchCaptureStore(client)
         results = DatastoreResearchResultStore(client)
+        ledger = ForecastLedger(_DatastoreLedgerAdapter(client))
 
         def authorize(assignment: ResearchAssignment) -> None:
             try:
@@ -216,6 +262,7 @@ def create_environment_app():
             ):
                 raise WorkerDegraded("research_result_identity_mismatch")
             results.record_result(assignment.budget_reservation_id, result)
+            record_research_forecast(ledger, result, capture, research_policy.model)
             actual_usd = (
                 None if completion.actual_usd is None
                 else Decimal(completion.actual_usd)
@@ -264,7 +311,7 @@ def create_environment_app():
     else:
         # Startup validates the configured secret, model identity, endpoint,
         # timeout and price before this revision can report ready.
-        research_policy.build_provider()
+        provider = research_policy.build_provider()
         gateway = HttpResearchJobGateway(
             _required("FORESEA_TWIN_MAINTENANCE_URL"),
             audience=_required("FORESEA_TWIN_MAINTENANCE_AUDIENCE"),
@@ -274,6 +321,7 @@ def create_environment_app():
             research_worker=TwinResearchWorker(gateway, worker_id=worker_id),
             research_operation=lambda assignment: _research_operation(
                 assignment, research_policy, gateway,
+                provider,
             ),
         )
     app = create_private_worker_app(runtime)

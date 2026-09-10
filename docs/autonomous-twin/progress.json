@@ -210,31 +210,26 @@
         "T04"
       ],
       "status": "in_progress",
-      "substep": "atomic reserve-and-claim and conservative uncertain accounting are complete; the private worker now validates one priced bounded model at startup, stale claimed calls remain uncertain, and content/market/as-of-bound evidence caches are implemented; authenticated durable capture/result transport and authoritative usage receipts remain",
-      "branch": "codex/autonomous-twin-t07-runtime",
+      "substep": "primary provider execution now runs in the isolated worker; fenced capture/result transport, create-once persistence, prospective-ledger recording, usage reconciliation, stale-call recovery, pricing, timeout, fanout and evidence caching are implemented; separately reserved schema repair remains",
+      "branch": "codex/t07-runtime-execution",
       "commit": null,
       "pr_url": null,
       "checks": [
-        "py -m unittest tests.test_twin_budget tests.test_twin_research_gateway tests.test_twin_runtime -v (pass: 45 tests)",
-        "py -m unittest discover -s tests (pass: 2134 tests)",
-        "py -m ruff check src tests (pass)",
-        "git diff --check (pass)"
+        "focused twin research/runtime/worker tests (pass: 49 tests)",
+        "py -m ruff check focused files (pass)"
       ],
       "evidence": [
-        "configs/twin.yaml",
-        "src/analyzing_llm_rationale/twin/budget.py",
         "src/analyzing_llm_rationale/twin/research_gateway.py",
         "src/analyzing_llm_rationale/twin/runtime_app.py",
-        "tests/test_twin_budget.py",
+        "src/analyzing_llm_rationale/twin/runtime.py",
+        "src/analyzing_llm_rationale/twin/worker.py",
         "tests/test_twin_research_gateway.py",
-        "tests/test_twin_runtime.py",
         "docs/autonomous-twin/BUDGET_INTEGRITY.md"
       ],
       "blockers": [
-        "The isolated research service still lacks authenticated durable capture acquisition and result submission.",
-        "Authoritative provider usage receipts must reconcile the maintenance-owned claim without a second reserve/claim."
+        "The optional schema-repair provider call still needs a separate atomic maintenance-owned reservation."
       ],
-      "handoff": "Add identity-bound capture and result transport through the maintenance service, reconcile actual provider usage once, and keep live trading disabled."
+      "handoff": "Add the fenced repair-reservation endpoint and reconcile primary and repair receipts independently; then rerun the complete T07 acceptance matrix."
     },
     {
       "id": "T08",
