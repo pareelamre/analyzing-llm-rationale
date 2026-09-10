@@ -22,9 +22,11 @@ from analyzing_llm_rationale.twin.models import (
 )
 from analyzing_llm_rationale.twin.research_gateway import (
     DatastorePublicEvidenceCache,
+    DatastoreResearchCaptureStore,
     DatastoreResearchResultStore,
     HistoricalCalibration,
     InMemoryPublicEvidenceCache,
+    InMemoryResearchCaptureStore,
     InMemoryResearchResultStore,
     PublicEvidence,
     PublicResearchCapture,
@@ -33,6 +35,8 @@ from analyzing_llm_rationale.twin.research_gateway import (
     ResearchResultStoreError,
     generate_research,
     public_evidence_set_id,
+    research_capture_payload,
+    restore_research_capture,
 )
 
 NOW = datetime(2025, 1, 3, tzinfo=timezone.utc)
@@ -212,6 +216,26 @@ class ResearchGatewayTests(unittest.TestCase):
         self.assertEqual(copied.evidence[0].text, "Supporting public report.")
         with self.assertRaises(FrozenInstanceError):
             copied.rules = "changed"
+
+    def test_capture_transport_round_trips_and_rejects_tampering(self):
+        payload = research_capture_payload(self.capture)
+        self.assertEqual(restore_research_capture(payload), self.capture)
+        payload["snapshot"]["instrument_id"] = "kalshi:demo:OTHER"
+        with self.assertRaisesRegex(ValueError, "cannot be restored"):
+            restore_research_capture(payload)
+
+    def test_capture_stores_are_immutable_by_assignment(self):
+        for store in (
+            InMemoryResearchCaptureStore(),
+            DatastoreResearchCaptureStore(FakeDatastoreClient()),
+        ):
+            with self.subTest(store=type(store).__name__):
+                self.assertTrue(store.record_capture("assignment-1", self.capture))
+                self.assertEqual(store.get_capture("assignment-1"), self.capture)
+                self.assertTrue(store.record_capture("assignment-1", self.capture))
+                changed = replace(self.capture, rules="Different settlement rule.")
+                with self.assertRaisesRegex(ValueError, "conflicting"):
+                    store.record_capture("assignment-1", changed)
 
     def test_malformed_semantics_get_exactly_one_repair_then_persist_pass(self):
         invalid = ["not-json", valid_response(action="BUY_YES"), valid_response(p_yes=True),

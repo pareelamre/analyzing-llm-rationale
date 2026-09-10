@@ -85,6 +85,10 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         authorized = []
         gateway = MaintenanceResearchJobGateway(
             jobs, authorize_assignment=lambda item: authorized.append(item.budget_reservation_id),
+            capture_loader=lambda item: {
+                "assignment_id": item.research_assignment_id,
+                "market_snapshot_id": item.market_snapshot_id,
+            },
         )
         runtime = PrivateTwinRuntime(
             WorkerRole.MAINTENANCE,
@@ -220,6 +224,14 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             self.assertEqual(claim.status_code, 200)
             assignment = claim.json()["assignment"]
             self.assertEqual(authorized, ["budget-001"])
+            capture = client.get(
+                "/internal/twin/research-jobs/research-job/capture",
+                headers=self.auth("research-token"),
+            )
+            self.assertEqual(capture.status_code, 200)
+            self.assertEqual(
+                capture.json()["capture"]["assignment_id"], "assignment-001",
+            )
             result = client.post(
                 "/internal/twin/research-jobs/research-job/result",
                 headers=self.auth("research-token"),
@@ -291,6 +303,8 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
                     return Response({"status": "claimed", "assignment": assignment})
                 if url.endswith("/result"):
                     return Response({"status": "completed", "research_result_id": "result-001"})
+                if url.endswith("/capture"):
+                    return Response({"capture": {"schema_version": 1}})
                 return Response({"status": "running", "completed_result": None})
 
         session = Session()
@@ -300,6 +314,7 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         )
         claimed = gateway.claim("research-job", worker_id="ignored", now=NOW)
         self.assertEqual(claimed.fence, 2)
+        self.assertEqual(gateway.load_capture(claimed), {"schema_version": 1})
         completed = gateway.complete(
             claimed, ResearchCompletion(
                 "completed", research_result_id="result-001", usage_record_id="usage-001",

@@ -127,6 +127,15 @@ class HttpResearchJobGateway:
         except (TypeError, ValueError) as exc:
             raise WorkerJobError("maintenance returned an invalid research assignment") from exc
 
+    def load_capture(self, assignment: ResearchAssignment) -> Mapping[str, Any]:
+        payload = self._call(
+            "GET", f"/internal/twin/research-jobs/{assignment.job_id}/capture",
+        )
+        capture = payload.get("capture")
+        if not isinstance(capture, Mapping):
+            raise WorkerJobError("maintenance omitted the research capture")
+        return capture
+
     def complete(
         self, assignment: ResearchAssignment, result: ResearchCompletion, *, now: datetime,
     ) -> Mapping[str, Any]:
@@ -299,6 +308,18 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
                     assignment, result, now=runtime.clock(),
                 )
                 return completed
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @app.get("/internal/twin/research-jobs/{job_id}/capture")
+        async def research_capture(job_id: str, request: Request):
+            try:
+                email = runtime.authenticate(request, runtime.identities.research_accounts)
+                assignment = ResearchAssignment.from_job(runtime.jobs.get(job_id))
+                if assignment.worker_id != runtime.research_worker_id(email):
+                    raise WorkerAuthenticationError("research claim belongs to another identity")
+                capture = runtime.research_gateway.load_capture(assignment)
+                return {"capture": capture}
             except Exception as exc:
                 raise _http_error(exc) from exc
 
