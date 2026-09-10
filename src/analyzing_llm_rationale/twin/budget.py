@@ -263,6 +263,12 @@ class InMemoryResearchBudget:
         with self._lock:
             return self._usage.get(key, BudgetUsage(key))
 
+    def mark_uncertain(self, reservation_id: str, *, key: str) -> BudgetUsage:
+        """Retain a timed-out, cancelled, or stale call as possibly billed."""
+        return self.reconcile(
+            reservation_id, key=key, actual_usd=None, actual_tokens=None,
+        )
+
 
 class DatastoreResearchBudget:
     """Durable daily budget aggregate and idempotent reservation adapter."""
@@ -365,3 +371,9 @@ class DatastoreResearchBudget:
     def usage(self, key: str) -> BudgetUsage:
         entity = self._client.get(self._usage_key(key))
         return self._usage(key, entity) if entity is not None else BudgetUsage(key)
+
+    def mark_uncertain(self, reservation_id: str, *, key: str) -> BudgetUsage:
+        """Atomically retain a timed-out, cancelled, or stale call as billed."""
+        return self.reconcile(
+            reservation_id, key=key, actual_usd=None, actual_tokens=None,
+        )

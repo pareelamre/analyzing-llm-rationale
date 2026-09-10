@@ -210,30 +210,31 @@
         "T04"
       ],
       "status": "in_progress",
-      "substep": "durable atomic reserve-and-claim, duplicate-dispatch prevention, conservative uncertain token and USD accounting, strict persisted-counter validation, and audited late reconciliation are implemented; production model pricing, timeouts, cancellation, stale-call recovery, and worker wiring remain",
-      "branch": "codex/research-budget-integrity",
-      "commit": "174cc3d3",
+      "substep": "atomic reserve-and-claim and conservative uncertain accounting are complete; the private worker now validates one priced bounded model at startup, stale claimed calls remain uncertain, and content/market/as-of-bound evidence caches are implemented; authenticated durable capture/result transport and authoritative usage receipts remain",
+      "branch": "codex/autonomous-twin-t07-runtime",
+      "commit": null,
       "pr_url": null,
       "checks": [
-        "PYTHONPATH=src py -m unittest tests.test_twin_budget (pass: 4 tests)",
-        "py -m ruff check src/analyzing_llm_rationale/twin/budget.py tests/test_twin_budget.py (pass)",
-        "git diff --check (pass)",
-        "DATASTORE_EMULATOR_HOST=127.0.0.1:8765 GOOGLE_CLOUD_PROJECT=foresea-twin-test PYTHONPATH=src py -m unittest tests.test_twin_store_integration (pass: 4 tests)",
-        "PYTHONPATH=src py -m unittest tests.test_twin_budget tests.test_twin_store_integration (pass: 13 tests; 6 Datastore emulator tests skipped when emulator unavailable)",
-        "PYTHONPATH=src py -m unittest discover -s tests (pass)",
-        "py -m ruff check src tests (pass)"
+        "py -m unittest tests.test_twin_budget tests.test_twin_research_gateway tests.test_twin_runtime -v (pass: 45 tests)",
+        "py -m unittest discover -s tests (pass: 2134 tests)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)"
       ],
       "evidence": [
-        "src/analyzing_llm_rationale/twin/budget.py",
         "configs/twin.yaml",
+        "src/analyzing_llm_rationale/twin/budget.py",
+        "src/analyzing_llm_rationale/twin/research_gateway.py",
+        "src/analyzing_llm_rationale/twin/runtime_app.py",
         "tests/test_twin_budget.py",
+        "tests/test_twin_research_gateway.py",
+        "tests/test_twin_runtime.py",
         "docs/autonomous-twin/BUDGET_INTEGRITY.md"
       ],
       "blockers": [
-        "Production research worker does not yet load approved model prices and bounded timeout settings.",
-        "Stale claimed-call recovery and evidence-cache integration remain unwired."
+        "The isolated research service still lacks authenticated durable capture acquisition and result submission.",
+        "Authoritative provider usage receipts must reconcile the maintenance-owned claim without a second reserve/claim."
       ],
-      "handoff": "Wire approved model pricing, provider timeouts, capture acquisition, and durable research results into the private worker; keep live trading disabled."
+      "handoff": "Add identity-bound capture and result transport through the maintenance service, reconcile actual provider usage once, and keep live trading disabled."
     },
     {
       "id": "T08",

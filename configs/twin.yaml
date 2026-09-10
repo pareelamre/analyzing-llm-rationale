@@ -2,16 +2,23 @@
 # a USD ceiling is enabled; zero-cost capacity must be declared explicitly.
 research:
   model: gpt-oss-120b
+  provider_id: scads-openai-compatible
   candidates_per_cycle: 3
   tool_calls_per_candidate: 8
   schema_repairs_per_candidate: 1
+  max_input_tokens: 16000
+  max_output_tokens: 1000
+  request_timeout_seconds: 60
+  price_valid_until: "2027-01-01T00:00:00+00:00"
   usd_limit_per_account_day: "0"
   token_limit_per_account_day: 30000
   request_limit_per_account_day: 30
   model_prices_usd_per_million:
     gpt-oss-120b:
-      input: null
-      output: null
+      # SCADS institutional capacity has no metered per-token charge. Missing
+      # or unknown prices still fail closed.
+      input: "0"
+      output: "0"
 
 strategy:
   config_version: foresea-edge-shadow-v1

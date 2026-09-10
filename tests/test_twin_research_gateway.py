@@ -21,8 +21,10 @@ from analyzing_llm_rationale.twin.models import (
     ProposalAction,
 )
 from analyzing_llm_rationale.twin.research_gateway import (
+    DatastorePublicEvidenceCache,
     DatastoreResearchResultStore,
     HistoricalCalibration,
+    InMemoryPublicEvidenceCache,
     InMemoryResearchResultStore,
     PublicEvidence,
     PublicResearchCapture,
@@ -30,6 +32,7 @@ from analyzing_llm_rationale.twin.research_gateway import (
     ResearchModelConfig,
     ResearchResultStoreError,
     generate_research,
+    public_evidence_set_id,
 )
 
 NOW = datetime(2025, 1, 3, tzinfo=timezone.utc)
@@ -341,6 +344,52 @@ class ResearchGatewayTests(unittest.TestCase):
             DatastoreResearchResultStore(client, max_payload_bytes=0)
         with self.assertRaisesRegex(ResearchResultStoreError, "exceeds"):
             DatastoreResearchResultStore(client, max_payload_bytes=1).record_result("job", result)
+
+    def test_public_evidence_cache_is_content_market_and_as_of_bound(self):
+        memory = InMemoryPublicEvidenceCache()
+        expected = public_evidence_set_id(
+            self.capture.instrument.id, self.capture.as_of, self.capture.evidence,
+        )
+        self.assertEqual(
+            memory.put(
+                self.capture.instrument.id, self.capture.as_of, self.capture.evidence,
+            ),
+            expected,
+        )
+        self.assertEqual(memory.get(expected), self.capture.evidence)
+        changed = replace(self.capture.evidence[0], text="Changed public fact")
+        self.assertNotEqual(
+            memory.put(self.capture.instrument.id, self.capture.as_of, (changed,)),
+            expected,
+        )
+
+        client = FakeDatastoreClient()
+        durable = DatastorePublicEvidenceCache(client)
+        with patch("google.cloud.datastore.Entity", FakeEntity):
+            self.assertEqual(
+                durable.put(
+                    self.capture.instrument.id, self.capture.as_of,
+                    self.capture.evidence,
+                ),
+                expected,
+            )
+            self.assertEqual(
+                durable.put(
+                    self.capture.instrument.id, self.capture.as_of,
+                    self.capture.evidence,
+                ),
+                expected,
+            )
+        self.assertEqual(durable.get(expected), self.capture.evidence)
+
+    def test_generate_research_round_trips_the_evidence_cache_before_model(self):
+        cache = InMemoryPublicEvidenceCache()
+        result = self.generate(evidence_cache=cache)
+        self.assertIsNotNone(result.forecast)
+        cache_id = public_evidence_set_id(
+            self.capture.instrument.id, self.capture.as_of, self.capture.evidence,
+        )
+        self.assertEqual(cache.get(cache_id), self.capture.evidence)
 
 
 if __name__ == "__main__":

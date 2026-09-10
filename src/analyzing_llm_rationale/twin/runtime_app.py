@@ -5,9 +5,11 @@ import os
 import socket
 from datetime import datetime, timezone
 from hashlib import sha256
+from pathlib import Path
 
 from ..observability import init_observability
 from .budget import BudgetAlreadyClaimed, BudgetExceeded, DatastoreResearchBudget
+from .research_gateway import ResearchRuntimePolicy, load_research_runtime_policy
 from .runtime import (
     HttpResearchJobGateway,
     PrivateTwinRuntime,
@@ -63,18 +65,51 @@ def _runtime_worker_id(role: WorkerRole, hostname: str) -> str:
     return f"{role.value}-{sha256(hostname.encode()).hexdigest()[:24]}"
 
 
-def _maintenance_operation(jobs: DatastoreWorkerJobs, job: WorkerJob) -> dict[str, object]:
+def _recover_stale_research_budgets(
+    jobs: DatastoreWorkerJobs, budget: DatastoreResearchBudget, *, now: datetime,
+) -> int:
+    """Classify expired research leases as uncertain without releasing capacity."""
+    recovered = 0
+    for stale in jobs.stale(now=now):
+        if stale.kind is not WorkerJobKind.RESEARCH:
+            continue
+        try:
+            budget.mark_uncertain(
+                stale.payload["budget_reservation_id"],
+                key=stale.payload["budget_key_id"],
+            )
+        except (BudgetExceeded, KeyError, ValueError):
+            # The original reservation remains counted if durable recovery is
+            # unavailable, so maintenance cannot create spending capacity.
+            continue
+        recovered += 1
+    return recovered
+
+
+def _maintenance_operation(
+    jobs: DatastoreWorkerJobs, budget: DatastoreResearchBudget, job: WorkerJob,
+) -> dict[str, object]:
     """Safe staging operation until venue/account adapters are configured."""
     if job.kind is WorkerJobKind.RECOVERY:
-        stale = jobs.stale(now=datetime.now(timezone.utc))
-        return {"status": "complete", "stale_jobs_detected": len(stale)}
+        now = datetime.now(timezone.utc)
+        stale = jobs.stale(now=now)
+        uncertain = _recover_stale_research_budgets(jobs, budget, now=now)
+        return {
+            "status": "complete",
+            "stale_jobs_detected": len(stale),
+            "research_budgets_marked_uncertain": uncertain,
+        }
     if job.kind in {WorkerJobKind.RECONCILE, WorkerJobKind.EXIT}:
         raise WorkerDegraded("account_maintenance_adapter_unconfigured")
     raise WorkerPaused("unsupported_maintenance_job")
 
 
-def _research_operation(_: ResearchAssignment) -> ResearchCompletion:
-    raise WorkerDegraded("research_pipeline_unconfigured")
+def _research_operation(
+    assignment: ResearchAssignment, policy: ResearchRuntimePolicy,
+) -> ResearchCompletion:
+    if assignment.model_config_id != policy.id:
+        raise WorkerDegraded("research_model_config_mismatch")
+    raise WorkerDegraded("research_capture_unavailable")
 
 
 def create_environment_app():
@@ -131,10 +166,18 @@ def create_environment_app():
         runtime = PrivateTwinRuntime(
             role, identities, now, jobs=jobs, dispatcher=dispatcher,
             maintenance_worker=worker,
-            maintenance_operation=lambda job: _maintenance_operation(jobs, job),
+            maintenance_operation=lambda job: _maintenance_operation(jobs, budget, job),
             research_gateway=gateway,
         )
     else:
+        repository_root = Path(__file__).resolve().parents[3]
+        research_policy = load_research_runtime_policy(
+            repository_root / "configs" / "twin.yaml",
+            repository_root / "configs" / "models.yaml",
+        )
+        # Startup validates the configured secret, model identity, endpoint,
+        # timeout and price before this revision can report ready.
+        research_policy.build_provider()
         gateway = HttpResearchJobGateway(
             _required("FORESEA_TWIN_MAINTENANCE_URL"),
             audience=_required("FORESEA_TWIN_MAINTENANCE_AUDIENCE"),
@@ -142,7 +185,9 @@ def create_environment_app():
         runtime = PrivateTwinRuntime(
             role, identities, now,
             research_worker=TwinResearchWorker(gateway, worker_id=worker_id),
-            research_operation=_research_operation,
+            research_operation=lambda assignment: _research_operation(
+                assignment, research_policy,
+            ),
         )
     app = create_private_worker_app(runtime)
     init_observability(app)
