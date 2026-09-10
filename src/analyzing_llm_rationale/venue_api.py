@@ -5,8 +5,11 @@ operation parameters; the HTTP layer supplies the signed-in user's connection.
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import logging
+import zipfile
 from decimal import Decimal, InvalidOperation
 from importlib.resources import files
 from typing import Any
@@ -27,6 +30,51 @@ BASES = {
     "clob": "https://clob.polymarket.com",
     "data": "https://data-api.polymarket.com",
 }
+
+
+def read_polymarket_accounting_snapshot(*, creds: dict) -> dict[str, Any]:
+    """Download and strictly parse Polymarket's atomic accounting ZIP.
+
+    The endpoint returns CSV files rather than JSON, so it intentionally lives
+    beside ``read`` instead of weakening the JSON operation contract.
+    Credentials are used only to resolve the connected account address and are
+    never sent to the public Data API.
+    """
+    if not creds:
+        raise trading.TradingNotConfiguredError("Connect a venue account first")
+    client = trading._polymarket_client(creds)
+    address = trading._polymarket_account_address(client, creds)
+    try:
+        response = requests.get(
+            f"{BASES['data']}/v1/accounting/snapshot",
+            params={"user": address},
+            timeout=20,
+            headers={"User-Agent": "foresea-market-bot/1.0"},
+        )
+        response.raise_for_status()
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            names = set(archive.namelist())
+            if not {"positions.csv", "equity.csv"}.issubset(names):
+                raise ValueError("accounting archive omitted a required CSV")
+
+            def rows(name: str) -> list[dict[str, str]]:
+                raw = archive.read(name).decode("utf-8-sig")
+                return list(csv.DictReader(io.StringIO(raw)))
+
+            positions = rows("positions.csv")
+            equity = rows("equity.csv")
+    except (requests.RequestException, OSError, UnicodeError, zipfile.BadZipFile, ValueError) as exc:
+        raise market_data.MarketDataError("Polymarket accounting snapshot failed") from exc
+    required_positions = {"conditionId", "asset", "size", "curPrice", "valuationTime"}
+    required_equity = {"cashBalance", "positionsValue", "equity", "valuationTime"}
+    if len(equity) != 1 or any(not required_positions.issubset(row) for row in positions):
+        raise market_data.MarketDataError("Polymarket accounting snapshot is malformed")
+    if not required_equity.issubset(equity[0]):
+        raise market_data.MarketDataError("Polymarket accounting snapshot is malformed")
+    valuation_times = {str(row["valuationTime"]).strip() for row in [*positions, *equity]}
+    if len(valuation_times) != 1 or not next(iter(valuation_times), ""):
+        raise market_data.MarketDataError("Polymarket accounting snapshot is not generation-consistent")
+    return {"positions": positions, "equity": equity[0], "generation_token": valuation_times.pop()}
 
 
 def contract(platform: str, operation: str, access: str) -> dict:

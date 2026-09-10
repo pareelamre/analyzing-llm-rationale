@@ -189,6 +189,74 @@ def _settlements_are_final(settlements: Sequence[Mapping[str, Any]]) -> Optional
     return None
 
 
+def _order_reserved_cash(orders: Sequence[Mapping[str, Any]]) -> tuple[Optional[Decimal], Optional[str]]:
+    """Return the observable worst-case cash needed by still-live buy orders."""
+    reserved = Decimal("0")
+    terminal = {"cancelled", "canceled", "executed", "filled", "expired", "rejected"}
+    for order in orders:
+        if str(order.get("status", "")).strip().lower() in terminal:
+            continue
+        side = str(order.get("side", "")).strip().lower()
+        action = str(order.get("action", "buy")).strip().lower()
+        if side not in {"buy", "yes", "no"} or action == "sell":
+            continue
+        remaining = _first_decimal(
+            order, ("remaining_quantity", "remaining_count_fp", "remaining_count", "size_remaining")
+        )
+        if remaining is None:
+            original = _first_decimal(order, ("original_size", "initial_count_fp", "initial_count"))
+            matched = _first_decimal(order, ("size_matched", "fill_count_fp", "fill_count"))
+            if original is not None and matched is not None and original >= matched:
+                remaining = original - matched
+        price_fields = ("price",)
+        if side in {"yes", "no"}:
+            price_fields = (f"{side}_price_dollars", f"{side}_price", "price")
+        price = _first_decimal(order, price_fields)
+        if remaining is None or price is None or price > 1:
+            return None, "open_order_reservation_unavailable"
+        reserved += remaining * price
+    return reserved, None
+
+
+def _cash_economics(
+    balance: Mapping[str, Any], orders: Sequence[Mapping[str, Any]]
+) -> tuple[Optional[tuple[Decimal, Decimal, Decimal, Decimal]], Optional[str]]:
+    """Normalize venue cash semantics without treating portfolio marks as cash."""
+    semantics = str(balance.get("cash_semantics", "canonical")).strip().lower()
+    if semantics == "canonical":
+        available, total, reserved, settled = (
+            _decimal("available", balance.get("available")),
+            _decimal("total", balance.get("total")),
+            _decimal("reserved", balance.get("reserved")),
+            _decimal("settled_cash", balance.get("settled_cash")),
+        )
+    else:
+        order_reserved, error = _order_reserved_cash(orders)
+        if error:
+            return None, error
+        assert order_reserved is not None
+        observed = _decimal("cash", balance.get("cash"))
+        if observed is None:
+            return None, "balance_unavailable_or_inconsistent"
+        if semantics == "kalshi_available":
+            available, reserved = observed, order_reserved
+            total = observed + order_reserved
+            settled = total
+        elif semantics == "polymarket_wallet":
+            total, reserved, settled = observed, order_reserved, observed
+            if reserved > total:
+                return None, "open_order_reservation_exceeds_cash"
+            available = total - reserved
+        else:
+            return None, "balance_cash_semantics_unknown"
+    if (
+        available is None or total is None or reserved is None or settled is None
+        or available + reserved > total or settled > total
+    ):
+        return None, "balance_unavailable_or_inconsistent"
+    return (available, total, reserved, settled), None
+
+
 def _drift_reasons(
     *,
     available_cash: Decimal,
@@ -304,26 +372,6 @@ def synchronize_account(
     if issues:
         return AccountSyncResult(previous, previous is not None, tuple(issues))
 
-    balance_rows = flat["balances"]
-    if len(balance_rows) != 1:
-        return AccountSyncResult(previous, previous is not None, ("balance_ambiguous",))
-    balance = balance_rows[0]
-    available, total, reserved, settled = (
-        _decimal("available", balance.get("available")),
-        _decimal("total", balance.get("total")),
-        _decimal("reserved", balance.get("reserved")),
-        _decimal("settled_cash", balance.get("settled_cash")),
-    )
-    if (
-        available is None
-        or total is None
-        or reserved is None
-        or settled is None
-        or available + reserved > total
-        or settled > total
-    ):
-        return AccountSyncResult(previous, previous is not None, ("balance_unavailable_or_inconsistent",))
-
     deduped: dict[str, tuple[Mapping[str, Any], ...]] = {}
     field_map = {"positions": ("position_id", "token_id", "ticker"), "orders": ("order_id", "id"), "fills": ("fill_id", "trade_id", "id"), "settlements": ("settlement_id", "id")}
     for label, fields in field_map.items():
@@ -334,6 +382,15 @@ def synchronize_account(
             deduped[label] = rows or ()
     if issues:
         return AccountSyncResult(previous, previous is not None, tuple(issues))
+
+    balance_rows = flat["balances"]
+    if len(balance_rows) != 1:
+        return AccountSyncResult(previous, previous is not None, ("balance_ambiguous",))
+    cash, cash_error = _cash_economics(balance_rows[0], deduped["orders"])
+    if cash_error:
+        return AccountSyncResult(previous, previous is not None, (cash_error,))
+    assert cash is not None
+    available, total, reserved, settled = cash
 
     settlement_error = _settlements_are_final(deduped["settlements"])
     holdings, holdings_error = _position_holdings(deduped["positions"])
@@ -367,8 +424,16 @@ def synchronize_account(
             external.append(f"unattributed_order:{order['order_id']}")
         elif command_id not in local_command_ids:
             external.append(command_id)
+    order_commands = {
+        str(order.get("order_id") or order.get("id")): str(
+            order.get("client_order_id") or order.get("command_id") or ""
+        ).strip()
+        for order in deduped["orders"]
+    }
     for fill in deduped["fills"]:
         command_id = str(fill.get("client_order_id") or fill.get("command_id") or "").strip()
+        if not command_id:
+            command_id = order_commands.get(str(fill.get("order_id") or ""), "")
         if not command_id:
             external.append(f"unattributed_fill:{fill.get('fill_id') or fill.get('trade_id') or fill['id']}")
         elif command_id not in local_command_ids:

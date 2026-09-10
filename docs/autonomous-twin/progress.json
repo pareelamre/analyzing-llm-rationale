@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_t07_in_progress",
-  "implementation_baseline": "b16f9b344b671d3537f79713ba42e4864e2eb7eb",
-  "next_task": "T06",
+  "implementation_status": "t07_in_progress",
+  "implementation_baseline": "d0cf0a80c",
+  "next_task": "T07",
   "live_authorized": false,
   "release_gates": {
     "G0": "pass",
@@ -178,32 +178,31 @@
         "T04",
         "T05"
       ],
-      "status": "in_progress",
-      "substep": "complete-generation retention, cursor completeness, external fill/order divergence, explicit complete-read conversion, fail-closed cursor/generation capture, venue cursor/offset continuation adapters, strict holdings/basis/settled-cash/fee/conservative-liquidation normalization, explicit venue/local drift comparison using supplied currency and quantity precision, authenticated Kalshi balance contract, generation-fenced durable complete-snapshot persistence, and native Kalshi/Polymarket adapter boundaries are implemented; provider cash/settlement data remains explicitly unsupported for capital authority until documented complete ledgers are available",
-      "branch": "codex/autonomous-twin-t06-venue-normalization",
-      "commit": null,
-      "pr_url": null,
+      "status": "complete",
+      "substep": "complete paginated Kalshi and Polymarket account reads, stable generation fences, cash reservations, executable liquidation, settlement correction identity, and fail-closed durable snapshot retention are implemented",
+      "branch": "codex/autonomous-twin-t06-final",
+      "commit": "d0cf0a80c",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/600",
       "checks": [
-        "PYTHONPATH=src py -m unittest tests.test_twin_account (pass: 20 tests; native adapter boundaries)",
-        "PYTHONPATH=src py -m unittest tests.test_twin_account tests.test_twin_account_store (pass: 20 tests)",
-        "PYTHONPATH=src py -m unittest tests.test_venue_extensions tests.test_twin_account (pass: 42 tests)",
-        "py -m ruff check src/analyzing_llm_rationale/twin/account.py tests/test_twin_account.py (pass)",
-        "PYTHONPATH=src py -m unittest discover -s tests (pass; 4 emulator skips)",
+        "py -m unittest tests.test_twin_account -v (pass: 29 tests)",
+        "py -m unittest discover -s tests (pass: 2129 tests; 10 skipped)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . (completed; generated graph changes intentionally unstaged)",
-        "PYTHONPATH=src py -m unittest tests.test_twin_account (pass: 20 tests)"
+        "py -m graphify update . (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/account.py",
         "src/analyzing_llm_rationale/twin/account_store.py",
         "src/analyzing_llm_rationale/twin/reconcile.py",
+        "src/analyzing_llm_rationale/twin/venue_account.py",
+        "src/analyzing_llm_rationale/venue_api.py",
         "tests/test_twin_account.py",
-        "tests/test_twin_account_store.py",
-        "src/analyzing_llm_rationale/twin/venue_account.py"
+        "tests/fixtures/twin/kalshi_account_v2.json",
+        "tests/fixtures/twin/polymarket_account_v1.json",
+        "docs/autonomous-twin/VENUE_CAPABILITIES.md"
       ],
       "blockers": [],
-      "handoff": "T07 is ready. Add durable atomic research budgets before any provider or tool call."
+      "handoff": "T07 is next. Wire approved pricing, timeouts, cancellation and stale-call recovery into the private research worker while keeping maintenance independent and live trading disabled."
     },
     {
       "id": "T07",

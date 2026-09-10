@@ -1,0 +1,9 @@
+{
+  "accounting": {
+    "positions": [{"conditionId": "condition-1", "asset": "token-1", "size": "2", "curPrice": "0.80", "valuationTime": "2026-01-01T00:00:00Z", "initialValue": "1.20"}],
+    "equity": {"cashBalance": "10.00", "positionsValue": "1.60", "equity": "11.60", "valuationTime": "2026-01-01T00:00:00Z"}
+  },
+  "orders": {"data": [{"id": "order-1", "client_order_id": "command-1", "status": "ORDER_STATUS_LIVE", "side": "BUY", "original_size": "2", "size_matched": "0", "price": "0.50"}], "next_cursor": "LTE="},
+  "fills": {"data": [{"id": "fill-1", "taker_order_id": "order-1", "fee_rate_bps": "0"}], "next_cursor": "LTE="},
+  "activity": [{"type": "REDEEM", "transactionHash": "0xabc", "conditionId": "condition-old", "asset": "token-old", "usdcSize": "1.00", "timestamp": 1767139200}]
+}
