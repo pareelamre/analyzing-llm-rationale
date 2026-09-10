@@ -2016,6 +2016,223 @@
       "outcome": "open",
       "record_hash": "032c60ed10785e383a892ca6580e0c73cecff373cb73921641a8bfafffbea88b",
       "recorded_at": "2026-09-09T06:14:34.145859+00:00"
+    },
+    {
+      "action_id": "38a7817c-2c09-4169-beba-a8cf89128bce",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "status": "legacy_record"
+      },
+      "cycle_id": "30m:993864",
+      "event_type": "settlement",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": null,
+        "quantity": 9.66,
+        "realized_pnl": -0.6762,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXHIGHNY-26SEP08-T80"
+      },
+      "mode": "shadow",
+      "outcome": "no",
+      "record_hash": "9ed750abfcb6733292d90c0296123934788f6f79961b3e0bc7013133b3c18d42",
+      "recorded_at": "2026-09-09T12:22:41.950480+00:00"
+    },
+    {
+      "action_id": "2b241b95-bae9-4a49-9336-32146c2d41a2",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_filled_partial",
+          "filled_quantity": 100.0
+        },
+        "quote": {
+          "marketable": true,
+          "observed_ask": 0.98,
+          "source": "live_venue_quote",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.98,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "cash_before": 7972.98578,
+          "cash_required": 0.0,
+          "concentration_cap": 1196.547867,
+          "cycle_id": "30m:993864",
+          "cycle_spend_after": 0.0,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 10.6636,
+          "daily_risk_before": 10.6636,
+          "daily_risk_limit": 2393.095734,
+          "drawdown_after": 0.202329,
+          "fee": 0.2744,
+          "gross_notional_override": true,
+          "market_cost_basis_after": 0,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 196.0,
+          "open_markets_after": 0,
+          "per_cycle_spend_limit": 1595.397156,
+          "reasons": [],
+          "risk_reducing": true
+        },
+        "sizing": {
+          "applied": false,
+          "mode": "close"
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:993864",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": 1.862799999999993,
+        "cash_required": 0.0,
+        "fee": 0.1372,
+        "netting_payout": 100.0,
+        "notional": 98.0,
+        "price": 0.98,
+        "quantity": 100.0,
+        "realized_pnl": -3.6372,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXNFLRETIRE-LJOHNSON65-2627"
+      },
+      "mode": "shadow",
+      "outcome": "realized",
+      "record_hash": "690814da683842eca90d7ac958e22acbd069bd7f4d82f73d47a17739e9e52c61",
+      "recorded_at": "2026-09-09T12:23:35.322515+00:00"
+    },
+    {
+      "action_id": "7d1e39cc-0dac-4ab0-a799-0181fc2ecd16",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_sizing",
+          "filled_quantity": 0.0
+        },
+        "risk": {
+          "reasons": [
+            "no_executable_price"
+          ],
+          "rejected_before_sizing": true
+        },
+        "status": "rejected_before_sizing",
+        "version": 1
+      },
+      "cycle_id": "30m:993868",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": 1.0,
+        "quantity": 0.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXNFLRETIRE-MSTAFFORD9-2627"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "c983d9e83091f0b174ef6308b8189802a692ed3e95548972eed2ddacfa146376",
+      "recorded_at": "2026-09-09T14:08:54.394702+00:00"
+    },
+    {
+      "action_id": "29bfca20-f231-4b85-8c28-cff50f7f17c1",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "status": "legacy_record"
+      },
+      "cycle_id": "30m:993888",
+      "event_type": "settlement",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": null,
+        "quantity": 100.0,
+        "realized_pnl": -5.5,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXNFLRETIRE-LJOHNSON65-2627"
+      },
+      "mode": "shadow",
+      "outcome": "no",
+      "record_hash": "f3e5503286e468d1f9e89357fe7cfad33bd225571612c377ebf2576636953def",
+      "recorded_at": "2026-09-10T00:12:33.934382+00:00"
+    },
+    {
+      "action_id": "f78f7f52-afd0-475e-94e3-c09f017dbd80",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_sizing",
+          "filled_quantity": 0.0
+        },
+        "risk": {
+          "reasons": [
+            "no_executable_price"
+          ],
+          "rejected_before_sizing": true
+        },
+        "status": "rejected_before_sizing",
+        "version": 1
+      },
+      "cycle_id": "30m:993888",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": 1.0,
+        "quantity": 100.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXNFLRETIRE-LJOHNSON65-2627"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "efe742d58d4646f9da0378bcb018a67a8a771f2e337601012cae76411e10443f",
+      "recorded_at": "2026-09-10T00:13:16.519041+00:00"
     }
   ],
   "month": "2026-09",
