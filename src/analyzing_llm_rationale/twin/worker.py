@@ -702,6 +702,7 @@ class ResearchJobGateway(Protocol):
 
     def completed_result(self, job_id: str) -> Optional[Mapping[str, Any]]: ...
     def claim(self, job_id: str, *, worker_id: str, now: datetime) -> Optional[ResearchAssignment]: ...
+    def load_capture(self, assignment: ResearchAssignment) -> Mapping[str, Any]: ...
     def complete(
         self, assignment: ResearchAssignment, result: ResearchCompletion, *, now: datetime,
     ) -> Mapping[str, Any]: ...
@@ -713,9 +714,11 @@ class MaintenanceResearchJobGateway:
     def __init__(
         self, jobs: WorkerJobs, *,
         authorize_assignment: Callable[[ResearchAssignment], None],
+        capture_loader: Optional[Callable[[ResearchAssignment], Mapping[str, Any]]] = None,
     ) -> None:
         self._jobs = jobs
         self._authorize_assignment = authorize_assignment
+        self._capture_loader = capture_loader
 
     def completed_result(self, job_id: str) -> Optional[Mapping[str, Any]]:
         job = self._jobs.get(job_id)
@@ -751,6 +754,17 @@ class MaintenanceResearchJobGateway:
             result=result.to_mapping(), now=now, degraded=result.status == "degraded",
         )
         return completed.completed_result or {}
+
+    def load_capture(self, assignment: ResearchAssignment) -> Mapping[str, Any]:
+        current = ResearchAssignment.from_job(self._jobs.get(assignment.job_id))
+        if current != assignment:
+            raise WorkerJobError("research capture request has a stale assignment")
+        if self._capture_loader is None:
+            raise WorkerDegraded("research_capture_unavailable")
+        capture = self._capture_loader(assignment)
+        if not isinstance(capture, Mapping):
+            raise WorkerJobError("research capture loader returned an invalid payload")
+        return capture
 
 
 class TwinResearchWorker:

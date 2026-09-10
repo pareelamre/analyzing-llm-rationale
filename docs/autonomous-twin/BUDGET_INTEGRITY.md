@@ -47,8 +47,14 @@ counts. The gateway computes cost from the approved price table and reconciles
 that receipt atomically. Missing or inconsistent receipts remain uncertain;
 provider-reported prices are not trusted over the configured price authority.
 
-Remaining T07 work is the authenticated durable capture/result transport between
-the maintenance and isolated research services. The maintenance service already owns the once-only budget claim,
-so the remote research path must reconcile that claim rather than reserve or
-claim it again. Until that transport exists, the worker returns
-`research_capture_unavailable`; these changes do not enable live trading.
+Frozen public research captures now have a strict versioned representation and
+create-once in-memory and Datastore stores. The maintenance service exposes them
+only to the service account that owns the current fenced claim. Both services
+verify the assignment, model, market snapshot, evidence content, market identity,
+and as-of time before the isolated research worker accepts the capture.
+
+Remaining T07 work is authenticated result submission and reconciliation through
+the same fenced channel. The maintenance service already owns the once-only
+budget claim, so the remote research path must reconcile that claim rather than
+reserve or claim it again. Until that transport exists, the worker returns
+`research_result_transport_unavailable`; these changes do not enable live trading.

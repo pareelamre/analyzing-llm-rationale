@@ -9,7 +9,14 @@ from pathlib import Path
 
 from ..observability import init_observability
 from .budget import BudgetAlreadyClaimed, BudgetExceeded, DatastoreResearchBudget
-from .research_gateway import ResearchRuntimePolicy, load_research_runtime_policy
+from .research_gateway import (
+    DatastoreResearchCaptureStore,
+    ResearchRuntimePolicy,
+    load_research_runtime_policy,
+    public_evidence_set_id,
+    research_capture_payload,
+    restore_research_capture,
+)
 from .runtime import (
     HttpResearchJobGateway,
     PrivateTwinRuntime,
@@ -27,6 +34,7 @@ from .worker import (
     TwinWorker,
     WorkerDegraded,
     WorkerJob,
+    WorkerJobError,
     WorkerJobKind,
     WorkerPaused,
     WorkerRole,
@@ -106,10 +114,22 @@ def _maintenance_operation(
 
 def _research_operation(
     assignment: ResearchAssignment, policy: ResearchRuntimePolicy,
+    gateway: HttpResearchJobGateway,
 ) -> ResearchCompletion:
     if assignment.model_config_id != policy.id:
         raise WorkerDegraded("research_model_config_mismatch")
-    raise WorkerDegraded("research_capture_unavailable")
+    try:
+        capture = restore_research_capture(gateway.load_capture(assignment))
+    except (ValueError, WorkerJobError) as exc:
+        raise WorkerDegraded("research_capture_unavailable") from exc
+    if (
+        capture.snapshot.id != assignment.market_snapshot_id
+        or public_evidence_set_id(
+            capture.instrument.id, capture.as_of, capture.evidence,
+        ) != assignment.evidence_set_id
+    ):
+        raise WorkerDegraded("research_capture_identity_mismatch")
+    raise WorkerDegraded("research_result_transport_unavailable")
 
 
 def create_environment_app():
@@ -130,6 +150,11 @@ def create_environment_app():
         _accounts("FORESEA_TWIN_RESEARCH_ACCOUNTS", required=role is WorkerRole.MAINTENANCE),
     )
     worker_id = _runtime_worker_id(role, socket.gethostname())
+    repository_root = Path(__file__).resolve().parents[3]
+    research_policy = load_research_runtime_policy(
+        repository_root / "configs" / "twin.yaml",
+        repository_root / "configs" / "models.yaml",
+    )
 
     if role is WorkerRole.MAINTENANCE:
         from google.cloud import datastore
@@ -137,6 +162,7 @@ def create_environment_app():
         client = datastore.Client(project=_required("GOOGLE_CLOUD_PROJECT"))
         jobs = DatastoreWorkerJobs(client)
         budget = DatastoreResearchBudget(client)
+        captures = DatastoreResearchCaptureStore(client)
 
         def authorize(assignment: ResearchAssignment) -> None:
             try:
@@ -148,7 +174,24 @@ def create_environment_app():
             except (BudgetExceeded, KeyError, ValueError) as exc:
                 raise WorkerDegraded("research_budget_unavailable") from exc
 
-        gateway = MaintenanceResearchJobGateway(jobs, authorize_assignment=authorize)
+        def load_capture(assignment: ResearchAssignment):
+            if assignment.model_config_id != research_policy.id:
+                raise WorkerDegraded("research_model_config_mismatch")
+            capture = captures.get_capture(assignment.research_assignment_id)
+            if capture is None:
+                raise WorkerDegraded("research_capture_unavailable")
+            if (
+                capture.snapshot.id != assignment.market_snapshot_id
+                or public_evidence_set_id(
+                    capture.instrument.id, capture.as_of, capture.evidence,
+                ) != assignment.evidence_set_id
+            ):
+                raise WorkerDegraded("research_capture_identity_mismatch")
+            return research_capture_payload(capture)
+
+        gateway = MaintenanceResearchJobGateway(
+            jobs, authorize_assignment=authorize, capture_loader=load_capture,
+        )
         dispatcher = CloudTasksDispatcher(CloudTasksConfig(
             _required("GOOGLE_CLOUD_PROJECT"), _required("FORESEA_TWIN_TASKS_LOCATION"),
             _required("FORESEA_TWIN_MAINTENANCE_QUEUE"),
@@ -170,11 +213,6 @@ def create_environment_app():
             research_gateway=gateway,
         )
     else:
-        repository_root = Path(__file__).resolve().parents[3]
-        research_policy = load_research_runtime_policy(
-            repository_root / "configs" / "twin.yaml",
-            repository_root / "configs" / "models.yaml",
-        )
         # Startup validates the configured secret, model identity, endpoint,
         # timeout and price before this revision can report ready.
         research_policy.build_provider()
@@ -186,7 +224,7 @@ def create_environment_app():
             role, identities, now,
             research_worker=TwinResearchWorker(gateway, worker_id=worker_id),
             research_operation=lambda assignment: _research_operation(
-                assignment, research_policy,
+                assignment, research_policy, gateway,
             ),
         )
     app = create_private_worker_app(runtime)

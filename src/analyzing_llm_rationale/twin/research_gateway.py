@@ -268,6 +268,135 @@ class PublicResearchCapture:
             raise ValueError("historical outcomes and calibration must be known before the decision")
 
 
+def research_capture_payload(capture: PublicResearchCapture) -> dict[str, Any]:
+    """Return the strict wire/storage representation of one frozen capture."""
+    return {
+        "schema_version": 1,
+        "instrument": capture.instrument.to_storage(),
+        "snapshot": capture.snapshot.to_storage(),
+        "rules": capture.rules,
+        "as_of": _utc(capture.as_of).isoformat(),
+        "evidence": [asdict(item) for item in capture.evidence],
+        "history": [asdict(item) for item in capture.history],
+    }
+
+
+def restore_research_capture(payload: Any) -> PublicResearchCapture:
+    """Validate and restore an untrusted capture received across the worker boundary."""
+    try:
+        if not isinstance(payload, dict) or set(payload) != {
+            "schema_version", "instrument", "snapshot", "rules", "as_of",
+            "evidence", "history",
+        } or payload["schema_version"] != 1:
+            raise ValueError("research capture payload schema is invalid")
+        evidence = _restore_evidence(payload["evidence"])
+        if not isinstance(payload["history"], list):
+            raise ValueError("research history payload must be a list")
+        history = []
+        for item in payload["history"]:
+            value = dict(item)
+            for name in ("forecasted_at", "resolved_at", "calibrated_at"):
+                value[name] = datetime.fromisoformat(str(value[name]))
+            history.append(HistoricalCalibration(**value))
+        capture = PublicResearchCapture(
+            Instrument(**dict(payload["instrument"])),
+            MarketSnapshot(**dict(payload["snapshot"])),
+            payload["rules"], datetime.fromisoformat(str(payload["as_of"])),
+            evidence, tuple(history),
+        )
+        capture.validate_at_decision()
+        return capture
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("research capture payload cannot be restored") from exc
+
+
+class ResearchCaptureStore(Protocol):
+    def get_capture(self, assignment_id: str) -> PublicResearchCapture | None: ...
+    def record_capture(self, assignment_id: str, capture: PublicResearchCapture) -> bool: ...
+
+
+class InMemoryResearchCaptureStore:
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._items: dict[str, str] = {}
+
+    def get_capture(self, assignment_id: str) -> PublicResearchCapture | None:
+        with self._lock:
+            encoded = self._items.get(str(assignment_id))
+        return None if encoded is None else restore_research_capture(json.loads(encoded))
+
+    def record_capture(self, assignment_id: str, capture: PublicResearchCapture) -> bool:
+        key = str(assignment_id).strip()
+        if not key:
+            raise ValueError("research assignment identity is required")
+        encoded = _json(research_capture_payload(capture))
+        with self._lock:
+            existing = self._items.get(key)
+            if existing is not None and existing != encoded:
+                raise ValueError("research assignment has a conflicting capture")
+            self._items[key] = encoded
+        return True
+
+
+class DatastoreResearchCaptureStore:
+    durable = True
+
+    def __init__(self, client: Any, *, max_payload_bytes: int = 900_000) -> None:
+        if max_payload_bytes < 1:
+            raise ValueError("research capture payload limit must be positive")
+        self._client = client
+        self._max_payload_bytes = max_payload_bytes
+
+    def _key(self, assignment_id: str) -> Any:
+        return self._client.key(
+            "TwinResearchCapture", sha256(assignment_id.encode("utf-8")).hexdigest(),
+        )
+
+    def get_capture(self, assignment_id: str) -> PublicResearchCapture | None:
+        key = str(assignment_id).strip()
+        if not key:
+            raise ValueError("research assignment identity is required")
+        entity = self._client.get(self._key(key))
+        if entity is None:
+            return None
+        if entity.get("assignment_id") != key:
+            raise ValueError("stored research capture identity mismatch")
+        encoded = str(entity.get("payload_json") or "")
+        payload = json.loads(encoded)
+        if entity.get("fingerprint") != _hash(payload):
+            raise ValueError("stored research capture fingerprint mismatch")
+        return restore_research_capture(payload)
+
+    def record_capture(self, assignment_id: str, capture: PublicResearchCapture) -> bool:
+        from google.cloud import datastore
+
+        key = str(assignment_id).strip()
+        if not key:
+            raise ValueError("research assignment identity is required")
+        payload = research_capture_payload(capture)
+        encoded = _json(payload)
+        if len(encoded.encode("utf-8")) > self._max_payload_bytes:
+            raise ValueError("research capture exceeds durable payload limit")
+        datastore_key = self._key(key)
+        with self._client.transaction():
+            existing = self._client.get(datastore_key)
+            if existing is not None:
+                stored = self.get_capture(key)
+                if _json(research_capture_payload(stored)) != encoded:
+                    raise ValueError("research assignment has a conflicting capture")
+                return True
+            entity = datastore.Entity(
+                key=datastore_key, exclude_from_indexes=("payload_json",),
+            )
+            entity.update({
+                "assignment_id": key,
+                "fingerprint": _hash(payload),
+                "payload_json": encoded,
+            })
+            self._client.put(entity)
+        return True
+
+
 class PublicResearchTools:
     """Fixed public reads from a capture, with no callback/URL escape hatch."""
 
