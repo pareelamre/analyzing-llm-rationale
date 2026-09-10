@@ -33,6 +33,7 @@ from analyzing_llm_rationale.twin.research_gateway import (
     PublicResearchTools,
     ResearchModelConfig,
     ResearchResultStoreError,
+    execute_preclaimed_research,
     generate_research,
     public_evidence_set_id,
     research_capture_payload,
@@ -195,6 +196,24 @@ class ResearchGatewayTests(unittest.TestCase):
         self.assertEqual(usage.actual_usd, Decimal("0.00014"))
         self.assertEqual(usage.uncertain_tokens, 0)
         self.assertEqual(usage.uncertain_usd, 0)
+
+    def test_preclaimed_execution_returns_validated_result_and_usage_without_budget_store(self):
+        execution = execute_preclaimed_research(
+            StructuredFixtureProvider(), capture=self.capture,
+            config=self.config, now=NOW,
+        )
+        self.assertIsNotNone(execution.result.forecast)
+        self.assertEqual(execution.actual_tokens, 120)
+        self.assertEqual(execution.actual_usd, Decimal("0.00014"))
+        self.assertEqual(len(execution.result.request_hash), 64)
+
+    def test_preclaimed_schema_failure_is_a_pass_with_known_usage(self):
+        provider = StructuredFixtureProvider(["not-json"])
+        execution = execute_preclaimed_research(
+            provider, capture=self.capture, config=self.config, now=NOW,
+        )
+        self.assertIsNone(execution.result.forecast)
+        self.assertEqual(execution.actual_tokens, 120)
 
     def test_closed_tools_deny_exchange_writes_and_urls(self):
         tools = PublicResearchTools(self.capture)

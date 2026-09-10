@@ -61,9 +61,14 @@ derives the public result and usage IDs. Large transport fields are never copied
 into the durable worker-job status. A lost response can therefore retry without
 duplicating spend or replacing a prior decision.
 
-Remaining T07 runtime work is invoking the bounded provider from the isolated
-worker and committing a forecast to the prospective ledger through maintenance.
-That path must use the already claimed reservation and request a separately
-authorized reservation before its optional schema-repair call. Until it exists,
-the worker returns `research_result_transport_unavailable`; these changes do not
-enable live trading.
+The isolated worker now invokes one bounded provider request against the exact
+frozen capture and approved model configuration. It returns a strict forecast or
+PASS plus measured usage through the fenced channel. Maintenance persists the
+result, records an accepted forecast through the existing prospective-ledger
+contract, and reconciles the original claim before marking the job complete.
+
+Remaining T07 work is the optional schema-repair call. It must receive its own
+atomic reservation through maintenance before dispatch, and unused repair
+capacity must be reconciled without inferring that an attempted request cost
+zero. The initial request path is operational; these changes do not enable live
+trading.
