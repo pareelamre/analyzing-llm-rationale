@@ -67,8 +67,12 @@ PASS plus measured usage through the fenced channel. Maintenance persists the
 result, records an accepted forecast through the existing prospective-ledger
 contract, and reconciles the original claim before marking the job complete.
 
-Remaining T07 work is the optional schema-repair call. It must receive its own
-atomic reservation through maintenance before dispatch, and unused repair
-capacity must be reconciled without inferring that an attempted request cost
-zero. The initial request path is operational; these changes do not enable live
-trading.
+Schema repair now uses a separate authenticated, fence-bound maintenance
+authorization. Maintenance reconciles the primary receipt before it atomically
+reserves and claims `:repair`; denial stops the worker before a second provider
+call. Primary and repair usage travel separately, and missing usage retains the
+corresponding claim as uncertain. Duplicate authorization cannot dispatch or
+charge a second repair, while stale-job recovery also retains a possibly claimed
+repair. Bounded OTel signals distinguish primary and repair tokens and repair
+authorization outcomes without using account or reservation IDs as metric
+labels. T07 is complete; these changes do not enable live trading.

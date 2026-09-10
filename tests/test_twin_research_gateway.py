@@ -215,6 +215,30 @@ class ResearchGatewayTests(unittest.TestCase):
         self.assertIsNone(execution.result.forecast)
         self.assertEqual(execution.actual_tokens, 120)
 
+    def test_preclaimed_repair_requires_separate_authorization_and_usage(self):
+        provider = StructuredFixtureProvider(["not-json", valid_response()])
+        authorization = []
+        execution = execute_preclaimed_research(
+            provider, capture=self.capture, config=self.config, now=NOW,
+            authorize_repair=lambda usd, tokens: authorization.append((usd, tokens)) or True,
+        )
+        self.assertIsNotNone(execution.result.forecast)
+        self.assertEqual(authorization, [(Decimal("0.00014"), 120)])
+        self.assertEqual(len(provider.calls), 2)
+        self.assertTrue(execution.repair_attempted)
+        self.assertEqual(execution.repair_actual_usd, Decimal("0.00014"))
+        self.assertEqual(execution.repair_actual_tokens, 120)
+
+    def test_preclaimed_repair_denial_stops_before_second_provider_call(self):
+        provider = StructuredFixtureProvider(["not-json", valid_response()])
+        execution = execute_preclaimed_research(
+            provider, capture=self.capture, config=self.config, now=NOW,
+            authorize_repair=lambda _usd, _tokens: False,
+        )
+        self.assertIsNone(execution.result.forecast)
+        self.assertEqual(len(provider.calls), 1)
+        self.assertFalse(execution.repair_attempted)
+
     def test_closed_tools_deny_exchange_writes_and_urls(self):
         tools = PublicResearchTools(self.capture)
         for name in ("place_trade", "fetch_api", "manage_credentials", "approve_mandate", "https://example.com/private"):

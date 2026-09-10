@@ -48,6 +48,17 @@ class ResearchResultRequest(BaseModel):
     result_payload: Optional[dict[str, Any]] = None
     actual_usd: Optional[str] = None
     actual_tokens: Optional[int] = Field(default=None, ge=0)
+    repair_attempted: bool = False
+    repair_actual_usd: Optional[str] = None
+    repair_actual_tokens: Optional[int] = Field(default=None, ge=0)
+
+
+class ResearchRepairRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fence: int = Field(ge=1)
+    actual_usd: Optional[str] = None
+    actual_tokens: Optional[int] = Field(default=None, ge=0)
 
 
 TokenVerifier = Callable[[str, str], Mapping[str, Any]]
@@ -138,6 +149,20 @@ class HttpResearchJobGateway:
         if not isinstance(capture, Mapping):
             raise WorkerJobError("maintenance omitted the research capture")
         return capture
+
+    def authorize_repair(
+        self, assignment: ResearchAssignment, *, actual_usd: Optional[str],
+        actual_tokens: Optional[int],
+    ) -> bool:
+        payload = self._call(
+            "POST", f"/internal/twin/research-jobs/{assignment.job_id}/repair",
+            body={
+                "fence": assignment.fence,
+                "actual_usd": actual_usd,
+                "actual_tokens": actual_tokens,
+            },
+        )
+        return payload.get("status") == "authorized"
 
     def complete(
         self, assignment: ResearchAssignment, result: ResearchCompletion, *, now: datetime,
@@ -308,11 +333,31 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
                     usage_record_id=body.usage_record_id, reason=body.reason,
                     result_payload=body.result_payload, actual_usd=body.actual_usd,
                     actual_tokens=body.actual_tokens,
+                    repair_attempted=body.repair_attempted,
+                    repair_actual_usd=body.repair_actual_usd,
+                    repair_actual_tokens=body.repair_actual_tokens,
                 )
                 completed = runtime.research_gateway.complete(
                     assignment, result, now=runtime.clock(),
                 )
                 return completed
+            except Exception as exc:
+                raise _http_error(exc) from exc
+
+        @app.post("/internal/twin/research-jobs/{job_id}/repair")
+        async def research_repair(job_id: str, body: ResearchRepairRequest, request: Request):
+            try:
+                email = runtime.authenticate(request, runtime.identities.research_accounts)
+                assignment = ResearchAssignment.from_job(runtime.jobs.get(job_id))
+                if assignment.worker_id != runtime.research_worker_id(email):
+                    raise WorkerAuthenticationError("research claim belongs to another identity")
+                if assignment.fence != body.fence:
+                    raise WorkerJobError("research repair has a stale fence")
+                authorized = runtime.research_gateway.authorize_repair(
+                    assignment, actual_usd=body.actual_usd,
+                    actual_tokens=body.actual_tokens,
+                )
+                return {"status": "authorized" if authorized else "denied"}
             except Exception as exc:
                 raise _http_error(exc) from exc
 

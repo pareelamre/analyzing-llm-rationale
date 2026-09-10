@@ -8,9 +8,16 @@ from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 
+from opentelemetry import metrics, trace
+
 from ..forecast_ledger import ForecastLedger
 from ..observability import init_observability
-from .budget import BudgetAlreadyClaimed, BudgetExceeded, DatastoreResearchBudget
+from .budget import (
+    BudgetAlreadyClaimed,
+    BudgetExceeded,
+    DatastoreResearchBudget,
+    estimate_request_cost,
+)
 from .research_gateway import (
     DatastoreResearchCaptureStore,
     DatastoreResearchResultStore,
@@ -46,6 +53,11 @@ from .worker import (
     WorkerJobKind,
     WorkerPaused,
     WorkerRole,
+)
+
+tracer = trace.get_tracer(__name__)
+repair_authorizations = metrics.get_meter(__name__).create_counter(
+    "twin.research.repair_authorizations", unit="1",
 )
 
 
@@ -126,6 +138,13 @@ def _recover_stale_research_budgets(
             # The original reservation remains counted if durable recovery is
             # unavailable, so maintenance cannot create spending capacity.
             continue
+        try:
+            budget.mark_uncertain(
+                stale.payload["budget_reservation_id"] + ":repair",
+                key=stale.payload["budget_key_id"],
+            )
+        except (BudgetExceeded, KeyError, ValueError):
+            pass
         recovered += 1
     return recovered
 
@@ -148,6 +167,45 @@ def _maintenance_operation(
     raise WorkerPaused("unsupported_maintenance_job")
 
 
+@tracer.start_as_current_span("twin.research.authorize_repair")
+def _authorize_research_repair(
+    budget, assignment: ResearchAssignment, policy: ResearchRuntimePolicy,
+    actual_usd: str | None, actual_tokens: int | None,
+) -> bool:
+    """Reconcile the primary call, then atomically claim one repair allowance."""
+    span = trace.get_current_span()
+    try:
+        amount = None if actual_usd is None else Decimal(actual_usd)
+        budget.reconcile(
+            assignment.budget_reservation_id, key=assignment.budget_key_id,
+            actual_usd=amount, actual_tokens=actual_tokens,
+        )
+        repair_id = assignment.budget_reservation_id + ":repair"
+        estimate = estimate_request_cost(
+            input_tokens=policy.model.max_input_tokens,
+            output_tokens=policy.model.max_output_tokens,
+            price=policy.model.price,
+            require_usd_ceiling=True,
+        )
+        budget.reserve(
+            repair_id, key=assignment.budget_key_id,
+            estimated_usd=estimate,
+            estimated_tokens=(
+                policy.model.max_input_tokens + policy.model.max_output_tokens
+            ),
+            policy=policy.budget,
+        )
+        budget.claim(repair_id, key=assignment.budget_key_id)
+    except (ArithmeticError, BudgetAlreadyClaimed, BudgetExceeded, KeyError, ValueError) as exc:
+        span.set_attribute("outcome", "denied")
+        span.set_attribute("twin.research.repair_denial", type(exc).__name__)
+        repair_authorizations.add(1, {"outcome": "denied"})
+        return False
+    span.set_attribute("outcome", "authorized")
+    repair_authorizations.add(1, {"outcome": "authorized"})
+    return True
+
+
 def _research_operation(
     assignment: ResearchAssignment, policy: ResearchRuntimePolicy,
     gateway: HttpResearchJobGateway, provider,
@@ -168,6 +226,11 @@ def _research_operation(
     execution = execute_preclaimed_research(
         provider, capture=capture, config=policy.model,
         now=datetime.now(timezone.utc),
+        authorize_repair=lambda usd, tokens: gateway.authorize_repair(
+            assignment,
+            actual_usd=None if usd is None else str(usd),
+            actual_tokens=tokens,
+        ),
     )
     usage = {}
     if execution.actual_usd is not None and execution.actual_tokens is not None:
@@ -177,6 +240,12 @@ def _research_operation(
         }
     return ResearchCompletion(
         "completed", result_payload=research_result_payload(execution.result),
+        repair_attempted=execution.repair_attempted,
+        repair_actual_usd=(
+            None if execution.repair_actual_usd is None
+            else str(execution.repair_actual_usd)
+        ),
+        repair_actual_tokens=execution.repair_actual_tokens,
         **usage,
     )
 
@@ -240,6 +309,14 @@ def create_environment_app():
                 raise WorkerDegraded("research_capture_identity_mismatch")
             return research_capture_payload(capture)
 
+        def authorize_repair(
+            assignment: ResearchAssignment, actual_usd: str | None,
+            actual_tokens: int | None,
+        ) -> bool:
+            return _authorize_research_repair(
+                budget, assignment, research_policy, actual_usd, actual_tokens,
+            )
+
         def finalize_result(
             assignment: ResearchAssignment, completion: ResearchCompletion,
         ) -> ResearchCompletion:
@@ -271,6 +348,17 @@ def create_environment_app():
                 assignment.budget_reservation_id, key=assignment.budget_key_id,
                 actual_usd=actual_usd, actual_tokens=completion.actual_tokens,
             )
+            if completion.repair_attempted:
+                repair_usd = (
+                    None if completion.repair_actual_usd is None
+                    else Decimal(completion.repair_actual_usd)
+                )
+                budget.reconcile(
+                    assignment.budget_reservation_id + ":repair",
+                    key=assignment.budget_key_id,
+                    actual_usd=repair_usd,
+                    actual_tokens=completion.repair_actual_tokens,
+                )
             result_id = (
                 result.forecast.id if result.forecast is not None else result.proposal.id
             )
@@ -286,7 +374,7 @@ def create_environment_app():
 
         gateway = MaintenanceResearchJobGateway(
             jobs, authorize_assignment=authorize, capture_loader=load_capture,
-            finalize_result=finalize_result,
+            authorize_repair=authorize_repair, finalize_result=finalize_result,
         )
         dispatcher = CloudTasksDispatcher(CloudTasksConfig(
             _required("GOOGLE_CLOUD_PROJECT"), _required("FORESEA_TWIN_TASKS_LOCATION"),

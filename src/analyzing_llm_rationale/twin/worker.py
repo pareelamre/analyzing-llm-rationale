@@ -675,6 +675,9 @@ class ResearchCompletion:
     result_payload: Optional[Mapping[str, Any]] = None
     actual_usd: Optional[str] = None
     actual_tokens: Optional[int] = None
+    repair_attempted: bool = False
+    repair_actual_usd: Optional[str] = None
+    repair_actual_tokens: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.status not in {"completed", "degraded"}:
@@ -700,6 +703,18 @@ class ResearchCompletion:
             type(self.actual_tokens) is not int or self.actual_tokens < 0
         ):
             raise WorkerJobError("research token usage is invalid")
+        if type(self.repair_attempted) is not bool:
+            raise WorkerJobError("research repair marker must be boolean")
+        if (self.repair_actual_usd is None) != (self.repair_actual_tokens is None):
+            raise WorkerJobError("research repair usage must include both USD and tokens")
+        if self.repair_actual_tokens is not None and (
+            type(self.repair_actual_tokens) is not int or self.repair_actual_tokens < 0
+        ):
+            raise WorkerJobError("research repair token usage is invalid")
+        if not self.repair_attempted and (
+            self.repair_actual_usd is not None or self.repair_actual_tokens is not None
+        ):
+            raise WorkerJobError("research repair usage requires an authorized attempt")
 
     def to_mapping(self, *, include_transport: bool = False) -> dict[str, Any]:
         values = {
@@ -711,6 +726,9 @@ class ResearchCompletion:
                 "result_payload": self.result_payload,
                 "actual_usd": self.actual_usd,
                 "actual_tokens": self.actual_tokens,
+                "repair_attempted": True if self.repair_attempted else None,
+                "repair_actual_usd": self.repair_actual_usd,
+                "repair_actual_tokens": self.repair_actual_tokens,
             })
         return {
             key: value for key, value in values.items() if value is not None
@@ -723,6 +741,10 @@ class ResearchJobGateway(Protocol):
     def completed_result(self, job_id: str) -> Optional[Mapping[str, Any]]: ...
     def claim(self, job_id: str, *, worker_id: str, now: datetime) -> Optional[ResearchAssignment]: ...
     def load_capture(self, assignment: ResearchAssignment) -> Mapping[str, Any]: ...
+    def authorize_repair(
+        self, assignment: ResearchAssignment, *, actual_usd: Optional[str],
+        actual_tokens: Optional[int],
+    ) -> bool: ...
     def complete(
         self, assignment: ResearchAssignment, result: ResearchCompletion, *, now: datetime,
     ) -> Mapping[str, Any]: ...
@@ -735,6 +757,9 @@ class MaintenanceResearchJobGateway:
         self, jobs: WorkerJobs, *,
         authorize_assignment: Callable[[ResearchAssignment], None],
         capture_loader: Optional[Callable[[ResearchAssignment], Mapping[str, Any]]] = None,
+        authorize_repair: Optional[
+            Callable[[ResearchAssignment, Optional[str], Optional[int]], bool]
+        ] = None,
         finalize_result: Optional[
             Callable[[ResearchAssignment, ResearchCompletion], ResearchCompletion]
         ] = None,
@@ -742,6 +767,7 @@ class MaintenanceResearchJobGateway:
         self._jobs = jobs
         self._authorize_assignment = authorize_assignment
         self._capture_loader = capture_loader
+        self._repair_authorizer = authorize_repair
         self._finalize_result = finalize_result
 
     def completed_result(self, job_id: str) -> Optional[Mapping[str, Any]]:
@@ -791,6 +817,17 @@ class MaintenanceResearchJobGateway:
         if not isinstance(capture, Mapping):
             raise WorkerJobError("research capture loader returned an invalid payload")
         return capture
+
+    def authorize_repair(
+        self, assignment: ResearchAssignment, *, actual_usd: Optional[str],
+        actual_tokens: Optional[int],
+    ) -> bool:
+        current = ResearchAssignment.from_job(self._jobs.get(assignment.job_id))
+        if current != assignment:
+            raise WorkerJobError("research repair request has a stale assignment")
+        if self._repair_authorizer is None:
+            return False
+        return self._repair_authorizer(assignment, actual_usd, actual_tokens) is True
 
 
 class TwinResearchWorker:
