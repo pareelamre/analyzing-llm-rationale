@@ -38,6 +38,13 @@ separately, confirms one ready revision receives 100% of traffic, and inspects
 the deployed environment for `shadow`, zero live capital, and no mandate. The
 smoke script cannot enqueue work or call a trading route.
 
+The smoke script uses the active gcloud identity by default. Grant that identity
+`roles/run.invoker` on both private services for the duration of the probe, then
+remove the binding. Alternatively, pass `-InvokerServiceAccount` to the smoke or
+deploy script. Impersonation requires temporary `roles/iam.serviceAccountTokenCreator`
+and `roles/iam.serviceAccountUser` bindings on that service account; remove both
+immediately afterward.
+
 Record the image digest, ready revisions, service roles, smoke output, PR commit,
 CI run URLs, artifact hash, source hash, and config hash in release evidence.
 Treat a healthy but unready service as a failed release.
