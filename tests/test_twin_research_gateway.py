@@ -80,6 +80,20 @@ class FixtureProvider(ChatProvider):
         return response
 
 
+class StructuredFixtureProvider(FixtureProvider):
+    def chat_completion_with_usage(self, messages, temperature, max_tokens, reasoning_effort=None):
+        return {
+            "response": self.chat_completion(
+                messages, temperature, max_tokens, reasoning_effort,
+            ),
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+            },
+        }
+
+
 class ResultStore:
     def __init__(self):
         self.records = []
@@ -166,6 +180,17 @@ class ResearchGatewayTests(unittest.TestCase):
         self.assertEqual(usage.uncertain_usd, Decimal("0.018"))
         self.assertEqual(usage.uncertain_tokens, 17000)
         self.assertEqual(self.provider.calls[0][1], 1000)
+
+    def test_structured_provider_usage_reconciles_actual_tokens_and_cost(self):
+        self.provider = StructuredFixtureProvider()
+
+        self.generate()
+
+        usage = self.budget.usage("strategy:account:2025-01-03")
+        self.assertEqual(usage.actual_tokens, 120)
+        self.assertEqual(usage.actual_usd, Decimal("0.00014"))
+        self.assertEqual(usage.uncertain_tokens, 0)
+        self.assertEqual(usage.uncertain_usd, 0)
 
     def test_closed_tools_deny_exchange_writes_and_urls(self):
         tools = PublicResearchTools(self.capture)

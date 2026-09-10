@@ -119,6 +119,36 @@ class ReasoningEffortPayloadTests(unittest.TestCase):
 
 
 class ProviderEmptyContentFallbackTests(unittest.TestCase):
+    def test_structured_completion_returns_only_consistent_usage(self):
+        from unittest.mock import MagicMock
+
+        provider = OpenAICompatibleProvider(
+            model_name="test-model", api_key="sk-test",
+            base_url="https://llm.scads.ai/v1",
+        )
+        response = MagicMock()
+        response.status_code = 200
+        response.text = "ok"
+        response.json.return_value = {
+            "choices": [{"message": {"content": "answer"}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        }
+        provider._session = MagicMock()
+        provider._session.post.return_value = response
+
+        result = provider.chat_completion_with_usage(
+            [{"role": "user", "content": "hi"}], 0.0, 100,
+        )
+
+        self.assertEqual(result["response"], "answer")
+        self.assertEqual(result["usage"]["total_tokens"], 15)
+
+        response.json.return_value["usage"]["total_tokens"] = 16
+        result = provider.chat_completion_with_usage(
+            [{"role": "user", "content": "hi"}], 0.0, 100,
+        )
+        self.assertNotIn("usage", result)
+
     def test_empty_content_with_reasoning_content_falls_back(self):
         from unittest.mock import MagicMock
 

@@ -41,9 +41,14 @@ a timeout, cancellation, or lost acknowledgement. Public evidence can be stored
 under a content-, market-, and as-of-bound identity in memory or Datastore, and
 the research gateway verifies a cache round trip before it calls a model.
 
+OpenAI-compatible calls now expose a bounded token receipt when the upstream
+response reports internally consistent prompt, completion, and total token
+counts. The gateway computes cost from the approved price table and reconciles
+that receipt atomically. Missing or inconsistent receipts remain uncertain;
+provider-reported prices are not trusted over the configured price authority.
+
 Remaining T07 work is the authenticated durable capture/result transport between
-the maintenance and isolated research services, including authoritative provider
-usage receipts. The maintenance service already owns the once-only budget claim,
+the maintenance and isolated research services. The maintenance service already owns the once-only budget claim,
 so the remote research path must reconcile that claim rather than reserve or
 claim it again. Until that transport exists, the worker returns
 `research_capture_unavailable`; these changes do not enable live trading.

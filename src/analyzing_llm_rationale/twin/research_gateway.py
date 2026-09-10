@@ -731,6 +731,33 @@ def generate_research(
         inputs["as_of"] = capture.as_of.isoformat()
         input_hash = _hash(inputs)
         messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": _json(inputs)}]
+
+        def provider_operation() -> Any:
+            structured = getattr(provider, "chat_completion_with_usage", None)
+            if not callable(structured):
+                return provider.chat_completion(
+                    messages, temperature=0.0, max_tokens=config.max_output_tokens,
+                )
+            call_result = structured(
+                messages, temperature=0.0, max_tokens=config.max_output_tokens,
+            )
+            if not isinstance(call_result, dict):
+                raise ValueError("structured provider response must be an object")
+            receipt = call_result.get("usage")
+            if isinstance(receipt, dict):
+                prompt_tokens = receipt.get("prompt_tokens")
+                completion_tokens = receipt.get("completion_tokens")
+                if type(prompt_tokens) is int and type(completion_tokens) is int:
+                    normalized = dict(receipt)
+                    normalized["cost_usd"] = str(estimate_request_cost(
+                        input_tokens=prompt_tokens,
+                        output_tokens=completion_tokens,
+                        price=config.price,
+                        require_usd_ceiling=True,
+                    ))
+                    call_result = {**call_result, "usage": normalized}
+            return call_result
+
         for attempt in range(2):
             if now + timedelta(seconds=time.monotonic() - started) >= config.price_valid_until:
                 raise ValueError("model price expired before provider dispatch")
@@ -738,10 +765,14 @@ def generate_research(
             # supported byte-level tokenizers; never use len(text)/4 estimates.
             if sum(len(message["content"].encode("utf-8")) + 32 for message in messages) > config.max_input_tokens:
                 raise ValueError("prompt exceeds explicit input-token reservation")
-            response = call_with_budget(
+            call_result = call_with_budget(
                 budget, reservation_id + (":repair" if attempt else ""), key=budget_key,
                 estimated_usd=estimate, estimated_tokens=config.max_input_tokens + config.max_output_tokens,
-                policy=budget_policy, operation=lambda: provider.chat_completion(messages, temperature=0.0, max_tokens=config.max_output_tokens),
+                policy=budget_policy, operation=provider_operation,
+            )
+            response = (
+                call_result.get("response")
+                if isinstance(call_result, dict) else call_result
             )
             try:
                 if not isinstance(response, str) or len(response.encode("utf-8")) > 4 * config.max_output_tokens:
