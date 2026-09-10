@@ -878,9 +878,10 @@ def _edge_hurdle_by_side(quote: Dict[str, Any]) -> Dict[str, float]:
     a two-sided quote, or quoted at or above 1.00, are omitted -- there is no
     reachable bar on a contract that cannot return more than it costs.
     """
-    from analyzing_llm_rationale.benchmark_tools import _kalshi_fee, _min_net_edge
+    from analyzing_llm_rationale.benchmark_tools import _kalshi_fee, _min_net_edge, _polymarket_fee
 
     platform = str(quote.get("platform") or "").strip().lower()
+    category = quote.get("category")
     q = MarketQuote.from_mapping(quote)
     out: Dict[str, float] = {}
     for side in ("YES", "NO"):
@@ -890,6 +891,11 @@ def _edge_hurdle_by_side(quote: Dict[str, Any]) -> Dict[str, float]:
         if platform == "kalshi":
             try:
                 fee = _kalshi_fee(ask, 1.0)
+            except Exception:
+                fee = 0.0
+        elif platform == "polymarket":
+            try:
+                fee = _polymarket_fee(ask, 1.0, category=category)
             except Exception:
                 fee = 0.0
         else:
