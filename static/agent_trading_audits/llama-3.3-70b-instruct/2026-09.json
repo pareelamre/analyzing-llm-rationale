@@ -2162,6 +2162,77 @@
       "outcome": "rejected",
       "record_hash": "c983d9e83091f0b174ef6308b8189802a692ed3e95548972eed2ddacfa146376",
       "recorded_at": "2026-09-09T14:08:54.394702+00:00"
+    },
+    {
+      "action_id": "29bfca20-f231-4b85-8c28-cff50f7f17c1",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "status": "legacy_record"
+      },
+      "cycle_id": "30m:993888",
+      "event_type": "settlement",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": null,
+        "quantity": 100.0,
+        "realized_pnl": -5.5,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXNFLRETIRE-LJOHNSON65-2627"
+      },
+      "mode": "shadow",
+      "outcome": "no",
+      "record_hash": "f3e5503286e468d1f9e89357fe7cfad33bd225571612c377ebf2576636953def",
+      "recorded_at": "2026-09-10T00:12:33.934382+00:00"
+    },
+    {
+      "action_id": "f78f7f52-afd0-475e-94e3-c09f017dbd80",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_sizing",
+          "filled_quantity": 0.0
+        },
+        "risk": {
+          "reasons": [
+            "no_executable_price"
+          ],
+          "rejected_before_sizing": true
+        },
+        "status": "rejected_before_sizing",
+        "version": 1
+      },
+      "cycle_id": "30m:993888",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": 1.0,
+        "quantity": 100.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXNFLRETIRE-LJOHNSON65-2627"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "efe742d58d4646f9da0378bcb018a67a8a771f2e337601012cae76411e10443f",
+      "recorded_at": "2026-09-10T00:13:16.519041+00:00"
     }
   ],
   "month": "2026-09",
