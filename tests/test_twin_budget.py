@@ -4,6 +4,9 @@ import threading
 import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest import mock
 
 from analyzing_llm_rationale.twin.budget import (
     BudgetAlreadyClaimed,
@@ -16,6 +19,9 @@ from analyzing_llm_rationale.twin.budget import (
     call_with_budget,
     estimate_request_cost,
 )
+from analyzing_llm_rationale.twin.research_gateway import load_research_runtime_policy
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class TwinBudgetTests(unittest.TestCase):
@@ -175,6 +181,38 @@ class TwinBudgetTests(unittest.TestCase):
         for field, value in [("actual_usd", "-10"), ("reserved_usd", "NaN"), ("actual_tokens", -100), ("reserved_tokens", 1.5), ("uncertain_tokens", True)]:
             with self.subTest(field=field), self.assertRaises((ValueError, ArithmeticError)):
                 DatastoreResearchBudget._usage("test", {"requests": 1, "uncertain_tokens": 0, field: value})
+
+    def test_runtime_policy_loads_one_explicitly_free_bounded_model(self):
+        policy = load_research_runtime_policy(
+            ROOT / "configs" / "twin.yaml", ROOT / "configs" / "models.yaml",
+        )
+        self.assertEqual(policy.model_key, "gpt-oss-120b")
+        self.assertEqual(policy.model.model_id, "openai/gpt-oss-120b")
+        self.assertEqual(policy.model.price, ModelPrice(Decimal("0"), Decimal("0")))
+        self.assertEqual(
+            (policy.candidates_per_cycle, policy.tool_calls_per_candidate,
+             policy.schema_repairs_per_candidate),
+            (3, 8, 1),
+        )
+        self.assertEqual(policy.model.max_request_seconds, 60)
+        with mock.patch.dict("os.environ", {policy.api_key_env_var: "fixture-key"}):
+            provider = policy.build_provider()
+        self.assertEqual(provider.model_name, policy.model.model_id)
+        self.assertEqual(provider.request_timeout_s, 60)
+
+    def test_runtime_policy_rejects_missing_price_or_widened_fanout(self):
+        source = (ROOT / "configs" / "twin.yaml").read_text(encoding="utf-8")
+        cases = (
+            (source.replace('input: "0"', "input: null"), "price"),
+            (source.replace("candidates_per_cycle: 3", "candidates_per_cycle: 4"), "fanout"),
+        )
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "twin.yaml"
+            for value, error in cases:
+                with self.subTest(error=error):
+                    path.write_text(value, encoding="utf-8")
+                    with self.assertRaises((PriceUnavailable, ValueError)):
+                        load_research_runtime_policy(path, ROOT / "configs" / "models.yaml")
 
 
 if __name__ == "__main__":

@@ -4,13 +4,18 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
+from analyzing_llm_rationale.twin.budget import BudgetPolicy, InMemoryResearchBudget
 from analyzing_llm_rationale.twin.runtime import (
     HttpResearchJobGateway,
     PrivateTwinRuntime,
     RuntimeIdentityPolicy,
     create_private_worker_app,
 )
-from analyzing_llm_rationale.twin.runtime_app import _assert_shadow_only, _runtime_worker_id
+from analyzing_llm_rationale.twin.runtime_app import (
+    _assert_shadow_only,
+    _recover_stale_research_budgets,
+    _runtime_worker_id,
+)
 from analyzing_llm_rationale.twin.worker import (
     InMemoryWorkerJobs,
     MaintenanceResearchJobGateway,
@@ -142,6 +147,34 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         self.assertNotIn("instance", worker_id)
         with self.assertRaises(RuntimeError):
             _runtime_worker_id(WorkerRole.RESEARCH, "  ")
+
+    def test_stale_research_lease_becomes_uncertain_without_releasing_capacity(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(research_job())
+        jobs.claim("research-job", worker_id="lost-worker", now=NOW, lease_seconds=1)
+        budget = InMemoryResearchBudget()
+        key = "foresea-edge:scope-001:2025-01-01"
+        budget.reserve(
+            "budget-001", key=key, estimated_usd=0, estimated_tokens=100,
+            policy=BudgetPolicy(0, 100, 1),
+        )
+        budget.claim("budget-001", key=key)
+        self.assertEqual(
+            _recover_stale_research_budgets(
+                jobs, budget, now=NOW + timedelta(seconds=2),
+            ),
+            1,
+        )
+        usage = budget.usage(key)
+        self.assertEqual(usage.reserved_tokens, 0)
+        self.assertEqual(usage.uncertain_tokens, 100)
+        self.assertEqual(
+            _recover_stale_research_budgets(
+                jobs, budget, now=NOW + timedelta(seconds=3),
+            ),
+            1,
+        )
+        self.assertEqual(budget.usage(key).uncertain_tokens, 100)
 
     def test_research_status_rejects_maintenance_job_ids(self):
         runtime, _ = self.maintenance_runtime()

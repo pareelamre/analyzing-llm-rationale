@@ -9,18 +9,21 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
+from pathlib import Path
 from typing import Any, Protocol
 
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
 
-from ..providers import ChatProvider
+from ..config import load_model_configs, load_yaml
+from ..providers import ChatProvider, OpenAICompatibleProvider
 from .budget import BudgetPolicy, ModelPrice, call_with_budget, estimate_request_cost
 from .market import _hash as settlement_hash
 from .models import (
@@ -80,6 +83,115 @@ class PublicEvidence:
             raise ValueError("evidence exceeds capture size limits")
         if _utc(self.published_at) > _utc(self.retrieved_at):
             raise ValueError("publication cannot follow retrieval")
+
+
+class PublicEvidenceCache(Protocol):
+    durable: bool
+
+    def put(
+        self, instrument_id: str, as_of: datetime,
+        evidence: tuple[PublicEvidence, ...],
+    ) -> str: ...
+
+    def get(self, evidence_set_id: str) -> tuple[PublicEvidence, ...] | None: ...
+
+
+def public_evidence_set_id(
+    instrument_id: str, as_of: datetime, evidence: tuple[PublicEvidence, ...],
+) -> str:
+    """Bind cached public evidence to content, market, and as-of version."""
+    if not instrument_id.strip() or not evidence:
+        raise ValueError("evidence cache identity requires a market and evidence")
+    return "evidence-set-" + _hash({
+        "instrument_id": instrument_id,
+        "as_of": _utc(as_of).isoformat(),
+        "evidence": [asdict(item) for item in evidence],
+    })[:24]
+
+
+def _evidence_payload(evidence: tuple[PublicEvidence, ...]) -> str:
+    return _json([asdict(item) for item in evidence])
+
+
+def _restore_evidence(payload: Any) -> tuple[PublicEvidence, ...]:
+    if not isinstance(payload, list):
+        raise ValueError("cached evidence payload must be a list")
+    restored = []
+    for item in payload:
+        if not isinstance(item, dict):
+            raise ValueError("cached evidence item must be an object")
+        value = dict(item)
+        for name in ("published_at", "retrieved_at"):
+            value[name] = datetime.fromisoformat(str(value[name]))
+        restored.append(PublicEvidence(**value))
+    return tuple(restored)
+
+
+class InMemoryPublicEvidenceCache:
+    durable = False
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._items: dict[str, str] = {}
+
+    def put(
+        self, instrument_id: str, as_of: datetime,
+        evidence: tuple[PublicEvidence, ...],
+    ) -> str:
+        evidence = tuple(evidence)
+        key = public_evidence_set_id(instrument_id, as_of, evidence)
+        encoded = _evidence_payload(evidence)
+        with self._lock:
+            existing = self._items.get(key)
+            if existing is not None and existing != encoded:
+                raise ValueError("evidence cache identity collision")
+            self._items[key] = encoded
+        return key
+
+    def get(self, evidence_set_id: str) -> tuple[PublicEvidence, ...] | None:
+        with self._lock:
+            encoded = self._items.get(evidence_set_id)
+        return _restore_evidence(json.loads(encoded)) if encoded is not None else None
+
+
+class DatastorePublicEvidenceCache:
+    durable = True
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def put(
+        self, instrument_id: str, as_of: datetime,
+        evidence: tuple[PublicEvidence, ...],
+    ) -> str:
+        from google.cloud import datastore
+
+        evidence = tuple(evidence)
+        cache_id = public_evidence_set_id(instrument_id, as_of, evidence)
+        encoded = _evidence_payload(evidence)
+        key = self._client.key("TwinPublicEvidenceCache", cache_id)
+        with self._client.transaction():
+            existing = self._client.get(key)
+            if existing is not None:
+                if str(existing.get("payload_json")) != encoded:
+                    raise ValueError("evidence cache identity collision")
+                return cache_id
+            entity = datastore.Entity(key=key, exclude_from_indexes=("payload_json",))
+            entity.update({
+                "instrument_id": instrument_id,
+                "as_of": _utc(as_of),
+                "payload_json": encoded,
+            })
+            self._client.put(entity)
+        return cache_id
+
+    def get(self, evidence_set_id: str) -> tuple[PublicEvidence, ...] | None:
+        entity = self._client.get(
+            self._client.key("TwinPublicEvidenceCache", evidence_set_id)
+        )
+        if entity is None:
+            return None
+        return _restore_evidence(json.loads(str(entity["payload_json"])))
 
 
 @dataclass(frozen=True)
@@ -202,6 +314,113 @@ class ResearchModelConfig:
         if self.max_request_seconds > 120:
             raise ValueError("research request timeout exceeds worker bound")
         _utc(self.price_valid_until)
+
+
+@dataclass(frozen=True)
+class ResearchRuntimePolicy:
+    """One fail-closed model and its complete request/account limits."""
+
+    model: ResearchModelConfig
+    budget: BudgetPolicy
+    model_key: str
+    api_base_url: str
+    api_key_env_var: str
+    candidates_per_cycle: int
+    tool_calls_per_candidate: int
+    schema_repairs_per_candidate: int
+
+    @property
+    def id(self) -> str:
+        return "model-config-" + _hash(asdict(self.model))[:24]
+
+    def build_provider(self) -> OpenAICompatibleProvider:
+        api_key = os.environ.get(self.api_key_env_var, "").strip()
+        if not api_key:
+            raise ValueError(f"{self.api_key_env_var} is required for twin research")
+        return OpenAICompatibleProvider(
+            self.model.model_id,
+            api_key,
+            request_timeout_s=float(self.model.max_request_seconds),
+            base_url=self.api_base_url,
+        )
+
+
+def load_research_runtime_policy(
+    twin_config_path: Path,
+    models_config_path: Path,
+) -> ResearchRuntimePolicy:
+    """Load the only model allowed to consume the autonomous research budget."""
+    raw = load_yaml(twin_config_path)
+    research = raw.get("research")
+    strategy = raw.get("strategy")
+    if not isinstance(research, dict) or not isinstance(strategy, dict):
+        raise ValueError("twin research and strategy configuration are required")
+    model_key = str(research.get("model") or "").strip()
+    models = load_model_configs(models_config_path)
+    if model_key not in models:
+        raise ValueError("twin research model is absent from models.yaml")
+    provider = models[model_key]
+    if (
+        provider.provider != "openai-compatible"
+        or not provider.api_base_url
+        or not provider.api_key_env_var
+    ):
+        raise ValueError("twin research requires one bounded OpenAI-compatible provider")
+
+    def positive_int(name: str) -> int:
+        value = research.get(name)
+        if type(value) is not int or value <= 0:
+            raise ValueError(f"research.{name} must be a positive integer")
+        return value
+
+    candidates = positive_int("candidates_per_cycle")
+    tools = positive_int("tool_calls_per_candidate")
+    repairs = positive_int("schema_repairs_per_candidate")
+    if candidates != 3 or tools != 8 or repairs != 1:
+        raise ValueError("twin research fanout must remain 3 candidates, 8 tools, 1 repair")
+    if strategy.get("max_research_candidates") != candidates:
+        raise ValueError("strategy and research candidate limits disagree")
+    max_input = positive_int("max_input_tokens")
+    max_output = positive_int("max_output_tokens")
+    timeout = positive_int("request_timeout_seconds")
+    prices = research.get("model_prices_usd_per_million")
+    price = prices.get(model_key) if isinstance(prices, dict) else None
+    if not isinstance(price, dict):
+        price = {}
+
+    def optional_price(name: str) -> Decimal | None:
+        value = price.get(name)
+        return None if value is None else Decimal(str(value))
+
+    try:
+        valid_until = datetime.fromisoformat(str(research.get("price_valid_until") or ""))
+    except ValueError as exc:
+        raise ValueError("research.price_valid_until must be an ISO timestamp") from exc
+    model = ResearchModelConfig(
+        model_id=provider.router_model_name,
+        provider_id=str(research.get("provider_id") or "").strip(),
+        price=ModelPrice(optional_price("input"), optional_price("output")),
+        price_valid_until=valid_until,
+        max_input_tokens=max_input,
+        max_output_tokens=max_output,
+        strategy_hash=_hash(strategy),
+        max_request_seconds=timeout,
+    )
+    budget = BudgetPolicy(
+        Decimal(str(research.get("usd_limit_per_account_day"))),
+        positive_int("token_limit_per_account_day"),
+        positive_int("request_limit_per_account_day"),
+    )
+    estimate_request_cost(
+        input_tokens=max_input, output_tokens=max_output,
+        price=model.price, require_usd_ceiling=True,
+    )
+    if max_input + max_output > budget.token_limit:
+        raise ValueError("one worst-case request exceeds the daily token allowance")
+    return ResearchRuntimePolicy(
+        model, budget, model_key, provider.api_base_url,
+        provider.api_key_env_var, candidates, tools, repairs,
+    )
 
 
 @dataclass(frozen=True)
@@ -464,6 +683,7 @@ def generate_research(
     provider: ChatProvider, *, capture: PublicResearchCapture, config: ResearchModelConfig,
     budget: Any, budget_key: str, budget_policy: BudgetPolicy, reservation_id: str,
     ledger: Any, result_store: ResearchResultStore, now: datetime,
+    evidence_cache: PublicEvidenceCache | None = None,
 ) -> ResearchResult:
     """Persist a strict forecast or PASS. Storage failure raises, never returns success.
 
@@ -487,6 +707,12 @@ def generate_research(
     try:
         now = _utc(now)
         capture.validate_at_decision()
+        if evidence_cache is not None:
+            cache_id = evidence_cache.put(
+                capture.instrument.id, capture.as_of, capture.evidence,
+            )
+            if evidence_cache.get(cache_id) != capture.evidence:
+                raise ValueError("public evidence cache failed round-trip validation")
         if not capture.as_of <= now < capture.instrument.close_at or now - capture.as_of > timedelta(minutes=5):
             raise ValueError("decision capture is no longer current")
         if config.price_valid_until <= now:
