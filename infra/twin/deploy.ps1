@@ -8,6 +8,7 @@ param(
     [string]$ResearchModelSecret,
     [Parameter(Mandatory)]
     [string]$TradingKmsKey,
+    [string]$InvokerServiceAccount = "",
     [switch]$Apply
 )
 
@@ -164,7 +165,8 @@ else {
 Write-Host "Private twin runtime definition applied in shadow mode. Record IAM evidence before staging traffic."
 
 if ($Apply) {
-    & (Join-Path $PSScriptRoot "smoke.ps1") -ProjectId $ProjectId -Region $Region
+    & (Join-Path $PSScriptRoot "smoke.ps1") -ProjectId $ProjectId -Region $Region `
+        -InvokerServiceAccount $InvokerServiceAccount
     if ($LASTEXITCODE -ne 0) { throw "Private twin smoke verification failed" }
 }
 else {

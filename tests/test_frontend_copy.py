@@ -49,7 +49,7 @@ class FrontendCopyTests(unittest.TestCase):
                 self.assertIn("function _renderVenueWithFee(", index)
                 self.assertIn("0% fee", index)
                 self.assertIn("~1.75% fee", index)
-                self.assertIn("_renderVenueWithFee(e.platform)", index)
+                self.assertIn("_renderVenueWithFee(e.platform,", index)
 
     def test_edge_board_model_comparison_chart_tracks_scads_models(self):
         index = (

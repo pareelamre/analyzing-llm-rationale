@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$ProjectId = "brave-drive-471109-d9",
-    [string]$Region = "us-central1"
+    [string]$Region = "us-central1",
+    [string]$InvokerServiceAccount = ""
 )
 
 Set-StrictMode -Version Latest
@@ -14,10 +15,15 @@ function Get-ServiceEvidence {
     $description = $raw | ConvertFrom-Json
     $url = [string]$description.status.url
     if (-not $url.StartsWith("https://")) { throw "$Service has no HTTPS URL" }
-    $token = (& gcloud auth print-identity-token --audiences=$url).Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($token)) {
+    $tokenArgs = @("auth", "print-identity-token")
+    if (-not [string]::IsNullOrWhiteSpace($InvokerServiceAccount)) {
+        $tokenArgs += @("--audiences=$url", "--impersonate-service-account=$InvokerServiceAccount")
+    }
+    $rawToken = & gcloud @tokenArgs
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$rawToken)) {
         throw "Could not obtain an identity token for $Service"
     }
+    $token = ([string]$rawToken).Trim()
     $headers = @{ Authorization = "Bearer $token" }
     $health = Invoke-RestMethod -Method Get -Uri "$url/health" -Headers $headers
     if ($health.status -ne "ok" -or $health.role -notin @("maintenance", "research")) {
@@ -39,7 +45,12 @@ function Get-ServiceEvidence {
     }
     $containers = @($description.spec.template.spec.containers)
     $environment = @{}
-    foreach ($entry in $containers[0].env) { $environment[[string]$entry.name] = [string]$entry.value }
+    foreach ($entry in $containers[0].env) {
+        $valueProperty = $entry.PSObject.Properties["value"]
+        if ($null -ne $valueProperty) {
+            $environment[[string]$entry.name] = [string]$valueProperty.Value
+        }
+    }
     if (
         $environment["FORESEA_TWIN_MODE"] -ne "shadow" -or
         $environment["FORESEA_TWIN_LIVE_CAPITAL"] -ne "0" -or

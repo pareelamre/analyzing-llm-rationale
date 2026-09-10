@@ -53,7 +53,12 @@ def verify_repository_contract(root: Path = ROOT) -> dict[str, object]:
         )),
         "scheduled_shadow_only": "FORESEA_AGENT_PLACE_TRADE_MODE: shadow" in reusable,
     }
-    requirements["health_smoke"] = requirements["health_smoke"] and "-Method Post" not in smoke
+    requirements["health_smoke"] = requirements["health_smoke"] and all(
+        value in smoke + deploy for value in (
+            "--impersonate-service-account=", "-InvokerServiceAccount",
+            'FORESEA_TWIN_MODE"] -ne "shadow"',
+        )
+    ) and "-Method Post" not in smoke
     requirements["readiness_smoke"] = requirements["readiness_smoke"] and "-Method Post" not in smoke
     failed = sorted(name for name, passed in requirements.items() if not passed)
     source_paths = list((root / "src" / "analyzing_llm_rationale" / "twin").glob("*.py"))
