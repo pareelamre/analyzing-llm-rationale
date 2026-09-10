@@ -53,8 +53,17 @@ only to the service account that owns the current fenced claim. Both services
 verify the assignment, model, market snapshot, evidence content, market identity,
 and as-of time before the isolated research worker accepts the capture.
 
-Remaining T07 work is authenticated result submission and reconciliation through
-the same fenced channel. The maintenance service already owns the once-only
-budget claim, so the remote research path must reconcile that claim rather than
-reserve or claim it again. Until that transport exists, the worker returns
-`research_result_transport_unavailable`; these changes do not enable live trading.
+The same authenticated fenced channel now accepts a strict research result and
+an optional complete usage receipt. Maintenance recomputes the capture/config
+request hash, verifies the result's snapshot and instrument identities, persists
+the decision create-once, reconciles the original claimed reservation, and
+derives the public result and usage IDs. Large transport fields are never copied
+into the durable worker-job status. A lost response can therefore retry without
+duplicating spend or replacing a prior decision.
+
+Remaining T07 runtime work is invoking the bounded provider from the isolated
+worker and committing a forecast to the prospective ledger through maintenance.
+That path must use the already claimed reservation and request a separately
+authorized reservation before its optional schema-repair call. Until it exists,
+the worker returns `research_result_transport_unavailable`; these changes do not
+enable live trading.

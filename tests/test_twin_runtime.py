@@ -318,6 +318,8 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         completed = gateway.complete(
             claimed, ResearchCompletion(
                 "completed", research_result_id="result-001", usage_record_id="usage-001",
+                result_payload={"schema_version": 1}, actual_usd="0",
+                actual_tokens=12,
             ), now=NOW,
         )
         self.assertEqual(completed["research_result_id"], "result-001")
@@ -325,7 +327,10 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         self.assertEqual(call["headers"], {"Authorization": f"Bearer token-for-{AUDIENCE}"})
         self.assertEqual(
             set(call["json"]),
-            {"fence", "status", "research_result_id", "usage_record_id"},
+            {
+                "fence", "status", "research_result_id", "usage_record_id",
+                "result_payload", "actual_usd", "actual_tokens",
+            },
         )
 
 

@@ -243,6 +243,37 @@ class TwinWorkerTests(unittest.TestCase):
         with self.assertRaises(WorkerJobError):
             ResearchCompletion("completed", research_result_id="result-without-usage")
 
+    def test_research_result_transport_is_finalized_before_job_completion(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job("research", kind=WorkerJobKind.RESEARCH))
+        finalized = []
+
+        def finalize(assignment, completion):
+            finalized.append((assignment.fence, completion.result_payload))
+            return ResearchCompletion(
+                "completed", research_result_id="result-derived",
+                usage_record_id="usage-derived",
+            )
+
+        worker = TwinResearchWorker(
+            MaintenanceResearchJobGateway(
+                jobs, authorize_assignment=lambda _: None,
+                finalize_result=finalize,
+            ),
+            worker_id="research-worker",
+        )
+        result = worker.handle(
+            "research", now=NOW,
+            research=lambda _: ResearchCompletion(
+                "completed", result_payload={"schema_version": 1},
+                actual_usd="0", actual_tokens=12,
+            ),
+        )
+
+        self.assertEqual(finalized, [(1, {"schema_version": 1})])
+        self.assertEqual(result["research_result_id"], "result-derived")
+        self.assertNotIn("result_payload", jobs.get("research").completed_result)
+
     def test_safe_reads_retry_only_within_the_configured_budget(self):
         attempts, sleeps = [], []
 

@@ -45,6 +45,9 @@ class ResearchResultRequest(BaseModel):
     research_result_id: Optional[str] = None
     usage_record_id: Optional[str] = None
     reason: Optional[str] = None
+    result_payload: Optional[dict[str, Any]] = None
+    actual_usd: Optional[str] = None
+    actual_tokens: Optional[int] = Field(default=None, ge=0)
 
 
 TokenVerifier = Callable[[str, str], Mapping[str, Any]]
@@ -142,7 +145,7 @@ class HttpResearchJobGateway:
         del now  # Maintenance timestamps the durable result.
         payload = self._call(
             "POST", f"/internal/twin/research-jobs/{assignment.job_id}/result",
-            body={"fence": assignment.fence, **result.to_mapping()},
+            body={"fence": assignment.fence, **result.to_mapping(include_transport=True)},
         )
         return payload
 
@@ -303,6 +306,8 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
                 result = ResearchCompletion(
                     body.status, research_result_id=body.research_result_id,
                     usage_record_id=body.usage_record_id, reason=body.reason,
+                    result_payload=body.result_payload, actual_usd=body.actual_usd,
+                    actual_tokens=body.actual_tokens,
                 )
                 completed = runtime.research_gateway.complete(
                     assignment, result, now=runtime.clock(),

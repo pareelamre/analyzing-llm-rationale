@@ -118,7 +118,10 @@ from .research_gateway import (
     load_research_runtime_policy,
     public_evidence_set_id,
     research_capture_payload,
+    research_request_hash,
+    research_result_payload,
     restore_research_capture,
+    restore_research_result,
 )
 from .risk import (
     CalibrationResult,
@@ -293,7 +296,10 @@ __all__ = [
     "load_research_runtime_policy",
     "public_evidence_set_id",
     "research_capture_payload",
+    "research_request_hash",
+    "research_result_payload",
     "restore_research_capture",
+    "restore_research_result",
     "normalize_market",
     "reconcile_lifecycle",
     "recover_submission",
