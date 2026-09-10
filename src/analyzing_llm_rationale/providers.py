@@ -265,6 +265,18 @@ class OpenAICompatibleProvider(ChatProvider):
         max_tokens: int,
         reasoning_effort: Optional[str] = None,
     ) -> str:
+        return self.chat_completion_with_usage(
+            messages, temperature, max_tokens, reasoning_effort,
+        )["response"]
+
+    def chat_completion_with_usage(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        reasoning_effort: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return content with an optional validated provider token receipt."""
         payload = self._payload(messages, temperature, max_tokens, reasoning_effort=reasoning_effort)
         response = _post(
             self._session,
@@ -315,7 +327,21 @@ class OpenAICompatibleProvider(ChatProvider):
                 content = json.dumps({"thought": "Calling tool", "action": fn_name, "args": parsed_args})
         if not isinstance(content, str) or not content.strip():
             raise RetryableProviderError("Malformed provider response: empty message content")
-        return content
+        result: Dict[str, Any] = {"response": content}
+        raw_usage = payload.get("usage")
+        if isinstance(raw_usage, dict):
+            prompt_tokens = raw_usage.get("prompt_tokens")
+            completion_tokens = raw_usage.get("completion_tokens")
+            total_tokens = raw_usage.get("total_tokens")
+            if all(type(value) is int and value >= 0 for value in (
+                prompt_tokens, completion_tokens, total_tokens,
+            )) and prompt_tokens + completion_tokens == total_tokens:
+                result["usage"] = {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                }
+        return result
 
     def stream_chat_completion(
         self,
