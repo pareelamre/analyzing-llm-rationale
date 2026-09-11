@@ -384,8 +384,27 @@ def _sizing_plan(
     if not 0.0 < price < 1.0:
         raise ValueError("Kelly sizing requires an executable price between 0 and 1")
 
-    model_yes_probability = _clean_probability(args.get("model_probability"), name="model_probability")
-    model_side_probability = model_yes_probability if side == "yes" else 1.0 - model_yes_probability
+    raw_p = (
+        args.get("model_probability")
+        if args.get("model_probability") is not None
+        else args.get("side_probability")
+        if args.get("side_probability") is not None
+        else args.get("calibrated_probability")
+    )
+    model_raw_probability = _clean_probability(raw_p, name="model_probability")
+    if side == "yes":
+        model_side_probability = model_raw_probability
+    else:
+        # Side is NO: agents may supply calibrated P(YES) (standard format, e.g. 0.06)
+        # or calibrated P(NO) directly (e.g. 0.94). Accept the calibrated deviation
+        # on the traded side: if the direct probability yields a positive edge
+        # while 1 - p yields non-positive, the model passed P(NO) directly.
+        p_implied_from_yes = 1.0 - model_raw_probability
+        p_direct_no = model_raw_probability
+        if (p_direct_no - price) > 0 and (p_implied_from_yes - price) <= 0:
+            model_side_probability = p_direct_no
+        else:
+            model_side_probability = p_implied_from_yes
     edge = model_side_probability - price
     if edge < policy.min_edge:
         return {
@@ -2293,13 +2312,28 @@ def _edge_clears_fees(
     """
     if risk_reducing or quantity <= 0 or price <= 0:
         return {"checked": False, "reason": "not_applicable"}
-    model_probability = _as_float(args.get("model_probability"))
+    raw_p = (
+        args.get("model_probability")
+        if args.get("model_probability") is not None
+        else args.get("side_probability")
+        if args.get("side_probability") is not None
+        else args.get("calibrated_probability")
+    )
+    model_probability = _as_float(raw_p)
     if model_probability is None or not (0.0 < model_probability < 1.0):
         return {"checked": False, "reason": "no_model_probability"}
     # A NO contract pays out when the event does not happen, so its win
-    # probability is 1 - P(YES). Both sides settle at $1, so expected value
-    # per contract is (win probability - price paid).
-    win_probability = model_probability if side == "yes" else 1.0 - model_probability
+    # probability is 1 - P(YES). If the agent supplied P(NO) directly when
+    # trading NO, accept that calibrated deviation.
+    if side == "yes":
+        win_probability = model_probability
+    else:
+        p_implied_from_yes = 1.0 - model_probability
+        p_direct_no = model_probability
+        if (p_direct_no - price) > 0 and (p_implied_from_yes - price) <= 0:
+            win_probability = p_direct_no
+        else:
+            win_probability = p_implied_from_yes
     gross_edge = win_probability - price
     fee_per_contract = (fee / quantity) if quantity else 0.0
     net_edge = gross_edge - fee_per_contract

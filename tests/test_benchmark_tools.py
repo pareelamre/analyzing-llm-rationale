@@ -705,6 +705,45 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertLessEqual(capped["target_notional"], 800.0)
         self.assertEqual(capped["max_position_fraction"], 0.08)
 
+    def test_accepts_calibrated_deviation_on_no_side_from_direct_or_implied_probability(self):
+        """Agents buying NO can specify either calibrated P(NO) directly or standard P(YES)."""
+        # Direct P(NO) = 0.94 against NO ask 0.82 (positive 12pp edge)
+        plan_direct = benchmark_tools._sizing_plan(
+            {"sizing_mode": "edge_kelly", "model_probability": 0.94},
+            price=0.82, side="no", account_value=10_000.0,
+        )
+        self.assertTrue(plan_direct["eligible"])
+        self.assertAlmostEqual(plan_direct["edge"], 0.12, places=4)
+
+        # Standard P(YES) = 0.06 against NO ask 0.82 (implied P(NO) = 0.94, positive 12pp edge)
+        plan_implied = benchmark_tools._sizing_plan(
+            {"sizing_mode": "edge_kelly", "model_probability": 0.06},
+            price=0.82, side="no", account_value=10_000.0,
+        )
+        self.assertTrue(plan_implied["eligible"])
+        self.assertAlmostEqual(plan_implied["edge"], 0.12, places=4)
+
+        # Explicit side_probability / calibrated_probability
+        plan_side = benchmark_tools._sizing_plan(
+            {"sizing_mode": "quarter_kelly", "side_probability": 0.94},
+            price=0.82, side="no", account_value=10_000.0,
+        )
+        self.assertTrue(plan_side["eligible"])
+        self.assertAlmostEqual(plan_side["edge"], 0.12, places=4)
+
+        # Verify fee-clearing gate accepts both formats
+        fee = benchmark_tools._kalshi_fee(0.82, 10.0)
+        edge_direct = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.94}, price=0.82, quantity=10.0, fee=fee, side="no", risk_reducing=False,
+        )
+        edge_implied = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.06}, price=0.82, quantity=10.0, fee=fee, side="no", risk_reducing=False,
+        )
+        self.assertTrue(edge_direct["clears"])
+        self.assertAlmostEqual(edge_direct["gross_edge"], 0.12, places=4)
+        self.assertTrue(edge_implied["clears"])
+        self.assertAlmostEqual(edge_implied["gross_edge"], 0.12, places=4)
+
     def test_place_trade_returns_skipped_and_rejected_when_kelly_sizing_ineligible(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
