@@ -3,13 +3,13 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t07_in_progress",
+  "implementation_status": "t21_pending_forward_trial",
   "implementation_baseline": "d0cf0a80c",
-  "next_task": "T07",
+  "next_task": "T21",
   "live_authorized": false,
   "release_gates": {
     "G0": "pass",
-    "G1": "not_started",
+    "G1": "collecting",
     "G2": "not_evaluated",
     "G3": "not_authorized",
     "G4": "not_evaluated"
@@ -209,27 +209,31 @@
       "dependencies": [
         "T04"
       ],
-      "status": "in_progress",
-      "substep": "primary provider execution now runs in the isolated worker; fenced capture/result transport, create-once persistence, prospective-ledger recording, usage reconciliation, stale-call recovery, pricing, timeout, fanout and evidence caching are implemented; separately reserved schema repair remains",
-      "branch": "codex/t07-runtime-execution",
+      "status": "complete",
+      "substep": "durable primary and schema-repair provider calls are independently reserved, fenced, metered, reconciled and recovered",
+      "branch": "codex/t07-repair-reservation",
       "commit": null,
       "pr_url": null,
       "checks": [
-        "focused twin research/runtime/worker tests (pass: 49 tests)",
-        "py -m ruff check focused files (pass)"
+        "py -m unittest tests.test_twin_research_gateway tests.test_twin_runtime tests.test_twin_worker tests.test_twin_budget tests.test_twin_observability (pass: 75 tests)",
+        "py -m unittest discover -s tests (pass)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (pass: 9599 nodes, 24091 edges)"
       ],
       "evidence": [
+        "src/analyzing_llm_rationale/twin/budget.py",
         "src/analyzing_llm_rationale/twin/research_gateway.py",
-        "src/analyzing_llm_rationale/twin/runtime_app.py",
         "src/analyzing_llm_rationale/twin/runtime.py",
+        "src/analyzing_llm_rationale/twin/runtime_app.py",
         "src/analyzing_llm_rationale/twin/worker.py",
+        "tests/test_twin_budget.py",
         "tests/test_twin_research_gateway.py",
+        "tests/test_twin_runtime.py",
         "docs/autonomous-twin/BUDGET_INTEGRITY.md"
       ],
-      "blockers": [
-        "The optional schema-repair provider call still needs a separate atomic maintenance-owned reservation."
-      ],
-      "handoff": "Add the fenced repair-reservation endpoint and reconcile primary and repair receipts independently; then rerun the complete T07 acceptance matrix."
+      "blockers": [],
+      "handoff": "Merge and deploy the shadow-only worker revision, then begin T21's seven-consecutive-day forward trial. Do not enable live capital or create a mandate."
     },
     {
       "id": "T08",

@@ -4,7 +4,11 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from analyzing_llm_rationale.twin.budget import BudgetPolicy, InMemoryResearchBudget
+from analyzing_llm_rationale.twin.budget import (
+    BudgetPolicy,
+    InMemoryResearchBudget,
+    ModelPrice,
+)
 from analyzing_llm_rationale.twin.runtime import (
     HttpResearchJobGateway,
     PrivateTwinRuntime,
@@ -13,12 +17,14 @@ from analyzing_llm_rationale.twin.runtime import (
 )
 from analyzing_llm_rationale.twin.runtime_app import (
     _assert_shadow_only,
+    _authorize_research_repair,
     _recover_stale_research_budgets,
     _runtime_worker_id,
 )
 from analyzing_llm_rationale.twin.worker import (
     InMemoryWorkerJobs,
     MaintenanceResearchJobGateway,
+    ResearchAssignment,
     ResearchCompletion,
     TwinResearchWorker,
     TwinWorker,
@@ -180,6 +186,65 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(budget.usage(key).uncertain_tokens, 100)
 
+    def test_repair_reservation_is_separate_bounded_and_once_only(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(research_job())
+        assignment = ResearchAssignment.from_job(
+            jobs.claim("research-job", worker_id="research-worker", now=NOW),
+        )
+        budget = InMemoryResearchBudget()
+        key = assignment.budget_key_id
+        policy = mock.Mock(
+            model=mock.Mock(
+                max_input_tokens=60, max_output_tokens=40,
+                price=ModelPrice(0, 0),
+            ),
+            budget=BudgetPolicy(0, 200, 2),
+        )
+        budget.reserve(
+            assignment.budget_reservation_id, key=key,
+            estimated_usd=0, estimated_tokens=100, policy=policy.budget,
+        )
+        budget.claim(assignment.budget_reservation_id, key=key)
+        self.assertTrue(_authorize_research_repair(
+            budget, assignment, policy, "0", 12,
+        ))
+        usage = budget.usage(key)
+        self.assertEqual(usage.requests, 2)
+        self.assertEqual(usage.actual_tokens, 12)
+        self.assertEqual(usage.reserved_tokens, 100)
+        self.assertFalse(_authorize_research_repair(
+            budget, assignment, policy, "0", 12,
+        ))
+        self.assertEqual(budget.usage(key).requests, 2)
+
+    def test_unknown_primary_usage_cannot_create_repair_capacity(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(research_job())
+        assignment = ResearchAssignment.from_job(
+            jobs.claim("research-job", worker_id="research-worker", now=NOW),
+        )
+        budget = InMemoryResearchBudget()
+        key = assignment.budget_key_id
+        policy = mock.Mock(
+            model=mock.Mock(
+                max_input_tokens=60, max_output_tokens=40,
+                price=ModelPrice(0, 0),
+            ),
+            budget=BudgetPolicy(0, 150, 2),
+        )
+        budget.reserve(
+            assignment.budget_reservation_id, key=key,
+            estimated_usd=0, estimated_tokens=100, policy=policy.budget,
+        )
+        budget.claim(assignment.budget_reservation_id, key=key)
+        self.assertFalse(_authorize_research_repair(
+            budget, assignment, policy, None, None,
+        ))
+        usage = budget.usage(key)
+        self.assertEqual(usage.requests, 1)
+        self.assertEqual(usage.uncertain_tokens, 100)
+
     def test_research_status_rejects_maintenance_job_ids(self):
         runtime, _ = self.maintenance_runtime()
         with TestClient(create_private_worker_app(runtime)) as client:
@@ -243,6 +308,51 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             self.assertEqual(result.status_code, 200)
             self.assertEqual(result.json()["research_result_id"], "result-001")
 
+    def test_repair_authorization_is_fenced_and_research_identity_bound(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(research_job())
+        repairs = []
+        gateway = MaintenanceResearchJobGateway(
+            jobs, authorize_assignment=lambda _: None,
+            authorize_repair=lambda assignment, usd, tokens: (
+                repairs.append((assignment.fence, usd, tokens)) or True
+            ),
+        )
+        runtime = PrivateTwinRuntime(
+            WorkerRole.MAINTENANCE,
+            RuntimeIdentityPolicy(
+                AUDIENCE, frozenset({SCHEDULER}), frozenset({DISPATCHER}),
+                frozenset({RESEARCH}),
+            ),
+            lambda: NOW, jobs=jobs, dispatcher=Dispatcher(),
+            maintenance_worker=TwinWorker(
+                jobs, worker_id="maintenance-worker", reconcile_startup=lambda: True,
+            ), maintenance_operation=lambda _: {"status": "complete"},
+            research_gateway=gateway, token_verifier=verifier,
+        )
+        with TestClient(create_private_worker_app(runtime)) as client:
+            assignment = client.post(
+                "/internal/twin/research-jobs/research-job/claim",
+                headers=self.auth("research-token"),
+            ).json()["assignment"]
+            path = "/internal/twin/research-jobs/research-job/repair"
+            denied = client.post(
+                path, headers=self.auth("intruder-token"),
+                json={"fence": assignment["fence"], "actual_usd": "0", "actual_tokens": 12},
+            )
+            self.assertEqual(denied.status_code, 401)
+            stale = client.post(
+                path, headers=self.auth("research-token"),
+                json={"fence": assignment["fence"] + 1, "actual_usd": "0", "actual_tokens": 12},
+            )
+            self.assertEqual(stale.status_code, 409)
+            accepted = client.post(
+                path, headers=self.auth("research-token"),
+                json={"fence": assignment["fence"], "actual_usd": "0", "actual_tokens": 12},
+            )
+            self.assertEqual(accepted.json(), {"status": "authorized"})
+            self.assertEqual(repairs, [(assignment["fence"], "0", 12)])
+
     def test_research_surface_cannot_reach_maintenance_or_public_routes(self):
         jobs = InMemoryWorkerJobs()
         jobs.add(research_job())
@@ -303,6 +413,8 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
                     return Response({"status": "claimed", "assignment": assignment})
                 if url.endswith("/result"):
                     return Response({"status": "completed", "research_result_id": "result-001"})
+                if url.endswith("/repair"):
+                    return Response({"status": "authorized"})
                 if url.endswith("/capture"):
                     return Response({"capture": {"schema_version": 1}})
                 return Response({"status": "running", "completed_result": None})
@@ -315,6 +427,10 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         claimed = gateway.claim("research-job", worker_id="ignored", now=NOW)
         self.assertEqual(claimed.fence, 2)
         self.assertEqual(gateway.load_capture(claimed), {"schema_version": 1})
+        self.assertTrue(gateway.authorize_repair(
+            claimed, actual_usd="0", actual_tokens=12,
+        ))
+        self.assertTrue(session.calls[-1][1].endswith("/repair"))
         completed = gateway.complete(
             claimed, ResearchCompletion(
                 "completed", research_result_id="result-001", usage_record_id="usage-001",
