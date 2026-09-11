@@ -434,7 +434,8 @@ class TrajectoryTests(unittest.TestCase):
                     self.assertIsNone(market_url)
                     self.assertIsNone(close_time)
 
-                agg = trl.aggregate(store, model="m", variant="v", temperature=0.0)
+                with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, 2, tzinfo=timezone.utc)):
+                    agg = trl.aggregate(store, model="m", variant="v", temperature=0.0)
                 questions = {e["question"] for e in agg["edge_board"]}
                 self.assertIn("Will A happen?", questions)
                 urls = {e["market_url"] for e in agg["edge_board"]}
@@ -1660,6 +1661,64 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertTrue(board[0]["context_complete"])
         self.assertEqual(board[0]["evidence_count"], 3)
         self.assertEqual(board[0]["venue_news_count"], 1)
+
+    def test_edge_board_drops_expired_markets(self):
+        now = datetime.now(timezone.utc)
+        rows = [
+            # Future market (should stay)
+            {
+                "platform": "Polymarket",
+                "ident": "future-1",
+                "model_probability": 0.70,
+                "market_probability": 0.40,
+                "snapshot_ts": now,
+                "question": "Future event",
+                "market_url": "https://polymarket.com/market/future-1",
+                "close_time": now + timedelta(days=5),
+            },
+            # Expired market (should be dropped)
+            {
+                "platform": "Polymarket",
+                "ident": "expired-1",
+                "model_probability": 0.80,
+                "market_probability": 0.30,
+                "snapshot_ts": now - timedelta(days=2),
+                "question": "Past event",
+                "market_url": "https://polymarket.com/market/expired-1",
+                "close_time": now - timedelta(hours=2),
+            },
+        ]
+        board = trl.build_edge_board(rows, {"future-1": 0.40, "expired-1": 0.30}, [])
+        self.assertEqual(len(board), 1)
+        self.assertEqual(board[0]["ident"], "future-1")
+
+    def test_edge_board_calculates_executable_edge_and_spread(self):
+        now = datetime.now(timezone.utc)
+        rows = [{
+            "platform": "Kalshi",
+            "ident": "wide-1",
+            "model_probability": 0.30,
+            "market_probability": 0.55,
+            "market_bid": 0.20,
+            "market_ask": 0.90,
+            "snapshot_ts": now,
+            "question": "Wide spread market",
+            "market_url": "https://kalshi.com/markets/wide-1",
+            "close_time": now + timedelta(days=10),
+            "market_volume": 500,
+        }]
+        board = trl.build_edge_board(rows, {"wide-1": 0.55}, [])
+        self.assertEqual(len(board), 1)
+        item = board[0]
+        self.assertEqual(item["spread"], 0.70)
+        self.assertTrue(item["needs_discrepancy_review"])
+        self.assertEqual(item["discrepancy_status"], "wide_spread")
+        self.assertIn("wide_bid_ask_spread", item["review_reasons"])
+        # Side is NO, model is 0.30, market_bid is 0.20
+        # Entry price for NO is 1.0 - bid = 0.80. Executable edge = (1 - 0.30) - 0.80 = -0.10
+        self.assertEqual(item["side"], "NO")
+        self.assertEqual(item["executable_entry_price"], 0.80)
+        self.assertEqual(item["executable_edge"], -0.10)
 
     def test_is_similar_question(self):
         q1 = "Will the Federal Reserve cut interest rates in September 2026?"
