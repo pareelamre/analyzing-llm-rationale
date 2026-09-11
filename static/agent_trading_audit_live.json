@@ -9700,6 +9700,89 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "489bcdc0-bb4e-41bc-9aed-13263a762170",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_quote_unavailable",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "marketable": false,
+            "observed_ask": null,
+            "source": "live_venue_quote",
+            "status": "shadow_quote_unavailable"
+          },
+          "requested_order": {
+            "price": 0.08,
+            "quantity": "None"
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 7974.801986,
+            "cash_required": 637.984159,
+            "concentration_cap": 1196.220298,
+            "cycle_id": "30m:993944",
+            "cycle_spend_after": 637.984159,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 638.058716,
+            "daily_risk_before": 0.074557,
+            "daily_risk_limit": 2392.440596,
+            "drawdown_after": 0.20638,
+            "fee": 38.600319,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 599.38384,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 599.38384,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1594.960397,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.87,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 637.984159,
+            "target_quantity": 7492.297995114618
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993944",
+        "event_type": "unfilled_order",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 0.08,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXCLEMSONSWINNEY-26DEC01"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "ee277c6ae67004e558902b3c648746cdcc0ae53f675db0a8bc14293533c4927f",
+        "recorded_at": "2026-09-11T04:10:44.445914+00:00"
+      },
+      {
         "action_id": "2347f740-f706-4249-9c22-cc938579f3dd",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -17432,6 +17515,172 @@
     ],
     "qwen3-8-27b": [
       {
+        "action_id": "728f8140-47e2-4330-9c48-9eb5886838fa",
+        "agent_id": "qwen3-8-27b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 200.0
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.8,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.8,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 10032.465227,
+            "cash_required": 802.597218,
+            "concentration_cap": 1504.869784,
+            "cycle_id": "30m:993944",
+            "cycle_spend_after": 802.597218,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 802.597218,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3009.739568,
+            "drawdown_after": 0.007022,
+            "fee": 11.081224,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 791.515994,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 791.515994,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 2006.493045,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.18,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 802.597218,
+            "target_quantity": 989.3949928007889
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993944",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -162.24,
+          "cash_required": 162.24,
+          "fee": 2.24,
+          "netting_payout": 0.0,
+          "notional": 160.0,
+          "price": 0.8,
+          "quantity": 200.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXMLBDEBUT-RCHOLOWSKY-26NOV01"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "8bb50c8e2c5f58c0baad7446ac56b6aa258d92b01c3d58981ddc2d6239bc194c",
+        "recorded_at": "2026-09-11T04:13:52.106124+00:00"
+      },
+      {
+        "action_id": "13fd411b-a040-4b02-b9ae-a56604d7d849",
+        "agent_id": "qwen3-8-27b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_unfilled_below_market",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "marketable": false,
+            "observed_ask": 0.8,
+            "source": "live_venue_quote",
+            "status": "shadow_unfilled_below_market"
+          },
+          "requested_order": {
+            "price": 0.79,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 10032.465227,
+            "cash_required": 793.111888,
+            "concentration_cap": 1504.869784,
+            "cycle_id": "30m:993944",
+            "cycle_spend_after": 793.111888,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 793.111888,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3009.739568,
+            "drawdown_after": 0.007062,
+            "fee": 11.489844,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 781.622044,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 781.622044,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 2006.493045,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.18,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 802.597218,
+            "target_quantity": 989.3949928007889
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993944",
+        "event_type": "unfilled_order",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 0.79,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXMLBDEBUT-RCHOLOWSKY-26NOV01"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "6189b6072c164b22549defaa4b6b3138f7b3475972ae9a03e9427d684061c839",
+        "recorded_at": "2026-09-11T04:13:35.552631+00:00"
+      },
+      {
         "action_id": "4ccc0393-65c7-40c3-a5d2-d5f1732b6949",
         "agent_id": "qwen3-8-27b",
         "audit": {
@@ -18753,7 +19002,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-11T02:16:06.830195+00:00",
+  "generated_at": "2026-09-11T04:15:19.407217+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
