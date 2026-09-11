@@ -2691,7 +2691,14 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
     for (platform, ident), r in latest.items():
         if r.get("model_probability") is None:
             continue
-        current_lead = _lead_time_days(r.get("close_time"))
+        close_t = r.get("close_time") or r.get("resolve_time")
+        if close_t is not None:
+            close_dt = _parse_dt(close_t)
+            if close_dt is not None and close_dt <= _now():
+                continue
+        current_lead = _lead_time_days(close_t)
+        if current_lead is not None and current_lead <= 0.0:
+            continue
         # Only show markets the venue API is still actively pricing —
         # if latest_price has no entry the market is gone from the venue.
         market_p = latest_price.get(ident)
@@ -2730,29 +2737,41 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             _optional_float(r.get("market_volume")) or 0.0,
             _optional_float(r.get("market_liquidity")) or 0.0,
         ) < 1000.0
+
+        bid_val = _optional_float(r.get("market_bid"))
+        ask_val = _optional_float(r.get("market_ask"))
+        spread = (ask_val - bid_val) if (bid_val is not None and ask_val is not None and ask_val >= bid_val) else None
+        wide_spread = spread is not None and spread >= 0.20
+
         review_reasons: List[str] = []
+        if wide_spread:
+            review_reasons.append("wide_bid_ask_spread")
         if huge_gap and crowd_move is not None and abs(crowd_move) >= 0.10:
             review_reasons.append("crowd_moved_since_forecast")
         if huge_gap and (model_p <= 0.10 or model_p >= 0.90):
             review_reasons.append("extreme_model_probability")
-        if huge_gap and thin_market:
+        if (huge_gap or abs(signed) >= 0.10) and thin_market:
             review_reasons.append("thin_market")
         if huge_gap and not rules_present:
             review_reasons.append("missing_market_rules")
         if huge_gap and evidence_count == 0:
             review_reasons.append("missing_news_context")
-        if not huge_gap:
-            discrepancy_status = "normal"
+
+        if wide_spread:
+            discrepancy_status = "wide_spread"
         elif "crowd_moved_since_forecast" in review_reasons:
             discrepancy_status = "stale_forecast"
-        elif not context_complete:
+        elif not context_complete and huge_gap:
             discrepancy_status = "context_incomplete"
         elif "thin_market" in review_reasons:
             discrepancy_status = "thin_market"
         elif "extreme_model_probability" in review_reasons:
             discrepancy_status = "extreme_forecast"
-        else:
+        elif huge_gap or abs(signed) >= 0.08:
             discrepancy_status = "genuine_candidate"
+        else:
+            discrepancy_status = "normal"
+
         label = _edge_label(abs(signed))
         tr = by_edge.get(label)
         # Primary link: resolved skill of forecasts made at a similar lead time —
@@ -2762,8 +2781,22 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
         # The directional trade: buy the model's side at that side's price. Buying
         # YES is the same position as fading NO (binary markets are symmetric); the
         # payout is asymmetric, though — a $1 winner returns (1 − price)/price.
-        side = "YES" if signed > 0 else "NO" if signed < 0 else None
-        entry = market_p if signed > 0 else (1.0 - market_p) if signed < 0 else None
+        if signed > 0:
+            side = "YES"
+            entry = market_p
+            exec_entry = ask_val if (ask_val is not None and 0.0 < ask_val < 1.0) else market_p
+            exec_edge = model_p - exec_entry
+        elif signed < 0:
+            side = "NO"
+            entry = 1.0 - market_p
+            exec_entry = (1.0 - bid_val) if (bid_val is not None and 0.0 < bid_val < 1.0) else (1.0 - market_p)
+            exec_edge = (1.0 - model_p) - exec_entry
+        else:
+            side = None
+            entry = None
+            exec_entry = None
+            exec_edge = 0.0
+
         payout_odds = round((1.0 - entry) / entry, 1) if entry and 0.0 < entry < 1.0 else None
         board.append({
             "question": r.get("question"),
@@ -2782,6 +2815,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "market_ask": r.get("market_ask"),
             "market_volume": r.get("market_volume"),
             "market_liquidity": r.get("market_liquidity"),
+            "spread": round(spread, 3) if spread is not None else None,
             "evidence_count": evidence_count,
             "venue_news_count": venue_news_count,
             "rules_present": rules_present,
@@ -2803,7 +2837,9 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             ),
             "edge": round(signed, 3),
             "abs_edge": round(abs(signed), 3),
-            "needs_discrepancy_review": huge_gap,
+            "executable_entry_price": round(exec_entry, 3) if exec_entry is not None else None,
+            "executable_edge": round(exec_edge, 3) if exec_edge is not None else None,
+            "needs_discrepancy_review": huge_gap or wide_spread,
             "discrepancy_status": discrepancy_status,
             "review_reasons": review_reasons,
             "stance": ("model_above_market" if signed > 0

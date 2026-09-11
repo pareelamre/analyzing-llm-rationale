@@ -1097,6 +1097,12 @@
     .eb-view-tab { border: 0; border-radius: 5px; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 6px 12px; }
     .eb-view-tab.active { background: var(--ink); color: #fff; }
     .eb-view-tab:not(.active):hover { background: var(--paper); color: var(--text); }
+    .eb-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 0 0 12px; padding: 8px 10px; background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
+    .eb-filter-pill { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 500; color: var(--text-dim); cursor: pointer; transition: all 0.15s ease; }
+    .eb-filter-pill:hover { color: var(--text); border-color: #999; }
+    .eb-filter-pill.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .eb-search-input { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; color: var(--text); width: 170px; }
+    .eb-search-input:focus { outline: none; border-color: var(--accent); }
     .eb-mtm-heading-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 20px; margin-bottom: 12px; }
     .eb-mtm-title { margin: 0; min-height: 2.9em; display: flex; align-items: flex-end; }
     .eb-view-tabs.eb-sizing-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: 500px; margin: 0; }
@@ -8383,6 +8389,9 @@ function _attachCrypto5mHover(container) {
 
 function _discrepancyBadge(e) {
   const status = e.discrepancy_status;
+  if (status === 'wide_spread') {
+    return ' <span class="eb-badge" style="background:rgba(239,68,68,0.12);color:#dc2626;border:1px solid rgba(239,68,68,0.3);font-size:10px;padding:1px 5px;margin-left:4px" title="Wide bid-ask spread (>=20¢): market order execution may not realize this theoretical edge">WIDE SPREAD</span>';
+  }
   if (status === 'genuine_candidate') {
     return ' <span class="eb-badge eb-sig" style="background:rgba(16,185,129,0.15);color:#059669;border:1px solid rgba(16,185,129,0.4);font-size:10px;padding:1px 5px;margin-left:4px" title="Verified genuine edge candidate: context complete, liquid venue, active crowd price">GENUINE EDGE</span>';
   }
@@ -8397,6 +8406,26 @@ function _discrepancyBadge(e) {
   }
   if (status === 'extreme_forecast') {
     return ' <span class="eb-badge" style="background:rgba(168,85,247,0.12);color:#9333ea;border:1px solid rgba(168,85,247,0.3);font-size:10px;padding:1px 5px;margin-left:4px" title="Extreme model probability (<=10% or >=90%)">EXTREME</span>';
+  }
+  return '';
+}
+
+function _credibilityBadge(e) {
+  const grade = e.credibility_grade;
+  const score = e.credibility_score;
+  if (!grade && score == null) return '';
+  const scorePct = score != null ? Math.round(score * 100) : null;
+  const summary = e.audit_summary || '';
+  const flags = (e.credibility_flags || []).join(', ');
+  const title = `${summary ? summary + ' · ' : ''}Credibility: ${scorePct != null ? scorePct + '%' : '—'}${flags ? ' · Flags: ' + flags : ''}`;
+  if (grade === 'A') {
+    return ` <span class="eb-badge" style="background:rgba(16,185,129,0.15);color:#059669;border:1px solid rgba(16,185,129,0.4);font-size:10px;padding:1px 5px;font-weight:600;margin-left:4px" title="${escAttr(title)}">GRADE A${scorePct ? ' ' + scorePct + '%' : ''}</span>`;
+  }
+  if (grade === 'B') {
+    return ` <span class="eb-badge" style="background:rgba(37,99,235,0.12);color:#2563eb;border:1px solid rgba(37,99,235,0.3);font-size:10px;padding:1px 5px;font-weight:600;margin-left:4px" title="${escAttr(title)}">GRADE B${scorePct ? ' ' + scorePct : ''}</span>`;
+  }
+  if (grade === 'C') {
+    return ` <span class="eb-badge" style="background:rgba(239,68,68,0.12);color:#dc2626;border:1px solid rgba(239,68,68,0.3);font-size:10px;padding:1px 5px;font-weight:600;margin-left:4px" title="${escAttr(title)}">GRADE C${scorePct ? ' ' + scorePct : ''}</span>`;
   }
   return '';
 }
@@ -8477,10 +8506,111 @@ function _renderVenueWithFee(platform, category, question) {
   return escHtml(p);
 }
 
+let _ebSearchQuery = '';
+let _ebVenueFilter = 'all';
+let _ebQualityFilter = 'all';
+let _ebSortBy = 'edge';
+
+function _filterAndSortBoard(board) {
+  let filtered = (board || []).slice();
+  if (_ebSearchQuery) {
+    const q = _ebSearchQuery.toLowerCase().trim();
+    filtered = filtered.filter(e =>
+      (e.question || '').toLowerCase().includes(q) ||
+      (e.platform || '').toLowerCase().includes(q) ||
+      (e.domain || '').toLowerCase().includes(q) ||
+      (e.ident || '').toLowerCase().includes(q)
+    );
+  }
+  if (_ebVenueFilter !== 'all') {
+    filtered = filtered.filter(e => String(e.platform || '').toLowerCase() === _ebVenueFilter.toLowerCase());
+  }
+  if (_ebQualityFilter === 'credible') {
+    filtered = filtered.filter(e => e.credibility_grade === 'A' || e.credibility_grade === 'B' || e.is_credible === true);
+  } else if (_ebQualityFilter === 'exclude_thin') {
+    filtered = filtered.filter(e => e.discrepancy_status !== 'thin_market' && e.discrepancy_status !== 'wide_spread');
+  }
+
+  // Sort
+  if (_ebSortBy === 'credibility') {
+    filtered.sort((a, b) => (b.credibility_score ?? -1) - (a.credibility_score ?? -1));
+  } else if (_ebSortBy === 'volume') {
+    filtered.sort((a, b) => (Number(b.market_volume) || 0) - (Number(a.market_volume) || 0));
+  } else if (_ebSortBy === 'lead') {
+    filtered.sort((a, b) => (a.lead_days ?? 999) - (b.lead_days ?? 999));
+  } else {
+    // default abs_edge
+    filtered.sort((a, b) => (b.abs_edge ?? 0) - (a.abs_edge ?? 0));
+  }
+  return filtered;
+}
+
+function _onEbSearch(val) {
+  _ebSearchQuery = val;
+  _ebPage = 0;
+  _renderBoardContainer();
+}
+
+function _onEbVenueFilter(venue) {
+  _ebVenueFilter = venue;
+  _ebPage = 0;
+  _renderBoardContainer();
+}
+
+function _onEbQualityFilter(quality) {
+  _ebQualityFilter = quality;
+  _ebPage = 0;
+  _renderBoardContainer();
+}
+
+function _onEbSort(sortKey) {
+  _ebSortBy = sortKey;
+  _ebPage = 0;
+  _renderBoardContainer();
+}
+
+function _renderBoardContainer() {
+  const container = document.getElementById('eb-board-section');
+  if (container && _ebBoardData) {
+    container.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+  }
+}
+
 function _renderBoardPage(board, page) {
-  if (!board.length) return '<p class="text-sm text-gray-500">No open markets tracked yet.</p>';
-  const pages = Math.ceil(board.length / _EB_PAGE_SIZE);
-  const slice = board.slice(page * _EB_PAGE_SIZE, (page + 1) * _EB_PAGE_SIZE);
+  if (!board || !board.length) return '<p class="text-sm text-gray-500">No open markets tracked yet.</p>';
+  const displayList = _filterAndSortBoard(board);
+  const totalMatches = displayList.length;
+  const pages = Math.max(1, Math.ceil(totalMatches / _EB_PAGE_SIZE));
+  const curPage = Math.min(page, pages - 1);
+  const slice = displayList.slice(curPage * _EB_PAGE_SIZE, (curPage + 1) * _EB_PAGE_SIZE);
+
+  const toolbarHtml = `<div class="eb-toolbar">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <input type="text" class="eb-search-input" placeholder="Search markets…" value="${escAttr(_ebSearchQuery)}" oninput="_onEbSearch(this.value)" />
+      <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Venue:</span>
+      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'all' ? 'active' : ''}" onclick="_onEbVenueFilter('all')">All</button>
+      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'polymarket' ? 'active' : ''}" onclick="_onEbVenueFilter('polymarket')">Polymarket</button>
+      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kalshi' ? 'active' : ''}" onclick="_onEbVenueFilter('kalshi')">Kalshi</button>
+      <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Quality:</span>
+      <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'all' ? 'active' : ''}" onclick="_onEbQualityFilter('all')">All</button>
+      <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'credible' ? 'active' : ''}" onclick="_onEbQualityFilter('credible')" title="Grade A or B credibility only">Grade A/B</button>
+      <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'exclude_thin' ? 'active' : ''}" onclick="_onEbQualityFilter('exclude_thin')" title="Exclude thin liquidity and wide spreads">Liquid only</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span style="font-size:11px;color:var(--text-dim)">Sort:</span>
+      <select onchange="_onEbSort(this.value)" style="background:#fff;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:11px;color:var(--text);cursor:pointer">
+        <option value="edge" ${_ebSortBy === 'edge' ? 'selected' : ''}>Edge (Highest)</option>
+        <option value="credibility" ${_ebSortBy === 'credibility' ? 'selected' : ''}>Credibility</option>
+        <option value="volume" ${_ebSortBy === 'volume' ? 'selected' : ''}>Volume</option>
+        <option value="lead" ${_ebSortBy === 'lead' ? 'selected' : ''}>Closing Soonest</option>
+      </select>
+    </div>
+  </div>`;
+
+  if (!slice.length) {
+    return toolbarHtml + '<p class="text-sm text-gray-500" style="padding:14px 0">No open markets match the active filters.</p>';
+  }
+
   const rows = slice.map(e => {
     // Primary link is the lead-time (how-early) track record; fall back to the
     // edge-size bucket record only if no lead-time record exists.
@@ -8500,27 +8630,35 @@ function _renderBoardPage(board, page) {
       ? `<button type="button" class="fav-star ${_isFav(favKey) ? 'on' : ''}" title="Watch this market"
            onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: resolvedExtUrl || e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${uiIcon('star')}</button>`
       : '';
+
+    const crowdSub = (e.market_bid != null && e.market_ask != null)
+      ? `<div style="font-size:10px;color:var(--text-dim)" title="Best bid: ${Math.round(e.market_bid*100)}¢ · Best ask: ${Math.round(e.market_ask*100)}¢">${Math.round(e.market_bid*100)}¢ / ${Math.round(e.market_ask*100)}¢</div>`
+      : '';
+    const execSub = (e.executable_edge != null && Math.abs(e.executable_edge - e.edge) >= 0.03)
+      ? `<div style="font-size:10px;color:var(--text-dim)" title="Executable edge against book: ${pct(e.executable_edge)}%">book: ${_sg(e.executable_edge)}</div>`
+      : '';
+
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${_leadSkillState(tr).key}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
-      `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}${_discrepancyBadge(e)}</td>` +
+      `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}${_credibilityBadge(e)}${_discrepancyBadge(e)}</td>` +
       `<td>${_renderVenueWithFee(e.platform, e.category || e.domain, e.question)}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
-      `<td class="eb-live-market">${pct(e.market_probability)}%</td>` +
-      `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td>` +
+      `<td class="eb-live-market">${pct(e.market_probability)}%${crowdSub}</td>` +
+      `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b>${execSub}</td>` +
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
       `<td style="white-space:nowrap">${lead}</td><td>${badge}</td></tr>`;
   }).join('');
   const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Foresea odds</th><th>Crowd</th><th>Edge</th><th>Signal</th><th>Lead</th><th>Skill at this lead</th></tr></thead><tbody>${rows}</tbody></table>`;
   let pagination = '';
   if (pages > 1) {
-    const prev = page > 0
-      ? `<button class="eb-page-btn ui-icon-label" onclick="_ebGoPage(${page - 1})">${uiIcon('arrow-left')} Prev</button>`
+    const prev = curPage > 0
+      ? `<button class="eb-page-btn ui-icon-label" onclick="_ebGoPage(${curPage - 1})">${uiIcon('arrow-left')} Prev</button>`
       : `<button class="eb-page-btn ui-icon-label" disabled>${uiIcon('arrow-left')} Prev</button>`;
-    const next = page < pages - 1
-      ? `<button class="eb-page-btn ui-icon-label" onclick="_ebGoPage(${page + 1})">Next ${uiIcon('arrow-right')}</button>`
+    const next = curPage < pages - 1
+      ? `<button class="eb-page-btn ui-icon-label" onclick="_ebGoPage(${curPage + 1})">Next ${uiIcon('arrow-right')}</button>`
       : `<button class="eb-page-btn ui-icon-label" disabled>Next ${uiIcon('arrow-right')}</button>`;
-    pagination = `<div class="eb-pagination">${prev}<span class="eb-page-info">${page + 1} / ${pages}</span>${next}</div>`;
+    pagination = `<div class="eb-pagination">${prev}<span class="eb-page-info">${curPage + 1} / ${pages} (${totalMatches} markets)</span>${next}</div>`;
   }
-  return tableHtml + pagination;
+  return toolbarHtml + tableHtml + pagination;
 }
 
 let _activeMtmStrat = 'quarter_kelly';

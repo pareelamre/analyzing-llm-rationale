@@ -64,6 +64,34 @@ class EdgeCredibilityTests(unittest.TestCase):
         self.assertIn("credibility_score", audited[0])
         self.assertIn("credibility_grade", audited[1])
 
+    def test_past_due_market_rejection(self):
+        opp = {
+            "question": "Will candidate win debate on 2026-09-01?",
+            "platform": "Polymarket",
+            "market_probability": 0.40,
+            "model_probability": 0.60,
+            "resolve_time": "2026-09-01T00:00:00Z",
+            "evidence": [{"title": "Debate concluded"}],
+            "volume": 50000,
+        }
+        res = audit_edge_opportunity(opp)
+        self.assertIn("potential_past_due_market", res["credibility_flags"])
+        self.assertLessEqual(res["credibility_score"], 0.60)
+
+    def test_wide_bid_ask_spread_penalty(self):
+        opp = {
+            "question": "Thin market with wide spread",
+            "platform": "Kalshi",
+            "market_probability": 0.50,
+            "model_probability": 0.70,
+            "market_bid": 0.15,
+            "market_ask": 0.85,
+            "volume": 300,
+        }
+        res = audit_edge_opportunity(opp)
+        self.assertIn("wide_bid_ask_spread", res["credibility_flags"])
+        self.assertLess(res["credibility_score"], 0.70)
+
 
 if __name__ == "__main__":
     unittest.main()

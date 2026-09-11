@@ -51,6 +51,19 @@ def _evidence_count(opp: Dict[str, Any]) -> int:
         return 0
 
 
+def _parse_dt(val: Any) -> datetime | None:
+    if isinstance(val, datetime):
+        return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+    if not val or not isinstance(val, str):
+        return None
+    cleaned = val.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(cleaned)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
 def audit_edge_opportunity(opp: Dict[str, Any]) -> Dict[str, Any]:
     """Audit a single market edge opportunity and return credibility metadata."""
     question = str(opp.get("question") or opp.get("title") or "").strip()
@@ -133,20 +146,45 @@ def audit_edge_opportunity(opp: Dict[str, Any]) -> Dict[str, Any]:
 
     # 4. Expiry / Horizon Audit
     has_past_due = False
-    date_matches = re.findall(r"\b(202[0-4])\b", question)
-    current_year = datetime.now(timezone.utc).year
-    for yr in date_matches:
-        if int(yr) < current_year:
-            has_past_due = True
-            break
+    now_utc = datetime.now(timezone.utc)
+    resolve_raw = _first_present(opp, "resolve_time", "close_time", "resolution_date")
+    parsed_resolve = _parse_dt(resolve_raw)
+    if parsed_resolve is not None and parsed_resolve <= now_utc:
+        has_past_due = True
+    else:
+        date_matches = re.findall(r"\b(20[1-2][0-9])\b", question)
+        current_year = now_utc.year
+        for yr in date_matches:
+            if int(yr) < current_year:
+                has_past_due = True
+                break
 
     if has_past_due:
-        score -= 0.50
+        score -= 0.60
         flags.append("potential_past_due_market")
     elif "day" in horizon or "week" in horizon or "month" in horizon:
         flags.append(f"horizon_{horizon}")
 
-    # 5. Liquidity & Volume Assessment (if available)
+    # 5. Liquidity, Spread & Volume Assessment
+    market_bid = _first_present(opp, "market_bid", "bid")
+    market_ask = _first_present(opp, "market_ask", "ask")
+    if market_bid is not None and market_ask is not None:
+        try:
+            bid_val = float(market_bid)
+            ask_val = float(market_ask)
+            if ask_val >= bid_val:
+                spread = ask_val - bid_val
+                if spread >= 0.25:
+                    score -= 0.30
+                    flags.append("wide_bid_ask_spread")
+                elif spread >= 0.12:
+                    score -= 0.15
+                    flags.append("moderate_bid_ask_spread")
+                else:
+                    flags.append("tight_spread")
+        except (ValueError, TypeError):
+            pass
+
     if volume is not None:
         try:
             vol_val = float(volume)
