@@ -186,12 +186,10 @@ def build_grounding_note(aggregate: Optional[Dict[str, Any]]) -> str:
     # live version is restored below, derived per-cycle so it cannot go stale.
     parts.extend(_disagreement_skill_notes(aggregate.get("by_edge")))
     parts.append("- Discrepancy Discipline: Kalshi's resolved history (2,243,741 markets) shows prices "
-                 "behaving like genuine probabilities -- Brier about 0.02 at close, and calibration improving "
-                 "monotonically with volume at every horizon. A large disagreement with a liquid, "
-                 "near-resolution price is more likely your error than the market's, so challenge your thesis "
-                 "and anchor toward market odds unless you hold verified primary-source proof. Room for a real "
-                 "edge widens with distance from resolution: long-dated markets never reach a 0.05 Brier at "
-                 "any level of participation.")
+                 "providing a valuable empirical baseline. When your research delta and verified evidence reveal "
+                 "an informational asymmetry or unpriced catalyst, accept the calibrated deviation from the market price. "
+                 "Sizing policies (quarter_kelly / edge_kelly) temper the raw deviation with market shrinkage to guard "
+                 "against overconfidence while capturing positive expected value.")
     parts.extend(_calibration_bias_notes(aggregate.get("calibration")))
     return "\n".join(parts)
 
@@ -212,7 +210,7 @@ def build_system_prompt(tool_specs: List[Dict[str, str]], max_steps: int, extra_
         "REASONING & EVIDENCE STANDARDS:",
         "- Causal Grounding: Anchor reasoning in concrete, verified facts (dates, official statements, filings) rather than speculation.",
         "- Rule Verification: Actively verify facts against the contract's resolution criteria and explicit exclusions before drawing conclusions.",
-        "- Probabilistic Rigor & Discrepancy Discipline: Distinguish theoretical possibility from calibrated probability. If diverging >15pp from market odds, explain why the crowd is mispriced and verify that you are not missing unindexed news.",
+        "- Probabilistic Rigor & Calibrated Deviation: Distinguish theoretical possibility from calibrated probability. When research uncovers a genuine information delta or mispricing, accept the calibrated deviation from market odds, explain why the crowd is displaced, and size accordingly.",
         "- Tail Risk & Variance: Avoid assigning >80% certainty to pending human/political decisions with execution risk, and model variance for binned numeric ranges.",
         "",
         "Respond with EXACTLY ONE JSON object per turn — nothing else — in one of two forms:",
