@@ -11,6 +11,7 @@ from analyzing_llm_rationale.twin.scheduler import (
     dispatch_due_jobs,
     ensure_shadow_cycle_job,
 )
+from analyzing_llm_rationale.twin.strategy import strategy_cycle_key_for_identity
 from analyzing_llm_rationale.twin.worker import (
     InMemoryWorkerJobs,
     MaintenanceResearchJobGateway,
@@ -66,12 +67,20 @@ class TwinWorkerTests(unittest.TestCase):
         self.assertNotEqual(first.id, following.id)
         self.assertEqual(first.kind, WorkerJobKind.STRATEGY)
         self.assertEqual(first.payload["strategy_cycle_id"], duplicate.payload["strategy_cycle_id"])
+        self.assertEqual(first.payload["strategy_cycle_id"], strategy_cycle_key_for_identity(
+            scope_id=schedule.account_scope_id, account_epoch=schedule.account_epoch,
+            now=NOW + timedelta(seconds=1), config_version=schedule.config_release_id,
+            bucket_seconds=schedule.bucket_seconds,
+        ))
 
     def test_shadow_cycle_schedule_rejects_live_scope_and_oversized_deadline(self):
         with self.assertRaisesRegex(Exception, "shadow account scope"):
             ShadowCycleSchedule("live-scope", "release-v1")
         with self.assertRaisesRegex(Exception, "fit inside"):
-            ShadowCycleSchedule("shadow-scope", "release-v1", 300, 301)
+            ShadowCycleSchedule(
+                "shadow-scope", "release-v1", bucket_seconds=300,
+                deadline_seconds=301,
+            )
 
     def test_private_worker_rejects_public_request(self):
         require_worker_request("valid", expected_token="valid")
