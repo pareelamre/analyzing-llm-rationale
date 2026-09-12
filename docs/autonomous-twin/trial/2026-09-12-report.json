@@ -1,0 +1,57 @@
+{
+  "artifact_hash": "27cfb0db2bb2a8b115aeb1dccf53a78d1c4242d902083bffd969a07889bc628f",
+  "blockers": [
+    "The five-minute scheduler dispatches existing jobs but no component creates forward strategy-cycle jobs.",
+    "The deployed maintenance operation still degrades account reconciliation and exit jobs because its account adapter is not wired."
+  ],
+  "evidence_hash": "bd6fc0a307caf18b6ccece865c7234e489481de8a70e3214191d809bd7d299de",
+  "g1": {
+    "consecutive_days": 0,
+    "drills": {
+      "cancel_fill_race": {
+        "evidence_id": "",
+        "status": "pending"
+      },
+      "duplicate_task": {
+        "evidence_id": "",
+        "status": "pending"
+      },
+      "kill_restart": {
+        "evidence_id": "",
+        "status": "pending"
+      },
+      "provider_outage": {
+        "evidence_id": "",
+        "status": "pending"
+      }
+    },
+    "next_measurement_at": null,
+    "reason": "forward_collection_not_operational",
+    "required_consecutive_days": 7,
+    "status": "blocked",
+    "totals": {
+      "actual_cost_usd": "0",
+      "complete_market_snapshots": 0,
+      "decisions": 0,
+      "duplicate_commands": 0,
+      "observations": 0,
+      "simulated_commands": 0,
+      "stale_exposure_attempts": 0,
+      "uncertain_cost_usd": "0",
+      "unexplained_divergences": 0
+    }
+  },
+  "g2": {
+    "reason": "strategy_evidence_missing",
+    "status": "collecting"
+  },
+  "generated_at": "2026-09-12T19:25:01.605674+00:00",
+  "live_eligible": false,
+  "release": {
+    "code_hash": "a5bead718eaab94369e4926181f68b81118b95ebec160fed525c1c523749d079",
+    "config_hash": "546639843f7869c36414c1d68bac5ad24360acebff76c6bbddc5d2bfd9b914f6",
+    "image_digest": "b1b818bebfbf5b8ae69b0d165979e99c6675c1d35ae94398b77e2ea9fcc4d6ec",
+    "started_at": "2026-09-11T00:09:32+00:00"
+  },
+  "schema_version": 1
+}

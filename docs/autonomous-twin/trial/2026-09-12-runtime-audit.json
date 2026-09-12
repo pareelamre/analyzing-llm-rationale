@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "release": {
+    "code_hash": "a5bead718eaab94369e4926181f68b81118b95ebec160fed525c1c523749d079",
+    "config_hash": "546639843f7869c36414c1d68bac5ad24360acebff76c6bbddc5d2bfd9b914f6",
+    "image_digest": "b1b818bebfbf5b8ae69b0d165979e99c6675c1d35ae94398b77e2ea9fcc4d6ec",
+    "started_at": "2026-09-11T00:09:32+00:00"
+  },
+  "collection_operational": false,
+  "observations": [],
+  "drills": {
+    "provider_outage": {"status": "pending", "evidence_id": ""},
+    "duplicate_task": {"status": "pending", "evidence_id": ""},
+    "cancel_fill_race": {"status": "pending", "evidence_id": ""},
+    "kill_restart": {"status": "pending", "evidence_id": ""}
+  },
+  "strategy_evidence": null,
+  "blockers": [
+    "The five-minute scheduler dispatches existing jobs but no component creates forward strategy-cycle jobs.",
+    "The deployed maintenance operation still degrades account reconciliation and exit jobs because its account adapter is not wired."
+  ]
+}
