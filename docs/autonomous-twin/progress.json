@@ -3,14 +3,14 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t21_pending_forward_trial",
+  "implementation_status": "t21_in_progress_runtime_collection_blocked",
   "implementation_baseline": "d0cf0a80c",
   "next_task": "T21",
   "live_authorized": false,
   "release_gates": {
     "G0": "pass",
-    "G1": "collecting",
-    "G2": "not_evaluated",
+    "G1": "blocked",
+    "G2": "collecting",
     "G3": "not_authorized",
     "G4": "not_evaluated"
   },
@@ -650,15 +650,37 @@
       "dependencies": [
         "T20"
       ],
-      "status": "pending",
-      "substep": null,
-      "branch": null,
+      "status": "in_progress",
+      "substep": "deterministic exact-release G1/G2 report implemented; production audit proves the scheduler has no cycle producer and account maintenance remains unwired",
+      "branch": "codex/t21-trial-runtime",
       "commit": null,
       "pr_url": null,
-      "checks": [],
-      "evidence": [],
-      "blockers": [],
-      "handoff": null
+      "checks": [
+        "py -m unittest tests.test_twin_trial -v (pass: 6 tests)",
+        "py -m ruff check src/analyzing_llm_rationale/twin/trial.py tests/test_twin_trial.py (pass)",
+        "py -m ruff check scripts/twin_trial_report.py --select F821,F811,F632,F502,F522,F701,B002 (pass)",
+        "py scripts/verify_twin_release.py at deployed 7a2923b95 (pass; exact code/config hashes recorded)",
+        "production scheduler, Cloud Run revision and Datastore read-only audit on 2026-09-12 (scheduler healthy; 0 trial cycles/captures/results)",
+        "npm ci && npm run frontend:build (pass; generated files restored and excluded from this backend commit)",
+        "py -m unittest discover -s tests (pass after frontend build)",
+        "py -m ruff check src tests (pass)",
+        "py -m graphify update . (pass: 9646 nodes, 24187 edges)",
+        "git diff --check (pass)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/trial.py",
+        "scripts/twin_trial_report.py",
+        "tests/test_twin_trial.py",
+        "docs/autonomous-twin/TRIAL_REPORT.md",
+        "docs/autonomous-twin/trial/2026-09-12-runtime-audit.json",
+        "docs/autonomous-twin/trial/2026-09-12-report.json"
+      ],
+      "blockers": [
+        "No deployed component creates forward strategy-cycle jobs.",
+        "The maintenance runtime account reconciliation and exit operation is still an unconfigured fail-closed adapter.",
+        "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
+      ],
+      "handoff": "Wire a bounded shadow cycle producer and durable account/strategy observation collector, deploy it, then restart the exact-release seven-day clock and execute the four required drills."
     },
     {
       "id": "T22",
