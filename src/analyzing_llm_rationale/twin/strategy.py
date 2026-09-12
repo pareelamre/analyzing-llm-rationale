@@ -469,11 +469,25 @@ def strategy_cycle_key(
     *, scope: AccountScope, now: datetime, config_version: str,
     bucket_seconds: int, strategy_version: str = STRATEGY_VERSION,
 ) -> str:
+    return strategy_cycle_key_for_identity(
+        scope_id=scope.id, account_epoch=scope.account_epoch, now=now,
+        config_version=config_version, bucket_seconds=bucket_seconds,
+        strategy_version=strategy_version,
+    )
+
+
+def strategy_cycle_key_for_identity(
+    *, scope_id: str, account_epoch: int, now: datetime, config_version: str,
+    bucket_seconds: int, strategy_version: str = STRATEGY_VERSION,
+) -> str:
+    """Build the cycle key before account material is loaded by the worker."""
     if now.tzinfo is None or bucket_seconds <= 0:
         raise ValueError("cycle key requires an aware time and positive bucket")
+    if not str(scope_id).strip() or type(account_epoch) is not int or account_epoch < 1:
+        raise ValueError("cycle key requires a stable scope and positive account epoch")
     bucket = int(now.astimezone(timezone.utc).timestamp()) // bucket_seconds
     return "strategy-cycle:" + _hash({
-        "strategy": strategy_version, "scope": scope.id, "account_epoch": scope.account_epoch,
+        "strategy": strategy_version, "scope": scope_id, "account_epoch": account_epoch,
         "bucket": bucket, "config_version": config_version,
     })[:32]
 

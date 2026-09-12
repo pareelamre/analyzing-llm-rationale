@@ -10,6 +10,7 @@ from typing import Any, Mapping, Protocol
 from google.api_core.exceptions import AlreadyExists
 from opentelemetry import metrics, trace
 
+from .strategy import strategy_cycle_key_for_identity
 from .worker import WorkerJob, WorkerJobKind, WorkerJobs
 
 tracer = trace.get_tracer(__name__)
@@ -41,6 +42,7 @@ class ShadowCycleSchedule:
 
     account_scope_id: str
     config_release_id: str
+    account_epoch: int = 1
     bucket_seconds: int = 300
     deadline_seconds: int = 300
 
@@ -49,6 +51,8 @@ class ShadowCycleSchedule:
             raise WorkerDispatchError("strategy schedule must use a shadow account scope")
         if not self.config_release_id.strip():
             raise WorkerDispatchError("strategy schedule requires a config release ID")
+        if type(self.account_epoch) is not int or self.account_epoch < 1:
+            raise WorkerDispatchError("strategy schedule requires a positive account epoch")
         if self.bucket_seconds < 60 or self.deadline_seconds < 1:
             raise WorkerDispatchError("strategy schedule timing is outside its bounded range")
         if self.deadline_seconds > self.bucket_seconds:
@@ -64,13 +68,14 @@ def ensure_shadow_cycle_job(
         raise WorkerDispatchError("cycle production needs an aware time")
     bucket_epoch = int(now.timestamp()) // schedule.bucket_seconds * schedule.bucket_seconds
     bucket = datetime.fromtimestamp(bucket_epoch, tz=timezone.utc)
-    identity = sha256(
-        (
-            f"{schedule.account_scope_id}|{schedule.config_release_id}|"
-            f"{bucket.isoformat()}"
-        ).encode()
-    ).hexdigest()[:32]
-    cycle_id = f"strategy-cycle-{identity}"
+    cycle_id = strategy_cycle_key_for_identity(
+        scope_id=schedule.account_scope_id,
+        account_epoch=schedule.account_epoch,
+        now=now,
+        config_version=schedule.config_release_id,
+        bucket_seconds=schedule.bucket_seconds,
+    )
+    identity = sha256(cycle_id.encode()).hexdigest()[:32]
     job = jobs.add(WorkerJob(
         id=f"strategy-job-{identity}",
         account_scope_id=schedule.account_scope_id,
