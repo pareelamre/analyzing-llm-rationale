@@ -18495,6 +18495,89 @@
     ],
     "qwen3-8-27b": [
       {
+        "action_id": "b58db7e5-c061-4973-8a09-322779fc0807",
+        "agent_id": "qwen3-8-27b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 100.0
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.68,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.68,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 10063.817827,
+            "cash_required": 805.105426,
+            "concentration_cap": 1509.572674,
+            "cycle_id": "30m:993988",
+            "cycle_spend_after": 805.105426,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 967.345426,
+            "daily_risk_before": 162.24,
+            "daily_risk_limit": 3019.145348,
+            "drawdown_after": 0.004565,
+            "fee": 17.639243,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 787.466184,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 787.466184,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 2012.763565,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.29,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 805.105426,
+            "target_quantity": 1158.0385053622388
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993988",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -69.5232,
+          "cash_required": 69.5232,
+          "fee": 1.5232,
+          "netting_payout": 0.0,
+          "notional": 68.0,
+          "price": 0.68,
+          "quantity": 100.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXMEDIARELEASESPIDERMAN-DEC26"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "d9593030f59142382125ccd155c87793481584eb481613a83a2ae1daf10ab5c2",
+        "recorded_at": "2026-09-12T02:18:21.431405+00:00"
+      },
+      {
         "action_id": "04be0333-bc4d-4271-aaab-c58751b50439",
         "agent_id": "qwen3-8-27b",
         "audit": {
@@ -20057,7 +20140,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-12T00:30:56.910235+00:00",
+  "generated_at": "2026-09-12T02:20:17.927664+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
