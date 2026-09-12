@@ -651,8 +651,8 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "deterministic exact-release G1/G2 report implemented; production audit proves the scheduler has no cycle producer and account maintenance remains unwired",
-      "branch": "codex/t21-trial-runtime",
+      "substep": "deterministic exact-release report plus an idempotent five-minute shadow cycle producer and immutable blocked-observation persistence are implemented; account and market/research adapters remain unwired",
+      "branch": "codex/t21-cycle-producer",
       "commit": null,
       "pr_url": null,
       "checks": [
@@ -665,7 +665,11 @@
         "py -m unittest discover -s tests (pass after frontend build)",
         "py -m ruff check src tests (pass)",
         "py -m graphify update . (pass: 9646 nodes, 24187 edges)",
-        "git diff --check (pass)"
+        "git diff --check (pass)",
+        "py -m unittest tests.test_twin_worker tests.test_twin_runtime tests.test_twin_strategy (pass: 41 tests)",
+        "py -m unittest discover -s tests after npm ci and npm run frontend:build (pass: 2161 tests; 10 skipped)",
+        "py -m ruff check src tests (pass)",
+        "py -m graphify update . (pass; generated graph changes unstaged)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -673,14 +677,17 @@
         "tests/test_twin_trial.py",
         "docs/autonomous-twin/TRIAL_REPORT.md",
         "docs/autonomous-twin/trial/2026-09-12-runtime-audit.json",
-        "docs/autonomous-twin/trial/2026-09-12-report.json"
+        "docs/autonomous-twin/trial/2026-09-12-report.json",
+        "src/analyzing_llm_rationale/twin/scheduler.py",
+        "src/analyzing_llm_rationale/twin/runtime.py",
+        "src/analyzing_llm_rationale/twin/runtime_app.py"
       ],
       "blockers": [
-        "No deployed component creates forward strategy-cycle jobs.",
+        "The shadow cycle producer is not deployed yet; its first persisted observations explicitly remain blocked until account and market/research dependencies are wired.",
         "The maintenance runtime account reconciliation and exit operation is still an unconfigured fail-closed adapter.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Wire a bounded shadow cycle producer and durable account/strategy observation collector, deploy it, then restart the exact-release seven-day clock and execute the four required drills."
+      "handoff": "Deploy the bounded cycle producer, then wire the existing account, market, asynchronous research and ShadowVenue adapters into its durable phase machine before restarting the exact-release seven-day clock and executing the four required drills."
     },
     {
       "id": "T22",

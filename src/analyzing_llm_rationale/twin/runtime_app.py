@@ -39,7 +39,8 @@ from .runtime import (
     RuntimeIdentityPolicy,
     create_private_worker_app,
 )
-from .scheduler import CloudTasksConfig, CloudTasksDispatcher
+from .scheduler import CloudTasksConfig, CloudTasksDispatcher, ShadowCycleSchedule
+from .strategy import DatastoreStrategyStore, StrategyCycle, StrategyStep, load_strategy_policy
 from .worker import (
     DatastoreWorkerJobs,
     MaintenanceResearchJobGateway,
@@ -151,6 +152,7 @@ def _recover_stale_research_budgets(
 
 def _maintenance_operation(
     jobs: DatastoreWorkerJobs, budget: DatastoreResearchBudget, job: WorkerJob,
+    strategy_store: DatastoreStrategyStore | None = None,
 ) -> dict[str, object]:
     """Safe staging operation until venue/account adapters are configured."""
     if job.kind is WorkerJobKind.RECOVERY:
@@ -164,6 +166,27 @@ def _maintenance_operation(
         }
     if job.kind in {WorkerJobKind.RECONCILE, WorkerJobKind.EXIT}:
         raise WorkerDegraded("account_maintenance_adapter_unconfigured")
+    if job.kind is WorkerJobKind.STRATEGY:
+        if strategy_store is None:
+            raise WorkerDegraded("strategy_store_unconfigured")
+        recorded = strategy_store.record_cycle(StrategyCycle(
+            key=job.payload["strategy_cycle_id"],
+            decision="PASS",
+            reason="strategy_dependencies_unconfigured",
+            steps=(StrategyStep(
+                "preflight", "blocked", "strategy_dependencies_unconfigured",
+                job.payload["config_release_id"],
+            ),),
+            created_at=job.created_at,
+            account_scope_id=job.account_scope_id,
+        ))
+        return {
+            "status": "blocked",
+            "reason": "strategy_dependencies_unconfigured",
+            "strategy_cycle_id": job.payload["strategy_cycle_id"],
+            "config_release_id": job.payload["config_release_id"],
+            "observation_recorded": recorded,
+        }
     raise WorkerPaused("unsupported_maintenance_job")
 
 
@@ -273,6 +296,7 @@ def create_environment_app():
         repository_root / "configs" / "twin.yaml",
         repository_root / "configs" / "models.yaml",
     )
+    strategy_policy = load_strategy_policy(repository_root / "configs" / "twin.yaml")
 
     if role is WorkerRole.MAINTENANCE:
         from google.cloud import datastore
@@ -282,6 +306,7 @@ def create_environment_app():
         budget = DatastoreResearchBudget(client)
         captures = DatastoreResearchCaptureStore(client)
         results = DatastoreResearchResultStore(client)
+        strategy_store = DatastoreStrategyStore(client)
         ledger = ForecastLedger(_DatastoreLedgerAdapter(client))
 
         def authorize(assignment: ResearchAssignment) -> None:
@@ -392,8 +417,15 @@ def create_environment_app():
         )
         runtime = PrivateTwinRuntime(
             role, identities, now, jobs=jobs, dispatcher=dispatcher,
+            cycle_schedule=ShadowCycleSchedule(
+                "shadow-scope:foresea-edge-v1", strategy_policy.config_version,
+                bucket_seconds=strategy_policy.cycle_bucket_seconds,
+                deadline_seconds=strategy_policy.cycle_bucket_seconds,
+            ),
             maintenance_worker=worker,
-            maintenance_operation=lambda job: _maintenance_operation(jobs, budget, job),
+            maintenance_operation=lambda job: _maintenance_operation(
+                jobs, budget, job, strategy_store,
+            ),
             research_gateway=gateway,
         )
     else:

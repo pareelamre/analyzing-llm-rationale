@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from typing import Any, Mapping, Protocol
 
@@ -22,6 +22,9 @@ duplicate_suppressions = metrics.get_meter(__name__).create_counter(
 queue_lag_seconds = metrics.get_meter(__name__).create_histogram(
     "twin.queue.lag", unit="s"
 )
+cycle_productions = metrics.get_meter(__name__).create_counter(
+    "twin.strategy.cycle_productions", unit="1"
+)
 
 
 class WorkerDispatchError(RuntimeError):
@@ -30,6 +33,61 @@ class WorkerDispatchError(RuntimeError):
 
 class TaskDispatcher(Protocol):
     def enqueue(self, job: WorkerJob) -> str: ...
+
+
+@dataclass(frozen=True)
+class ShadowCycleSchedule:
+    """Versioned schedule for one deterministic shadow cycle per UTC bucket."""
+
+    account_scope_id: str
+    config_release_id: str
+    bucket_seconds: int = 300
+    deadline_seconds: int = 300
+
+    def __post_init__(self) -> None:
+        if not self.account_scope_id.startswith("shadow-"):
+            raise WorkerDispatchError("strategy schedule must use a shadow account scope")
+        if not self.config_release_id.strip():
+            raise WorkerDispatchError("strategy schedule requires a config release ID")
+        if self.bucket_seconds < 60 or self.deadline_seconds < 1:
+            raise WorkerDispatchError("strategy schedule timing is outside its bounded range")
+        if self.deadline_seconds > self.bucket_seconds:
+            raise WorkerDispatchError("strategy job deadline must fit inside its cycle bucket")
+
+
+@tracer.start_as_current_span("twin.strategy.produce_cycle")
+def ensure_shadow_cycle_job(
+    jobs: WorkerJobs, schedule: ShadowCycleSchedule, *, now: datetime,
+) -> WorkerJob:
+    """Persist the current bucket once before due jobs are dispatched."""
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise WorkerDispatchError("cycle production needs an aware time")
+    bucket_epoch = int(now.timestamp()) // schedule.bucket_seconds * schedule.bucket_seconds
+    bucket = datetime.fromtimestamp(bucket_epoch, tz=timezone.utc)
+    identity = sha256(
+        (
+            f"{schedule.account_scope_id}|{schedule.config_release_id}|"
+            f"{bucket.isoformat()}"
+        ).encode()
+    ).hexdigest()[:32]
+    cycle_id = f"strategy-cycle-{identity}"
+    job = jobs.add(WorkerJob(
+        id=f"strategy-job-{identity}",
+        account_scope_id=schedule.account_scope_id,
+        kind=WorkerJobKind.STRATEGY,
+        payload={
+            "strategy_cycle_id": cycle_id,
+            "config_release_id": schedule.config_release_id,
+        },
+        deadline=bucket + timedelta(seconds=schedule.deadline_seconds),
+        created_at=now,
+    ))
+    trace.get_current_span().set_attributes({
+        "twin.strategy.mode": "shadow",
+        "twin.strategy.bucket_seconds": schedule.bucket_seconds,
+    })
+    cycle_productions.add(1, {"mode": "shadow", "outcome": "ensured"})
+    return job
 
 
 @dataclass(frozen=True)
