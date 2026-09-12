@@ -18,6 +18,7 @@ from .budget import (
     DatastoreResearchBudget,
     estimate_request_cost,
 )
+from .cycle_runtime import DatastoreStrategyRunStore, StrategyRun, StrategyRunPhase
 from .research_gateway import (
     DatastoreResearchCaptureStore,
     DatastoreResearchResultStore,
@@ -153,6 +154,7 @@ def _recover_stale_research_budgets(
 def _maintenance_operation(
     jobs: DatastoreWorkerJobs, budget: DatastoreResearchBudget, job: WorkerJob,
     strategy_store: DatastoreStrategyStore | None = None,
+    strategy_run_store: DatastoreStrategyRunStore | None = None,
 ) -> dict[str, object]:
     """Safe staging operation until venue/account adapters are configured."""
     if job.kind is WorkerJobKind.RECOVERY:
@@ -167,8 +169,24 @@ def _maintenance_operation(
     if job.kind in {WorkerJobKind.RECONCILE, WorkerJobKind.EXIT}:
         raise WorkerDegraded("account_maintenance_adapter_unconfigured")
     if job.kind is WorkerJobKind.STRATEGY:
-        if strategy_store is None:
+        if strategy_store is None or strategy_run_store is None:
             raise WorkerDegraded("strategy_store_unconfigured")
+        run = strategy_run_store.create(StrategyRun(
+            id=job.payload["strategy_cycle_id"],
+            account_scope_id=job.account_scope_id,
+            account_epoch=1,
+            config_release_id=job.payload["config_release_id"],
+            observed_at=job.created_at,
+        ))
+        if run.phase is StrategyRunPhase.QUEUED:
+            run = strategy_run_store.save(
+                run.advance(
+                    StrategyRunPhase.BLOCKED,
+                    now=datetime.now(timezone.utc),
+                    reason="strategy_dependencies_unconfigured",
+                ),
+                expected_revision=run.revision,
+            )
         recorded = strategy_store.record_cycle(StrategyCycle(
             key=job.payload["strategy_cycle_id"],
             decision="PASS",
@@ -186,6 +204,8 @@ def _maintenance_operation(
             "strategy_cycle_id": job.payload["strategy_cycle_id"],
             "config_release_id": job.payload["config_release_id"],
             "observation_recorded": recorded,
+            "run_phase": run.phase.value,
+            "run_revision": run.revision,
         }
     raise WorkerPaused("unsupported_maintenance_job")
 
@@ -307,6 +327,7 @@ def create_environment_app():
         captures = DatastoreResearchCaptureStore(client)
         results = DatastoreResearchResultStore(client)
         strategy_store = DatastoreStrategyStore(client)
+        strategy_run_store = DatastoreStrategyRunStore(client)
         ledger = ForecastLedger(_DatastoreLedgerAdapter(client))
 
         def authorize(assignment: ResearchAssignment) -> None:
@@ -424,7 +445,7 @@ def create_environment_app():
             ),
             maintenance_worker=worker,
             maintenance_operation=lambda job: _maintenance_operation(
-                jobs, budget, job, strategy_store,
+                jobs, budget, job, strategy_store, strategy_run_store,
             ),
             research_gateway=gateway,
         )

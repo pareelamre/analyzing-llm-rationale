@@ -338,9 +338,14 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         })
 
     def test_strategy_job_records_an_explicit_blocked_observation(self):
+        from analyzing_llm_rationale.twin.cycle_runtime import (
+            InMemoryStrategyRunStore,
+        )
+
         jobs = InMemoryWorkerJobs()
         budget = InMemoryResearchBudget()
         store = InMemoryStrategyStore()
+        run_store = InMemoryStrategyRunStore()
         strategy_job = jobs.add(WorkerJob(
             "strategy-job-001", "shadow-scope:foresea-edge-v1",
             WorkerJobKind.STRATEGY,
@@ -351,8 +356,12 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             NOW + timedelta(minutes=5), created_at=NOW,
         ))
 
-        first = _maintenance_operation(jobs, budget, strategy_job, store)
-        second = _maintenance_operation(jobs, budget, strategy_job, store)
+        first = _maintenance_operation(
+            jobs, budget, strategy_job, store, run_store,
+        )
+        second = _maintenance_operation(
+            jobs, budget, strategy_job, store, run_store,
+        )
 
         self.assertTrue(first["observation_recorded"])
         self.assertFalse(second["observation_recorded"])
@@ -360,6 +369,9 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         self.assertEqual(cycle.decision, "PASS")
         self.assertEqual(cycle.reason, "strategy_dependencies_unconfigured")
         self.assertEqual(cycle.account_scope_id, "shadow-scope:foresea-edge-v1")
+        self.assertEqual(first["run_phase"], "blocked")
+        self.assertEqual(first["run_revision"], 1)
+        self.assertEqual(second["run_revision"], 1)
 
     def test_repair_authorization_is_fenced_and_research_identity_bound(self):
         jobs = InMemoryWorkerJobs()

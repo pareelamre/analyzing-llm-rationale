@@ -23,6 +23,14 @@ from .budget import (
     call_with_budget,
     estimate_request_cost,
 )
+from .cycle_runtime import (
+    DatastoreStrategyRunStore,
+    InMemoryStrategyRunStore,
+    StrategyRun,
+    StrategyRunError,
+    StrategyRunPhase,
+    StrategyRunStore,
+)
 from .evaluation import (
     ReadinessArtifactError,
     ReplayPolicy,
@@ -192,6 +200,7 @@ __all__ = [
     "CapturedBook",
     "CandidateMemory",
     "DatastoreResearchBudget",
+    "DatastoreStrategyRunStore",
     "DatastoreResearchCaptureStore",
     "DatastoreResearchResultStore",
     "DatastorePublicEvidenceCache",
@@ -214,6 +223,7 @@ __all__ = [
     "InMemoryStrategyStore",
     "InMemoryAccountSnapshotStore",
     "InMemoryResearchBudget",
+    "InMemoryStrategyRunStore",
     "InMemoryResearchCaptureStore",
     "InMemoryResearchResultStore",
     "PreclaimedResearchExecution",
@@ -256,6 +266,10 @@ __all__ = [
     "RecoveryResult",
     "StaleReservationPrecondition",
     "StrategyAccountState",
+    "StrategyRun",
+    "StrategyRunError",
+    "StrategyRunPhase",
+    "StrategyRunStore",
     "StrategyCandidate",
     "StrategyCycle",
     "StrategyPolicy",
