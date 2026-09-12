@@ -7,7 +7,9 @@ from google.api_core.exceptions import AlreadyExists
 from analyzing_llm_rationale.twin.scheduler import (
     CloudTasksConfig,
     CloudTasksDispatcher,
+    ShadowCycleSchedule,
     dispatch_due_jobs,
+    ensure_shadow_cycle_job,
 )
 from analyzing_llm_rationale.twin.worker import (
     InMemoryWorkerJobs,
@@ -41,10 +43,36 @@ def job(job_id="job-001", *, kind=WorkerJobKind.RECONCILE, deadline=NOW + timede
             "model_config_id": "model-001",
             "budget_key_id": "foresea-edge:scope-001:2025-01-01",
         }
+    elif kind is WorkerJobKind.STRATEGY:
+        payload = {
+            "strategy_cycle_id": "strategy-cycle-001",
+            "config_release_id": "foresea-edge-shadow-v1",
+        }
     return WorkerJob(job_id, "scope-001", kind, payload, deadline)
 
 
 class TwinWorkerTests(unittest.TestCase):
+    def test_shadow_cycle_production_is_idempotent_per_release_bucket(self):
+        jobs = InMemoryWorkerJobs()
+        schedule = ShadowCycleSchedule(
+            "shadow-scope:foresea-edge-v1", "foresea-edge-shadow-v1",
+        )
+        first = ensure_shadow_cycle_job(jobs, schedule, now=NOW + timedelta(seconds=1))
+        duplicate = ensure_shadow_cycle_job(jobs, schedule, now=NOW + timedelta(seconds=299))
+        self.assertEqual(len(jobs.due(now=NOW + timedelta(seconds=299))), 1)
+        following = ensure_shadow_cycle_job(jobs, schedule, now=NOW + timedelta(seconds=300))
+
+        self.assertEqual(first.id, duplicate.id)
+        self.assertNotEqual(first.id, following.id)
+        self.assertEqual(first.kind, WorkerJobKind.STRATEGY)
+        self.assertEqual(first.payload["strategy_cycle_id"], duplicate.payload["strategy_cycle_id"])
+
+    def test_shadow_cycle_schedule_rejects_live_scope_and_oversized_deadline(self):
+        with self.assertRaisesRegex(Exception, "shadow account scope"):
+            ShadowCycleSchedule("live-scope", "release-v1")
+        with self.assertRaisesRegex(Exception, "fit inside"):
+            ShadowCycleSchedule("shadow-scope", "release-v1", 300, 301)
+
     def test_private_worker_rejects_public_request(self):
         require_worker_request("valid", expected_token="valid")
         with self.assertRaises(WorkerAuthenticationError):

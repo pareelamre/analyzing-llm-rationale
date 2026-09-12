@@ -18,9 +18,12 @@ from analyzing_llm_rationale.twin.runtime import (
 from analyzing_llm_rationale.twin.runtime_app import (
     _assert_shadow_only,
     _authorize_research_repair,
+    _maintenance_operation,
     _recover_stale_research_budgets,
     _runtime_worker_id,
 )
+from analyzing_llm_rationale.twin.scheduler import ShadowCycleSchedule
+from analyzing_llm_rationale.twin.strategy import InMemoryStrategyStore
 from analyzing_llm_rationale.twin.worker import (
     InMemoryWorkerJobs,
     MaintenanceResearchJobGateway,
@@ -307,6 +310,56 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             )
             self.assertEqual(result.status_code, 200)
             self.assertEqual(result.json()["research_result_id"], "result-001")
+
+    def test_scheduler_creates_one_shadow_strategy_job_per_bucket(self):
+        runtime, _ = self.maintenance_runtime()
+        runtime.cycle_schedule = ShadowCycleSchedule(
+            "shadow-scope:foresea-edge-v1", "foresea-edge-shadow-v1",
+        )
+        with TestClient(create_private_worker_app(runtime)) as client:
+            first = client.post(
+                "/internal/twin/dispatch", headers=self.auth("scheduler-token"),
+            )
+            second = client.post(
+                "/internal/twin/dispatch", headers=self.auth("scheduler-token"),
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(
+            first.json()["strategy_job_id"], second.json()["strategy_job_id"],
+        )
+        strategy_jobs = [
+            item for item in runtime.jobs.due(now=NOW)
+            if item.kind is WorkerJobKind.STRATEGY
+        ]
+        self.assertEqual(len(strategy_jobs), 1)
+        self.assertEqual(set(strategy_jobs[0].payload), {
+            "strategy_cycle_id", "config_release_id",
+        })
+
+    def test_strategy_job_records_an_explicit_blocked_observation(self):
+        jobs = InMemoryWorkerJobs()
+        budget = InMemoryResearchBudget()
+        store = InMemoryStrategyStore()
+        strategy_job = jobs.add(WorkerJob(
+            "strategy-job-001", "shadow-scope:foresea-edge-v1",
+            WorkerJobKind.STRATEGY,
+            {
+                "strategy_cycle_id": "strategy-cycle-001",
+                "config_release_id": "foresea-edge-shadow-v1",
+            },
+            NOW + timedelta(minutes=5), created_at=NOW,
+        ))
+
+        first = _maintenance_operation(jobs, budget, strategy_job, store)
+        second = _maintenance_operation(jobs, budget, strategy_job, store)
+
+        self.assertTrue(first["observation_recorded"])
+        self.assertFalse(second["observation_recorded"])
+        cycle = store.get_cycle("strategy-cycle-001")
+        self.assertEqual(cycle.decision, "PASS")
+        self.assertEqual(cycle.reason, "strategy_dependencies_unconfigured")
+        self.assertEqual(cycle.account_scope_id, "shadow-scope:foresea-edge-v1")
 
     def test_repair_authorization_is_fenced_and_research_identity_bound(self):
         jobs = InMemoryWorkerJobs()

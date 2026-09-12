@@ -134,16 +134,24 @@ class WorkerJobKind(str, Enum):
     RECOVERY = "recovery"
     RECONCILE = "reconcile"
     EXIT = "exit"
+    STRATEGY = "strategy"
     RESEARCH = "research"
 
 
-_PRIORITY = {WorkerJobKind.RECOVERY: 0, WorkerJobKind.RECONCILE: 1, WorkerJobKind.EXIT: 2, WorkerJobKind.RESEARCH: 3}
+_PRIORITY = {
+    WorkerJobKind.RECOVERY: 0,
+    WorkerJobKind.RECONCILE: 1,
+    WorkerJobKind.EXIT: 2,
+    WorkerJobKind.STRATEGY: 3,
+    WorkerJobKind.RESEARCH: 4,
+}
 _STABLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,254}$")
 _MAX_RESULT_BYTES = 64 * 1024
 _RESEARCH_PAYLOAD_FIELDS = frozenset({
     "research_assignment_id", "budget_reservation_id", "market_snapshot_id",
     "evidence_set_id", "model_config_id", "budget_key_id",
 })
+_STRATEGY_PAYLOAD_FIELDS = frozenset({"strategy_cycle_id", "config_release_id"})
 
 
 class WorkerRole(str, Enum):
@@ -227,6 +235,8 @@ class WorkerJob:
             raise WorkerJobError("worker payloads may contain stable ID fields only")
         if self.kind is WorkerJobKind.RESEARCH and set(self.payload) != _RESEARCH_PAYLOAD_FIELDS:
             raise WorkerJobError("research job is missing its exact budgeted assignment IDs")
+        if self.kind is WorkerJobKind.STRATEGY and set(self.payload) != _STRATEGY_PAYLOAD_FIELDS:
+            raise WorkerJobError("strategy job is missing its exact cycle IDs")
         for timestamp in (self.created_at, self.completed_at, self.lease_expires_at):
             if timestamp is not None and (timestamp.tzinfo is None or timestamp.utcoffset() is None):
                 raise WorkerJobError("worker job timestamps must be timezone-aware")

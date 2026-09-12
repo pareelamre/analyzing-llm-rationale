@@ -12,7 +12,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from .scheduler import TaskDispatcher, dispatch_due_jobs
+from .scheduler import (
+    ShadowCycleSchedule,
+    TaskDispatcher,
+    dispatch_due_jobs,
+    ensure_shadow_cycle_job,
+)
 from .worker import (
     MaintenanceResearchJobGateway,
     ResearchAssignment,
@@ -182,6 +187,7 @@ class PrivateTwinRuntime:
     clock: Clock
     jobs: Optional[WorkerJobs] = None
     dispatcher: Optional[TaskDispatcher] = None
+    cycle_schedule: Optional[ShadowCycleSchedule] = None
     maintenance_worker: Optional[TwinWorker] = None
     maintenance_operation: Optional[Callable[[Any], Mapping[str, Any]]] = None
     research_gateway: Optional[MaintenanceResearchJobGateway] = None
@@ -271,10 +277,19 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
         async def dispatch(request: Request):
             try:
                 runtime.authenticate(request, runtime.identities.scheduler_accounts)
+                dispatch_at = runtime.clock()
+                produced = None
+                if runtime.cycle_schedule is not None:
+                    produced = ensure_shadow_cycle_job(
+                        runtime.jobs, runtime.cycle_schedule, now=dispatch_at,
+                    )
                 names = dispatch_due_jobs(
-                    runtime.jobs, runtime.dispatcher, now=runtime.clock(), limit=25,
+                    runtime.jobs, runtime.dispatcher, now=dispatch_at, limit=25,
                 )
-                return {"status": "complete", "tasks_enqueued": len(names)}
+                return {
+                    "status": "complete", "tasks_enqueued": len(names),
+                    "strategy_job_id": produced.id if produced is not None else None,
+                }
             except Exception as exc:
                 raise _http_error(exc) from exc
 
