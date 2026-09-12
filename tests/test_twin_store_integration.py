@@ -21,6 +21,12 @@ from analyzing_llm_rationale.twin.budget import (
     DatastoreResearchBudget,
     call_with_budget,
 )
+from analyzing_llm_rationale.twin.cycle_runtime import (
+    DatastoreStrategyRunStore,
+    StrategyRun,
+    StrategyRunError,
+    StrategyRunPhase,
+)
 from analyzing_llm_rationale.twin.mandates import DatastoreMandateStore, Mandate
 from analyzing_llm_rationale.twin.manual import reserve_confirmed_manual_order
 from analyzing_llm_rationale.twin.operator import DatastorePauseStore
@@ -83,6 +89,30 @@ def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, resul
 
 @unittest.skipUnless(os.environ.get("DATASTORE_EMULATOR_HOST"), "requires DATASTORE_EMULATOR_HOST")
 class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
+    def test_strategy_run_phase_survives_restart_and_fences_stale_writer(self):
+        from google.cloud import datastore
+
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")
+        client = datastore.Client(project=project)
+        store = DatastoreStrategyRunStore(client)
+        now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        initial = store.create(StrategyRun(
+            f"strategy-cycle-{uuid4().hex}",
+            "shadow-scope:foresea-edge-v1", 1,
+            "foresea-edge-shadow-v1", now,
+        ))
+        blocked = initial.advance(
+            StrategyRunPhase.BLOCKED, now=now + timedelta(seconds=1),
+            reason="fixture_complete",
+        )
+        store.save(blocked, expected_revision=0)
+
+        restarted = DatastoreStrategyRunStore(datastore.Client(project=project))
+        self.assertEqual(restarted.get(initial.id), blocked)
+        self.assertEqual(restarted.create(initial), blocked)
+        with self.assertRaisesRegex(StrategyRunError, "revision conflict"):
+            restarted.save(blocked, expected_revision=0)
+
     def test_operator_queries_and_controls_survive_store_recreation(self):
         from google.cloud import datastore
 

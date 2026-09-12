@@ -651,10 +651,10 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "deterministic exact-release report plus an idempotent five-minute shadow cycle producer and immutable blocked-observation persistence are implemented; account and market/research adapters remain unwired",
-      "branch": "codex/t21-cycle-producer",
-      "commit": null,
-      "pr_url": null,
+      "substep": "canonical account-epoch-bound five-minute cycle production is merged; durable revision-fenced strategy run phases are in PR #613; account and market/research adapters remain unwired",
+      "branch": "codex/t21-phase-machine",
+      "commit": "b3e34370b",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/613",
       "checks": [
         "py -m unittest tests.test_twin_trial -v (pass: 6 tests)",
         "py -m ruff check src/analyzing_llm_rationale/twin/trial.py tests/test_twin_trial.py (pass)",
@@ -669,7 +669,11 @@
         "py -m unittest tests.test_twin_worker tests.test_twin_runtime tests.test_twin_strategy (pass: 41 tests)",
         "py -m unittest discover -s tests after npm ci and npm run frontend:build (pass: 2161 tests; 10 skipped)",
         "py -m ruff check src tests (pass)",
-        "py -m graphify update . (pass; generated graph changes unstaged)"
+        "py -m graphify update . (pass; generated graph changes unstaged)",
+        "PR #612 CI test and datastore-integration (pass); merged as 7a7259b1a",
+        "py -m unittest tests.test_twin_cycle_runtime tests.test_twin_runtime (pass: 19 tests)",
+        "py -m unittest discover -s tests for durable phase state (pass: 2166 tests; 11 skipped)",
+        "py -m ruff check src tests for durable phase state (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -680,14 +684,17 @@
         "docs/autonomous-twin/trial/2026-09-12-report.json",
         "src/analyzing_llm_rationale/twin/scheduler.py",
         "src/analyzing_llm_rationale/twin/runtime.py",
-        "src/analyzing_llm_rationale/twin/runtime_app.py"
+        "src/analyzing_llm_rationale/twin/runtime_app.py",
+        "src/analyzing_llm_rationale/twin/cycle_runtime.py",
+        "tests/test_twin_cycle_runtime.py"
       ],
       "blockers": [
-        "The shadow cycle producer is not deployed yet; its first persisted observations explicitly remain blocked until account and market/research dependencies are wired.",
+        "PR #613 must pass protected CI and be deployed before its durable phase records can be verified in the private runtime.",
         "The maintenance runtime account reconciliation and exit operation is still an unconfigured fail-closed adapter.",
+        "Market capture, asynchronous research resumption, and durable ShadowVenue state are not wired into the cycle phase machine.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Deploy the bounded cycle producer, then wire the existing account, market, asynchronous research and ShadowVenue adapters into its durable phase machine before restarting the exact-release seven-day clock and executing the four required drills."
+      "handoff": "Merge and privately deploy PR #613 after CI, verify canonical strategy run records, then wire the existing account, market, asynchronous research and ShadowVenue adapters before restarting the exact-release seven-day clock."
     },
     {
       "id": "T22",
