@@ -83,6 +83,7 @@ def ensure_shadow_cycle_job(
         payload={
             "strategy_cycle_id": cycle_id,
             "config_release_id": schedule.config_release_id,
+            "account_epoch_id": str(schedule.account_epoch),
         },
         deadline=bucket + timedelta(seconds=schedule.deadline_seconds),
         created_at=now,

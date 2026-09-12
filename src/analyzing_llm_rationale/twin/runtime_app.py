@@ -174,7 +174,7 @@ def _maintenance_operation(
         run = strategy_run_store.create(StrategyRun(
             id=job.payload["strategy_cycle_id"],
             account_scope_id=job.account_scope_id,
-            account_epoch=1,
+            account_epoch=int(job.payload["account_epoch_id"]),
             config_release_id=job.payload["config_release_id"],
             observed_at=job.created_at,
         ))

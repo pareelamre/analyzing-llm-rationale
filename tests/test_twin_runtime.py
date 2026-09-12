@@ -334,8 +334,9 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         ]
         self.assertEqual(len(strategy_jobs), 1)
         self.assertEqual(set(strategy_jobs[0].payload), {
-            "strategy_cycle_id", "config_release_id",
+            "strategy_cycle_id", "config_release_id", "account_epoch_id",
         })
+        self.assertEqual(strategy_jobs[0].payload["account_epoch_id"], "1")
 
     def test_strategy_job_records_an_explicit_blocked_observation(self):
         from analyzing_llm_rationale.twin.cycle_runtime import (
@@ -352,6 +353,7 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             {
                 "strategy_cycle_id": "strategy-cycle-001",
                 "config_release_id": "foresea-edge-shadow-v1",
+                "account_epoch_id": "1",
             },
             NOW + timedelta(minutes=5), created_at=NOW,
         ))

@@ -151,7 +151,9 @@ _RESEARCH_PAYLOAD_FIELDS = frozenset({
     "research_assignment_id", "budget_reservation_id", "market_snapshot_id",
     "evidence_set_id", "model_config_id", "budget_key_id",
 })
-_STRATEGY_PAYLOAD_FIELDS = frozenset({"strategy_cycle_id", "config_release_id"})
+_STRATEGY_PAYLOAD_FIELDS = frozenset({
+    "strategy_cycle_id", "config_release_id", "account_epoch_id",
+})
 
 
 class WorkerRole(str, Enum):
@@ -237,6 +239,11 @@ class WorkerJob:
             raise WorkerJobError("research job is missing its exact budgeted assignment IDs")
         if self.kind is WorkerJobKind.STRATEGY and set(self.payload) != _STRATEGY_PAYLOAD_FIELDS:
             raise WorkerJobError("strategy job is missing its exact cycle IDs")
+        if self.kind is WorkerJobKind.STRATEGY and (
+            not self.payload["account_epoch_id"].isdigit()
+            or int(self.payload["account_epoch_id"]) < 1
+        ):
+            raise WorkerJobError("strategy job account epoch ID must be positive")
         for timestamp in (self.created_at, self.completed_at, self.lease_expires_at):
             if timestamp is not None and (timestamp.tzinfo is None or timestamp.utcoffset() is None):
                 raise WorkerJobError("worker job timestamps must be timezone-aware")
