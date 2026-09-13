@@ -361,6 +361,84 @@ def _clean_probability(value: Any, *, name: str) -> float:
     return probability
 
 
+#: A bucket is only allowed to move sizing once it has this many resolved
+#: snapshots behind it; below that the policy's own shrinkage stands alone.
+_MIN_CALIBRATION_N = 30
+_EDGE_CALIBRATION_CACHE: Dict[str, Any] = {}
+
+
+def _published_edge_calibration() -> Optional[List[Dict[str, Any]]]:
+    """by_edge from the published track record, read once per process.
+
+    The same file the board publishes -- static/track_record_live.json, or
+    FORESEA_TRACK_RECORD_PATH -- so sizing follows the record everyone can
+    see rather than constants chosen here, and moves with it as it grows.
+    """
+    if "rows" in _EDGE_CALIBRATION_CACHE:
+        return _EDGE_CALIBRATION_CACHE["rows"]
+    rows: Optional[List[Dict[str, Any]]] = None
+    default = Path(__file__).resolve().parents[2] / "static" / "track_record_live.json"
+    path = Path(os.environ.get("FORESEA_TRACK_RECORD_PATH") or default)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        found = payload.get("by_edge") if isinstance(payload, dict) else None
+        rows = [r for r in found if isinstance(r, dict)] if isinstance(found, list) else None
+    except Exception:
+        logger.warning(
+            "edge calibration unavailable path=%s; sizing uses policy shrinkage only",
+            path, exc_info=True,
+        )
+    _EDGE_CALIBRATION_CACHE["rows"] = rows
+    return rows
+
+
+def _edge_reliability(
+    edge: float, calibration: Optional[List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    """How far to trust a claimed edge of this size, from the published record.
+
+    The record shows the model growing less reliable the further it strays
+    from the market: at a 20pp+ disagreement its Brier score is 0.50 against
+    the market's 0.21 over 185 resolved snapshots. The fleet's trades agree
+    -- opens claiming 20pp+ won 30% and lost about $50 each -- yet Kelly
+    shrank every claim by the same fixed fraction, so the largest stakes went
+    on the least reliable calls.
+
+    ``weight`` is the model's accuracy relative to the market in that bucket,
+    ``market_brier / model_brier``, capped at 1. Where the model is as good as
+    the market it is 1 and sizing is exactly what the policy already did;
+    where the model is worse it falls in proportion, and it never reaches
+    zero, so a claim is sized down rather than refused. It is never above 1:
+    the record is used to temper a claim, not to amplify one.
+
+    Buckets come from track_record_live._edge_label, the function that built
+    the published record, so the two cannot drift apart.
+    """
+    from analyzing_llm_rationale.track_record_live import _edge_label
+
+    label = _edge_label(abs(edge))
+    neutral = {"weight": 1.0, "edge_bucket": label}
+    if not calibration:
+        return {**neutral, "reason": "no_published_calibration"}
+    row = next((r for r in calibration if r.get("edge_bucket") == label), None)
+    if row is None:
+        return {**neutral, "reason": "bucket_not_published"}
+    n = int(_as_float(row.get("n")) or 0)
+    model_brier = _as_float(row.get("model_brier"))
+    market_brier = _as_float(row.get("market_brier"))
+    if n < _MIN_CALIBRATION_N or not model_brier or model_brier <= 0 or market_brier is None:
+        return {**neutral, "reason": "insufficient_sample", "n": n}
+    weight = max(0.0, min(1.0, market_brier / model_brier))
+    return {
+        "weight": round(weight, 6),
+        "edge_bucket": label,
+        "n": n,
+        "model_brier": model_brier,
+        "market_brier": market_brier,
+        "reason": None,
+    }
+
+
 def _sizing_plan(
     args: Mapping[str, Any], *, price: float, side: str, account_value: float,
     platform: str = "kalshi", category: Optional[str] = None,
@@ -405,8 +483,12 @@ def _sizing_plan(
         }
 
     # Match the published Mark-to-Market definitions: Quarter Kelly shrinks
-    # halfway to market; Edge Kelly uses 25% shrinkage and half Kelly.
-    p_win = model_side_probability + policy.market_shrinkage * (price - model_side_probability)
+    # halfway to market; Edge Kelly uses 25% shrinkage and half Kelly. The
+    # share of the model's disagreement that survives is then scaled by how
+    # reliable the published record says disagreements this size have been.
+    reliability = _edge_reliability(edge, _published_edge_calibration())
+    kept = (1.0 - policy.market_shrinkage) * reliability["weight"]
+    p_win = price + kept * (model_side_probability - price)
     # Kelly must price the bet actually on offer. A contract costs the ask
     # *plus* the taker fee, so gross odds overstate the payoff and overstate
     # the stake with it -- by 3.2x at a 5pp edge on a 50c contract, and worst
@@ -448,6 +530,8 @@ def _sizing_plan(
         "min_edge": policy.min_edge,
         "kelly_fraction": policy.kelly_fraction,
         "market_shrinkage": policy.market_shrinkage,
+        "effective_market_shrinkage": round(1.0 - kept, 6),
+        "calibration_reliability": reliability,
         "raw_kelly": round(raw_kelly, 6),
         "target_fraction": round(target_fraction, 6),
         "max_position_fraction": policy.max_position_fraction,

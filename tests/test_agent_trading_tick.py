@@ -22,6 +22,19 @@ _SPEC.loader.exec_module(agent_trading_tick)
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 
 
+def setUpModule():
+    # Kelly sizing reads the published track record's edge calibration. Left
+    # alone, these tests would read the live, bot-published
+    # static/track_record_live.json, and their stake assertions would change
+    # whenever a new track record was published. The reliability weighting
+    # has its own tests, with a frozen record, in test_edge_reliability_sizing.py.
+    benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = None
+
+
+def tearDownModule():
+    benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+
+
 def _quote(ident, question="Q?", bid=0.4, ask=0.45, close="2026-09-01T00:00:00Z",
            opens="2026-05-01T00:00:00Z", resolution_criteria=None):
     quote = {

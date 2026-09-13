@@ -14,6 +14,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 
 
+def setUpModule():
+    # Kelly sizing reads the published track record's edge calibration. Left
+    # alone, these tests would read the live, bot-published
+    # static/track_record_live.json, and their stake assertions would change
+    # whenever a new track record was published. The reliability weighting
+    # has its own tests, with a frozen record, in test_edge_reliability_sizing.py.
+    benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = None
+
+
+def tearDownModule():
+    benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+
+
 class _FakeDsKey:
     """Mimics google.cloud.datastore.Key enough for benchmark_tools' Datastore
     account store: multi-segment ancestor paths, equality/hashing by path."""
