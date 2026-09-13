@@ -433,7 +433,10 @@ class ShadowVenue:
             "remaining_quantity": receipt.remaining_quantity,
         } for receipt in sorted(self._orders.values(), key=lambda item: item.order_id))
         return AccountSnapshot(
-            scope_id=self.scope_id, generation=len(self._events), received_at=received_at,
+            # Generation zero is never durable account authority.  The initial
+            # empty shadow portfolio is the first complete observation; each
+            # subsequent event advances that observation monotonically.
+            scope_id=self.scope_id, generation=len(self._events) + 1, received_at=received_at,
             completeness=Completeness.COMPLETE, available_cash=self._cash, total_cash=self._cash,
             reserved_cash=_ZERO, settled_cash=self._cash, holdings=holdings,
             position_basis=sum((item.basis for item in holdings), _ZERO),

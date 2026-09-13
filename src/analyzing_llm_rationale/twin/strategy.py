@@ -533,14 +533,18 @@ class ForeseaEdgeStrategy:
         discover: Callable[[], Sequence[StrategyCandidate]],
         research: Callable[[StrategyCandidate], ResearchResult],
         policy_stop: bool = False,
+        cycle_identity_at: Optional[datetime] = None,
     ) -> StrategyCycle:
         """Reconcile, maintain positions, then consider at most one new intent."""
         if self.policy is None:
             raise ValueError("typed strategy cycles require a StrategyPolicy")
         if now.tzinfo is None:
             raise ValueError("strategy cycle time must be timezone-aware")
+        identity_at = cycle_identity_at or now
+        if identity_at.tzinfo is None:
+            raise ValueError("strategy cycle identity time must be timezone-aware")
         key = strategy_cycle_key(
-            scope=scope, now=now, config_version=self.policy.config_version,
+            scope=scope, now=identity_at, config_version=self.policy.config_version,
             bucket_seconds=self.policy.cycle_bucket_seconds,
         )
         span = trace.get_current_span()

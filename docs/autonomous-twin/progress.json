@@ -651,8 +651,8 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "durable research phase merged; legacy research-job payload compatibility hotfix validated after failed private readiness smoke and safe rollback; durable account simulation remains",
-      "branch": "codex/t21-shadow-state",
+      "substep": "private cycles now reconcile a fresh durable shadow account generation and execute the existing Foresea strategy after research while preserving scheduled cycle identity; durable order simulation remains",
+      "branch": "codex/t21-shadow-runtime",
       "commit": null,
       "pr_url": null,
       "checks": [
@@ -721,7 +721,18 @@
         "py -m unittest discover -s tests for legacy payload compatibility (pass)",
         "py -m ruff check src tests for legacy payload compatibility (pass)",
         "py -m graphify update . for legacy payload compatibility (pass)",
-        "git diff --check for legacy payload compatibility (pass)"
+        "git diff --check for legacy payload compatibility (pass)",
+        "PR #626 CI test and datastore-integration (pass); merged as 505bd730e",
+        "public foresea Docker build/deploy run 34775556740 (pass)",
+        "private twin-maintenance revision twin-maintenance-00021-sd2 and twin-research revision twin-research-00022-mwx run exact image sha256:4e98a9e0a3a0fb85900233abbf247a53d5442b73faf4b8bf804a7f26706d89fa",
+        "private /health and /ready compatibility smoke (pass); shadow mode, zero live capital, empty mandate; temporary human invoker grants removed",
+        "production scheduler manual dispatch after compatibility deployment (pass)",
+        "focused durable shadow account, asynchronous strategy identity, calibration provenance and research-resume tests (pass: 74 tests)",
+        "npm ci && npm run frontend:build for durable shadow account strategy runtime (pass; generated files restored and excluded)",
+        "py -m unittest discover -s tests for durable shadow account strategy runtime (pass)",
+        "py -m ruff check src tests for durable shadow account strategy runtime (pass)",
+        "py -m graphify update . for durable shadow account strategy runtime (pass: 9955 nodes, 25247 edges)",
+        "git diff --check for durable shadow account strategy runtime (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -742,14 +753,17 @@
         "tests/test_twin_public_evidence.py",
         "tests/test_twin_runtime.py",
         "src/analyzing_llm_rationale/twin/worker.py",
-        "tests/test_twin_worker.py"
+        "tests/test_twin_worker.py",
+        "src/analyzing_llm_rationale/twin/account_store.py",
+        "src/analyzing_llm_rationale/twin/simulator.py",
+        "src/analyzing_llm_rationale/forecast_ledger.py"
       ],
       "blockers": [
-        "The maintenance runtime account reconciliation and exit operation is still an unconfigured fail-closed adapter.",
-        "Durable ShadowVenue state is not yet wired into the private cycle runtime.",
+        "Durable shadow order preview, command submission, fill, cancellation and settlement state are not yet wired into the private cycle runtime.",
+        "Compatible audit-grade calibration observations must accumulate before entry intents can qualify.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Wire the existing venue account synchronization and ShadowVenue implementation into the private phase machine, deploy in shadow mode, then restart the seven-day collection clock."
+      "handoff": "Persist shadow venue execution state, run accepted intents through durable commands and captured-book simulation, then restart the seven-day collection clock."
     },
     {
       "id": "T22",

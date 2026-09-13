@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import socket
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
@@ -12,6 +13,7 @@ from opentelemetry import metrics, trace
 
 from ..forecast_ledger import ForecastLedger
 from ..observability import init_observability
+from .account_store import DatastoreAccountSnapshotStore
 from .budget import (
     BudgetAlreadyClaimed,
     BudgetExceeded,
@@ -25,6 +27,7 @@ from .market_capture import (
     MarketCapturePolicy,
     capture_markets,
 )
+from .models import AccountScope
 from .public_evidence import (
     NewsPipelinePublicArticleGateway,
     PublicEvidenceError,
@@ -55,8 +58,12 @@ from .runtime import (
     create_private_worker_app,
 )
 from .scheduler import CloudTasksConfig, CloudTasksDispatcher, ShadowCycleSchedule
+from .simulator import ShadowVenue
+from .store import DatastoreTwinStore
 from .strategy import (
     DatastoreStrategyStore,
+    ForeseaEdgeStrategy,
+    StrategyAccountState,
     StrategyCandidate,
     StrategyCycle,
     StrategyStep,
@@ -86,6 +93,85 @@ research_preparations = metrics.get_meter(__name__).create_counter(
 )
 
 
+@tracer.start_as_current_span("twin.strategy.load_calibration")
+def _calibration_observations(ledger: ForecastLedger, *, as_of: datetime) -> tuple[dict[str, object], ...]:
+    """Expose only resolved, audit-grade forecasts available before a decision."""
+    observations = []
+    for row in ledger.resolved_forecasts():
+        try:
+            resolved_at = datetime.fromisoformat(str(row["resolved_at"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (
+            resolved_at >= as_of or row.get("ledger_audit_grade") is not True
+            or row.get("source") != "twin_research_v1"
+            or not all(str(row.get(name) or "").strip() for name in (
+                "forecast_id", "instrument_id", "cluster_id", "model_hash",
+                "prompt_hash", "category_family",
+            ))
+        ):
+            continue
+        observations.append({
+            "id": str(row["forecast_id"]),
+            "instrument_id": str(row["instrument_id"]),
+            "cluster_id": str(row["cluster_id"]),
+            "probability": str(row["model_probability"]),
+            "outcome": int(row["outcome"]),
+            "forecast_at": str(row["forecasted_at"]),
+            "resolved_at": str(row["resolved_at"]),
+            "model_hash": str(row["model_hash"]),
+            "prompt_hash": str(row["prompt_hash"]),
+            "category_family": str(row["category_family"]),
+        })
+    return tuple(sorted(observations, key=lambda item: (str(item["resolved_at"]), str(item["id"]))))
+
+
+@tracer.start_as_current_span("twin.shadow_account.reconcile")
+def _reconcile_shadow_account(
+    snapshot_store, twin_store, *, scope_id: str, account_epoch: int,
+    now: datetime, strategy_policy,
+) -> tuple[AccountScope, StrategyAccountState]:
+    """Refresh one durable, zero-authority account generation for shadow decisions."""
+    scope = AccountScope(
+        scope_id, "foresea-edge-v1", "shadow", "foresea-edge-v1", "simulation",
+        "USD", "shadow-venue-v3", account_epoch,
+        datetime(2020, 1, 1, tzinfo=timezone.utc),
+    )
+    prior = snapshot_store.load(scope_id)
+    if prior is None:
+        snapshot = ShadowVenue(
+            account_id="shadow-account-foresea-edge-v1",
+            scope_id=scope_id,
+            seed=20260913,
+            starting_cash=Decimal("1000"),
+        ).account(received_at=now)
+    else:
+        snapshot = replace(prior, generation=prior.generation + 1, received_at=now)
+    snapshot = snapshot_store.save(snapshot)
+    projection = twin_store.register_account(
+        scope, venue_available_cash=snapshot.available_cash,
+        loss_limit=strategy_policy.risk_limits.max_total_loss,
+    )
+    if (
+        projection.venue_available_cash != snapshot.available_cash
+        or projection.loss_limit != strategy_policy.risk_limits.max_total_loss
+    ):
+        projection = twin_store.refresh_account_capacity(
+            scope.id, venue_available_cash=snapshot.available_cash,
+            loss_limit=strategy_policy.risk_limits.max_total_loss,
+        )
+    portfolio_complete = not any((
+        snapshot.holdings, snapshot.orders, snapshot.fills, snapshot.settlements,
+    ))
+    state = StrategyAccountState(
+        snapshot, projection, (), (), Decimal("0"), Decimal("0"),
+        snapshot.conservative_liquidation_value,
+        snapshot.conservative_liquidation_value,
+        portfolio_complete=portfolio_complete,
+    )
+    return scope, state
+
+
 def _stable_id(prefix: str, *parts: object) -> str:
     return prefix + sha256("|".join(str(item) for item in parts).encode()).hexdigest()[:24]
 
@@ -94,6 +180,7 @@ def _stable_id(prefix: str, *parts: object) -> str:
 def _prepare_strategy_research(
     *, run: StrategyRun, capture, jobs, budget, captures, evidence_cache,
     evidence_gateway, research_policy: ResearchRuntimePolicy, now: datetime,
+    calibration_observations=(),
 ) -> tuple[tuple[StrategyCandidate, ...], tuple[str, ...]]:
     """Persist bounded research inputs and jobs, skipping unsafe candidates."""
     candidates: list[StrategyCandidate] = []
@@ -164,6 +251,7 @@ def _prepare_strategy_research(
                 market.trading_cost.no_fee_per_share,
             ),
             market.instrument.tick_size,
+            tuple(calibration_observations),
         ))
         job_ids.append(job_id)
     research_preparations.add(1, {
@@ -295,6 +383,10 @@ def _maintenance_operation(
     evidence_gateway=None,
     research_policy: ResearchRuntimePolicy | None = None,
     dispatcher=None,
+    account_snapshot_store=None,
+    twin_store=None,
+    strategy_policy=None,
+    calibration_observations=(),
 ) -> dict[str, object]:
     """Safe staging operation until venue/account adapters are configured."""
     if job.kind is WorkerJobKind.RECOVERY:
@@ -363,6 +455,11 @@ def _maintenance_operation(
                     captures=research_capture_store, evidence_cache=evidence_cache,
                     evidence_gateway=evidence_gateway,
                     research_policy=research_policy, now=prepared_at,
+                    calibration_observations=(
+                        calibration_observations()
+                        if callable(calibration_observations)
+                        else calibration_observations
+                    ),
                 )
                 if not research_job_ids:
                     run = strategy_run_store.save(
@@ -383,9 +480,12 @@ def _maintenance_operation(
                     )
                     for research_job_id in research_job_ids:
                         dispatcher.enqueue(jobs.get(research_job_id))
-        if run.phase is StrategyRunPhase.RESEARCH_PENDING:
+        durable_results = ()
+        if run.phase in {StrategyRunPhase.RESEARCH_PENDING, StrategyRunPhase.READY}:
             research_jobs = tuple(jobs.get(item) for item in run.research_job_ids)
             if any(item.completed_result is None for item in research_jobs):
+                if run.phase is StrategyRunPhase.READY:
+                    raise WorkerPaused("ready_strategy_research_not_terminal")
                 return {
                     "status": "pending", "reason": "research_pending",
                     "strategy_cycle_id": run.id,
@@ -405,35 +505,81 @@ def _maintenance_operation(
                     ),
                     expected_revision=run.revision,
                 )
-            else:
+            elif run.phase is StrategyRunPhase.RESEARCH_PENDING:
                 run = strategy_run_store.save(
                     run.advance(StrategyRunPhase.READY, now=datetime.now(timezone.utc)),
                     expected_revision=run.revision,
                 )
+        if run.phase is StrategyRunPhase.READY:
+            decision_at = datetime.now(timezone.utc)
+            if any(item is None for item in (
+                account_snapshot_store, twin_store, strategy_policy,
+            )):
                 run = strategy_run_store.save(
                     run.advance(
-                        StrategyRunPhase.BLOCKED, now=datetime.now(timezone.utc),
+                        StrategyRunPhase.BLOCKED, now=decision_at,
                         reason="account_maintenance_adapter_unconfigured",
                     ),
                     expected_revision=run.revision,
                 )
+            else:
+                scope, account_state = _reconcile_shadow_account(
+                    account_snapshot_store, twin_store,
+                    scope_id=run.account_scope_id, account_epoch=run.account_epoch,
+                    now=decision_at, strategy_policy=strategy_policy,
+                )
+                results_by_instrument = {
+                    candidate.instrument.id: result
+                    for candidate, result in zip(run.candidates, durable_results)
+                    if result is not None
+                }
+                candidates_by_instrument = {
+                    candidate.instrument.id: candidate for candidate in run.candidates
+                }
+                cycle = ForeseaEdgeStrategy(
+                    store=strategy_store, policy=strategy_policy,
+                ).run_cycle(
+                    scope=scope, now=decision_at,
+                    cycle_identity_at=run.observed_at,
+                    reconcile=lambda: account_state,
+                    load_position_market=lambda position: candidates_by_instrument.get(
+                        position.instrument.id,
+                    ),
+                    discover=lambda: tuple(
+                        candidate for candidate in run.candidates
+                        if candidate.instrument.id in results_by_instrument
+                    ),
+                    research=lambda candidate: results_by_instrument[candidate.instrument.id],
+                )
+                run = strategy_run_store.save(
+                    run.advance(
+                        StrategyRunPhase.COMPLETE, now=decision_at,
+                        reason=cycle.reason,
+                    ),
+                    expected_revision=run.revision,
+                )
         capture = market_capture_store.get(run.id)
-        if run.phase is not StrategyRunPhase.BLOCKED:
+        if run.phase not in {StrategyRunPhase.BLOCKED, StrategyRunPhase.COMPLETE}:
             raise WorkerPaused("strategy_run_not_terminal")
-        recorded = strategy_store.record_cycle(StrategyCycle(
-            key=job.payload["strategy_cycle_id"],
-            decision="PASS",
-            reason=str(run.reason),
-            steps=(StrategyStep(
-                "market_capture", "blocked", str(run.reason),
-                job.payload["config_release_id"],
-            ),),
-            created_at=job.created_at,
-            account_scope_id=job.account_scope_id,
-        ))
+        cycle = strategy_store.get_cycle(job.payload["strategy_cycle_id"])
+        recorded = False
+        if cycle is None:
+            recorded = strategy_store.record_cycle(StrategyCycle(
+                key=job.payload["strategy_cycle_id"],
+                decision="PASS",
+                reason=str(run.reason),
+                steps=(StrategyStep(
+                    "market_capture", "blocked", str(run.reason),
+                    job.payload["config_release_id"],
+                ),),
+                created_at=job.created_at,
+                account_scope_id=job.account_scope_id,
+            ))
+            cycle = strategy_store.get_cycle(job.payload["strategy_cycle_id"])
         return {
-            "status": "blocked",
-            "reason": "strategy_dependencies_unconfigured",
+            "status": "complete" if run.phase is StrategyRunPhase.COMPLETE else "blocked",
+            "reason": str(run.reason),
+            "decision": cycle.decision if cycle is not None else "PASS",
             "strategy_cycle_id": job.payload["strategy_cycle_id"],
             "config_release_id": job.payload["config_release_id"],
             "observation_recorded": recorded,
@@ -562,6 +708,8 @@ def create_environment_app():
         captures = DatastoreResearchCaptureStore(client)
         results = DatastoreResearchResultStore(client)
         strategy_store = DatastoreStrategyStore(client)
+        account_snapshot_store = DatastoreAccountSnapshotStore(client)
+        twin_store = DatastoreTwinStore(client)
         strategy_run_store = DatastoreStrategyRunStore(client)
         market_capture_store = DatastoreMarketCaptureStore(client)
         market_data_gateway = LiveMarketDataGateway()
@@ -704,6 +852,8 @@ def create_environment_app():
                 ),
                 captures, results, evidence_cache, evidence_gateway,
                 research_policy, dispatcher,
+                account_snapshot_store, twin_store, strategy_policy,
+                lambda: _calibration_observations(ledger, as_of=now()),
             ),
             research_gateway=gateway,
         )

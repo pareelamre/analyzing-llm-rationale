@@ -655,6 +655,11 @@ def record_research_forecast(
         "evidence_as_of": capture.as_of,
         "model": config.model_id,
         "model_version": result.provenance.model_hash,
+        "instrument_id": capture.instrument.id,
+        "cluster_id": capture.instrument.cluster_id,
+        "model_hash": forecast.model_hash,
+        "prompt_hash": forecast.prompt_hash,
+        "category_family": capture.instrument.category,
         "source": "twin_research_v1",
     }, snapshot_key=forecast.id)
 
