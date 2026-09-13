@@ -147,10 +147,11 @@ _PRIORITY = {
 }
 _STABLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,254}$")
 _MAX_RESULT_BYTES = 64 * 1024
-_RESEARCH_PAYLOAD_FIELDS = frozenset({
+_LEGACY_RESEARCH_PAYLOAD_FIELDS = frozenset({
     "research_assignment_id", "budget_reservation_id", "market_snapshot_id",
-    "evidence_set_id", "model_config_id", "budget_key_id", "strategy_cycle_id",
+    "evidence_set_id", "model_config_id", "budget_key_id",
 })
+_RESEARCH_PAYLOAD_FIELDS = _LEGACY_RESEARCH_PAYLOAD_FIELDS | {"strategy_cycle_id"}
 _STRATEGY_PAYLOAD_FIELDS = frozenset({
     "strategy_cycle_id", "config_release_id", "account_epoch_id",
 })
@@ -235,7 +236,9 @@ class WorkerJob:
             for key, value in self.payload.items()
         ):
             raise WorkerJobError("worker payloads may contain stable ID fields only")
-        if self.kind is WorkerJobKind.RESEARCH and set(self.payload) != _RESEARCH_PAYLOAD_FIELDS:
+        if self.kind is WorkerJobKind.RESEARCH and set(self.payload) not in {
+            _LEGACY_RESEARCH_PAYLOAD_FIELDS, _RESEARCH_PAYLOAD_FIELDS,
+        }:
             raise WorkerJobError("research job is missing its exact budgeted assignment IDs")
         if self.kind is WorkerJobKind.STRATEGY and set(self.payload) != _STRATEGY_PAYLOAD_FIELDS:
             raise WorkerJobError("strategy job is missing its exact cycle IDs")
@@ -674,14 +677,18 @@ class ResearchAssignment:
     def from_job(cls, job: WorkerJob) -> "ResearchAssignment":
         if job.kind is not WorkerJobKind.RESEARCH or job.worker_id is None:
             raise WorkerJobError("research assignment requires a claimed research job")
-        if set(job.payload) != _RESEARCH_PAYLOAD_FIELDS:
+        if set(job.payload) not in {
+            _LEGACY_RESEARCH_PAYLOAD_FIELDS, _RESEARCH_PAYLOAD_FIELDS,
+        }:
             raise WorkerJobError("research assignment payload is incomplete")
         return cls(
             job.id, job.worker_id, job.fence, job.deadline,
             job.payload["research_assignment_id"], job.payload["budget_reservation_id"],
             job.payload["market_snapshot_id"], job.payload["evidence_set_id"],
             job.payload["model_config_id"], job.payload["budget_key_id"],
-            job.payload["strategy_cycle_id"],
+            job.payload.get("strategy_cycle_id") or (
+                "legacy-research-cycle:" + sha256(job.id.encode()).hexdigest()[:24]
+            ),
         )
 
 

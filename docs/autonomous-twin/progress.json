@@ -651,8 +651,8 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "canonical cycles now acquire bounded public evidence, reserve durable research work, dispatch it, and resume after terminal results; account reconciliation and durable simulation remain",
-      "branch": "codex/t21-research-phase",
+      "substep": "durable research phase merged; legacy research-job payload compatibility hotfix validated after failed private readiness smoke and safe rollback; durable account simulation remains",
+      "branch": "codex/t21-shadow-state",
       "commit": null,
       "pr_url": null,
       "checks": [
@@ -711,7 +711,17 @@
         "py -m unittest discover -s tests for durable research phase (pass: 2232 tests; 12 skipped)",
         "py -m ruff check src tests for durable research phase (pass)",
         "py -m graphify update . for durable research phase (pass: 9916 nodes, 25102 edges)",
-        "git diff --check for durable research phase (pass)"
+        "git diff --check for durable research phase (pass)",
+        "PR #623 CI test and datastore-integration (pass); merged as 96565748e",
+        "public foresea Docker build/deploy run 34754176365 (pass; image sha256:bb9ebb8f232a187316feee42e21202950f3659ecf332ea42b2797013320b5202)",
+        "private PR #623 readiness smoke exposed legacy durable research payload incompatibility in revisions twin-maintenance-00019-bp7 and twin-research-00020-7bc; both revisions removed from traffic",
+        "private services rolled back to healthy twin-maintenance-00017-qj8 and twin-research-00018-p2v; /ready passed after rollback and temporary human invokers were removed",
+        "py -m unittest tests.test_twin_worker tests.test_twin_runtime for legacy payload compatibility (pass: 33 tests)",
+        "npm ci && npm run frontend:build for legacy payload compatibility (pass; generated files restored and excluded)",
+        "py -m unittest discover -s tests for legacy payload compatibility (pass)",
+        "py -m ruff check src tests for legacy payload compatibility (pass)",
+        "py -m graphify update . for legacy payload compatibility (pass)",
+        "git diff --check for legacy payload compatibility (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -730,7 +740,9 @@
         "src/analyzing_llm_rationale/twin/public_evidence.py",
         "src/analyzing_llm_rationale/twin/research_gateway.py",
         "tests/test_twin_public_evidence.py",
-        "tests/test_twin_runtime.py"
+        "tests/test_twin_runtime.py",
+        "src/analyzing_llm_rationale/twin/worker.py",
+        "tests/test_twin_worker.py"
       ],
       "blockers": [
         "The maintenance runtime account reconciliation and exit operation is still an unconfigured fail-closed adapter.",

@@ -15,6 +15,7 @@ from analyzing_llm_rationale.twin.strategy import strategy_cycle_key_for_identit
 from analyzing_llm_rationale.twin.worker import (
     InMemoryWorkerJobs,
     MaintenanceResearchJobGateway,
+    ResearchAssignment,
     ResearchCompletion,
     TwinResearchWorker,
     TwinWorker,
@@ -55,6 +56,16 @@ def job(job_id="job-001", *, kind=WorkerJobKind.RECONCILE, deadline=NOW + timede
 
 
 class TwinWorkerTests(unittest.TestCase):
+    def test_legacy_research_payload_remains_readable_after_cycle_link_migration(self):
+        payload = dict(job("research", kind=WorkerJobKind.RESEARCH).payload)
+        payload.pop("strategy_cycle_id")
+        legacy = WorkerJob(
+            "legacy-research", "scope-001", WorkerJobKind.RESEARCH, payload,
+            NOW + timedelta(minutes=1), worker_id="research-worker",
+        )
+        assignment = ResearchAssignment.from_job(legacy)
+        self.assertTrue(assignment.strategy_cycle_id.startswith("legacy-research-cycle:"))
+
     def test_shadow_cycle_production_is_idempotent_per_release_bucket(self):
         jobs = InMemoryWorkerJobs()
         schedule = ShadowCycleSchedule(
