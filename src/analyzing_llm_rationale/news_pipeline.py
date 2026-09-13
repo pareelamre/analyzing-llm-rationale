@@ -1,14 +1,51 @@
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 import os
 import re
 import threading
-from typing import Callable, List, Optional, Sequence
+import time
+from typing import Callable, Dict, List, Optional, Sequence
 from urllib.parse import urlencode, urlparse, urlunparse
 from xml.etree import ElementTree
 
 import numpy as np
+
+logger = logging.getLogger("foresea.news")
+
+#: At most one warning per evidence source in this window. Every fetcher
+#: runs on every forecast, so an outage logged per request would bury the
+#: one line worth reading.
+_SOURCE_FAILURE_LOG_INTERVAL_S = 300.0
+_last_source_failure: Dict[str, float] = {}
+_source_failure_lock = threading.Lock()
+
+
+def _note_source_failure(source: str) -> None:
+    """Say that an evidence source failed, without flooding the log.
+
+    Call it from inside the except block, so the traceback is attached.
+
+    Every fetcher in this module ended in `except Exception: return []`
+    and the module had no logger at all. A source that stops working --
+    an expired Tavily or Serper key, a quota, a changed endpoint -- then
+    looks exactly like a source with nothing to say, and every forecast
+    quietly loses that evidence. The server reports an evidence error only
+    when all sources come back empty, and even then cannot name one.
+    Behaviour is unchanged: the fetcher still returns what it has.
+    """
+    now = time.monotonic()
+    with _source_failure_lock:
+        last = _last_source_failure.get(source)
+        if last is not None and now - last < _SOURCE_FAILURE_LOG_INTERVAL_S:
+            return
+        _last_source_failure[source] = now
+    logger.warning(
+        "evidence source failed source=%s; continuing without it",
+        source,
+        exc_info=True,
+    )
 
 RSS_FEEDS = [
     "https://feeds.bbci.co.uk/news/rss.xml",
@@ -527,6 +564,7 @@ class NewsPipeline:
                 "source": self._domain(r.get("url") or ""), "source_channel": "web",
             } for r in resp.json().get("results", [])]
         except Exception:
+            _note_source_failure("_web_tavily")
             return []
 
     def _web_serper(self, query: str, limit: int = 10) -> List[dict]:
@@ -546,6 +584,7 @@ class NewsPipeline:
                 "source": self._domain(r.get("link") or ""), "source_channel": "web",
             } for r in resp.json().get("organic", [])]
         except Exception:
+            _note_source_failure("_web_serper")
             return []
 
     def _web_brave(self, query: str, limit: int = 10) -> List[dict]:
@@ -566,6 +605,7 @@ class NewsPipeline:
                 "source_channel": "web",
             } for r in (resp.json().get("web") or {}).get("results", [])]
         except Exception:
+            _note_source_failure("_web_brave")
             return []
 
     def _web_searxng(self, query: str, limit: int = 10) -> List[dict]:
@@ -586,6 +626,7 @@ class NewsPipeline:
                 "source": self._domain(r.get("url") or ""), "source_channel": "web",
             } for r in resp.json().get("results", [])[:limit]]
         except Exception:
+            _note_source_failure("_web_searxng")
             return []
 
     def _parse_duckduckgo_results(self, html: str, limit: int) -> List[dict]:
@@ -663,6 +704,7 @@ class NewsPipeline:
                 if articles:
                     return articles
             except Exception:
+                _note_source_failure("_web_duckduckgo")
                 continue
         return []
 
@@ -682,6 +724,7 @@ class NewsPipeline:
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
         except Exception:
+            _note_source_failure("_web_ap_news")
             return []
 
         articles: List[dict] = []
@@ -738,6 +781,7 @@ class NewsPipeline:
                 })
             return articles
         except Exception:
+            _note_source_failure("_fetch_newsapi")
             return []
 
     def _fetch_gdelt(self, query: str, limit: int = 20) -> List[dict]:
@@ -770,6 +814,7 @@ class NewsPipeline:
                 })
             return articles
         except Exception:
+            _note_source_failure("_fetch_gdelt")
             return []
 
     def _fetch_bing_news(self, query: str, limit: int = 20) -> List[dict]:
@@ -795,6 +840,7 @@ class NewsPipeline:
             resp.raise_for_status()
             root = ElementTree.fromstring(resp.content)
         except Exception:
+            _note_source_failure("_fetch_bing_news")
             return []
 
         articles: List[dict] = []
@@ -853,6 +899,7 @@ class NewsPipeline:
                     for entry in entries
                 ]
             except Exception:
+                _note_source_failure("_fetch_google_news")
                 return []
 
         articles: List[dict] = []
@@ -909,6 +956,7 @@ class NewsPipeline:
                         "search_query": feed_title,
                     })
             except Exception:
+                _note_source_failure("_fetch_stooq")
                 continue
         return articles
 
@@ -944,6 +992,7 @@ class NewsPipeline:
             resp.raise_for_status()
             series_list = resp.json().get("seriess", [])
         except Exception:
+            _note_source_failure("_fetch_fred")
             return []
 
         for series in series_list[:limit]:
@@ -969,6 +1018,7 @@ class NewsPipeline:
                 obs_resp.raise_for_status()
                 observations = obs_resp.json().get("observations", [])
             except Exception:
+                _note_source_failure("_fetch_fred")
                 continue
 
             obs_lines = [
@@ -1029,6 +1079,7 @@ class NewsPipeline:
                 r.get("country", ""),
             ]))
         except Exception:
+            _note_source_failure("_fetch_open_meteo")
             return []
 
         try:
@@ -1057,6 +1108,7 @@ class NewsPipeline:
             fc.raise_for_status()
             daily = fc.json().get("daily", {})
         except Exception:
+            _note_source_failure("_fetch_open_meteo")
             return []
 
         dates = daily.get("time", [])
@@ -1123,6 +1175,7 @@ class NewsPipeline:
                         "source_channel": "rss",
                     })
             except Exception:
+                _note_source_failure("_fetch_rss")
                 continue
         return articles
 
