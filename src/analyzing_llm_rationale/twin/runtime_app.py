@@ -175,8 +175,10 @@ def _prepare_strategy_research(
 
 def _stage_strategy_continuation(
     jobs, strategy_run_store, assignment: ResearchAssignment, *, now: datetime,
-) -> WorkerJob:
+) -> WorkerJob | None:
     """Durably stage one unique continuation after a research terminal result."""
+    if assignment.strategy_cycle_id.startswith("legacy-research-cycle:"):
+        return None
     run = strategy_run_store.get(assignment.strategy_cycle_id)
     if run is None:
         raise WorkerJobError("strategy run is unavailable for research continuation")
@@ -577,7 +579,7 @@ def create_environment_app():
             _required("FORESEA_TWIN_RESEARCH_AUDIENCE"),
         ))
 
-        def stage_continuation(assignment: ResearchAssignment) -> WorkerJob:
+        def stage_continuation(assignment: ResearchAssignment) -> WorkerJob | None:
             return _stage_strategy_continuation(
                 jobs, strategy_run_store, assignment, now=now(),
             )
@@ -675,8 +677,10 @@ def create_environment_app():
         gateway = MaintenanceResearchJobGateway(
             jobs, authorize_assignment=authorize, capture_loader=load_capture,
             authorize_repair=authorize_repair, finalize_result=finalize_result,
-            after_complete=lambda assignment, _completed: dispatcher.enqueue(
-                stage_continuation(assignment)
+            after_complete=lambda assignment, _completed: (
+                dispatcher.enqueue(continuation)
+                if (continuation := stage_continuation(assignment)) is not None
+                else None
             ),
         )
         worker = TwinWorker(
