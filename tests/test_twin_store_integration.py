@@ -29,6 +29,11 @@ from analyzing_llm_rationale.twin.cycle_runtime import (
 )
 from analyzing_llm_rationale.twin.mandates import DatastoreMandateStore, Mandate
 from analyzing_llm_rationale.twin.manual import reserve_confirmed_manual_order
+from analyzing_llm_rationale.twin.market_capture import (
+    DatastoreMarketCaptureStore,
+    MarketCaptureBatch,
+    MarketCaptureError,
+)
 from analyzing_llm_rationale.twin.operator import DatastorePauseStore
 from analyzing_llm_rationale.twin.recovery import (
     DatastoreLifecycleStore,
@@ -89,6 +94,24 @@ def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, resul
 
 @unittest.skipUnless(os.environ.get("DATASTORE_EMULATOR_HOST"), "requires DATASTORE_EMULATOR_HOST")
 class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
+    def test_market_capture_survives_restart_and_rejects_conflicting_cycle(self):
+        from google.cloud import datastore
+
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")
+        client = datastore.Client(project=project)
+        store = DatastoreMarketCaptureStore(client)
+        cycle_id = f"market-capture-{uuid4().hex}"
+        now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        batch = MarketCaptureBatch(now, (), ())
+        self.assertTrue(store.record(cycle_id, batch))
+        self.assertFalse(store.record(cycle_id, batch))
+        restarted = DatastoreMarketCaptureStore(datastore.Client(project=project))
+        self.assertEqual(restarted.get(cycle_id), batch)
+        with self.assertRaisesRegex(MarketCaptureError, "conflicting"):
+            restarted.record(
+                cycle_id, MarketCaptureBatch(now + timedelta(seconds=1), (), ()),
+            )
+
     def test_strategy_run_phase_survives_restart_and_fences_stale_writer(self):
         from google.cloud import datastore
 

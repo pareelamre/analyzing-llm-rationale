@@ -82,7 +82,9 @@ def _hash(*values: str) -> str:
     return sha256("\x1f".join(values).encode("utf-8")).hexdigest()
 
 
-def _book_levels(raw: Any) -> tuple[Optional[Decimal], Decimal]:
+def _book_levels(
+    raw: Any, *, best_is_max: bool,
+) -> tuple[Optional[Decimal], Decimal]:
     """Return best price and visible size from CLOB-shaped levels."""
     levels = raw if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)) else []
     best: Optional[Decimal] = None
@@ -96,13 +98,27 @@ def _book_levels(raw: Any) -> tuple[Optional[Decimal], Decimal]:
             continue
         if price is None or quantity is None:
             continue
-        best = price if best is None else max(best, price)
+        if best is None:
+            best = price
+        else:
+            best = max(best, price) if best_is_max else min(best, price)
         size += quantity
     return best, size
 
 
 def _reason_set(*reasons: RejectionReason) -> tuple[RejectionReason, ...]:
     return tuple(dict.fromkeys(reasons))
+
+
+def _kalshi_tick(market: Mapping[str, Any]) -> Optional[Decimal]:
+    explicit = _decimal(market.get("tick_size"))
+    if explicit is not None:
+        return explicit
+    steps = {
+        step for item in _list(market.get("price_ranges"))
+        if isinstance(item, Mapping) and (step := _decimal(item.get("step"))) is not None
+    }
+    return next(iter(steps)) if len(steps) == 1 else None
 
 
 def normalize_market(
@@ -175,8 +191,8 @@ def _normalize_kalshi(
         received_at=received_at, allowed_categories=allowed_categories, min_horizon_seconds=min_horizon_seconds,
         max_horizon_seconds=max_horizon_seconds,
     ))
-    tick = _decimal(market.get("price_level_structure") or market.get("tick_size") or "0.01")
-    minimum = _decimal(market.get("min_contracts") or market.get("min_quantity") or "1")
+    tick = _kalshi_tick(market)
+    minimum = _decimal(market.get("min_contracts") or market.get("min_quantity") or "0.01")
     yes_bid, yes_ask = _decimal(market.get("yes_bid_dollars") or market.get("yes_bid")), _decimal(market.get("yes_ask_dollars") or market.get("yes_ask"))
     no_bid, no_ask = _decimal(market.get("no_bid_dollars") or market.get("no_bid")), _decimal(market.get("no_ask_dollars") or market.get("no_ask"))
     if not ticker or tick is None or minimum is None or tick == 0 or minimum == 0:
@@ -191,8 +207,10 @@ def _normalize_kalshi(
     instrument = Instrument(
         id=canonical_instrument_id(venue="kalshi", environment="live", venue_instrument_id=ticker), venue="kalshi",
         environment="live", venue_instrument_id=ticker, condition_id=None, yes_token_id=None, no_token_id=None,
-        settlement_spec_hash=_hash("kalshi", ticker, settlement), category=category or "other", event_id=ticker,
-        cluster_id=ticker, tick_size=tick, min_quantity=minimum, fee_version=_text(market.get("fee_version") or "kalshi-default"),
+        settlement_spec_hash=_hash("kalshi", ticker, settlement), category=category or "other",
+        event_id=_text(market.get("event_ticker") or ticker),
+        cluster_id=_text(market.get("event_ticker") or ticker), tick_size=tick,
+        min_quantity=minimum, fee_version=_text(market.get("fee_version") or "kalshi-default"),
         capability_version="kalshi-v2-limit", status="open", close_at=close_at, resolution_at=close_at, created_at=received_at,
     )
     snapshot = MarketSnapshot(
@@ -211,7 +229,7 @@ def _normalize_polymarket(
 ) -> MarketAssessment:
     condition_id, market_id = _identifier(market.get("conditionId") or market.get("condition_id")), _identifier(market.get("id"))
     outcomes, tokens = [_text(item).lower() for item in _list(market.get("outcomes"))], [_identifier(item) for item in _list(market.get("clobTokenIds"))]
-    close_at = _timestamp(market.get("endDateIso") or market.get("endDate"))
+    close_at = _timestamp(market.get("endDate") or market.get("endDateIso"))
     venue_at = _timestamp(market.get("updatedAt") or market.get("updated_at")) or received_at
     category = _text(market.get("category") or "other")
     settlement = _text(market.get("rules") or market.get("description") or market.get("resolutionSource"))
@@ -222,7 +240,21 @@ def _normalize_polymarket(
     ))
     if outcomes != ["yes", "no"] or len(tokens) != 2 or any(token is None for token in tokens):
         reasons.append(RejectionReason.PASS_UNSUPPORTED_INSTRUMENT)
-    tick, minimum = _decimal(market.get("minimum_tick_size") or market.get("tick_size")), _decimal(market.get("minimum_order_size") or market.get("min_order_size"))
+    yes_book = orderbooks.get(str(tokens[0])) if len(tokens) == 2 else None
+    no_book = orderbooks.get(str(tokens[1])) if len(tokens) == 2 else None
+
+    def consistent_book_value(*keys: str) -> Optional[Decimal]:
+        values = []
+        for book in (yes_book, no_book):
+            if not isinstance(book, Mapping):
+                return None
+            values.append(_decimal(next((book.get(key) for key in keys if book.get(key) not in (None, "")), None)))
+        return values[0] if values[0] is not None and values[0] == values[1] else None
+
+    tick = _decimal(market.get("minimum_tick_size") or market.get("tick_size"))
+    minimum = _decimal(market.get("minimum_order_size") or market.get("min_order_size"))
+    tick = tick or consistent_book_value("tick_size", "minimum_tick_size")
+    minimum = minimum or consistent_book_value("min_order_size", "minimum_order_size")
     if not condition_id or not market_id or tick is None or minimum is None or tick == 0 or minimum == 0:
         reasons.append(RejectionReason.PASS_INCOMPLETE_DATA)
     if venue_at > received_at:
@@ -230,13 +262,12 @@ def _normalize_polymarket(
     if reasons:
         return MarketAssessment(None, None, _reason_set(*reasons))
     yes_token, no_token = str(tokens[0]), str(tokens[1])
-    yes_book, no_book = orderbooks.get(yes_token), orderbooks.get(no_token)
     if not isinstance(yes_book, Mapping) or not isinstance(no_book, Mapping):
         return MarketAssessment(None, None, (RejectionReason.PASS_INCOMPLETE_DATA,))
-    yes_bid, yes_size = _book_levels(yes_book.get("bids"))
-    yes_ask, yes_ask_size = _book_levels(yes_book.get("asks"))
-    no_bid, no_size = _book_levels(no_book.get("bids"))
-    no_ask, no_ask_size = _book_levels(no_book.get("asks"))
+    yes_bid, yes_size = _book_levels(yes_book.get("bids"), best_is_max=True)
+    yes_ask, yes_ask_size = _book_levels(yes_book.get("asks"), best_is_max=False)
+    no_bid, no_size = _book_levels(no_book.get("bids"), best_is_max=True)
+    no_ask, no_ask_size = _book_levels(no_book.get("asks"), best_is_max=False)
     if min(yes_size, yes_ask_size, no_size, no_ask_size) <= 0 or yes_ask is None or no_ask is None:
         return MarketAssessment(None, None, (RejectionReason.PASS_INCOMPLETE_DATA,))
     assert condition_id and market_id and close_at and tick is not None and minimum is not None
