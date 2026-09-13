@@ -1565,6 +1565,69 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(opp["edge"], -0.35)
             self.assertEqual(opp["model_forecast"]["provider"], "google_maps_weather")
 
+    def test_weather_radar_says_why_it_is_empty_when_kalshi_is_down(self):
+        """Every series failing used to return an empty radar and no reason.
+
+        _collect_weather_radar skipped a failing series with a bare
+        `continue`, so a Kalshi outage and a genuinely quiet weather market
+        were indistinguishable from the outside.
+        """
+        with (
+            mock.patch(
+                "analyzing_llm_rationale.market_data.list_kalshi",
+                side_effect=RuntimeError("kalshi down"),
+            ),
+        ):
+            server_module.logger.reset_mock()
+            response = self.client.get("/market/weather-radar?limit=5")
+        self.assertEqual(response.status_code, 200, "the radar still answers")
+        self.assertEqual(response.json()["opportunities"], [])
+        skipped = [
+            call.args[1]
+            for call in server_module.logger.warning.call_args_list
+            if call.args and call.args[0] == "weather radar skipped series=%s"
+        ]
+        self.assertEqual(len(skipped), 8, "one warning per weather series")
+        self.assertIn("KXHIGHNY", skipped)
+
+    def test_weather_radar_names_a_market_whose_research_failed(self):
+        quote = {
+            "ident": "KXHIGHNY-26SEP07-B77.5", "ticker": "KXHIGHNY-26SEP07-B77.5",
+            "title": "Will the daily high temperature in NYC be below 77.5° on Sep 7?",
+            "question": "Will the daily high temperature in NYC be below 77.5° on Sep 7?",
+            "category": "Weather", "subtitle": "Below 77.5°",
+            "resolution_criteria": "NWS Daily Climate Report, station KNYC.",
+            "price": 0.45, "platform": "kalshi",
+        }
+        with (
+            mock.patch("analyzing_llm_rationale.market_data.list_kalshi", return_value=[quote]),
+            mock.patch(
+                "analyzing_llm_rationale.weather_research.research_weather_market",
+                side_effect=RuntimeError("forecast provider down"),
+            ),
+        ):
+            server_module.logger.reset_mock()
+            response = self.client.get("/market/weather-radar?limit=5")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            mock.call("weather radar skipped market=%s", "KXHIGHNY-26SEP07-B77.5", exc_info=True),
+            server_module.logger.warning.call_args_list,
+        )
+
+    def test_user_count_logs_before_falling_back_to_duckdb(self):
+        class FailingDatastore:
+            def query(self, **_kwargs):
+                raise RuntimeError("datastore unavailable")
+
+        with mock.patch.object(server_module, "_get_datastore", return_value=FailingDatastore()):
+            server_module.logger.reset_mock()
+            count = server_module._count_registered_users()
+        self.assertIsInstance(count, int, "the duckdb fallback still answers")
+        self.assertIn(
+            mock.call("datastore user count failed; falling back to duckdb", exc_info=True),
+            server_module.logger.warning.call_args_list,
+        )
+
     def test_radar_endpoint_schedules_evidence_prefetch(self):
         live = {
             "generated_at": "2026-06-28T23:51:20+00:00",
