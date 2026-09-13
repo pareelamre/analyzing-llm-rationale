@@ -2330,6 +2330,82 @@ def _edge_clears_fees(
     }
 
 
+#: New exposure is refused when the published track record shows forecasts
+#: that disagreed with the market by the claimed amount were *materially*
+#: worse than the market: the whole 95% CI on skill below this deficit.
+_MATERIAL_SKILL_DEFICIT = 0.01
+#: ...and only on a bucket with enough resolved snapshots to mean it.
+_MIN_CALIBRATION_N = 30
+_EDGE_CALIBRATION_CACHE: Dict[str, Any] = {}
+
+
+def _published_edge_calibration() -> Optional[List[Dict[str, Any]]]:
+    """by_edge from the published track record, read once per process.
+
+    The same file the board publishes -- static/track_record_live.json, or
+    FORESEA_TRACK_RECORD_PATH -- so the guard holds agents to the record
+    everyone can see rather than to a threshold chosen here. It follows the
+    record as it grows: a bucket where the model earns skill stops being
+    refused without a code change.
+    """
+    if "rows" in _EDGE_CALIBRATION_CACHE:
+        return _EDGE_CALIBRATION_CACHE["rows"]
+    rows: Optional[List[Dict[str, Any]]] = None
+    default = Path(__file__).resolve().parents[2] / "static" / "track_record_live.json"
+    path = Path(os.environ.get("FORESEA_TRACK_RECORD_PATH") or default)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        found = payload.get("by_edge") if isinstance(payload, dict) else None
+        rows = [r for r in found if isinstance(r, dict)] if isinstance(found, list) else None
+    except Exception:
+        logger.warning(
+            "edge calibration unavailable path=%s; entry guard not applied", path,
+            exc_info=True,
+        )
+    _EDGE_CALIBRATION_CACHE["rows"] = rows
+    return rows
+
+
+def _edge_calibration_verdict(
+    gross_edge: float, calibration: Optional[List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    """Does the published record say edges this size lose to the market?
+
+    Forecasts that disagree with the market by 20pp or more have been far
+    worse than the market -- model Brier 0.50 against 0.21 over 185 resolved
+    snapshots, skill CI entirely below zero -- and the fleet's own trades
+    agree: entries claiming a 20pp+ edge won 30% and lost about $50 each.
+    Kelly sizing still shrank such a claim only halfway to the market, so
+    the largest stakes went on the least reliable calls.
+
+    Buckets come from track_record_live._edge_label, the function that built
+    the published record, so the two cannot drift apart.
+    """
+    from analyzing_llm_rationale.track_record_live import _edge_label
+
+    label = _edge_label(abs(gross_edge))
+    if not calibration:
+        return {"checked": False, "reason": "no_published_calibration", "edge_bucket": label}
+    row = next((r for r in calibration if r.get("edge_bucket") == label), None)
+    if row is None:
+        return {"checked": False, "reason": "bucket_not_published", "edge_bucket": label}
+    n = int(_as_float(row.get("n")) or 0)
+    ci_high = row.get("skill_ci_high")
+    if n < _MIN_CALIBRATION_N or ci_high is None:
+        return {"checked": False, "reason": "insufficient_sample", "edge_bucket": label, "n": n}
+    ci_high = float(ci_high)
+    return {
+        "checked": True,
+        "refuses": ci_high < -_MATERIAL_SKILL_DEFICIT,
+        "edge_bucket": label,
+        "n": n,
+        "skill_vs_market": row.get("skill_vs_market"),
+        "skill_ci_low": row.get("skill_ci_low"),
+        "skill_ci_high": ci_high,
+        "material_deficit": _MATERIAL_SKILL_DEFICIT,
+    }
+
+
 def _check_trade_guards(
     *,
     args: Mapping[str, Any],
@@ -2401,6 +2477,13 @@ def _check_trade_guards(
         args, price=price, quantity=quantity, fee=fee, side=side,
         risk_reducing=risk_reducing,
     )
+    # Only an edge the agent actually stated is judged, and never a close:
+    # reducing risk must stay available whatever the record says.
+    calibration_check = (
+        _edge_calibration_verdict(edge_check["gross_edge"], _published_edge_calibration())
+        if edge_check.get("checked")
+        else {"checked": False, "reason": edge_check.get("reason", "not_applicable")}
+    )
 
     reasons: List[str] = []
     if sizing_detail.get("mode") == "close":
@@ -2408,6 +2491,8 @@ def _check_trade_guards(
             reasons.append("close_exceeds_open_position")
     if edge_check.get("checked") and not edge_check.get("clears"):
         reasons.append("edge_below_fee_floor")
+    if not risk_reducing and calibration_check.get("refuses"):
+        reasons.append("edge_bucket_underperforms_market")
     if market_cost_basis_after > concentration_cap + 1e-9:
         reasons.append("concentration_limit")
     if cash_required > cash_before + 1e-9:
@@ -2433,6 +2518,7 @@ def _check_trade_guards(
         "allowed": not reasons,
         "reasons": reasons,
         "edge_after_fees": edge_check,
+        "edge_calibration": calibration_check,
         "account_value": round(policy.account_value, 6),
         "cash_before": round(cash_before, 6),
         "concentration_limit": policy.concentration_limit,

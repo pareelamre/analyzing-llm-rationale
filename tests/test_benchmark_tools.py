@@ -14,6 +14,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 
 
+def setUpModule():
+    # These tests exercise the other trade guards with large claimed edges.
+    # Left alone, the calibration guard would read the live, bot-published
+    # static/track_record_live.json, and these results would change whenever
+    # a new track record was published. The calibration guard has its own
+    # tests with fixed calibration in test_edge_calibration_guard.py.
+    benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = None
+
+
+def tearDownModule():
+    benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+
+
 class _FakeDsKey:
     """Mimics google.cloud.datastore.Key enough for benchmark_tools' Datastore
     account store: multi-segment ancestor paths, equality/hashing by path."""
