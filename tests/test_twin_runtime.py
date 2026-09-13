@@ -9,6 +9,7 @@ from analyzing_llm_rationale.twin.budget import (
     InMemoryResearchBudget,
     ModelPrice,
 )
+from analyzing_llm_rationale.twin.market_capture import InMemoryMarketCaptureStore
 from analyzing_llm_rationale.twin.runtime import (
     HttpResearchJobGateway,
     PrivateTwinRuntime,
@@ -347,6 +348,14 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         budget = InMemoryResearchBudget()
         store = InMemoryStrategyStore()
         run_store = InMemoryStrategyRunStore()
+        capture_store = InMemoryMarketCaptureStore()
+
+        class NoMarketsGateway:
+            def discover(self, _venue, **_kwargs):
+                return []
+
+            def fetch(self, _venue, _identifier):
+                raise AssertionError("empty discovery cannot fetch")
         strategy_job = jobs.add(WorkerJob(
             "strategy-job-001", "shadow-scope:foresea-edge-v1",
             WorkerJobKind.STRATEGY,
@@ -360,20 +369,23 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
 
         first = _maintenance_operation(
             jobs, budget, strategy_job, store, run_store,
+            capture_store, NoMarketsGateway(),
         )
         second = _maintenance_operation(
             jobs, budget, strategy_job, store, run_store,
+            capture_store, NoMarketsGateway(),
         )
 
         self.assertTrue(first["observation_recorded"])
         self.assertFalse(second["observation_recorded"])
         cycle = store.get_cycle("strategy-cycle-001")
         self.assertEqual(cycle.decision, "PASS")
-        self.assertEqual(cycle.reason, "strategy_dependencies_unconfigured")
+        self.assertEqual(cycle.reason, "no_eligible_markets")
         self.assertEqual(cycle.account_scope_id, "shadow-scope:foresea-edge-v1")
         self.assertEqual(first["run_phase"], "blocked")
         self.assertEqual(first["run_revision"], 1)
         self.assertEqual(second["run_revision"], 1)
+        self.assertEqual(first["market_capture_count"], 0)
 
     def test_repair_authorization_is_fenced_and_research_identity_bound(self):
         jobs = InMemoryWorkerJobs()

@@ -19,6 +19,12 @@ from .budget import (
     estimate_request_cost,
 )
 from .cycle_runtime import DatastoreStrategyRunStore, StrategyRun, StrategyRunPhase
+from .market_capture import (
+    DatastoreMarketCaptureStore,
+    LiveMarketDataGateway,
+    MarketCapturePolicy,
+    capture_markets,
+)
 from .research_gateway import (
     DatastoreResearchCaptureStore,
     DatastoreResearchResultStore,
@@ -155,6 +161,9 @@ def _maintenance_operation(
     jobs: DatastoreWorkerJobs, budget: DatastoreResearchBudget, job: WorkerJob,
     strategy_store: DatastoreStrategyStore | None = None,
     strategy_run_store: DatastoreStrategyRunStore | None = None,
+    market_capture_store: DatastoreMarketCaptureStore | None = None,
+    market_data_gateway: LiveMarketDataGateway | None = None,
+    market_capture_policy: MarketCapturePolicy | None = None,
 ) -> dict[str, object]:
     """Safe staging operation until venue/account adapters are configured."""
     if job.kind is WorkerJobKind.RECOVERY:
@@ -169,7 +178,10 @@ def _maintenance_operation(
     if job.kind in {WorkerJobKind.RECONCILE, WorkerJobKind.EXIT}:
         raise WorkerDegraded("account_maintenance_adapter_unconfigured")
     if job.kind is WorkerJobKind.STRATEGY:
-        if strategy_store is None or strategy_run_store is None:
+        if (
+            strategy_store is None or strategy_run_store is None
+            or market_capture_store is None or market_data_gateway is None
+        ):
             raise WorkerDegraded("strategy_store_unconfigured")
         run = strategy_run_store.create(StrategyRun(
             id=job.payload["strategy_cycle_id"],
@@ -179,20 +191,32 @@ def _maintenance_operation(
             observed_at=job.created_at,
         ))
         if run.phase is StrategyRunPhase.QUEUED:
+            capture = market_capture_store.get(run.id)
+            if capture is None:
+                capture = capture_markets(
+                    market_data_gateway, now=datetime.now(timezone.utc),
+                    policy=market_capture_policy,
+                )
+                market_capture_store.record(run.id, capture)
+            reason = (
+                "strategy_research_unconfigured" if capture.markets
+                else "no_eligible_markets"
+            )
             run = strategy_run_store.save(
                 run.advance(
                     StrategyRunPhase.BLOCKED,
                     now=datetime.now(timezone.utc),
-                    reason="strategy_dependencies_unconfigured",
+                    reason=reason,
                 ),
                 expected_revision=run.revision,
             )
+        capture = market_capture_store.get(run.id)
         recorded = strategy_store.record_cycle(StrategyCycle(
             key=job.payload["strategy_cycle_id"],
             decision="PASS",
-            reason="strategy_dependencies_unconfigured",
+            reason=str(run.reason),
             steps=(StrategyStep(
-                "preflight", "blocked", "strategy_dependencies_unconfigured",
+                "market_capture", "blocked", str(run.reason),
                 job.payload["config_release_id"],
             ),),
             created_at=job.created_at,
@@ -206,6 +230,8 @@ def _maintenance_operation(
             "observation_recorded": recorded,
             "run_phase": run.phase.value,
             "run_revision": run.revision,
+            "market_capture_count": len(capture.markets) if capture else 0,
+            "market_rejection_count": len(capture.rejections) if capture else 0,
         }
     raise WorkerPaused("unsupported_maintenance_job")
 
@@ -328,6 +354,8 @@ def create_environment_app():
         results = DatastoreResearchResultStore(client)
         strategy_store = DatastoreStrategyStore(client)
         strategy_run_store = DatastoreStrategyRunStore(client)
+        market_capture_store = DatastoreMarketCaptureStore(client)
+        market_data_gateway = LiveMarketDataGateway()
         ledger = ForecastLedger(_DatastoreLedgerAdapter(client))
 
         def authorize(assignment: ResearchAssignment) -> None:
@@ -446,6 +474,11 @@ def create_environment_app():
             maintenance_worker=worker,
             maintenance_operation=lambda job: _maintenance_operation(
                 jobs, budget, job, strategy_store, strategy_run_store,
+                market_capture_store, market_data_gateway,
+                MarketCapturePolicy(
+                    max_candidates=strategy_policy.max_research_candidates,
+                    candidates_per_venue=strategy_policy.max_research_candidates,
+                ),
             ),
             research_gateway=gateway,
         )

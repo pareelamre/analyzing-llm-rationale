@@ -87,6 +87,7 @@ class MarketDataTests(unittest.TestCase):
 
     def test_polymarket_parses_json_encoded_outcomes(self):
         payload = [{
+            "id": "12345",
             "question": "Will X happen?",
             "slug": "will-x",
             "outcomes": '["Yes", "No"]',
@@ -127,6 +128,7 @@ class MarketDataTests(unittest.TestCase):
         # The YES-outcome CLOB token id is what /market/batch needs to fetch
         # order book depth / price history for this market from marketd.
         payload = [{
+            "id": "12345",
             "question": "Will X happen?",
             "slug": "will-x",
             "outcomes": '["Yes", "No"]',
@@ -138,6 +140,7 @@ class MarketDataTests(unittest.TestCase):
         quote = fetch_polymarket(slug="will-x")
 
         self.assertEqual(quote["token_id"], "111111")
+        self.assertEqual(quote["market_id"], "12345")
 
     def test_polymarket_token_id_is_none_without_clob_token_ids(self):
         payload = [{
@@ -342,10 +345,12 @@ class MarketDataTests(unittest.TestCase):
              "yes_bid_dollars": None, "yes_ask_dollars": None},
             {"ticker": "T3", "title": "Parlay", "last_price_dollars": "0.50",
              "mve_collection_ticker": "KXMVE-X"},
+            {"ticker": "T4", "title": "Finished", "last_price_dollars": "0.50",
+             "status": "finalized", "close_time": "2026-12-01T00:00:00Z"},
         ]}]}
         sys.modules["requests"] = _fake_requests(payload)
         quotes = list_kalshi(limit=10)
-        # Unpriced (T2) and MVE parlay (T3) dropped; only the real priced binary kept.
+        # Unpriced, MVE parlay, and finalized nested markets are dropped.
         self.assertEqual([q["question"] for q in quotes], ["Event One"])
         self.assertAlmostEqual(quotes[0]["probability"], 0.6)
         self.assertEqual(

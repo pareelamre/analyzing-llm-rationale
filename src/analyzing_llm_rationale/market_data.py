@@ -272,6 +272,7 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     ]
     return {
         "platform": "Polymarket",
+        "market_id": str(market.get("id") or "").strip() or None,
         "question": market.get("question") or market.get("title") or "",
         "market_url": f"https://polymarket.com/market/{slug}" if slug else "",
         "ident": slug,
@@ -706,6 +707,9 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
         for market in event.get("markets", []) or []:
             if market.get("mve_collection_ticker"):
                 continue  # skip multi-leg parlay markets
+            market_status = str(market.get("status") or "").strip().lower()
+            if market_status and market_status not in {"active", "open", "trading"}:
+                continue
             quote = _kalshi_quote(market, event)
             prob = quote["probability"]
             if prob is None:
