@@ -651,10 +651,10 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "canonical account-epoch-bound five-minute cycle production is merged; durable revision-fenced strategy run phases are in PR #613; account and market/research adapters remain unwired",
-      "branch": "codex/t21-phase-machine",
-      "commit": "b3e34370b",
-      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/613",
+      "substep": "canonical scheduled cycles and durable phase state are deployed; bounded executable market capture is in PR #620; account reconciliation, asynchronous research resumption, costs, and simulation remain unwired",
+      "branch": "codex/t21-market-capture",
+      "commit": "b632bb43d",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/620",
       "checks": [
         "py -m unittest tests.test_twin_trial -v (pass: 6 tests)",
         "py -m ruff check src/analyzing_llm_rationale/twin/trial.py tests/test_twin_trial.py (pass)",
@@ -673,7 +673,14 @@
         "PR #612 CI test and datastore-integration (pass); merged as 7a7259b1a",
         "py -m unittest tests.test_twin_cycle_runtime tests.test_twin_runtime (pass: 19 tests)",
         "py -m unittest discover -s tests for durable phase state (pass: 2166 tests; 11 skipped)",
-        "py -m ruff check src tests for durable phase state (pass)"
+        "py -m ruff check src tests for durable phase state (pass)",
+        "PR #613 CI test and datastore-integration (pass); merged as 7cbcd53ac",
+        "private twin-maintenance revision twin-maintenance-00011-n4p and twin-research revision twin-research-00011-z9k run exact image sha256:8e367aea4ae016f72f50e1fbf46909dd6890f95c260e09893d720325cb1c925f",
+        "private /health and /ready smoke (pass); shadow mode, zero live capital, empty mandate; temporary human invoker grants removed",
+        "production scheduler manual and recurring dispatch (pass: completed five-minute strategy jobs with account_epoch_id=1)",
+        "production Datastore readback (pass: matching TwinStrategyCycle PASS and revision-1 blocked TwinStrategyRun records)",
+        "py -m unittest discover -s tests for market capture (pass: 2204 tests; 12 skipped)",
+        "live read-only market capture (pass: three eligible Polymarket captures; eligible Kalshi longer-horizon capture)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -686,15 +693,17 @@
         "src/analyzing_llm_rationale/twin/runtime.py",
         "src/analyzing_llm_rationale/twin/runtime_app.py",
         "src/analyzing_llm_rationale/twin/cycle_runtime.py",
-        "tests/test_twin_cycle_runtime.py"
+        "tests/test_twin_cycle_runtime.py",
+        "src/analyzing_llm_rationale/twin/market_capture.py",
+        "tests/test_twin_market_capture.py"
       ],
       "blockers": [
-        "PR #613 must pass protected CI and be deployed before its durable phase records can be verified in the private runtime.",
+        "PR #620 must pass protected CI, merge, and be deployed before production TwinMarketCapture records can be verified.",
         "The maintenance runtime account reconciliation and exit operation is still an unconfigured fail-closed adapter.",
-        "Market capture, asynchronous research resumption, and durable ShadowVenue state are not wired into the cycle phase machine.",
+        "Verified fee/cost capture, evidence acquisition, asynchronous research resumption, and durable ShadowVenue state are not wired into the cycle phase machine.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Merge and privately deploy PR #613 after CI, verify canonical strategy run records, then wire the existing account, market, asynchronous research and ShadowVenue adapters before restarting the exact-release seven-day clock."
+      "handoff": "Merge and privately deploy PR #620 after CI, verify production TwinMarketCapture records, then wire cost/evidence/research phases and durable ShadowVenue simulation before restarting the exact-release seven-day clock."
     },
     {
       "id": "T22",
