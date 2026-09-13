@@ -4,6 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -452,6 +453,19 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(_kalshi_series_ticker({"ticker": "KXHIGHNY-26SEP07-B77.5"}), "kxhighny")
         # Inherited from event dict
         self.assertEqual(_kalshi_series_ticker({}, {"series_ticker": "KXFED"}), "kxfed")
+
+
+class KalshiSeriesTests(unittest.TestCase):
+    def test_strict_series_fetch_propagates_data_failure(self):
+        from analyzing_llm_rationale.market_data import fetch_kalshi_series
+
+        with patch(
+            "analyzing_llm_rationale.market_data._get_json",
+            side_effect=MarketDataError("offline"),
+        ):
+            self.assertEqual(fetch_kalshi_series("KXTEST"), {})
+            with self.assertRaisesRegex(MarketDataError, "offline"):
+                fetch_kalshi_series("KXTEST", strict=True)
 
 
 if __name__ == "__main__":
