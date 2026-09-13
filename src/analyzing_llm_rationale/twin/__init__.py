@@ -82,6 +82,13 @@ from .models import (
     can_transition_command,
     canonical_instrument_id,
 )
+from .public_evidence import (
+    NewsPipelinePublicArticleGateway,
+    PublicArticleGateway,
+    PublicEvidenceError,
+    PublicEvidencePolicy,
+    acquire_public_evidence,
+)
 from .reconcile import synchronize_venue_account
 from .recovery import (
     AbsencePolicy,
@@ -264,10 +271,14 @@ __all__ = [
     "MandateError",
     "ModelPrice",
     "PriceUnavailable",
+    "PublicArticleGateway",
     "PublicEvidence",
     "PublicEvidenceCache",
+    "PublicEvidenceError",
+    "PublicEvidencePolicy",
     "PublicResearchCapture",
     "PublicResearchTools",
+    "NewsPipelinePublicArticleGateway",
     "PassDecision",
     "PauseState",
     "Proposal",
@@ -335,6 +346,7 @@ __all__ = [
     "evaluate_dataset",
     "evaluate_replay",
     "execute_preclaimed_research",
+    "acquire_public_evidence",
     "generate_research",
     "load_research_runtime_policy",
     "public_evidence_set_id",

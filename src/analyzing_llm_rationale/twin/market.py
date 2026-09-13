@@ -212,6 +212,8 @@ def _normalize_kalshi(
         cluster_id=_text(market.get("event_ticker") or ticker), tick_size=tick,
         min_quantity=minimum, fee_version=_text(market.get("fee_version") or "kalshi-default"),
         capability_version="kalshi-v2-limit", status="open", close_at=close_at, resolution_at=close_at, created_at=received_at,
+        display_title=_text(market.get("title") or market.get("question")) or None,
+        display_slug=_text(market.get("ticker")) or None,
     )
     snapshot = MarketSnapshot(
         id=f"snapshot-{_hash(instrument.id, str(sequence), venue_at.isoformat())[:32]}", instrument_id=instrument.id,
@@ -278,6 +280,8 @@ def _normalize_polymarket(
         category=category or "other", event_id=condition_id, cluster_id=condition_id, tick_size=tick, min_quantity=minimum,
         fee_version=_text(market.get("fee_version") or "polymarket-default"), capability_version="polymarket-clob-limit",
         status="open", close_at=close_at, resolution_at=close_at, created_at=received_at,
+        display_title=_text(market.get("question") or market.get("title")) or None,
+        display_slug=_text(market.get("slug")) or None,
     )
     snapshot = MarketSnapshot(
         id=f"snapshot-{_hash(instrument.id, str(sequence), venue_at.isoformat())[:32]}", instrument_id=instrument.id,

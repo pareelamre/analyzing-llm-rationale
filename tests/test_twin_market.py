@@ -22,6 +22,8 @@ def poly_market(**updates):
         "acceptingOrders": True,
         "endDateIso": CLOSE.isoformat(),
         "rules": "Resolves against the official source.",
+        "question": "Will the measure pass?",
+        "slug": "will-the-measure-pass",
         "category": "politics",
         "minimum_tick_size": "0.01",
         "minimum_order_size": "1",
@@ -44,6 +46,8 @@ class TwinMarketTests(unittest.TestCase):
         self.assertTrue(assessment.eligible)
         self.assertEqual(assessment.instrument.id, "polymarket:live:condition-001:market-001")
         self.assertEqual(assessment.instrument.yes_token_id, "yes-token-001")
+        self.assertEqual(assessment.instrument.display_title, "Will the measure pass?")
+        self.assertEqual(assessment.instrument.display_slug, "will-the-measure-pass")
         self.assertEqual(str(assessment.snapshot.yes_ask), "0.50")
 
     def test_polymarket_uses_full_end_time_and_consistent_book_precision(self):
@@ -121,10 +125,12 @@ class TwinMarketTests(unittest.TestCase):
             "rules_primary": "Official source", "category": "politics", "tick_size": "0.01",
             "min_contracts": "1", "yes_bid_dollars": "0.49", "yes_ask_dollars": "0.51",
             "no_bid_dollars": "0.49", "no_ask_dollars": "0.51",
+            "title": "Will the Kalshi test resolve yes?",
         }
         accepted = normalize_market("kalshi", market, received_at=NOW, sequence=1)
         rejected = normalize_market("kalshi", {**market, "no_ask_dollars": None}, received_at=NOW, sequence=1)
         self.assertTrue(accepted.eligible)
+        self.assertEqual(accepted.instrument.display_title, "Will the Kalshi test resolve yes?")
         self.assertIn(RejectionReason.PASS_INCOMPLETE_DATA, rejected.reasons)
 
     def test_kalshi_uses_fixed_point_price_grid_and_quantity_granularity(self):

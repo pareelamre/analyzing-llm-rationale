@@ -651,8 +651,8 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "canonical scheduled cycles, durable phase state, bounded executable market capture, and verified venue fee capture are implemented; account reconciliation, evidence acquisition, asynchronous research resumption, and durable simulation remain unwired",
-      "branch": "codex/t21-fee-capture",
+      "substep": "canonical cycles, durable phase state, executable market capture, verified fees, and a bounded no-LLM public evidence adapter are implemented; evidence/research phase wiring, account reconciliation, and durable simulation remain",
+      "branch": "codex/t21-public-evidence",
       "commit": null,
       "pr_url": null,
       "checks": [
@@ -690,7 +690,18 @@
         "py -m unittest discover -s tests for verified fee capture (pass: 2207 tests; 12 skipped)",
         "py -m ruff check src tests for verified fee capture (pass)",
         "py -m graphify update . for verified fee capture (pass; generated graph unchanged)",
-        "git diff --check for verified fee capture (pass)"
+        "git diff --check for verified fee capture (pass)",
+        "PR #621 CI test and datastore-integration (pass); merged as b47c9a856",
+        "public foresea Docker build/deploy run 34751674188 (pass)",
+        "private twin-maintenance revision twin-maintenance-00015-vvc and twin-research revision twin-research-00015-ghl run exact image sha256:8ba354ff7ebaec487c179f7e4897572386f47ae52c6591680a4f97cc7cd68252",
+        "private /health and /ready smoke after PR #621 (pass); shadow mode, zero live capital, empty mandate; temporary human invoker grants removed",
+        "production fee capture readback (pass: schema v2, three live markets, two rate 0.05 and one verified fee-free schedule)",
+        "live no-LLM public evidence probe (pass: current market title produced recent timestamped Google News evidence after rejecting undated sources)",
+        "npm ci && npm run frontend:build for public evidence adapter (pass; generated files restored and excluded)",
+        "py -m unittest discover -s tests for public evidence adapter (pass: 2230 tests; 12 skipped)",
+        "py -m ruff check src tests for public evidence adapter (pass)",
+        "py -m graphify update . for public evidence adapter (pass: 9910 nodes, 25035 edges)",
+        "git diff --check for public evidence adapter (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -709,10 +720,10 @@
       ],
       "blockers": [
         "The maintenance runtime account reconciliation and exit operation is still an unconfigured fail-closed adapter.",
-        "Public evidence acquisition, asynchronous research resumption, and durable ShadowVenue state are not wired into the cycle phase machine.",
+        "The public evidence adapter, asynchronous research resumption, and durable ShadowVenue state are not yet wired into the cycle phase machine.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Complete and deploy verified fee capture, then wire public evidence and asynchronous research phases before adding durable ShadowVenue simulation and restarting the exact-release seven-day clock."
+      "handoff": "Wire the bounded public evidence adapter into durable research captures/jobs and resume StrategyRun after results, then add account reconciliation and durable ShadowVenue simulation before restarting the seven-day clock."
     },
     {
       "id": "T22",
