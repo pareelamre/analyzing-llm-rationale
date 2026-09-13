@@ -22,6 +22,10 @@ def kalshi_market():
         "yes_bid_dollars": "0.40", "yes_ask_dollars": "0.42",
         "no_bid_dollars": "0.58", "no_ask_dollars": "0.60",
         "yes_ask_size_fp": "12.5", "no_ask_size_fp": "9.5",
+        "series_ticker": "KXTEST", "_foresea_fee_schedule": {
+            "ticker": "KXTEST", "fee_type": "quadratic", "fee_multiplier": 1,
+            "last_updated_ts": "2026-09-12T00:00:00Z",
+        },
     }
 
 
@@ -34,6 +38,8 @@ def polymarket_market():
         "endDateIso": (NOW + timedelta(days=3)).isoformat(),
         "rules": "Official Polymarket rule source.", "category": "politics",
         "minimum_tick_size": "0.01", "minimum_order_size": "1",
+        "feesEnabled": True,
+        "feeSchedule": {"rate": 0.04, "exponent": 1, "takerOnly": True},
     }
 
 
@@ -77,6 +83,39 @@ class MarketCaptureTests(unittest.TestCase):
         self.assertEqual(batch.markets[1].yes_ask_depth, Decimal("7"))
         self.assertEqual(batch.markets[1].no_ask_depth, Decimal("5"))
         self.assertEqual(batch.markets[1].settlement_rules, "Official Polymarket rule source.")
+        self.assertEqual(batch.markets[0].trading_cost.yes_fee_per_share, Decimal("0.0171"))
+        self.assertEqual(batch.markets[1].trading_cost.yes_fee_per_share, Decimal("0.009744"))
+        self.assertEqual(
+            batch.markets[1].instrument.fee_version,
+            batch.markets[1].trading_cost.schedule_version,
+        )
+
+    def test_missing_or_unsupported_fee_schedule_is_rejected(self):
+        gateway = Gateway()
+        market = polymarket_market()
+        market.pop("feeSchedule")
+        gateway.discover = lambda venue, **_kwargs: (
+            [] if venue == "kalshi" else [{"market_id": "market-1"}]
+        )
+        books = Gateway().fetch("polymarket", "market-1")[1]
+        gateway.fetch = lambda _venue, _identifier: (market, books)
+        batch = capture_markets(gateway, now=NOW)
+        self.assertEqual(batch.markets, ())
+        self.assertEqual(batch.rejections[0].reason, "missing_verified_fee_schedule")
+
+    def test_fee_free_polymarket_has_verified_zero_cost(self):
+        gateway = Gateway()
+        market = polymarket_market()
+        market["feesEnabled"] = False
+        market.pop("feeSchedule")
+        original_fetch = gateway.fetch
+        gateway.fetch = lambda venue, identifier: (
+            (market, original_fetch(venue, identifier)[1])
+            if venue == "polymarket" else original_fetch(venue, identifier)
+        )
+        batch = capture_markets(gateway, now=NOW)
+        poly = next(item for item in batch.markets if item.instrument.venue == "polymarket")
+        self.assertEqual(poly.trading_cost.rate, Decimal("0"))
 
     def test_missing_depth_is_rejected_without_partial_candidate(self):
         gateway = Gateway()

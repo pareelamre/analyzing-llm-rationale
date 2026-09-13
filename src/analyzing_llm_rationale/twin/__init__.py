@@ -53,6 +53,7 @@ from .mandates import (
 from .market import MarketAssessment, normalize_market
 from .market_capture import (
     CapturedMarket,
+    CapturedTradingCost,
     DatastoreMarketCaptureStore,
     InMemoryMarketCaptureStore,
     LiveMarketDataGateway,
@@ -211,6 +212,7 @@ __all__ = [
     "CalibrationResult",
     "CapturedBook",
     "CapturedMarket",
+    "CapturedTradingCost",
     "CandidateMemory",
     "DatastoreResearchBudget",
     "DatastoreMarketCaptureStore",
