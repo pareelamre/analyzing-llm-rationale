@@ -4,8 +4,9 @@ Eight defects were confirmed before the rule shipped; every verifier had been
 told to default to "not real". Seven are fixed here. The eighth -- the
 Datastore account backend dropping the whole audit block -- predates this
 rule, affects every trade on the Cloud Run tool loop rather than this rule
-(the scheduled tick always runs on SQLite), and is tracked separately; the
-rule now refuses to run without a SQLite store instead.
+(the scheduled tick always runs on SQLite). It is fixed separately and held
+by tests.test_benchmark_datastore_account.DatastoreTradeAuditTests; the rule
+still refuses to run without a SQLite store.
 
   1. Polymarket was judged on its order-book bestBid, but the backtest only had
      Polymarket last-trade marks. The rule is Kalshi-only until Polymarket is

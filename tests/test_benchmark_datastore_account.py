@@ -31,15 +31,21 @@ can be covered without building it again.
 from __future__ import annotations
 
 import contextlib
+import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from google.cloud import datastore  # noqa: E402
+from scripts import build_agent_trading_audit  # noqa: E402
 
-from analyzing_llm_rationale import benchmark_tools  # noqa: E402
+from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 
 
 class _FakeQuery:
@@ -157,6 +163,144 @@ class DatastoreCashRequiredTests(unittest.TestCase):
         self.assertEqual(
             netted["cash_required"], 0.0, "a trade that returns cash consumes none"
         )
+
+
+def _kalshi_quote(ticker, *, bid, ask):
+    return {
+        "platform": "Kalshi", "ident": ticker, "question": "Q?",
+        "probability": (bid + ask) / 2, "yes_bid": bid, "yes_ask": ask,
+        "close_time": "2026-09-01T00:00:00Z", "created_time": "2026-05-01T00:00:00Z",
+    }
+
+
+class DatastoreTradeAuditTests(unittest.TestCase):
+    """place_trade on the Datastore store keeps the versioned audit block.
+
+    FORESEA_AGENT_ACCOUNT_DB_PATH unset selects Datastore, which is the Cloud
+    Run tool loop's path. _apply_trade_to_account_tables and
+    _record_rejected_account_action took an ``audit`` argument and did not
+    forward it, and the _ds_* writers stored only risk_guard. Every Datastore
+    trade lost its requested order, quote, sizing, risk and fill status, and
+    published as "legacy_record". The scheduled tick runs on SQLite, so the
+    SQLite-only audit tests never saw it.
+    """
+
+    AGENT = "datastore-audit-model"
+    RULE = "pre_expiry_exit_rule"
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        env = mock.patch.dict(os.environ, {
+            "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(tmp.name) / "ledger.jsonl"),
+            "FORESEA_AGENT_NOTES_PATH": str(Path(tmp.name) / "notes.json"),
+            "FORESEA_AGENT_PLACE_TRADE_MODE": "shadow",
+            "FORESEA_AGENT_CYCLE_ID": "datastore-audit-cycle",
+        }, clear=False)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop("FORESEA_AGENT_ACCOUNT_DB_PATH", None)
+        self.assertTrue(benchmark_tools._use_datastore_account_store())
+
+        self.client = FakeDatastoreClient()
+        previous = benchmark_tools._ds_account_client
+        benchmark_tools._ds_account_client = self.client
+        self.addCleanup(setattr, benchmark_tools, "_ds_account_client", previous)
+        resolve = mock.patch.object(market_data, "resolve_kalshi", return_value=None)
+        resolve.start()
+        self.addCleanup(resolve.stop)
+
+    def place(self, ticker, *, side="yes", bid=0.40, ask=0.42, initiated_by=None):
+        ctx = benchmark_tools.ToolContext(agent_id=self.AGENT, initiated_by=initiated_by)
+        with mock.patch.object(market_data, "fetch_kalshi", return_value=_kalshi_quote(ticker, bid=bid, ask=ask)):
+            return benchmark_tools.place_trade(
+                {"ticker": ticker, "side": side, "price": 0.42, "quantity": 10}, ctx,
+            )
+
+    def recorded(self, ticker):
+        rows = [
+            e for e in self.client.entities_of_kind(benchmark_tools._DS_ACTION_KIND)
+            if e.get("ticker") == ticker
+        ]
+        self.assertEqual(len(rows), 1, rows)
+        return rows[0]
+
+    def audit(self, ticker):
+        return json.loads(self.recorded(ticker)["metadata_json"])["audit"]
+
+    def assert_published_as_recorded(self, ticker):
+        published = build_agent_trading_audit._audit_context(self.recorded(ticker)["metadata_json"])
+        self.assertNotEqual(published["status"], "legacy_record")
+        self.assertEqual(published["version"], 1)
+
+    def test_a_fill_records_the_full_audit_block(self):
+        self.assertTrue(self.place("KXFILL")["ok"])
+        row = self.recorded("KXFILL")
+        self.assertEqual(row["action_type"], "trade")
+        audit = self.audit("KXFILL")
+        self.assertEqual(audit["version"], 1)
+        self.assertEqual(audit["requested_order"], {"price": 0.42, "quantity": 10})
+        self.assertEqual(audit["quote"]["observed_ask"], 0.42)
+        self.assertIn("risk", audit)
+        self.assertEqual(audit["execution"]["filled_quantity"], 10.0)
+        self.assertNotIn("initiated_by", audit, "an agent's own trade carries no tag")
+        self.assertIn("risk_guard", json.loads(row["metadata_json"]))
+        self.assert_published_as_recorded("KXFILL")
+
+    def test_a_system_initiated_fill_records_who_placed_it(self):
+        self.assertTrue(self.place("KXRULEFILL", initiated_by=self.RULE)["ok"])
+        self.assertEqual(self.audit("KXRULEFILL")["initiated_by"], self.RULE)
+        self.assert_published_as_recorded("KXRULEFILL")
+
+    def test_a_guard_rejection_records_the_audit_block(self):
+        with mock.patch.dict(os.environ, {"FORESEA_AGENT_CONCENTRATION_LIMIT": "0.0001"}):
+            result = self.place("KXREJECT")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["reason"], "concentration_limit")
+        self.assertEqual(self.recorded("KXREJECT")["action_type"], "rejected_trade")
+        audit = self.audit("KXREJECT")
+        self.assertEqual(audit["version"], 1)
+        self.assertEqual(audit["requested_order"], {"price": 0.42, "quantity": 10})
+        self.assertIn("concentration_limit", audit["risk"]["reasons"])
+        self.assertEqual(audit["execution"]["filled_quantity"], 0.0)
+        self.assertNotIn("initiated_by", audit)
+        self.assert_published_as_recorded("KXREJECT")
+
+    def test_a_system_initiated_guard_rejection_records_who_placed_it(self):
+        with mock.patch.dict(os.environ, {"FORESEA_AGENT_CONCENTRATION_LIMIT": "0.0001"}):
+            self.assertFalse(self.place("KXRULEREJECT", initiated_by=self.RULE)["ok"])
+        self.assertEqual(self.audit("KXRULEREJECT")["initiated_by"], self.RULE)
+
+    def test_a_pre_sizing_rejection_records_the_audit_block(self):
+        # yes_bid 0 leaves a NO order no executable price: refused before sizing.
+        self.assertFalse(self.place("KXPRESIZE", side="no", bid=0.0, ask=0.02)["ok"])
+        audit = self.audit("KXPRESIZE")
+        self.assertEqual(audit["status"], "rejected_before_sizing")
+        self.assertEqual(audit["risk"]["reasons"], ["no_executable_price"])
+        self.assertNotIn("initiated_by", audit)
+        self.assert_published_as_recorded("KXPRESIZE")
+
+    def test_a_system_initiated_pre_sizing_rejection_records_who_placed_it(self):
+        self.place("KXRULEPRESIZE", side="no", bid=0.0, ask=0.02, initiated_by=self.RULE)
+        self.assertEqual(self.audit("KXRULEPRESIZE")["initiated_by"], self.RULE)
+
+    def test_the_guard_replay_skips_a_system_fill_on_datastore_too(self):
+        """_risk_usage reads initiated_by back out of the stored audit.
+
+        With the block dropped, a system close on Datastore used up the agent's
+        per-cycle trade count exactly like the agent's own order.
+        """
+        def cycle_trades():
+            _account, usage = benchmark_tools._load_guard_account(
+                self.AGENT, benchmark_tools._risk_guard_policy(),
+                platform="kalshi", ticker="KXOTHER", side="yes",
+            )
+            return usage["cycle_trade_count"]
+
+        self.assertTrue(self.place("KXSYSTEM", initiated_by=self.RULE)["ok"])
+        self.assertEqual(cycle_trades(), 0)
+        self.assertTrue(self.place("KXAGENT")["ok"])
+        self.assertEqual(cycle_trades(), 1)
 
 
 if __name__ == "__main__":

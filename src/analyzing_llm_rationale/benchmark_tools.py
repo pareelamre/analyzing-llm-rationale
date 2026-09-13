@@ -1290,7 +1290,7 @@ def _record_rejected_account_action(
     if _use_datastore_account_store():
         _ds_record_rejected_account_action(
             agent_id=agent_id, mode=mode, ticker=ticker, side=side,
-            normalized=normalized, guard=guard, platform=platform,
+            normalized=normalized, guard=guard, audit=audit, platform=platform,
         )
         return None
     with _account_transaction() as conn:
@@ -1341,7 +1341,8 @@ def _apply_trade_to_account_tables(
     if _use_datastore_account_store():
         return _ds_apply_trade(
             agent_id=agent_id, policy=policy, mode=mode, submitted=submitted,
-            ticker=ticker, side=side, normalized=normalized, guard=guard, platform=platform,
+            ticker=ticker, side=side, normalized=normalized, guard=guard,
+            audit=audit, platform=platform,
         )
     opposite_side = _opposite_side(side)
     price = _as_float(normalized.get("price"))
@@ -1836,6 +1837,7 @@ def _ds_record_rejected_account_action(
     side: str,
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
+    audit: Optional[Mapping[str, Any]] = None,
     platform: str = "kalshi",
 ) -> None:
     client = _get_account_datastore()
@@ -1866,7 +1868,9 @@ def _ds_record_rejected_account_action(
             realized_pairs=_as_float(guard.get("netting_payout")),
             client_order_id=normalized.get("exchange_order", {}).get("client_order_id"),
             outcome="rejected",
-            metadata={"risk_guard": dict(guard)},
+            # Same shape as the SQLite path. Without "audit" here every
+            # Datastore row published as "legacy_record".
+            metadata={"audit": dict(audit or {}), "risk_guard": dict(guard)},
         )
 
     _ds_run_in_transaction(client, _run)
@@ -1882,6 +1886,7 @@ def _ds_apply_trade(
     side: str,
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
+    audit: Optional[Mapping[str, Any]] = None,
     platform: str = "kalshi",
 ) -> Dict[str, Any]:
     client = _get_account_datastore()
@@ -1980,7 +1985,7 @@ def _ds_apply_trade(
             realized_pairs=realized_pairs,
             client_order_id=normalized.get("exchange_order", {}).get("client_order_id"),
             outcome="realized" if realized_pairs > 0 else "open",
-            metadata={"risk_guard": dict(guard)},
+            metadata={"audit": dict(audit or {}), "risk_guard": dict(guard)},
         )
         summary = _ds_account_summary(client, agent_id, policy.account_value)
         return {
