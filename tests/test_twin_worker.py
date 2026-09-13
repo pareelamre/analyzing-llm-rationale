@@ -43,6 +43,7 @@ def job(job_id="job-001", *, kind=WorkerJobKind.RECONCILE, deadline=NOW + timede
             "evidence_set_id": "evidence-001",
             "model_config_id": "model-001",
             "budget_key_id": "foresea-edge:scope-001:2025-01-01",
+        "strategy_cycle_id": "strategy-cycle-001",
         }
     elif kind is WorkerJobKind.STRATEGY:
         payload = {
@@ -287,6 +288,7 @@ class TwinWorkerTests(unittest.TestCase):
         jobs = InMemoryWorkerJobs()
         jobs.add(job("research", kind=WorkerJobKind.RESEARCH))
         finalized = []
+        continuations = []
 
         def finalize(assignment, completion):
             finalized.append((assignment.fence, completion.result_payload))
@@ -299,6 +301,9 @@ class TwinWorkerTests(unittest.TestCase):
             MaintenanceResearchJobGateway(
                 jobs, authorize_assignment=lambda _: None,
                 finalize_result=finalize,
+                after_complete=lambda assignment, completed: continuations.append(
+                    (assignment.strategy_cycle_id, completed.status.value)
+                ),
             ),
             worker_id="research-worker",
         )
@@ -311,6 +316,7 @@ class TwinWorkerTests(unittest.TestCase):
         )
 
         self.assertEqual(finalized, [(1, {"schema_version": 1})])
+        self.assertEqual(continuations, [("strategy-cycle-001", "completed")])
         self.assertEqual(result["research_result_id"], "result-derived")
         self.assertNotIn("result_payload", jobs.get("research").completed_result)
 

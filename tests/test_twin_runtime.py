@@ -10,6 +10,11 @@ from analyzing_llm_rationale.twin.budget import (
     ModelPrice,
 )
 from analyzing_llm_rationale.twin.market_capture import InMemoryMarketCaptureStore
+from analyzing_llm_rationale.twin.research_gateway import (
+    InMemoryPublicEvidenceCache,
+    InMemoryResearchCaptureStore,
+    load_research_runtime_policy,
+)
 from analyzing_llm_rationale.twin.runtime import (
     HttpResearchJobGateway,
     PrivateTwinRuntime,
@@ -22,6 +27,7 @@ from analyzing_llm_rationale.twin.runtime_app import (
     _maintenance_operation,
     _recover_stale_research_budgets,
     _runtime_worker_id,
+    _stage_strategy_continuation,
 )
 from analyzing_llm_rationale.twin.scheduler import ShadowCycleSchedule
 from analyzing_llm_rationale.twin.strategy import InMemoryStrategyStore
@@ -70,6 +76,7 @@ def research_job(job_id="research-job"):
             "evidence_set_id": "evidence-001",
             "model_config_id": "model-001",
             "budget_key_id": "foresea-edge:scope-001:2025-01-01",
+            "strategy_cycle_id": "strategy-cycle-001",
         },
         NOW + timedelta(minutes=1),
     )
@@ -387,6 +394,92 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         self.assertEqual(second["run_revision"], 1)
         self.assertEqual(first["market_capture_count"], 0)
 
+    def test_strategy_research_is_budgeted_dispatched_and_resumed(self):
+        from pathlib import Path
+
+        from analyzing_llm_rationale.twin.cycle_runtime import InMemoryStrategyRunStore
+        from analyzing_llm_rationale.twin.market_capture import capture_markets
+        from tests.test_twin_market_capture import Gateway
+
+        current = datetime.now(timezone.utc)
+        jobs = InMemoryWorkerJobs()
+        budget = InMemoryResearchBudget()
+        store = InMemoryStrategyStore()
+        run_store = InMemoryStrategyRunStore()
+        capture_store = InMemoryMarketCaptureStore()
+        captures = InMemoryResearchCaptureStore()
+        cache = InMemoryPublicEvidenceCache()
+        dispatcher = Dispatcher()
+        policy = load_research_runtime_policy(
+            Path("configs/twin.yaml"), Path("configs/models.yaml"),
+        )
+
+        class EvidenceGateway:
+            def search(self, _query, *, limit):
+                self.limit = limit
+                return [{
+                    "title": "Relevant public report",
+                    "summary": "Verified public evidence for the captured market.",
+                    "url": "https://example.com/report",
+                    "publish_date": (current - timedelta(hours=1)).isoformat(),
+                    "relevance": 0.9,
+                }]
+
+        class TitledGateway(Gateway):
+            def fetch(self, venue, identifier):
+                market, books = super().fetch(venue, identifier)
+                return {**market, "title": "Will the test event happen?"}, books
+
+        class Results:
+            def get_result(self, _reservation_id):
+                return object()
+
+        batch = capture_markets(TitledGateway(), now=current)
+        capture_store.record("strategy-cycle-001", batch)
+        strategy_job = jobs.add(WorkerJob(
+            "strategy-job-001", "shadow-scope:foresea-edge-v1",
+            WorkerJobKind.STRATEGY,
+            {
+                "strategy_cycle_id": "strategy-cycle-001",
+                "config_release_id": "foresea-edge-shadow-v1",
+                "account_epoch_id": "1",
+            },
+            current + timedelta(minutes=5), created_at=current,
+        ))
+
+        pending = _maintenance_operation(
+            jobs, budget, strategy_job, store, run_store, capture_store, Gateway(),
+            None, captures, Results(), cache, EvidenceGateway(), policy, dispatcher,
+        )
+        self.assertEqual(pending["status"], "pending", pending)
+        self.assertEqual(pending["research_job_count"], 1)
+        research_job = jobs.get(dispatcher.ids[0])
+        self.assertEqual(research_job.payload["strategy_cycle_id"], "strategy-cycle-001")
+        claimed = jobs.claim(
+            research_job.id, worker_id="research-worker", now=current + timedelta(seconds=1),
+        )
+        jobs.complete(
+            research_job.id, worker_id="research-worker", fence=claimed.fence,
+            result={
+                "status": "completed", "research_result_id": "result-001",
+                "usage_record_id": "usage-001",
+            },
+            now=current + timedelta(seconds=2),
+        )
+        assignment = ResearchAssignment.from_job(claimed)
+        continuation = _stage_strategy_continuation(
+            jobs, run_store, assignment, now=current + timedelta(seconds=2),
+        )
+        resumed = _maintenance_operation(
+            jobs, budget, continuation, store, run_store, capture_store, Gateway(),
+            None, captures, Results(), cache, EvidenceGateway(), policy, dispatcher,
+        )
+        self.assertEqual(resumed["run_phase"], "blocked")
+        self.assertEqual(
+            store.get_cycle("strategy-cycle-001").reason,
+            "account_maintenance_adapter_unconfigured",
+        )
+
     def test_repair_authorization_is_fenced_and_research_identity_bound(self):
         jobs = InMemoryWorkerJobs()
         jobs.add(research_job())
@@ -470,6 +563,7 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             "market_snapshot_id": "snapshot-001", "evidence_set_id": "evidence-001",
             "model_config_id": "model-001",
             "budget_key_id": "foresea-edge:scope-001:2025-01-01",
+            "strategy_cycle_id": "strategy-cycle-001",
         }
 
         class Response:

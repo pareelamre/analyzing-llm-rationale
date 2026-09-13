@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import socket
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
@@ -25,9 +25,17 @@ from .market_capture import (
     MarketCapturePolicy,
     capture_markets,
 )
+from .public_evidence import (
+    NewsPipelinePublicArticleGateway,
+    PublicEvidenceError,
+    PublicEvidencePolicy,
+    acquire_public_evidence,
+)
 from .research_gateway import (
+    DatastorePublicEvidenceCache,
     DatastoreResearchCaptureStore,
     DatastoreResearchResultStore,
+    PublicResearchCapture,
     ResearchRuntimePolicy,
     execute_preclaimed_research,
     load_research_runtime_policy,
@@ -47,7 +55,13 @@ from .runtime import (
     create_private_worker_app,
 )
 from .scheduler import CloudTasksConfig, CloudTasksDispatcher, ShadowCycleSchedule
-from .strategy import DatastoreStrategyStore, StrategyCycle, StrategyStep, load_strategy_policy
+from .strategy import (
+    DatastoreStrategyStore,
+    StrategyCandidate,
+    StrategyCycle,
+    StrategyStep,
+    load_strategy_policy,
+)
 from .worker import (
     DatastoreWorkerJobs,
     MaintenanceResearchJobGateway,
@@ -67,6 +81,115 @@ tracer = trace.get_tracer(__name__)
 repair_authorizations = metrics.get_meter(__name__).create_counter(
     "twin.research.repair_authorizations", unit="1",
 )
+research_preparations = metrics.get_meter(__name__).create_counter(
+    "twin.strategy.research_preparations", unit="1",
+)
+
+
+def _stable_id(prefix: str, *parts: object) -> str:
+    return prefix + sha256("|".join(str(item) for item in parts).encode()).hexdigest()[:24]
+
+
+@tracer.start_as_current_span("twin.strategy.prepare_research")
+def _prepare_strategy_research(
+    *, run: StrategyRun, capture, jobs, budget, captures, evidence_cache,
+    evidence_gateway, research_policy: ResearchRuntimePolicy, now: datetime,
+) -> tuple[tuple[StrategyCandidate, ...], tuple[str, ...]]:
+    """Persist bounded research inputs and jobs, skipping unsafe candidates."""
+    candidates: list[StrategyCandidate] = []
+    job_ids: list[str] = []
+    if research_policy.model.price_valid_until <= now:
+        research_preparations.add(1, {"outcome": "expired_price", "candidate_count": 0})
+        return (), ()
+    estimate = estimate_request_cost(
+        input_tokens=research_policy.model.max_input_tokens,
+        output_tokens=research_policy.model.max_output_tokens,
+        price=research_policy.model.price,
+        require_usd_ceiling=True,
+    )
+    estimated_tokens = (
+        research_policy.model.max_input_tokens + research_policy.model.max_output_tokens
+    )
+    budget_key = f"foresea-edge:{run.account_scope_id}:{now.date().isoformat()}"
+    for market in capture.markets[:research_policy.candidates_per_cycle]:
+        if market.trading_cost is None:
+            continue
+        assignment_id = _stable_id("assignment-", run.id, market.instrument.id)
+        reservation_id = _stable_id("budget-", run.id, market.instrument.id)
+        job_id = _stable_id("research-job-", run.id, market.instrument.id)
+        try:
+            research_capture = captures.get_capture(assignment_id)
+            if research_capture is None:
+                evidence = acquire_public_evidence(
+                    evidence_gateway, instrument=market.instrument, now=now,
+                    policy=PublicEvidencePolicy(max_evidence=5),
+                )
+                as_of = datetime.now(timezone.utc)
+                research_capture = PublicResearchCapture(
+                    market.instrument, market.snapshot, market.settlement_rules,
+                    as_of, evidence,
+                )
+                research_capture.validate_at_decision()
+                evidence_cache.put(market.instrument.id, as_of, evidence)
+                captures.record_capture(assignment_id, research_capture)
+            evidence_id = public_evidence_set_id(
+                research_capture.instrument.id, research_capture.as_of,
+                research_capture.evidence,
+            )
+            budget.reserve(
+                reservation_id, key=budget_key, estimated_usd=estimate,
+                estimated_tokens=estimated_tokens, policy=research_policy.budget,
+            )
+            jobs.add(WorkerJob(
+                job_id, run.account_scope_id, WorkerJobKind.RESEARCH,
+                {
+                    "research_assignment_id": assignment_id,
+                    "budget_reservation_id": reservation_id,
+                    "market_snapshot_id": research_capture.snapshot.id,
+                    "evidence_set_id": evidence_id,
+                    "model_config_id": research_policy.id,
+                    "budget_key_id": budget_key,
+                    "strategy_cycle_id": run.id,
+                },
+                min(research_capture.instrument.close_at, now + timedelta(minutes=4)),
+                created_at=now,
+            ))
+        except (ArithmeticError, BudgetExceeded, PublicEvidenceError, ValueError):
+            continue
+        candidates.append(StrategyCandidate(
+            market.instrument, market.snapshot,
+            market.yes_ask_depth, market.no_ask_depth,
+            max(
+                market.trading_cost.yes_fee_per_share,
+                market.trading_cost.no_fee_per_share,
+            ),
+            market.instrument.tick_size,
+        ))
+        job_ids.append(job_id)
+    research_preparations.add(1, {
+        "outcome": "prepared" if job_ids else "empty",
+        "candidate_count": len(job_ids),
+    })
+    return tuple(candidates), tuple(job_ids)
+
+
+def _stage_strategy_continuation(
+    jobs, strategy_run_store, assignment: ResearchAssignment, *, now: datetime,
+) -> WorkerJob:
+    """Durably stage one unique continuation after a research terminal result."""
+    run = strategy_run_store.get(assignment.strategy_cycle_id)
+    if run is None:
+        raise WorkerJobError("strategy run is unavailable for research continuation")
+    return jobs.add(WorkerJob(
+        _stable_id("strategy-continuation-", run.id, assignment.job_id),
+        run.account_scope_id, WorkerJobKind.STRATEGY,
+        {
+            "strategy_cycle_id": run.id,
+            "config_release_id": run.config_release_id,
+            "account_epoch_id": str(run.account_epoch),
+        },
+        now + timedelta(minutes=10), created_at=now,
+    ))
 
 
 def _required(name: str) -> str:
@@ -164,6 +287,12 @@ def _maintenance_operation(
     market_capture_store: DatastoreMarketCaptureStore | None = None,
     market_data_gateway: LiveMarketDataGateway | None = None,
     market_capture_policy: MarketCapturePolicy | None = None,
+    research_capture_store=None,
+    research_result_store=None,
+    evidence_cache=None,
+    evidence_gateway=None,
+    research_policy: ResearchRuntimePolicy | None = None,
+    dispatcher=None,
 ) -> dict[str, object]:
     """Safe staging operation until venue/account adapters are configured."""
     if job.kind is WorkerJobKind.RECOVERY:
@@ -183,13 +312,21 @@ def _maintenance_operation(
             or market_capture_store is None or market_data_gateway is None
         ):
             raise WorkerDegraded("strategy_store_unconfigured")
-        run = strategy_run_store.create(StrategyRun(
-            id=job.payload["strategy_cycle_id"],
-            account_scope_id=job.account_scope_id,
-            account_epoch=int(job.payload["account_epoch_id"]),
-            config_release_id=job.payload["config_release_id"],
-            observed_at=job.created_at,
-        ))
+        run = strategy_run_store.get(job.payload["strategy_cycle_id"])
+        if run is None:
+            run = strategy_run_store.create(StrategyRun(
+                id=job.payload["strategy_cycle_id"],
+                account_scope_id=job.account_scope_id,
+                account_epoch=int(job.payload["account_epoch_id"]),
+                config_release_id=job.payload["config_release_id"],
+                observed_at=job.created_at,
+            ))
+        elif (
+            run.account_scope_id != job.account_scope_id
+            or run.account_epoch != int(job.payload["account_epoch_id"])
+            or run.config_release_id != job.payload["config_release_id"]
+        ):
+            raise WorkerJobError("strategy continuation identity changed")
         if run.phase is StrategyRunPhase.QUEUED:
             capture = market_capture_store.get(run.id)
             if capture is None:
@@ -198,19 +335,89 @@ def _maintenance_operation(
                     policy=market_capture_policy,
                 )
                 market_capture_store.record(run.id, capture)
-            reason = (
-                "strategy_research_unconfigured" if capture.markets
-                else "no_eligible_markets"
+            prepared_at = datetime.now(timezone.utc)
+            if not capture.markets:
+                run = strategy_run_store.save(
+                    run.advance(
+                        StrategyRunPhase.BLOCKED, now=prepared_at,
+                        reason="no_eligible_markets",
+                    ),
+                    expected_revision=run.revision,
+                )
+            elif any(item is None for item in (
+                research_capture_store, research_result_store, evidence_cache,
+                evidence_gateway, research_policy, dispatcher,
+            )):
+                run = strategy_run_store.save(
+                    run.advance(
+                        StrategyRunPhase.BLOCKED, now=prepared_at,
+                        reason="strategy_research_unconfigured",
+                    ),
+                    expected_revision=run.revision,
+                )
+            else:
+                candidates, research_job_ids = _prepare_strategy_research(
+                    run=run, capture=capture, jobs=jobs, budget=budget,
+                    captures=research_capture_store, evidence_cache=evidence_cache,
+                    evidence_gateway=evidence_gateway,
+                    research_policy=research_policy, now=prepared_at,
+                )
+                if not research_job_ids:
+                    run = strategy_run_store.save(
+                        run.advance(
+                            StrategyRunPhase.BLOCKED, now=datetime.now(timezone.utc),
+                            reason="research_inputs_unavailable",
+                        ),
+                        expected_revision=run.revision,
+                    )
+                else:
+                    run = strategy_run_store.save(
+                        run.advance(
+                            StrategyRunPhase.RESEARCH_PENDING,
+                            now=datetime.now(timezone.utc), candidates=candidates,
+                            research_job_ids=research_job_ids,
+                        ),
+                        expected_revision=run.revision,
+                    )
+                    for research_job_id in research_job_ids:
+                        dispatcher.enqueue(jobs.get(research_job_id))
+        if run.phase is StrategyRunPhase.RESEARCH_PENDING:
+            research_jobs = tuple(jobs.get(item) for item in run.research_job_ids)
+            if any(item.completed_result is None for item in research_jobs):
+                return {
+                    "status": "pending", "reason": "research_pending",
+                    "strategy_cycle_id": run.id,
+                    "config_release_id": run.config_release_id,
+                    "run_phase": run.phase.value, "run_revision": run.revision,
+                    "research_job_count": len(research_jobs),
+                }
+            durable_results = tuple(
+                research_result_store.get_result(item.payload["budget_reservation_id"])
+                for item in research_jobs
             )
-            run = strategy_run_store.save(
-                run.advance(
-                    StrategyRunPhase.BLOCKED,
-                    now=datetime.now(timezone.utc),
-                    reason=reason,
-                ),
-                expected_revision=run.revision,
-            )
+            if not any(item is not None for item in durable_results):
+                run = strategy_run_store.save(
+                    run.advance(
+                        StrategyRunPhase.BLOCKED, now=datetime.now(timezone.utc),
+                        reason="research_results_unavailable",
+                    ),
+                    expected_revision=run.revision,
+                )
+            else:
+                run = strategy_run_store.save(
+                    run.advance(StrategyRunPhase.READY, now=datetime.now(timezone.utc)),
+                    expected_revision=run.revision,
+                )
+                run = strategy_run_store.save(
+                    run.advance(
+                        StrategyRunPhase.BLOCKED, now=datetime.now(timezone.utc),
+                        reason="account_maintenance_adapter_unconfigured",
+                    ),
+                    expected_revision=run.revision,
+                )
         capture = market_capture_store.get(run.id)
+        if run.phase is not StrategyRunPhase.BLOCKED:
+            raise WorkerPaused("strategy_run_not_terminal")
         recorded = strategy_store.record_cycle(StrategyCycle(
             key=job.payload["strategy_cycle_id"],
             decision="PASS",
@@ -356,7 +563,24 @@ def create_environment_app():
         strategy_run_store = DatastoreStrategyRunStore(client)
         market_capture_store = DatastoreMarketCaptureStore(client)
         market_data_gateway = LiveMarketDataGateway()
+        evidence_cache = DatastorePublicEvidenceCache(client)
+        evidence_gateway = NewsPipelinePublicArticleGateway()
         ledger = ForecastLedger(_DatastoreLedgerAdapter(client))
+        dispatcher = CloudTasksDispatcher(CloudTasksConfig(
+            _required("GOOGLE_CLOUD_PROJECT"), _required("FORESEA_TWIN_TASKS_LOCATION"),
+            _required("FORESEA_TWIN_MAINTENANCE_QUEUE"),
+            _required("FORESEA_TWIN_RESEARCH_QUEUE"),
+            _required("FORESEA_TWIN_MAINTENANCE_URL") + "/internal/twin/maintain",
+            _required("FORESEA_TWIN_RESEARCH_URL") + "/internal/twin/research",
+            _required("FORESEA_TWIN_DISPATCHER_SERVICE_ACCOUNT"),
+            _required("FORESEA_TWIN_MAINTENANCE_AUDIENCE"),
+            _required("FORESEA_TWIN_RESEARCH_AUDIENCE"),
+        ))
+
+        def stage_continuation(assignment: ResearchAssignment) -> WorkerJob:
+            return _stage_strategy_continuation(
+                jobs, strategy_run_store, assignment, now=now(),
+            )
 
         def authorize(assignment: ResearchAssignment) -> None:
             try:
@@ -398,6 +622,7 @@ def create_environment_app():
                 budget.mark_uncertain(
                     assignment.budget_reservation_id, key=assignment.budget_key_id,
                 )
+                stage_continuation(assignment)
                 return ResearchCompletion("degraded", reason=completion.reason)
             if completion.result_payload is None:
                 raise WorkerDegraded("research_result_payload_missing")
@@ -442,6 +667,7 @@ def create_environment_app():
                     f"{completion.actual_usd}|{completion.actual_tokens}"
                 ).encode()
             ).hexdigest()[:24]
+            stage_continuation(assignment)
             return ResearchCompletion(
                 "completed", research_result_id=result_id, usage_record_id=usage_id,
             )
@@ -449,17 +675,10 @@ def create_environment_app():
         gateway = MaintenanceResearchJobGateway(
             jobs, authorize_assignment=authorize, capture_loader=load_capture,
             authorize_repair=authorize_repair, finalize_result=finalize_result,
+            after_complete=lambda assignment, _completed: dispatcher.enqueue(
+                stage_continuation(assignment)
+            ),
         )
-        dispatcher = CloudTasksDispatcher(CloudTasksConfig(
-            _required("GOOGLE_CLOUD_PROJECT"), _required("FORESEA_TWIN_TASKS_LOCATION"),
-            _required("FORESEA_TWIN_MAINTENANCE_QUEUE"),
-            _required("FORESEA_TWIN_RESEARCH_QUEUE"),
-            _required("FORESEA_TWIN_MAINTENANCE_URL") + "/internal/twin/maintain",
-            _required("FORESEA_TWIN_RESEARCH_URL") + "/internal/twin/research",
-            _required("FORESEA_TWIN_DISPATCHER_SERVICE_ACCOUNT"),
-            _required("FORESEA_TWIN_MAINTENANCE_AUDIENCE"),
-            _required("FORESEA_TWIN_RESEARCH_AUDIENCE"),
-        ))
         worker = TwinWorker(
             jobs, worker_id=worker_id,
             reconcile_startup=lambda: not jobs.stale(now=now()),
@@ -479,6 +698,8 @@ def create_environment_app():
                     max_candidates=strategy_policy.max_research_candidates,
                     candidates_per_venue=strategy_policy.max_research_candidates,
                 ),
+                captures, results, evidence_cache, evidence_gateway,
+                research_policy, dispatcher,
             ),
             research_gateway=gateway,
         )

@@ -73,6 +73,16 @@ class PublicEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(PublicEvidenceError, "no recent"):
             acquire_public_evidence(Gateway(rows), instrument=instrument(), now=NOW)
 
+    def test_bounds_long_public_source_identifiers(self):
+        evidence = acquire_public_evidence(Gateway([{
+            "title": "Long public URL",
+            "summary": "A valid timestamped public report.",
+            "url": "https://example.com/" + "x" * 400,
+            "publish_date": "2026-09-13T10:00:00Z",
+            "relevance": 0.9,
+        }]), instrument=instrument(), now=NOW)
+        self.assertEqual(len(evidence[0].source_id), 256)
+
     def test_missing_title_and_provider_failure_fail_closed(self):
         with self.assertRaisesRegex(PublicEvidenceError, "title"):
             acquire_public_evidence(

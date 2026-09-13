@@ -88,7 +88,7 @@ def _public_url(raw: Any) -> str | None:
         else:
             if not address.is_global:
                 return None
-        return value[:1000]
+        return value[:256]
     except ValueError:
         return None
 

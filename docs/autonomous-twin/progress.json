@@ -3,7 +3,7 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t21_in_progress_runtime_collection_blocked",
+  "implementation_status": "t21_in_progress_account_and_simulation_blocked",
   "implementation_baseline": "d0cf0a80c",
   "next_task": "T21",
   "live_authorized": false,
@@ -651,8 +651,8 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "canonical cycles, durable phase state, executable market capture, verified fees, and a bounded no-LLM public evidence adapter are implemented; evidence/research phase wiring, account reconciliation, and durable simulation remain",
-      "branch": "codex/t21-public-evidence",
+      "substep": "canonical cycles now acquire bounded public evidence, reserve durable research work, dispatch it, and resume after terminal results; account reconciliation and durable simulation remain",
+      "branch": "codex/t21-research-phase",
       "commit": null,
       "pr_url": null,
       "checks": [
@@ -701,7 +701,17 @@
         "py -m unittest discover -s tests for public evidence adapter (pass: 2230 tests; 12 skipped)",
         "py -m ruff check src tests for public evidence adapter (pass)",
         "py -m graphify update . for public evidence adapter (pass: 9910 nodes, 25035 edges)",
-        "git diff --check for public evidence adapter (pass)"
+        "git diff --check for public evidence adapter (pass)",
+        "PR #622 CI test and datastore-integration (pass); merged as 6248b0025",
+        "public foresea Docker build/deploy run 34753021512 (pass)",
+        "private twin-maintenance revision twin-maintenance-00017-qj8 and twin-research revision twin-research-00018-p2v run exact image sha256:35988ddd120aa3b220476003d7eac4fabbb975e5ce6ea1bc8f20277deb8b51ce",
+        "private /health and /ready smoke after PR #622 (pass); shadow mode, zero live capital, empty mandate; temporary human invoker grants removed",
+        "bounded research phase focused tests (pass: public evidence, worker continuation, budgeted strategy dispatch and resumption)",
+        "npm ci && npm run frontend:build for durable research phase (pass; generated files restored and excluded)",
+        "py -m unittest discover -s tests for durable research phase (pass: 2232 tests; 12 skipped)",
+        "py -m ruff check src tests for durable research phase (pass)",
+        "py -m graphify update . for durable research phase (pass: 9916 nodes, 25102 edges)",
+        "git diff --check for durable research phase (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -716,14 +726,18 @@
         "src/analyzing_llm_rationale/twin/cycle_runtime.py",
         "tests/test_twin_cycle_runtime.py",
         "src/analyzing_llm_rationale/twin/market_capture.py",
-        "tests/test_twin_market_capture.py"
+        "tests/test_twin_market_capture.py",
+        "src/analyzing_llm_rationale/twin/public_evidence.py",
+        "src/analyzing_llm_rationale/twin/research_gateway.py",
+        "tests/test_twin_public_evidence.py",
+        "tests/test_twin_runtime.py"
       ],
       "blockers": [
         "The maintenance runtime account reconciliation and exit operation is still an unconfigured fail-closed adapter.",
-        "The public evidence adapter, asynchronous research resumption, and durable ShadowVenue state are not yet wired into the cycle phase machine.",
+        "Durable ShadowVenue state is not yet wired into the private cycle runtime.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Wire the bounded public evidence adapter into durable research captures/jobs and resume StrategyRun after results, then add account reconciliation and durable ShadowVenue simulation before restarting the seven-day clock."
+      "handoff": "Wire the existing venue account synchronization and ShadowVenue implementation into the private phase machine, deploy in shadow mode, then restart the seven-day collection clock."
     },
     {
       "id": "T22",
