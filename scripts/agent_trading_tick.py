@@ -554,6 +554,174 @@ def _fmt_open_position(
     )
 
 
+#: Close a held position automatically once its market is within this many
+#: hours of closing...
+PRE_EXPIRY_EXIT_HOURS = 24.0
+#: ...and its live bid is more than this fraction below its average entry.
+PRE_EXPIRY_EXIT_LOSS = 0.30
+PRE_EXPIRY_EXIT_RULE = "pre_expiry_exit_rule"
+
+
+def _pre_expiry_exit_enabled() -> bool:
+    raw = str(os.environ.get("FORESEA_AGENT_PRE_EXPIRY_EXIT", "on")).strip().lower()
+    return raw not in {"0", "off", "false", "no", "disabled"}
+
+
+def _pre_expiry_exit_candidates(
+    positions: List[Dict[str, Any]],
+    held_quotes: List[Dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> List[Dict[str, Any]]:
+    """Held positions the pre-expiry exit rule would close right now.
+
+    Positions held to settlement won 4 of 26 and lost $3,984 -- 86% of the
+    fleet's realized losses. A backtest on the fleet's own price paths (99
+    positions, exits at the executable bid, fees charged, no lookahead)
+    tested three families of exit rule, each then adversarially verified:
+
+      - fixed price stop-losses: at best a wash against what the agents did
+      - trailing stops: worse by $578-$1,053, shaken out of short-dated news
+        markets that went on to settle as winners
+      - down more than 30% within 24h of close: +$302 on the current
+        accounts, cutting one eventual winner ($3 forgone); positive in both
+        eras
+
+    Only the last helped, so only the last is applied. Its gain is modest and
+    43% of it comes from one weather market that collapsed right after entry,
+    so the direction is better supported than the size.
+
+    A position qualifies when its market closes within PRE_EXPIRY_EXIT_HOURS
+    (and has not already closed -- a closed market cannot be traded out of),
+    it has a live executable bid on the side held, and that bid is strictly
+    below (1 - PRE_EXPIRY_EXIT_LOSS) x its average entry price.
+
+    That is the comparison the backtest ran (price < 0.7 * avg_entry), kept
+    exactly: a price test on the entry, not a value test on quantity x bid
+    against cost basis. The two agree in principle, but multiplying a cent
+    price by a quantity leaves float noise -- 100 x 0.28 is 28.000000000000004
+    -- that moves a position sitting exactly on the line to the other side.
+    """
+    quotes_by_key = {
+        (str(q.get("platform") or "kalshi").lower(), q["ident"]): q
+        for q in held_quotes if q.get("ident")
+    }
+    chosen: List[Dict[str, Any]] = []
+    for position in positions:
+        quote = quotes_by_key.get((str(position.get("platform") or "kalshi").lower(), position["ticker"]))
+        if quote is None:
+            continue
+        hours = _hours_until(quote.get("close_time"), now=now)
+        if hours is None or hours <= 0 or hours > PRE_EXPIRY_EXIT_HOURS:
+            continue
+        side = str(position["side"])
+        bid = MarketQuote.from_mapping(quote).bid(side)
+        avg_entry = float(position["avg_entry_price"])
+        if bid is None or bid <= 0 or avg_entry <= 0:
+            continue
+        if not bid < (1.0 - PRE_EXPIRY_EXIT_LOSS) * avg_entry:
+            continue
+        change = bid / avg_entry - 1.0
+        chosen.append({
+            "platform": str(position.get("platform") or "kalshi").lower(),
+            "ticker": position["ticker"],
+            "side": side.lower(),
+            "quantity": float(position["quantity"]),
+            "bid": bid,
+            "change": change,
+            "hours_left": hours,
+        })
+    return chosen
+
+
+def _run_pre_expiry_exits(
+    agent_id: str,
+    held_quotes: List[Dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> List[Dict[str, Any]]:
+    """Close qualifying positions and report what actually happened to each.
+
+    Closes go through place_trade exactly like an agent's own close:
+    sizing_mode="close" with quantity and price omitted, so the order snaps
+    to the exact held quantity and fills at the live price; closes are exempt
+    from the fee floor, spend caps, trade-rate limit and drawdown breaker.
+    The order is tagged initiated_by="pre_expiry_exit_rule" through
+    ToolContext, which only system code builds, so it is visible as a rule
+    exit in the published audit and cannot be forged from a tool call.
+
+    place_trade reports ok for an order that filled nothing, so the outcome
+    is read from filled_quantity: a partial or empty fill is reported as such
+    and the rest of the position stays open, never described as closed.
+    """
+    if not _pre_expiry_exit_enabled():
+        return []
+    with benchmark_tools._account_transaction() as conn:
+        summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
+    ctx = benchmark_tools.ToolContext(
+        agent_id=agent_id, require_kelly_sizing=True, initiated_by=PRE_EXPIRY_EXIT_RULE,
+    )
+    outcomes: List[Dict[str, Any]] = []
+    for target in _pre_expiry_exit_candidates(summary["open_positions"], held_quotes, now=now):
+        order = {
+            "platform": target["platform"],
+            "ticker": target["ticker"],
+            "side": "no" if target["side"] == "yes" else "yes",
+            "sizing_mode": "close",
+        }
+        try:
+            result = benchmark_tools.place_trade(order, ctx)
+        except Exception as exc:  # place_trade normally returns errors; guard the cycle anyway
+            logger.warning("pre-expiry exit raised agent=%s ticker=%s", agent_id, target["ticker"], exc_info=True)
+            result = {"ok": False, "error": str(exc)}
+        execution = result.get("execution") or {}
+        filled = float(execution.get("filled_quantity") or 0.0)
+        if not result.get("ok"):
+            status = "failed"
+        elif filled <= benchmark_tools.MIN_POSITION_QUANTITY:
+            status = "unfilled"
+        elif filled + benchmark_tools.MIN_POSITION_QUANTITY < target["quantity"]:
+            status = "partial"
+        else:
+            status = "closed"
+        detail = (
+            result.get("reason") or result.get("error") or execution.get("fill_status") or ""
+        )
+        if status != "closed":
+            logger.warning(
+                "pre-expiry exit %s agent=%s ticker=%s detail=%s",
+                status, agent_id, target["ticker"], detail,
+            )
+        outcomes.append({**target, "status": status, "filled_quantity": filled, "detail": str(detail)})
+    return outcomes
+
+
+def _fmt_pre_expiry_exits(outcomes: List[Dict[str, Any]]) -> Optional[str]:
+    """Tell the agent which positions the rule closed, or tried to."""
+    if not outcomes:
+        return None
+    lines = [
+        "=== Automatic pre-expiry exits this cycle ===",
+        f"Rule: a position whose live bid is more than {PRE_EXPIRY_EXIT_LOSS:.0%} below its "
+        f"average entry within {PRE_EXPIRY_EXIT_HOURS:.0f}h of its market closing is closed "
+        "before you act.",
+    ]
+    for o in outcomes:
+        where = (
+            f"  - {o['ticker']} {o['side'].upper()}: {o['quantity']:.1f} contracts, "
+            f"down {abs(o['change']):.0%} at bid {o['bid']:.2f} with {o['hours_left']:.0f}h left"
+        )
+        if o["status"] == "closed":
+            lines.append(where + " -> closed.")
+        elif o["status"] == "partial":
+            lines.append(
+                where + f" -> only {o['filled_quantity']:.1f} filled; the rest is still open."
+            )
+        else:
+            lines.append(where + f" -> NOT closed ({o['status']}: {o['detail'] or 'no detail'}); still open.")
+    return "\n".join(lines)
+
+
 def _build_portfolio_block(
     conn,
     agent_id: str,
@@ -562,6 +730,7 @@ def _build_portfolio_block(
     last_transcript: Optional[str] = None,
     held_quotes: Optional[List[Dict[str, Any]]] = None,
     now: Optional[datetime] = None,
+    exit_notes: Optional[str] = None,
 ) -> str:
     summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
     lines = [
@@ -588,6 +757,8 @@ def _build_portfolio_block(
                 lines.append(_fmt_open_position(p, quote, now=now))
     else:
         lines.append("Open positions: none.")
+    if exit_notes:
+        lines.append(exit_notes)
     if learning_block:
         lines.append(learning_block)
     research_context = _research_context(last_transcript)
@@ -3009,10 +3180,25 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     # portfolio block from those quotes so each held position can state its
     # current value and time left.
     held_quotes = _requote_held(held_positions)
+    # Close positions the pre-expiry rule selects before the agent decides,
+    # so the portfolio it reads is the one it actually holds.
+    pre_expiry_exits = _run_pre_expiry_exits(agent_id, held_quotes)
     with benchmark_tools._account_transaction() as conn:
+        still_held = {
+            (str(row["platform"] or "kalshi").lower(), row["ticker"])
+            for row in conn.execute(
+                "SELECT DISTINCT platform, ticker FROM agent_positions WHERE agent_id = ? AND quantity > ?",
+                (agent_id, benchmark_tools.MIN_POSITION_QUANTITY),
+            )
+        }
+        held_quotes = [
+            q for q in held_quotes
+            if (str(q.get("platform") or "kalshi").lower(), q.get("ident")) in still_held
+        ]
         portfolio_block = _build_portfolio_block(
             conn, agent_id, last_thesis, learning_block, last_transcript,
             held_quotes=held_quotes,
+            exit_notes=_fmt_pre_expiry_exits(pre_expiry_exits),
         )
     known = {q.get("ident") for q in held_quotes if q.get("ident")}
     candidates_file = (

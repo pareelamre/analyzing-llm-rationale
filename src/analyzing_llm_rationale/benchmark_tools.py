@@ -114,6 +114,10 @@ class ToolContext:
     user_id: Optional[str] = None
     model: Optional[str] = None
     require_kelly_sizing: bool = False
+    #: Set only by system code, never from a tool call's arguments, so an
+    #: agent cannot label its own order as a system-initiated one. Recorded
+    #: on the trade's audit, e.g. "pre_expiry_exit_rule".
+    initiated_by: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -2797,6 +2801,7 @@ def _trade_audit_context(
     guard: Mapping[str, Any],
     fill_status: Optional[str] = None,
     filled_quantity: Optional[float] = None,
+    initiated_by: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Return a compact, non-sensitive execution record for later audits.
 
@@ -2841,6 +2846,10 @@ def _trade_audit_context(
             "fill_status": fill_status,
             "filled_quantity": filled_quantity,
         }
+    if initiated_by:
+        # Present only when system code placed the order, so every
+        # agent-placed trade stays exactly as it was.
+        context["initiated_by"] = str(initiated_by)
     return context
 
 
@@ -3213,6 +3222,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             guard["gross_notional_override"] = verified_reduce_only_close
             if not allowed:
                 audit = _trade_audit_context(
+                    initiated_by=ctx.initiated_by,
                     requested_price=requested_price,
                     # No default. `args` is the model's own tool call, and a
                     # missing quantity means it delegated sizing -- recording 1
@@ -3331,6 +3341,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 else "partial"
             )
             audit = _trade_audit_context(
+                    initiated_by=ctx.initiated_by,
                 requested_price=requested_price,
                 # See above: absent means delegated, not one contract.
                 requested_quantity=args.get("quantity"),
