@@ -5,7 +5,7 @@ import json
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Any, Mapping, Optional, Protocol, Sequence
 
@@ -42,12 +42,56 @@ class MarketCapturePolicy:
 
 
 @dataclass(frozen=True)
+class CapturedTradingCost:
+    """Verified taker costs at the captured executable YES and NO asks."""
+
+    model: str
+    rate: Decimal
+    yes_fee_per_share: Decimal
+    no_fee_per_share: Decimal
+    schedule_version: str
+    source: str
+
+    def __post_init__(self) -> None:
+        if self.model not in {"kalshi_quadratic", "polymarket_v2"}:
+            raise MarketCaptureError("captured fee model is unsupported")
+        for name in ("rate", "yes_fee_per_share", "no_fee_per_share"):
+            value = _decimal(getattr(self, name))
+            if value is None:
+                raise MarketCaptureError("captured fee value is invalid")
+            object.__setattr__(self, name, value)
+        if not self.schedule_version.strip() or not self.source.strip():
+            raise MarketCaptureError("captured fee provenance is incomplete")
+
+    def to_storage(self) -> dict[str, str]:
+        return {
+            "model": self.model,
+            "rate": str(self.rate),
+            "yes_fee_per_share": str(self.yes_fee_per_share),
+            "no_fee_per_share": str(self.no_fee_per_share),
+            "schedule_version": self.schedule_version,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_storage(cls, payload: Any) -> "CapturedTradingCost":
+        expected = {
+            "model", "rate", "yes_fee_per_share", "no_fee_per_share",
+            "schedule_version", "source",
+        }
+        if not isinstance(payload, Mapping) or set(payload) != expected:
+            raise MarketCaptureError("stored fee schedule schema is invalid")
+        return cls(**dict(payload))
+
+
+@dataclass(frozen=True)
 class CapturedMarket:
     instrument: Instrument
     snapshot: MarketSnapshot
     yes_ask_depth: Decimal
     no_ask_depth: Decimal
     settlement_rules: str
+    trading_cost: CapturedTradingCost | None = None
 
     def __post_init__(self) -> None:
         if self.snapshot.instrument_id != self.instrument.id:
@@ -62,6 +106,8 @@ class CapturedMarket:
             object.__setattr__(self, name, value)
         if not isinstance(self.settlement_rules, str) or not self.settlement_rules.strip():
             raise MarketCaptureError("captured market needs exact settlement rules")
+        if self.trading_cost is not None and not isinstance(self.trading_cost, CapturedTradingCost):
+            raise MarketCaptureError("captured market fee schedule is invalid")
 
     def to_storage(self) -> dict[str, Any]:
         return {
@@ -70,14 +116,18 @@ class CapturedMarket:
             "yes_ask_depth": str(self.yes_ask_depth),
             "no_ask_depth": str(self.no_ask_depth),
             "settlement_rules": self.settlement_rules,
+            "trading_cost": None if self.trading_cost is None else self.trading_cost.to_storage(),
         }
 
     @classmethod
     def from_storage(cls, payload: Any) -> "CapturedMarket":
-        if not isinstance(payload, Mapping) or set(payload) != {
+        if not isinstance(payload, Mapping) or set(payload) not in ({
             "instrument", "snapshot", "yes_ask_depth", "no_ask_depth",
             "settlement_rules",
-        }:
+        }, {
+            "instrument", "snapshot", "yes_ask_depth", "no_ask_depth",
+            "settlement_rules", "trading_cost",
+        }):
             raise MarketCaptureError("stored captured market schema is invalid")
         try:
             return cls(
@@ -86,6 +136,8 @@ class CapturedMarket:
                 Decimal(str(payload["yes_ask_depth"])),
                 Decimal(str(payload["no_ask_depth"])),
                 str(payload["settlement_rules"]),
+                CapturedTradingCost.from_storage(payload["trading_cost"])
+                if payload.get("trading_cost") is not None else None,
             )
         except (ArithmeticError, KeyError, TypeError, ValueError) as exc:
             raise MarketCaptureError("stored captured market is malformed") from exc
@@ -118,7 +170,7 @@ class MarketCaptureBatch:
 
     def to_storage(self) -> dict[str, Any]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "observed_at": self.observed_at.isoformat(),
             "markets": [item.to_storage() for item in self.markets],
             "rejections": [
@@ -131,7 +183,7 @@ class MarketCaptureBatch:
     def from_storage(cls, payload: Any) -> "MarketCaptureBatch":
         if not isinstance(payload, Mapping) or set(payload) != {
             "schema_version", "observed_at", "markets", "rejections",
-        } or payload.get("schema_version") != 1:
+        } or payload.get("schema_version") not in {1, 2}:
             raise MarketCaptureError("stored market capture schema is invalid")
         if not isinstance(payload["markets"], list) or not isinstance(payload["rejections"], list):
             raise MarketCaptureError("stored market capture collections are invalid")
@@ -283,10 +335,22 @@ class LiveMarketDataGateway:
     def fetch(
         self, venue: str, identifier: str,
     ) -> tuple[Mapping[str, Any], Mapping[str, Mapping[str, Any]]]:
-        from ..market_data import fetch_kalshi_orderbook, fetch_twin_market_payload
+        from ..market_data import (
+            fetch_kalshi_orderbook,
+            fetch_kalshi_series,
+            fetch_twin_market_payload,
+        )
 
         market, books = fetch_twin_market_payload(venue, identifier)
         if venue == "kalshi":
+            series_ticker = str(
+                market.get("series_ticker") or str(market.get("ticker") or "").split("-")[0]
+            ).strip()
+            series_payload = fetch_kalshi_series(series_ticker, strict=True)
+            series = series_payload.get("series") if isinstance(series_payload, Mapping) else None
+            if not isinstance(series, Mapping):
+                raise MarketDataError("Kalshi series fee schedule is unavailable")
+            market = {**market, "_foresea_fee_schedule": dict(series)}
             books = {identifier: fetch_kalshi_orderbook(identifier)}
         return market, books
 
@@ -377,6 +441,73 @@ def _settlement_rules(venue: str, market: Mapping[str, Any]) -> str:
     return str(raw or "").strip()
 
 
+def _fee_version(payload: Mapping[str, Any]) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return "fee-" + sha256(encoded.encode("utf-8")).hexdigest()[:24]
+
+
+def _kalshi_taker_fee_per_share(price: Decimal, rate: Decimal) -> Decimal:
+    raw_fee = rate * price * (Decimal("1") - price)
+    charged = (price + raw_fee).quantize(Decimal("0.0001"), rounding=ROUND_CEILING)
+    return charged - price
+
+
+def _verified_trading_cost(
+    venue: str, market: Mapping[str, Any], snapshot: MarketSnapshot,
+) -> CapturedTradingCost | None:
+    if snapshot.yes_ask is None or snapshot.no_ask is None:
+        return None
+    if venue == "kalshi":
+        raw = market.get("_foresea_fee_schedule")
+        if not isinstance(raw, Mapping):
+            return None
+        fee_type = str(raw.get("fee_type") or "").strip().lower()
+        multiplier = _decimal(raw.get("fee_multiplier"))
+        series_ticker = str(raw.get("ticker") or market.get("series_ticker") or "").strip()
+        if fee_type not in {"quadratic", "quadratic_with_maker_fees"} or multiplier is None or not series_ticker:
+            return None
+        rate = Decimal("0.07") * multiplier
+        schedule = {
+            "fee_type": fee_type, "fee_multiplier": str(multiplier),
+            "series_ticker": series_ticker,
+            "last_updated_ts": str(raw.get("last_updated_ts") or ""),
+        }
+        def fee(price: Decimal) -> Decimal:
+            return _kalshi_taker_fee_per_share(price, rate)
+        return CapturedTradingCost(
+            "kalshi_quadratic", rate, fee(snapshot.yes_ask), fee(snapshot.no_ask),
+            _fee_version(schedule), "kalshi.series",
+        )
+    if venue == "polymarket":
+        enabled = market.get("feesEnabled")
+        raw = market.get("feeSchedule")
+        if enabled is False:
+            schedule = {"condition_id": str(market.get("conditionId") or ""), "enabled": False}
+            return CapturedTradingCost(
+                "polymarket_v2", Decimal("0"), Decimal("0"), Decimal("0"),
+                _fee_version(schedule), "polymarket.gamma.feeSchedule",
+            )
+        if enabled is not True or not isinstance(raw, Mapping):
+            return None
+        rate = _decimal(raw.get("rate"))
+        exponent = _decimal(raw.get("exponent"))
+        taker_only = raw.get("takerOnly")
+        condition_id = str(market.get("conditionId") or "").strip()
+        if rate is None or exponent != Decimal("1") or taker_only is not True or not condition_id:
+            return None
+        schedule = {
+            "condition_id": condition_id, "rate": str(rate),
+            "exponent": str(exponent), "taker_only": True,
+        }
+        def fee(price: Decimal) -> Decimal:
+            return rate * price * (Decimal("1") - price)
+        return CapturedTradingCost(
+            "polymarket_v2", rate, fee(snapshot.yes_ask), fee(snapshot.no_ask),
+            _fee_version(schedule), "polymarket.gamma.feeSchedule",
+        )
+    return None
+
+
 @tracer.start_as_current_span("twin.market.capture")
 def capture_markets(
     gateway: MarketDataGateway, *, now: datetime,
@@ -433,17 +564,29 @@ def capture_markets(
             rejections.append(MarketCaptureRejection(venue, identifier, reasons))
             continue
         assert assessment.instrument is not None and assessment.snapshot is not None
+        trading_cost = _verified_trading_cost(venue, market, assessment.snapshot)
+        if trading_cost is None:
+            rejections.append(MarketCaptureRejection(
+                venue, identifier, "missing_verified_fee_schedule",
+            ))
+            continue
+        instrument = Instrument(**{
+            **assessment.instrument.to_storage(), "fee_version": trading_cost.schedule_version,
+        })
+        snapshot = MarketSnapshot(**{
+            **assessment.snapshot.to_storage(), "fee_version": trading_cost.schedule_version,
+        })
         depth = (
-            _kalshi_depth(market, books, assessment.snapshot)
+            _kalshi_depth(market, books, snapshot)
             if venue == "kalshi"
-            else _polymarket_depth(market, books, assessment.snapshot)
+            else _polymarket_depth(market, books, snapshot)
         )
         if depth is None:
             rejections.append(MarketCaptureRejection(venue, identifier, "missing_executable_depth"))
             continue
         markets.append(CapturedMarket(
-            assessment.instrument, assessment.snapshot, depth[0], depth[1],
-            _settlement_rules(venue, market),
+            instrument, snapshot, depth[0], depth[1],
+            _settlement_rules(venue, market), trading_cost,
         ))
         market_capture_attempts.add(1, {"venue": venue, "outcome": "captured"})
     return MarketCaptureBatch(now, tuple(markets), tuple(rejections))

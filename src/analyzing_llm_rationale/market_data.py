@@ -922,11 +922,13 @@ def fetch_trader_leaderboard(limit: int = 20) -> List[Dict[str, Any]]:
     return _object_rows(data, "leaderboard")
 
 
-def fetch_kalshi_series(series_ticker: str = "") -> Any:
+def fetch_kalshi_series(series_ticker: str = "", *, strict: bool = False) -> Any:
     """Fetch Kalshi series catalog or specific series metadata."""
     url = f"{KALSHI_SERIES_URL}/{series_ticker}" if series_ticker else KALSHI_SERIES_URL
     try:
         data = _get_json(url)
         return data
     except Exception:
+        if strict:
+            raise
         return {} if series_ticker else []

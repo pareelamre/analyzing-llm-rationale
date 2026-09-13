@@ -651,10 +651,10 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "canonical scheduled cycles and durable phase state are deployed; bounded executable market capture is in PR #620; account reconciliation, asynchronous research resumption, costs, and simulation remain unwired",
-      "branch": "codex/t21-market-capture",
-      "commit": "b632bb43d",
-      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/620",
+      "substep": "canonical scheduled cycles, durable phase state, bounded executable market capture, and verified venue fee capture are implemented; account reconciliation, evidence acquisition, asynchronous research resumption, and durable simulation remain unwired",
+      "branch": "codex/t21-fee-capture",
+      "commit": null,
+      "pr_url": null,
       "checks": [
         "py -m unittest tests.test_twin_trial -v (pass: 6 tests)",
         "py -m ruff check src/analyzing_llm_rationale/twin/trial.py tests/test_twin_trial.py (pass)",
@@ -680,7 +680,17 @@
         "production scheduler manual and recurring dispatch (pass: completed five-minute strategy jobs with account_epoch_id=1)",
         "production Datastore readback (pass: matching TwinStrategyCycle PASS and revision-1 blocked TwinStrategyRun records)",
         "py -m unittest discover -s tests for market capture (pass: 2204 tests; 12 skipped)",
-        "live read-only market capture (pass: three eligible Polymarket captures; eligible Kalshi longer-horizon capture)"
+        "live read-only market capture (pass: three eligible Polymarket captures; eligible Kalshi longer-horizon capture)",
+        "PR #620 CI test and datastore-integration (pass); merged as 0e1a8c6eb",
+        "private twin-maintenance revision twin-maintenance-00013-sdd and twin-research revision twin-research-00013-r5n run exact image sha256:ed4891c94c234b6f7ef31cb06ca684ccdfeef923a54f47be7fdd050c15",
+        "private /health and /ready smoke after PR #620 (pass); shadow mode, zero live capital, empty mandate; temporary human invoker grants removed",
+        "production TwinMarketCapture readback (pass: scheduled cycle persisted three live Polymarket markets with exact rules, quotes, tick/minimum, and executable depth)",
+        "live read-only fee capture (pass: market-specific Polymarket V2 fee schedules and fee-free schedule; Kalshi series quadratic multiplier)",
+        "npm ci && npm run frontend:build for verified fee capture (pass; generated files restored and excluded)",
+        "py -m unittest discover -s tests for verified fee capture (pass: 2207 tests; 12 skipped)",
+        "py -m ruff check src tests for verified fee capture (pass)",
+        "py -m graphify update . for verified fee capture (pass; generated graph unchanged)",
+        "git diff --check for verified fee capture (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -698,12 +708,11 @@
         "tests/test_twin_market_capture.py"
       ],
       "blockers": [
-        "PR #620 must pass protected CI, merge, and be deployed before production TwinMarketCapture records can be verified.",
         "The maintenance runtime account reconciliation and exit operation is still an unconfigured fail-closed adapter.",
-        "Verified fee/cost capture, evidence acquisition, asynchronous research resumption, and durable ShadowVenue state are not wired into the cycle phase machine.",
+        "Public evidence acquisition, asynchronous research resumption, and durable ShadowVenue state are not wired into the cycle phase machine.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Merge and privately deploy PR #620 after CI, verify production TwinMarketCapture records, then wire cost/evidence/research phases and durable ShadowVenue simulation before restarting the exact-release seven-day clock."
+      "handoff": "Complete and deploy verified fee capture, then wire public evidence and asynchronous research phases before adding durable ShadowVenue simulation and restarting the exact-release seven-day clock."
     },
     {
       "id": "T22",
