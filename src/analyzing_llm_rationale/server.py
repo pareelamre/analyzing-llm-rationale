@@ -7023,7 +7023,12 @@ async def _prepare_predict_messages(
                     if record.get(f"market_{fld}") is None and quote.get(fld) is not None:
                         record[f"market_{fld}"] = quote[fld]
         except Exception:
-            pass
+            logger.warning(
+                "market context unavailable; forecasting without live pricing "
+                "platform=%s ident=%s",
+                record.get("market_platform"), record.get("market_ident"),
+                exc_info=True,
+            )
     venue_articles = (
         quote.get("venue_news_articles") or []
         if quote
@@ -7735,7 +7740,9 @@ def _count_registered_users() -> int:
             q.keys_only()
             return len(list(q.fetch()))
         except Exception:
-            pass
+            logger.warning(
+                "datastore user count failed; falling back to duckdb", exc_info=True
+            )
     try:
         conn = _analytics_conn()
         try:
@@ -9532,6 +9539,9 @@ async def market_weather_radar(
                 batch = _md.list_kalshi(limit=4, series_ticker=s, min_close_days=0.0)
                 candidates.extend(batch)
             except Exception:
+                logger.warning(
+                    "weather radar skipped series=%s", s, exc_info=True
+                )
                 continue
 
         results = []
@@ -9546,6 +9556,9 @@ async def market_weather_radar(
             try:
                 research = research_weather_market(quote)
             except Exception:
+                logger.warning(
+                    "weather radar skipped market=%s", ident, exc_info=True
+                )
                 continue
 
             mf = research.get("model_forecast")
@@ -9735,7 +9748,9 @@ async def websocket_radar(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     except Exception:
-        pass
+        # A client leaving is WebSocketDisconnect, above. Anything that lands
+        # here closed a live stream on a bug, so it should not be silent.
+        logger.warning("radar websocket closed on an error", exc_info=True)
 
 
 # ── V1 Enterprise API Endpoints ──────────────────────────────────────────────
