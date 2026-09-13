@@ -561,75 +561,6 @@ def _apply_effort_tier(req: "AgentAnalyzeRequest", question: str) -> None:
         req.max_tool_steps = _EFFORT_MAX_TOOL_STEPS[tier]
 
 
-def _strategy_filter_edge_entry(entry: dict, strategy: str) -> bool:
-    """Apply a paper-pnl strategy's filter logic to a live edge board entry."""
-    entry_price = entry.get("entry_price", 0.5)
-    abs_edge = entry.get("abs_edge", 0.0)
-    domain = entry.get("domain", "")
-    if strategy == "smart":
-        if entry_price < 0.20 or entry_price > 0.80:
-            return False
-        if domain == "geopolitics" and abs_edge > 0.10:
-            return False
-        if abs_edge > 0.40:
-            return False
-        return True
-    return True  # flat / half_kelly / crowd_baseline — no extra filter beyond min_edge
-
-
-def _pick_best_strategy(paper_pnl: dict) -> tuple:
-    """Return (name, data) of the highest-ROI strategy with at least 20 resolved bets."""
-    industry_grade = {"smart", "half_kelly", "flat", "crowd_baseline"}
-    candidates = [
-        (k, v) for k, v in paper_pnl.items()
-        if k in industry_grade
-        and isinstance(v, dict)
-        and v.get("roi") is not None
-        and (v.get("n_bets") or 0) >= 20
-    ]
-    if not candidates:
-        return ("flat", paper_pnl.get("flat") or {})
-    return max(candidates, key=lambda x: x[1]["roi"])
-
-
-def _edge_board_order_context(trl: dict) -> str:
-    """Format the top edge board picks for the best paper strategy as chat context."""
-    paper_pnl = trl.get("paper_pnl") or {}
-    edge_board = trl.get("edge_board") or []
-    if not edge_board or not paper_pnl:
-        return ""
-    strategy_name, strategy_data = _pick_best_strategy(paper_pnl)
-    filtered = [e for e in edge_board if _strategy_filter_edge_entry(e, strategy_name)]
-    filtered.sort(key=lambda e: e.get("abs_edge", 0.0), reverse=True)
-    if not filtered:
-        return ""
-    roi_pct = f"{strategy_data['roi']:.1%}" if strategy_data.get("roi") is not None else "n/a"
-    n_bets = strategy_data.get("n_bets", "?")
-    lines = [
-        "## Live order recommendations",
-        f"Best back-tested strategy: **{strategy_name}** "
-        f"(historical ROI {roi_pct} over {n_bets} resolved bets, paper only).",
-        "",
-    ]
-    for i, e in enumerate(filtered[:10], 1):
-        sig = e.get("track_record") or {}
-        proven = "proven" if sig.get("skill_significant") else "unproven"
-        model_p = f"{e.get('model_probability', 0):.0%}"
-        mkt_p = f"{e.get('market_probability', 0):.0%}"
-        edge_pct = f"{e.get('abs_edge', 0):.0%}"
-        payout = e.get("payout_odds", "?")
-        lines.append(
-            f"{i}. **{e.get('question', '')}** [{e.get('platform', '')}]  "
-            f"Bet {e.get('side', '?')} @ {mkt_p} | Model {model_p} | "
-            f"Edge {edge_pct} | {payout}x payout | {proven}  "
-            f"{e.get('market_url', '')}"
-        )
-    lines.append(
-        "\nAll figures are paper/hypothetical. Entry prices are live at last tick."
-    )
-    return "\n".join(lines)
-
-
 _strategy_filter_edge_entry = live_track_record_support.strategy_filter_edge_entry
 _pick_best_strategy = live_track_record_support.pick_best_strategy
 _edge_board_order_context = live_track_record_support.edge_board_order_context
@@ -7248,7 +7179,14 @@ async def _prepare_predict_messages(
                     if ctx:
                         system_prompt += f"\n\n{ctx}"
             except Exception:
-                pass
+                # Optional context, so the reply goes ahead without it -- but
+                # say so. This was a bare `pass`, and it hid a TypeError that
+                # removed every order recommendation whenever one market on
+                # the board had no side.
+                logger.warning(
+                    "edge board order context unavailable; replying without it",
+                    exc_info=True,
+                )
         user_prompt = build_user_prompt(record, "[question]", "full")
     else:
         user_prompt = build_user_prompt(record, prompt_text, req.evidence_detail)
