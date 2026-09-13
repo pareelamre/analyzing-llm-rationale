@@ -7174,7 +7174,14 @@ async def _prepare_predict_messages(
                     if ctx:
                         system_prompt += f"\n\n{ctx}"
             except Exception:
-                pass
+                # Optional context, so the reply goes ahead without it -- but
+                # say so. This was a bare `pass`, and it hid a TypeError that
+                # removed every order recommendation whenever one market on
+                # the board had no side.
+                logger.warning(
+                    "edge board order context unavailable; replying without it",
+                    exc_info=True,
+                )
         user_prompt = build_user_prompt(record, "[question]", "full")
     else:
         user_prompt = build_user_prompt(record, prompt_text, req.evidence_detail)
