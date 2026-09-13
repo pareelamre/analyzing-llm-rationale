@@ -94,6 +94,7 @@ class TwinSimulatorTests(unittest.TestCase):
         receipt = venue.status(order_id)
         self.assertEqual((receipt.status, receipt.filled_quantity, receipt.remaining_quantity), ("partial", Decimal("3"), Decimal("2")))
         account = venue.account(received_at=NOW)
+        self.assertEqual(account.generation, 3)
         self.assertEqual(account.available_cash, Decimal("8.7678"))
         self.assertEqual(account.position_basis, Decimal("1.2322"))
         self.assertEqual(account.fees_paid, Decimal(".0122"))
@@ -113,6 +114,12 @@ class TwinSimulatorTests(unittest.TestCase):
             return preview, response, venue.events(), venue.account(received_at=NOW)
 
         self.assertEqual(cycle(), cycle())
+
+    def test_initial_complete_account_is_generation_one(self):
+        account = ShadowVenue(
+            account_id="shadow-account-001", seed=1,
+        ).account(received_at=NOW)
+        self.assertEqual(account.generation, 1)
 
     def test_no_fill_and_adverse_move_use_captured_ask_not_midpoint(self):
         no_fill = ShadowVenue(

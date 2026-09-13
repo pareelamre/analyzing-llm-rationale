@@ -1,9 +1,11 @@
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from fastapi.testclient import TestClient
 
+from analyzing_llm_rationale.twin.account_store import InMemoryAccountSnapshotStore
 from analyzing_llm_rationale.twin.budget import (
     BudgetPolicy,
     InMemoryResearchBudget,
@@ -13,6 +15,7 @@ from analyzing_llm_rationale.twin.market_capture import InMemoryMarketCaptureSto
 from analyzing_llm_rationale.twin.research_gateway import (
     InMemoryPublicEvidenceCache,
     InMemoryResearchCaptureStore,
+    InMemoryResearchResultStore,
     load_research_runtime_policy,
 )
 from analyzing_llm_rationale.twin.runtime import (
@@ -24,13 +27,20 @@ from analyzing_llm_rationale.twin.runtime import (
 from analyzing_llm_rationale.twin.runtime_app import (
     _assert_shadow_only,
     _authorize_research_repair,
+    _calibration_observations,
     _maintenance_operation,
+    _reconcile_shadow_account,
     _recover_stale_research_budgets,
     _runtime_worker_id,
     _stage_strategy_continuation,
 )
 from analyzing_llm_rationale.twin.scheduler import ShadowCycleSchedule
-from analyzing_llm_rationale.twin.strategy import InMemoryStrategyStore
+from analyzing_llm_rationale.twin.store import InMemoryTwinStore
+from analyzing_llm_rationale.twin.strategy import (
+    InMemoryStrategyStore,
+    load_strategy_policy,
+    strategy_cycle_key_for_identity,
+)
 from analyzing_llm_rationale.twin.worker import (
     InMemoryWorkerJobs,
     MaintenanceResearchJobGateway,
@@ -92,6 +102,53 @@ class Dispatcher:
 
 
 class PrivateTwinRuntimeTests(unittest.TestCase):
+    def test_calibration_loader_accepts_only_audit_grade_resolved_twin_history(self):
+        good = {
+            "forecast_id": "forecast-1", "instrument_id": "kalshi:demo:one",
+            "cluster_id": "cluster-1", "model_hash": "a" * 64,
+            "prompt_hash": "b" * 64, "category_family": "politics",
+            "model_probability": 0.7, "outcome": 1,
+            "forecasted_at": (NOW - timedelta(days=3)).isoformat(),
+            "resolved_at": (NOW - timedelta(days=1)).isoformat(),
+            "ledger_audit_grade": True, "source": "twin_research_v1",
+        }
+        ledger = mock.Mock()
+        ledger.resolved_forecasts.return_value = [
+            good,
+            {**good, "forecast_id": "legacy", "prompt_hash": ""},
+            {**good, "forecast_id": "late", "resolved_at": NOW.isoformat()},
+            {**good, "forecast_id": "other", "source": "track_record_snapshot"},
+        ]
+        rows = _calibration_observations(ledger, as_of=NOW)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], "forecast-1")
+        self.assertEqual(rows[0]["category_family"], "politics")
+
+    def test_shadow_account_reconciliation_is_durable_fresh_and_generation_fenced(self):
+        from pathlib import Path
+
+        snapshots = InMemoryAccountSnapshotStore()
+        twin_store = InMemoryTwinStore()
+        policy = load_strategy_policy(Path("configs/twin.yaml"))
+        scope, first = _reconcile_shadow_account(
+            snapshots, twin_store,
+            scope_id="shadow-scope:foresea-edge-v1", account_epoch=1,
+            now=NOW, strategy_policy=policy,
+        )
+        _, second = _reconcile_shadow_account(
+            snapshots, twin_store,
+            scope_id=scope.id, account_epoch=1,
+            now=NOW + timedelta(minutes=5), strategy_policy=policy,
+        )
+        self.assertEqual(first.account_snapshot.generation, 1)
+        self.assertEqual(second.account_snapshot.generation, 2)
+        self.assertEqual(second.account_snapshot.received_at, NOW + timedelta(minutes=5))
+        self.assertEqual(
+            second.account_snapshot.available_cash,
+            first.account_snapshot.available_cash,
+        )
+        self.assertTrue(second.portfolio_complete)
+
     def maintenance_runtime(self, *, startup=True):
         jobs = InMemoryWorkerJobs()
         jobs.add(WorkerJob(
@@ -430,17 +487,22 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
                 market, books = super().fetch(venue, identifier)
                 return {**market, "title": "Will the test event happen?"}, books
 
-        class Results:
-            def get_result(self, _reservation_id):
-                return object()
-
         batch = capture_markets(TitledGateway(), now=current)
-        capture_store.record("strategy-cycle-001", batch)
+        cycle_id = strategy_cycle_key_for_identity(
+            scope_id="shadow-scope:foresea-edge-v1", account_epoch=1,
+            now=current, config_version="foresea-edge-shadow-v1",
+            bucket_seconds=300,
+        )
+        capture_store.record(cycle_id, batch)
+        results = InMemoryResearchResultStore()
+        account_snapshots = InMemoryAccountSnapshotStore()
+        twin_store = InMemoryTwinStore()
+        strategy_policy = load_strategy_policy(Path("configs/twin.yaml"))
         strategy_job = jobs.add(WorkerJob(
             "strategy-job-001", "shadow-scope:foresea-edge-v1",
             WorkerJobKind.STRATEGY,
             {
-                "strategy_cycle_id": "strategy-cycle-001",
+                "strategy_cycle_id": cycle_id,
                 "config_release_id": "foresea-edge-shadow-v1",
                 "account_epoch_id": "1",
             },
@@ -449,12 +511,13 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
 
         pending = _maintenance_operation(
             jobs, budget, strategy_job, store, run_store, capture_store, Gateway(),
-            None, captures, Results(), cache, EvidenceGateway(), policy, dispatcher,
+            None, captures, results, cache, EvidenceGateway(), policy, dispatcher,
+            account_snapshots, twin_store, strategy_policy,
         )
         self.assertEqual(pending["status"], "pending", pending)
         self.assertEqual(pending["research_job_count"], 1)
         research_job = jobs.get(dispatcher.ids[0])
-        self.assertEqual(research_job.payload["strategy_cycle_id"], "strategy-cycle-001")
+        self.assertEqual(research_job.payload["strategy_cycle_id"], cycle_id)
         claimed = jobs.claim(
             research_job.id, worker_id="research-worker", now=current + timedelta(seconds=1),
         )
@@ -466,18 +529,33 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             },
             now=current + timedelta(seconds=2),
         )
+        from tests.test_twin_strategy import research_result
+
+        candidate = run_store.get(cycle_id).candidates[0]
+        result = research_result(candidate)
+        result = replace(
+            result,
+            forecast=replace(
+                result.forecast, as_of=current,
+                expires_at=current + timedelta(hours=1), created_at=current,
+            ),
+            proposal=replace(result.proposal, created_at=current),
+        )
+        results.record_result(research_job.payload["budget_reservation_id"], result)
         assignment = ResearchAssignment.from_job(claimed)
         continuation = _stage_strategy_continuation(
             jobs, run_store, assignment, now=current + timedelta(seconds=2),
         )
         resumed = _maintenance_operation(
             jobs, budget, continuation, store, run_store, capture_store, Gateway(),
-            None, captures, Results(), cache, EvidenceGateway(), policy, dispatcher,
+            None, captures, results, cache, EvidenceGateway(), policy, dispatcher,
+            account_snapshots, twin_store, strategy_policy,
         )
-        self.assertEqual(resumed["run_phase"], "blocked")
+        self.assertEqual(resumed["run_phase"], "complete")
+        self.assertEqual(resumed["decision"], "PASS")
+        self.assertEqual(store.get_cycle(cycle_id).reason, "no_candidate_qualified")
         self.assertEqual(
-            store.get_cycle("strategy-cycle-001").reason,
-            "account_maintenance_adapter_unconfigured",
+            account_snapshots.load("shadow-scope:foresea-edge-v1").generation, 1,
         )
 
     def test_repair_authorization_is_fenced_and_research_identity_bound(self):

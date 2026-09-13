@@ -180,6 +180,25 @@ class TwinStrategyTests(unittest.TestCase):
         self.assertEqual(calls, ["reconcile", "snapshot-002"])
         self.assertEqual(StrategyCycle.from_storage(result.to_storage()), result)
 
+    def test_async_completion_keeps_the_original_cycle_bucket_identity(self):
+        engine = strategy()
+        completed_at = NOW + timedelta(minutes=6)
+        result = engine.run_cycle(
+            scope=scope(), now=completed_at, cycle_identity_at=NOW,
+            reconcile=lambda: state(at=completed_at),
+            load_position_market=lambda _position: None,
+            discover=lambda: (candidate(at=completed_at),),
+            research=lambda item: research_result(item),
+        )
+        self.assertEqual(
+            result.key,
+            strategy_cycle_key(
+                scope=scope(), now=NOW,
+                config_version=engine.policy.config_version,
+                bucket_seconds=engine.policy.cycle_bucket_seconds,
+            ),
+        )
+
     def test_provider_outage_budget_exhaustion_and_empty_discovery_are_safe_decisions(self):
         unavailable = strategy().run_cycle(
             scope=scope(), now=NOW, reconcile=lambda: state(), load_position_market=lambda _position: None,
