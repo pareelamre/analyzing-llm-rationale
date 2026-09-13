@@ -153,7 +153,20 @@ class LiveTrackRecordReader:
 
 
 def strategy_filter_edge_entry(entry: Dict[str, Any], strategy: str) -> bool:
-    """Apply a paper-PnL strategy's filter logic to a live edge board entry."""
+    """Apply a paper-PnL strategy's filter logic to a live edge board entry.
+
+    An entry with no side is not a trade. build_edge_board emits side None
+    and entry_price None when the model and the market agree exactly, and
+    keeps those rows because min_abs_edge defaults to zero. The price guard
+    below then compared None with a float and raised TypeError -- and the
+    chat path calls this inside `except Exception: pass`, so a single
+    agreeing market on the board silently removed every order
+    recommendation from the reply rather than just itself. Under the other
+    strategies the same row passed and rendered as "Bet ? @ 50%" at zero
+    edge. There is no position to recommend, so it is excluded for all.
+    """
+    if not entry.get("side") or entry.get("entry_price") is None:
+        return False
     entry_price = entry.get("entry_price", 0.5)
     abs_edge = entry.get("abs_edge", 0.0)
     domain = entry.get("domain", "")
