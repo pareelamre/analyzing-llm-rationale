@@ -64,6 +64,13 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
     show an empty or one-outcome win rate even after an agent had closed
     several positions. Rejected trades and open positions remain excluded.
 
+    Closes placed by the pre-expiry exit rule (``audit.initiated_by``) are
+    counted in these realized figures too. They are the account's real
+    outcomes -- leaving them out would hide losses the account actually took
+    and flatter win_rate -- but they are not the agent's own decisions, so
+    ``rule_exit_count`` reports how many of the realized closes the rule made,
+    and each published activity item carries ``initiated_by``.
+
     ``settled_count`` intentionally remains the count of final market
     settlements only, so the promotion-sample guard still requires outcomes
     that ran to the contract's stated resolution rather than allowing rapid
@@ -116,11 +123,16 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
             "SELECT metadata_json, quantity FROM agent_actions WHERE agent_id = ? "
             "AND action_type = 'trade' AND quantity > 0"
         )
+        rule_exit_sql = (
+            "SELECT metadata_json FROM agent_actions WHERE agent_id = ? "
+            "AND action_type = 'trade' AND outcome = 'realized'"
+        )
         if since_ts is not None:
             # Same reset boundary as every sibling query: without it a reset
             # account reports fill stats over trades that trade_count has
             # already dropped, so sized_trade_count could exceed trade_count.
             fill_sql += " AND ts >= ?"
+            rule_exit_sql += " AND ts >= ?"
 
         trade_count = conn.execute(trade_sql, params).fetchone()[0]
         fill_rows = conn.execute(fill_sql, params).fetchall()
@@ -129,6 +141,10 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
         settled_count = len(settlement_pnls)
         realized_count = len(realized_pnls)
         won_count = sum(1 for pnl in realized_pnls if pnl > 0)
+        rule_exit_count = sum(
+            1 for (metadata_json,) in conn.execute(rule_exit_sql, params)
+            if (_metadata_dict(metadata_json).get("audit") or {}).get("initiated_by")
+        )
         win_rate = (won_count / realized_count) if realized_count else None
 
         starting_cash = float(acct_row["starting_cash"])
@@ -155,6 +171,7 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
             "settled_count": settled_count,
             "realized_count": realized_count,
             "won_count": won_count,
+            "rule_exit_count": rule_exit_count,
             "win_rate": round(win_rate, 4) if win_rate is not None else None,
             "updated_at": acct_row["updated_at"],
         })
@@ -658,6 +675,10 @@ def fill_context(metadata_json: Any, filled_quantity: Any) -> Dict[str, Any]:
         return {}
 
     context: Dict[str, Any] = {}
+    if audit.get("initiated_by"):
+        # A close placed by system code, not the agent: the feed must say so,
+        # or it reads as the agent's own exit.
+        context["initiated_by"] = str(audit["initiated_by"])[:60]
     execution = audit.get("execution")
     status = execution.get("fill_status") if isinstance(execution, dict) else None
     if status and str(status) not in _COMPLETE_FILL_STATUSES:

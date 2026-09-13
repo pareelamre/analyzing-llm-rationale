@@ -7,7 +7,7 @@ exit rule, and an adversarial reviewer re-ran each:
 
     fixed price stop-loss          at best a wash against what agents did
     trailing stop / combinations   worse by $578-$1,053 (whipsaw on news markets)
-    down >= 30% within 24h         +$302 on the current accounts, 1 winner cut
+    down > 30% within 24h          +$302 on the current accounts, 1 winner cut
 
 Only the last helped, so only the last is applied. Its size is fragile -- 43%
 of the gain is one weather market -- but its direction held in both eras.

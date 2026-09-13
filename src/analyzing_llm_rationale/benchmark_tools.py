@@ -1223,6 +1223,7 @@ def _record_pre_sizing_rejection(
     price: Optional[float],
     quantity: Any,
     reason: str,
+    initiated_by: Optional[str] = None,
 ) -> None:
     """Record an order refused before sizing, so it leaves an audit trail.
 
@@ -1263,6 +1264,9 @@ def _record_pre_sizing_rejection(
                 "status": "rejected_before_sizing",
                 "risk": {"reasons": [reason], "rejected_before_sizing": True},
                 "execution": {"fill_status": "rejected_before_sizing", "filled_quantity": 0.0},
+                # Without this, a rule exit refused this early was filed as an
+                # ordinary agent rejection: the third of three write paths.
+                **({"initiated_by": str(initiated_by)} if initiated_by else {}),
             },
         )
     except Exception:
@@ -2172,6 +2176,26 @@ def _parse_risk_timestamp(value: Any) -> Optional[datetime]:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
+def _audit_initiated_by(metadata: Any) -> Optional[str]:
+    """``audit.initiated_by`` from an action's metadata, if system code placed it.
+
+    Accepts the stored JSON text or an already-parsed dict. Returns None for
+    anything the agent placed, and for rows written before the tag existed.
+    """
+    if isinstance(metadata, (str, bytes, bytearray)):
+        try:
+            metadata = json.loads(metadata)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(metadata, Mapping):
+        return None
+    audit = metadata.get("audit")
+    if not isinstance(audit, Mapping):
+        return None
+    tag = audit.get("initiated_by")
+    return str(tag) if tag else None
+
+
 def _risk_usage(
     actions: Iterable[Mapping[str, Any]],
     *,
@@ -2189,6 +2213,14 @@ def _risk_usage(
     duplicate_active = False
     for action in actions:
         if str(action.get("action_type") or "") != "trade":
+            continue
+        if _audit_initiated_by(action.get("metadata_json")):
+            # A close placed by system code (the pre-expiry exit rule) is not
+            # the agent's decision and adds no risk, so it must not use up the
+            # agent's per-cycle trade count or spend, its daily risk budget, or
+            # put that market on duplicate cooldown. It runs before the agent
+            # acts, so counting it would block the agent's own trades in the
+            # very cycle it freed capital for.
             continue
         ts = _parse_risk_timestamp(action.get("ts"))
         cash_required = max(0.0, _as_float(action.get("cash_required")))
@@ -2268,7 +2300,7 @@ def _load_guard_account(
             dict(event)
             for event in conn.execute(
                 """
-                SELECT action_type, cycle_id, ts, platform, ticker, side, cash_required, quantity
+                SELECT action_type, cycle_id, ts, platform, ticker, side, cash_required, quantity, metadata_json
                 FROM agent_actions
                 WHERE agent_id = ?
                 """,
@@ -3029,6 +3061,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 # tolerable for a paper score and not for an account meant to
                 # stand in for real execution.
                 _record_pre_sizing_rejection(
+                    initiated_by=ctx.initiated_by,
                     agent_id=agent_id,
                     mode=mode,
                     ticker=ticker,

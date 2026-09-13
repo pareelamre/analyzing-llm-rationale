@@ -567,6 +567,18 @@ def _pre_expiry_exit_enabled() -> bool:
     return raw not in {"0", "off", "false", "no", "disabled"}
 
 
+def _backtested_exit_price(quote: Dict[str, Any], side: str) -> Optional[float]:
+    """The held side's exit price exactly as the pre-expiry backtest priced it.
+
+    YES: yes_bid. NO: 1 - yes_ask. Deliberately not MarketQuote.bid(), which
+    prefers a venue no_bid for NO holders -- see _pre_expiry_exit_candidates.
+    """
+    q = MarketQuote.from_mapping(quote)
+    if str(side).strip().lower() == "yes":
+        return q.yes_bid
+    return None if q.yes_ask is None else 1.0 - q.yes_ask
+
+
 def _pre_expiry_exit_candidates(
     positions: List[Dict[str, Any]],
     held_quotes: List[Dict[str, Any]],
@@ -601,6 +613,22 @@ def _pre_expiry_exit_candidates(
     against cost basis. The two agree in principle, but multiplying a cent
     price by a quantity leaves float noise -- 100 x 0.28 is 28.000000000000004
     -- that moves a position sitting exactly on the line to the other side.
+
+    Two scope limits follow from what the backtest could and could not see:
+
+    Kalshi only. Polymarket's public price history has no historical bid,
+    so every Polymarket point in the backtest was a mark or last trade. The
+    live quote is an order-book bestBid, which sits at or below the last
+    trade whenever there is a spread and so would fire earlier and more often
+    than anything tested. Polymarket is left alone until it can be tested on
+    the price the rule would actually use.
+
+    The backtested price series, not MarketQuote.bid(). For a YES holder that
+    is yes_bid; for a NO holder the backtest used 1 - yes_ask on every point.
+    MarketQuote.bid("NO") prefers the venue's own no_bid when it is quoted,
+    which diverges from 1 - yes_ask exactly when books thin near expiry --
+    the only window this rule acts in. _backtested_exit_price keeps the rule
+    on the series its evidence came from.
     """
     quotes_by_key = {
         (str(q.get("platform") or "kalshi").lower(), q["ident"]): q
@@ -608,14 +636,17 @@ def _pre_expiry_exit_candidates(
     }
     chosen: List[Dict[str, Any]] = []
     for position in positions:
-        quote = quotes_by_key.get((str(position.get("platform") or "kalshi").lower(), position["ticker"]))
+        platform = str(position.get("platform") or "kalshi").lower()
+        if platform != "kalshi":
+            continue
+        quote = quotes_by_key.get((platform, position["ticker"]))
         if quote is None:
             continue
         hours = _hours_until(quote.get("close_time"), now=now)
         if hours is None or hours <= 0 or hours > PRE_EXPIRY_EXIT_HOURS:
             continue
         side = str(position["side"])
-        bid = MarketQuote.from_mapping(quote).bid(side)
+        bid = _backtested_exit_price(quote, side)
         avg_entry = float(position["avg_entry_price"])
         if bid is None or bid <= 0 or avg_entry <= 0:
             continue
@@ -656,13 +687,27 @@ def _run_pre_expiry_exits(
     """
     if not _pre_expiry_exit_enabled():
         return []
-    with benchmark_tools._account_transaction() as conn:
-        summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
+    if benchmark_tools._use_datastore_account_store():
+        # Positions below are read from the SQLite store, but with no
+        # FORESEA_AGENT_ACCOUNT_DB_PATH place_trade would trade against
+        # Datastore -- reading one book and trading another. The scheduled
+        # tick always sets the path; anything else skips the rule.
+        logger.info("pre-expiry exits skipped agent=%s: no SQLite account store configured", agent_id)
+        return []
+    try:
+        with benchmark_tools._account_transaction() as conn:
+            summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
+        targets = _pre_expiry_exit_candidates(summary["open_positions"], held_quotes, now=now)
+    except Exception:
+        # Like the settlement pass, an automatic pre-cycle step must never
+        # abort the agent's cycle: no exits this cycle, and say why.
+        logger.warning("pre-expiry exit selection failed agent=%s; no exits this cycle", agent_id, exc_info=True)
+        return []
     ctx = benchmark_tools.ToolContext(
         agent_id=agent_id, require_kelly_sizing=True, initiated_by=PRE_EXPIRY_EXIT_RULE,
     )
     outcomes: List[Dict[str, Any]] = []
-    for target in _pre_expiry_exit_candidates(summary["open_positions"], held_quotes, now=now):
+    for target in targets:
         order = {
             "platform": target["platform"],
             "ticker": target["ticker"],
@@ -770,14 +815,26 @@ def _build_portfolio_block(
     return "\n".join(lines)
 
 
-def _learning_lesson(action_type: str, realized_pnl: float) -> str:
+def _learning_lesson(action_type: str, realized_pnl: float, initiated_by: Optional[str] = None) -> str:
     """Return a bounded, deterministic postmortem for one realized trade.
 
     This deliberately does not ask another model to self-critique, and never
     changes a risk limit. It gives the next cycle a small calibration cue based
     on an auditable realized outcome, not an instruction copied from a prior
     thesis or an overfit strategy adjustment.
+
+    A close placed by the pre-expiry exit rule was not the agent's decision,
+    so it gets its own wording: framing it as "your position close lost money"
+    would critique an exit the agent never chose. The lesson is about the
+    entry that reached that state, which was the agent's.
     """
+    if initiated_by == PRE_EXPIRY_EXIT_RULE:
+        return (
+            "The pre-expiry exit rule closed this position, not you: it was more than "
+            f"{PRE_EXPIRY_EXIT_LOSS:.0%} below your entry within {PRE_EXPIRY_EXIT_HOURS:.0f}h of "
+            "its market closing. Review the entry, not the exit -- the evidence and price you "
+            "entered on -- before a comparable exposure."
+        )
     event = "settlement" if action_type == "settlement" else "position close"
     if realized_pnl > 0.005:
         return (
@@ -795,6 +852,11 @@ def _learning_lesson(action_type: str, realized_pnl: float) -> str:
     )
 
 
+def _action_initiated_by(metadata_json: Any) -> Optional[str]:
+    """Who placed a recorded action, when system code did; None for the agent."""
+    return benchmark_tools._audit_initiated_by(metadata_json)
+
+
 def _refresh_learning(conn, agent_id: str) -> int:
     """Persist one lesson for each newly realized settlement or position close.
 
@@ -808,7 +870,7 @@ def _refresh_learning(conn, agent_id: str) -> int:
         try:
             rows = conn.execute(
                 """
-                SELECT id, ts, action_type, platform, ticker, outcome, realized_pnl
+                SELECT id, ts, action_type, platform, ticker, outcome, realized_pnl, metadata_json
                 FROM agent_actions
                 WHERE agent_id = ?
                   AND (
@@ -843,7 +905,9 @@ def _refresh_learning(conn, agent_id: str) -> int:
                         row["ticker"],
                         row["outcome"],
                         pnl,
-                        _learning_lesson(str(row["action_type"]), pnl),
+                        _learning_lesson(
+                            str(row["action_type"]), pnl, _action_initiated_by(row["metadata_json"]),
+                        ),
                         now,
                     ),
                 )
