@@ -497,12 +497,71 @@ def _research_context(last_transcript: Optional[str]) -> str:
             research_context_duration.record(time.perf_counter() - started)
 
 
+def _fmt_time_left(hours: Optional[float]) -> str:
+    if hours is None:
+        return "close time unknown"
+    if hours <= 0:
+        return "past its close time, awaiting settlement"
+    if hours < 1:
+        return "closes in under 1h"
+    if hours < 48:
+        return f"closes in {hours:.0f}h"
+    return f"closes in {hours / 24:.0f}d"
+
+
+def _fmt_open_position(
+    position: Dict[str, Any],
+    quote: Optional[Dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> str:
+    """One held position, with what it is worth now and how long it has left.
+
+    The candidates block already re-quotes every held market, but as a raw
+    YES and NO book in a different block from the entry price. To tell
+    whether a position is losing, an agent had to find its own entry in the
+    portfolio block, pick the right side's bid out of the candidates block
+    -- the NO bid for a NO holding -- multiply by quantity, subtract cost
+    basis, and work out time to close from two timestamps. Positions held to
+    settlement won 4 of 26 and lost $3,984, 86% of realized losses, so the
+    number that matters for exiting is stated here instead of left implied.
+
+    The exit value is the live bid on the side held -- the same mark the
+    published board uses -- before exit fees. A position with no live quote
+    or no executable bid says so rather than disappearing or showing zero.
+    """
+    side = str(position["side"])
+    quantity = float(position["quantity"])
+    cost_basis = float(position["cost_basis"])
+    line = (
+        f"  - {position['ticker']} {side}: {quantity:.1f} contracts, "
+        f"avg entry {float(position['avg_entry_price']):.2f}, cost basis {_fmt_money(cost_basis)}"
+    )
+    if quote is None:
+        return line + " | no live quote this cycle -- current value unknown"
+    bid = MarketQuote.from_mapping(quote).bid(side)
+    time_left = _fmt_time_left(_hours_until(quote.get("close_time"), now=now))
+    if bid is None or bid <= 0:
+        return line + f" | no executable {side} bid right now -- cannot exit at a price | {time_left}"
+    value = quantity * bid
+    unrealized = value - cost_basis
+    pct = f" ({unrealized / cost_basis:+.0%})" if cost_basis > 0 else ""
+    return (
+        line
+        + f" | exit value now {bid:.2f} ({_fmt_money(value)}) -> unrealized "
+        + f"{'+' if unrealized >= 0 else '-'}{_fmt_money(abs(unrealized))}{pct} before fees"
+        + f" | {time_left}"
+    )
+
+
 def _build_portfolio_block(
     conn,
     agent_id: str,
     last_thesis: Optional[str],
     learning_block: Optional[str] = None,
     last_transcript: Optional[str] = None,
+    held_quotes: Optional[List[Dict[str, Any]]] = None,
+    now: Optional[datetime] = None,
 ) -> str:
     summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
     lines = [
@@ -512,11 +571,21 @@ def _build_portfolio_block(
     ]
     if summary["open_positions"]:
         lines.append("Open positions:")
+        quotes_by_key = {
+            (str(q.get("platform") or "kalshi").lower(), q["ident"]): q
+            for q in (held_quotes or []) if q.get("ident")
+        }
         for p in summary["open_positions"]:
-            lines.append(
-                f"  - {p['ticker']} {p['side']}: {p['quantity']:.1f} contracts, "
-                f"avg entry {p['avg_entry_price']:.2f}, cost basis {_fmt_money(p['cost_basis'])}"
-            )
+            quote = quotes_by_key.get((str(p.get("platform") or "kalshi").lower(), p["ticker"]))
+            if held_quotes is None:
+                # Called without quotes: keep the plain line rather than
+                # claiming every position is unquoted.
+                lines.append(
+                    f"  - {p['ticker']} {p['side']}: {p['quantity']:.1f} contracts, "
+                    f"avg entry {p['avg_entry_price']:.2f}, cost basis {_fmt_money(p['cost_basis'])}"
+                )
+            else:
+                lines.append(_fmt_open_position(p, quote, now=now))
     else:
         lines.append("Open positions: none.")
     if learning_block:
@@ -739,19 +808,26 @@ def _paper_market_domain(quote: Dict[str, Any]) -> str:
     return "other"
 
 
-def _paper_horizon_bucket(close_time: Any, *, now: Optional[datetime] = None) -> str:
+def _hours_until(close_time: Any, *, now: Optional[datetime] = None) -> Optional[float]:
+    """Hours from now until close_time; negative once it has passed, None if unknown."""
     if not close_time:
-        return "unknown"
+        return None
     try:
         close = datetime.fromisoformat(str(close_time).strip().replace("Z", "+00:00"))
     except ValueError:
-        return "unknown"
+        return None
     if close.tzinfo is None:
         close = close.replace(tzinfo=timezone.utc)
     reference = now or datetime.now(timezone.utc)
     if reference.tzinfo is None:
         reference = reference.replace(tzinfo=timezone.utc)
-    hours = (close - reference).total_seconds() / 3600
+    return (close - reference).total_seconds() / 3600
+
+
+def _paper_horizon_bucket(close_time: Any, *, now: Optional[datetime] = None) -> str:
+    hours = _hours_until(close_time, now=now)
+    if hours is None:
+        return "unknown"
     if hours <= 48:
         return "short"
     if hours <= 24 * 7:
@@ -2928,11 +3004,16 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         ).fetchone()
         last_thesis = last_cycle["thesis"] if last_cycle else None
         last_transcript = last_cycle["transcript_json"] if last_cycle else None
-        portfolio_block = _build_portfolio_block(
-            conn, agent_id, last_thesis, learning_block, last_transcript
-        )
 
+    # Re-quote outside the account transaction (network I/O), then build the
+    # portfolio block from those quotes so each held position can state its
+    # current value and time left.
     held_quotes = _requote_held(held_positions)
+    with benchmark_tools._account_transaction() as conn:
+        portfolio_block = _build_portfolio_block(
+            conn, agent_id, last_thesis, learning_block, last_transcript,
+            held_quotes=held_quotes,
+        )
     known = {q.get("ident") for q in held_quotes if q.get("ident")}
     candidates_file = (
         os.environ.get("AGENT_TRADING_CANDIDATES_FILE")
