@@ -149,7 +149,7 @@ _STABLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,254}$")
 _MAX_RESULT_BYTES = 64 * 1024
 _RESEARCH_PAYLOAD_FIELDS = frozenset({
     "research_assignment_id", "budget_reservation_id", "market_snapshot_id",
-    "evidence_set_id", "model_config_id", "budget_key_id",
+    "evidence_set_id", "model_config_id", "budget_key_id", "strategy_cycle_id",
 })
 _STRATEGY_PAYLOAD_FIELDS = frozenset({
     "strategy_cycle_id", "config_release_id", "account_epoch_id",
@@ -668,6 +668,7 @@ class ResearchAssignment:
     evidence_set_id: str
     model_config_id: str
     budget_key_id: str
+    strategy_cycle_id: str
 
     @classmethod
     def from_job(cls, job: WorkerJob) -> "ResearchAssignment":
@@ -680,6 +681,7 @@ class ResearchAssignment:
             job.payload["research_assignment_id"], job.payload["budget_reservation_id"],
             job.payload["market_snapshot_id"], job.payload["evidence_set_id"],
             job.payload["model_config_id"], job.payload["budget_key_id"],
+            job.payload["strategy_cycle_id"],
         )
 
 
@@ -780,12 +782,14 @@ class MaintenanceResearchJobGateway:
         finalize_result: Optional[
             Callable[[ResearchAssignment, ResearchCompletion], ResearchCompletion]
         ] = None,
+        after_complete: Optional[Callable[[ResearchAssignment, WorkerJob], None]] = None,
     ) -> None:
         self._jobs = jobs
         self._authorize_assignment = authorize_assignment
         self._capture_loader = capture_loader
         self._repair_authorizer = authorize_repair
         self._finalize_result = finalize_result
+        self._after_complete = after_complete
 
     def completed_result(self, job_id: str) -> Optional[Mapping[str, Any]]:
         job = self._jobs.get(job_id)
@@ -804,12 +808,14 @@ class MaintenanceResearchJobGateway:
         try:
             self._authorize_assignment(assignment)
         except WorkerDegraded as exc:
-            self._jobs.complete(
+            completed = self._jobs.complete(
                 assignment.job_id, worker_id=assignment.worker_id,
                 fence=assignment.fence,
                 result={"status": "degraded", "reason": exc.reason},
                 now=now, degraded=True,
             )
+            if self._after_complete is not None:
+                self._after_complete(assignment, completed)
             return None
         return assignment
 
@@ -822,6 +828,8 @@ class MaintenanceResearchJobGateway:
             assignment.job_id, worker_id=assignment.worker_id, fence=assignment.fence,
             result=result.to_mapping(), now=now, degraded=result.status == "degraded",
         )
+        if self._after_complete is not None:
+            self._after_complete(assignment, completed)
         return completed.completed_result or {}
 
     def load_capture(self, assignment: ResearchAssignment) -> Mapping[str, Any]:
