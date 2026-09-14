@@ -123,6 +123,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: false
+    agent_trading_enabled: false
+    track_record_enabled: false
   scads-alias-huge-no-thinking:
     result_label: SCADS Alias Huge No Thinking
     provider: openai-compatible
@@ -132,6 +135,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: false
+    agent_trading_enabled: false
+    track_record_enabled: false
   qwen3-vl-8b-instruct:
     result_label: Qwen3-VL-8B-Instruct
     provider: openai-compatible
@@ -260,17 +266,16 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
-    # It joins the paper-trading board immediately; keep MTM out until the
-    # forecast scheduler has accumulated a non-empty comparison history.
-    track_record_enabled: false
+    track_record_enabled: true
     fallback_model_chain:
       - zai-org/GLM-5.3
       - openai/gpt-oss-120b
   deepseek-v4-flash:
     result_label: DeepSeek-V4-Flash
     provider: openai-compatible
-    local_model_name: deepseek-ai/DeepSeek-V4-Flash
-    router_model_name: deepseek-ai/DeepSeek-V4-Flash
+    local_model_name: deepseek-ai/DeepSeek-V4.1-Flash
+    router_model_name: deepseek-ai/DeepSeek-V4.1-Flash
+    agent_model_identity: deepseek-ai/DeepSeek-V4.1-Flash
     # Context window published by SCADS' status probe (verified 2026-09-05).
     context_window_tokens: 1048576
     # SCADS AI output quota: 30,000 output tokens/minute (output-only limit).
@@ -280,7 +285,7 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
-    track_record_enabled: false
+    track_record_enabled: true
     fallback_model_chain:
       - openai/gpt-oss-120b
       - google/gemma-4-26B-A4B-it

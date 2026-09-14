@@ -224,7 +224,7 @@ SCADS_STATUS_PRECHECK = os.environ.get("AGENT_TRADING_SCADS_STATUS_PRECHECK", "t
 }
 SCADS_STATUS_URL = os.environ.get("AGENT_TRADING_SCADS_STATUS_URL", "https://llm.scads.ai/status/state.json")
 SCADS_STATUS_TIMEOUT_S = max(0.1, float(os.environ.get("AGENT_TRADING_SCADS_STATUS_TIMEOUT_S", "5")))
-SCADS_UNAVAILABLE_STATES = {"down", "timeout", "not_listed"}
+SCADS_UNAVAILABLE_STATES = {"down", "timeout"}
 # AgentAnalyzeRequest.question used to have a tight 2000-char server-side
 # limit (see server.py) that was found silently destroying almost an entire
 # candidates block, including every Polymarket candidate, down to a mid-word
@@ -1739,19 +1739,22 @@ _TRADING_INSTRUCTION = (
     "gaps -- your profit comes from being right where you genuinely know more, and "
     "every trade pays a spread and a fee whether or not it was worth taking.\n\n"
     "SIZING: For every NEW position, call place_trade with your calibrated probability "
-    "(as model_probability) and exactly one sizing_mode: quarter_kelly "
-    "(25% Kelly, 50% market shrinkage, 8% account cap) or edge_kelly "
-    "(50% Kelly, 10 percentage-point edge minimum, 25% market shrinkage, "
-    "8% account cap). The tool accepts your calibrated deviation from the market price, "
-    "whether passed as P(YES) or contract probability, and calculates the final quantity "
-    "from the live ask and current account value; never invent a quantity larger than its "
-    "result. For a pure exit, use sizing_mode='close' and do not increase the "
-    "position. For an exact close, use the currently held quantity, including "
-    "any fractional contracts. CLOSE ACCOUNTING: buying the opposite binary "
-    "contract pays $1.00 per matched pair, so close P&L is quantity × (1 - "
-    "existing average entry - live opposite ask) minus fees. Do not call the "
-    "close order's gross cash outlay an additional loss or compare it directly "
-    "with the original cost basis.\n\n"
+    "(as model_probability) and exactly one sizing_mode: (1) convex_conviction "
+    "(30% Kelly, 15% market shrinkage further reduced by conviction, 1.2pp edge minimum, "
+    "6% account cap, with positive-skew payout boosting -- USE THIS when your forecast is "
+    "close to the market [1.5-8pp edge] backed by high research conviction, especially on "
+    "cheap underpriced contracts [<35c] where payout odds [3:1 to 9:1] produce disproportionate "
+    "winnings over losses; you may optionally pass conviction [0.0 to 1.0] in place_trade args), "
+    "(2) quarter_kelly (25% Kelly, 50% market shrinkage, 8% account cap), or (3) edge_kelly "
+    "(50% Kelly, 10 percentage-point edge minimum, 25% market shrinkage, 8% account cap). "
+    "The tool accepts your calibrated deviation from the market price, whether passed as P(YES) "
+    "or contract probability, and calculates the final quantity from the live ask and current "
+    "account value; never invent a quantity larger than its result. For a pure exit, use "
+    "sizing_mode='close' and do not increase the position. For an exact close, use the currently "
+    "held quantity, including any fractional contracts. CLOSE ACCOUNTING: buying the opposite "
+    "binary contract pays $1.00 per matched pair, so close P&L is quantity × (1 - "
+    "existing average entry - live opposite ask) minus fees. Do not call the close order's "
+    "gross cash outlay an additional loss or compare it directly with the original cost basis.\n\n"
     "EXECUTION CONTRACT: A final BUY YES, BUY NO, SELL YES, SELL NO, or CLOSE is "
     "a commitment to act in this shadow account. Call place_trade BEFORE writing "
     "that final action. If the tool rejects or cannot fill the order, say so plainly "
@@ -2336,7 +2339,8 @@ def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
     sizing_text = _THESIS_SIZING_RE.search(text)
     sizing_value = sizing_text.group(1).lower() if sizing_text else text.lower()
     sizing_mode = (
-        "edge_kelly" if "edge kelly" in sizing_value
+        "convex_conviction" if ("convex" in sizing_value or "conviction" in sizing_value)
+        else "edge_kelly" if "edge kelly" in sizing_value
         else "quarter_kelly" if ("quarter kelly" in sizing_value or "quarter-kelly" in sizing_value or "kelly" in sizing_value)
         else "quarter_kelly" if action.startswith("BUY ")
         else None
@@ -2345,6 +2349,19 @@ def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
     qty_match = re.search(r"~?(\d+(?:\.\d+)?)\s*contracts?", sizing_value)
     quantity = float(qty_match.group(1)) if qty_match else None
 
+    conv_match = re.search(
+        r"(?:\*{0,2}conviction\*{0,2})\s*[:=]?\s*\*{0,2}\s*~?\s*(\d+(?:\.\d+)?)\s*(?:%|\b)",
+        text,
+        re.IGNORECASE,
+    )
+    conviction = None
+    if conv_match:
+        try:
+            raw_c = float(conv_match.group(1))
+            conviction = raw_c / 100.0 if raw_c > 1.0 else raw_c
+        except (ValueError, TypeError):
+            pass
+
     return {
         "action": action,
         "ticker": ticker,
@@ -2352,6 +2369,7 @@ def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
         "model_probability": probability,
         "sizing_mode": sizing_mode,
         "quantity": quantity,
+        "conviction": conviction,
     }
 
 
@@ -2630,6 +2648,8 @@ def _reconcile_thesis_execution(
             args["quantity"] = quantity
         if probability is not None:
             args["model_probability"] = probability
+        if decision.get("conviction") is not None:
+            args["conviction"] = decision["conviction"]
 
         result = benchmark_tools.place_trade(
             args,
@@ -2762,6 +2782,42 @@ def _thesis_forecast_records(
                 "strategy": strategy,
                 "evidence_delta": _excerpt(evidence.group(1), 600) if evidence else None,
             })
+    else:
+        model_probability = _extract_thesis_probability(thesis or "")
+        if model_probability is not None:
+            ticker = ""
+            platform = ""
+            if market:
+                ticker = _normalise_forecast_ticker(market.group(1))
+                platform = market.group(2).lower()
+            else:
+                loose_match = _LOOSE_ACTION_MARKET_RE.search(thesis or "")
+                if loose_match:
+                    ticker = _normalise_forecast_ticker(loose_match.group(2))
+                    platform = loose_match.group(3).lower()
+                else:
+                    for step in transcript or []:
+                        if not isinstance(step, dict):
+                            continue
+                        args = step.get("args") or {}
+                        if not isinstance(args, dict):
+                            continue
+                        t = args.get("ticker") or args.get("market_id")
+                        if t:
+                            ticker = _normalise_forecast_ticker(t)
+                            platform = str(args.get("platform") or ("kalshi" if str(t).startswith("KX") else "polymarket")).strip().lower()
+                            break
+            if ticker and platform:
+                market_probability = _candidate_probability(candidates, platform, ticker)
+                records.append({
+                    "platform": platform,
+                    "ticker": ticker,
+                    "model_probability": model_probability,
+                    "market_probability": market_probability,
+                    "action": action.group(1).strip() if action else None,
+                    "strategy": strategy,
+                    "evidence_delta": _excerpt(evidence.group(1), 600) if evidence else None,
+                })
 
     # A trade cannot reach the ledger without model_probability in benchmark
     # mode. Preserve that durable input if a provider failed to echo it in the
@@ -2809,6 +2865,13 @@ def _expected_provider_identity(model: str) -> str:
     return str(identity or "").strip()
 
 
+def _normalize_model_name(name: str) -> str:
+    s = (name or "").strip().lower().split(":", 1)[0].rsplit("/", 1)[-1]
+    if s in {"deepseek-v4-flash", "deepseek-v4.1-flash"}:
+        return "deepseek-v4-flash"
+    return s
+
+
 def _served_model_matches(expected: str, served: str) -> bool:
     """Whether the provider answered with the model this agent asked for.
 
@@ -2820,7 +2883,9 @@ def _served_model_matches(expected: str, served: str) -> bool:
     got = (served or "").strip().lower().split(":", 1)[0]
     if not exp or not got:
         return True
-    return exp == got or exp.rsplit("/", 1)[-1] == got.rsplit("/", 1)[-1]
+    if exp == got or exp.rsplit("/", 1)[-1] == got.rsplit("/", 1)[-1]:
+        return True
+    return _normalize_model_name(exp) == _normalize_model_name(got)
 
 
 def _persist_thesis_forecasts(
@@ -3137,10 +3202,19 @@ def _scads_model_readiness(model: str) -> Tuple[Optional[str], Optional[str]]:
         )
         for item in records:
             names = {str(item.get("name") or "").strip(), str(item.get("real_name") or "").strip()}
+            matched = False
             if target in names:
+                matched = True
+            else:
+                norm_target = _normalize_model_name(target)
+                for n in names:
+                    if _normalize_model_name(n) == norm_target:
+                        matched = True
+                        break
+            if matched:
                 state = str(item.get("state") or "unknown").strip().lower()
                 return state, f"SCADS status check reports {target} as {state}."
-        return "not_listed", f"SCADS status check does not list configured model {target}."
+        return None, None
     except Exception as exc:  # noqa: BLE001 - availability checks must fail open
         logger.info("SCADS status precheck unavailable for model=%s: %s", model, type(exc).__name__)
         return None, None

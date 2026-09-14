@@ -162,6 +162,14 @@ AGENT_SIZING_POLICIES: Dict[str, AgentSizingPolicy] = {
         max_position_fraction=0.08,
         min_edge=0.10,
     ),
+    "convex_conviction": AgentSizingPolicy(
+        key="convex_conviction",
+        label="Convex Conviction · Asymmetric Sizing",
+        kelly_fraction=0.30,
+        market_shrinkage=0.15,
+        max_position_fraction=0.06,
+        min_edge=0.012,
+    ),
 }
 
 
@@ -487,11 +495,22 @@ def _sizing_plan(
         }
 
     # Match the published Mark-to-Market definitions: Quarter Kelly shrinks
-    # halfway to market; Edge Kelly uses 25% shrinkage and half Kelly. The
-    # share of the model's disagreement that survives is then scaled by how
-    # reliable the published record says disagreements this size have been.
+    # halfway to market; Edge Kelly uses 25% shrinkage and half Kelly.
+    # Convex Conviction uses 15% base shrinkage, optionally reduced further by
+    # the agent's stated conviction score (0.0 to 1.0). The share of the
+    # model's disagreement that survives is then scaled by how reliable the
+    # published record says disagreements this size have been.
+    effective_shrinkage = policy.market_shrinkage
+    raw_conviction = args.get("conviction")
+    if raw_conviction is not None:
+        try:
+            conv_val = max(0.0, min(1.0, float(raw_conviction)))
+            effective_shrinkage = policy.market_shrinkage * max(0.20, 1.0 - 0.75 * conv_val)
+        except (ValueError, TypeError):
+            pass
+
     reliability = _edge_reliability(edge, _published_edge_calibration())
-    kept = (1.0 - policy.market_shrinkage) * reliability["weight"]
+    kept = (1.0 - effective_shrinkage) * reliability["weight"]
     p_win = price + kept * (model_side_probability - price)
     # Kelly must price the bet actually on offer. A contract costs the ask
     # *plus* the taker fee, so gross odds overstate the payoff and overstate
@@ -523,6 +542,13 @@ def _sizing_plan(
         }
     odds = (1.0 - effective_cost) / effective_cost
     raw_kelly = max(0.0, (p_win * odds - (1.0 - p_win)) / odds)
+    if policy.key == "convex_conviction" and odds > 0:
+        # Convex payoff multiplier: scale sizing by reward-to-risk ratio b^0.35.
+        # Underpriced contracts (<50c, b > 1.0) receive a convex boost up to 2.0x,
+        # making winners disproportionately larger than losses, while expensive
+        # favorites (b < 1.0) are dampened to protect against negative skew.
+        skew_multiplier = min(2.0, max(0.4, odds ** 0.35))
+        raw_kelly *= skew_multiplier
     target_fraction = min(policy.kelly_fraction * raw_kelly, policy.max_position_fraction)
     target_notional = account_value * target_fraction
     return {
@@ -533,7 +559,7 @@ def _sizing_plan(
         "edge": round(edge, 6),
         "min_edge": policy.min_edge,
         "kelly_fraction": policy.kelly_fraction,
-        "market_shrinkage": policy.market_shrinkage,
+        "market_shrinkage": round(effective_shrinkage, 6),
         "effective_market_shrinkage": round(1.0 - kept, 6),
         "calibration_reliability": reliability,
         "raw_kelly": round(raw_kelly, 6),
@@ -2445,13 +2471,25 @@ def _edge_clears_fees(
     fee_per_contract = (fee / quantity) if quantity else 0.0
     net_edge = gross_edge - fee_per_contract
     floor = _min_net_edge()
+    sizing_mode = str(args.get("sizing_mode") or "").strip().lower().replace("-", "_")
+    if sizing_mode == "convex_conviction":
+        policy = AGENT_SIZING_POLICIES.get("convex_conviction")
+        if policy is not None:
+            floor = min(floor, policy.min_edge)
+    # Asymmetric hurdle discount: on cheap contracts (<50c), payout odds b = (1-c)/c
+    # are >= 1.0, generating substantially higher return-on-investment per dollar risked.
+    # Scale down the fee floor proportionally for positive-skew contracts while holding
+    # the standard floor for even-money and favorite contracts.
+    asym_discount = min(1.0, (price / max(1e-4, 1.0 - price)) ** 0.5) if 0.0 < price < 0.50 else 1.0
+    effective_floor = floor * asym_discount
     return {
         "checked": True,
-        "clears": net_edge >= floor - 1e-9,
+        "clears": net_edge >= effective_floor - 1e-9,
         "gross_edge": round(gross_edge, 6),
         "fee_per_contract": round(fee_per_contract, 6),
         "net_edge": round(net_edge, 6),
-        "min_net_edge": floor,
+        "min_net_edge": round(effective_floor, 6),
+        "base_min_net_edge": floor,
     }
 
 

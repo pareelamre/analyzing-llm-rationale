@@ -332,6 +332,15 @@ def _normalize_action(obj: Dict[str, Any]) -> Dict[str, Any]:
         return obj
     if "final" in obj:
         return obj
+    for key in ("thesis", "answer", "summary", "response", "decision"):
+        if key in obj and isinstance(obj[key], (str, dict)):
+            obj["final"] = obj[key]
+            return obj
+    if "thought" in obj and not obj.get("action") and not obj.get("name"):
+        thought_val = str(obj["thought"])
+        if "### 0. Research Delta" in thought_val or "### 1. Decision" in thought_val:
+            obj["final"] = thought_val
+            return obj
     name = obj.get("name")
     if not isinstance(name, str) or not name:
         return obj
@@ -476,12 +485,42 @@ def _format_prob_display(val: Any) -> Optional[str]:
     return f"{round(f, 1)}%"
 
 
+def _clean_original_response(answer: str, max_chars: int = 600) -> str:
+    """Format the model's raw response cleanly for the human thesis card.
+
+    Extracts thought/reasoning text from raw JSON blobs and removes raw JSON
+    formatting noise so operators reading the card see clear prose.
+    """
+    raw = str(answer or "").strip()
+    if not raw:
+        return "No publishable final response was supplied."
+    if raw.startswith("{"):
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                for k in ("thought", "reasoning", "thesis", "answer", "final", "summary"):
+                    val = parsed.get(k)
+                    if isinstance(val, str) and val.strip():
+                        raw = val.strip()
+                        break
+        except Exception:
+            m = re.search(r'"(?:thought|reasoning|thesis|answer|final)"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+            if m:
+                try:
+                    raw = json.loads(f'"{m.group(1)}"')
+                except Exception:
+                    raw = m.group(1)
+    clean_lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    cleaned = "\n".join(clean_lines)
+    return cleaned[:max_chars] or "No publishable final response was supplied."
+
+
 def _extract_synthesis_metadata(
     answer: str, transcript: Sequence[Dict[str, Any]]
 ) -> tuple[str, str, Optional[str], Optional[str]]:
     """Extract (action, market, model_prob_str, market_price_str) from answer and transcript.
 
-    Recovers researched tickers, actions (HOLD/PASS), and explicit probabilities
+    Recovers researched tickers, actions (HOLD/PASS/BUY), and explicit probabilities
     when a model failed to format them into the mandated 4-section markdown.
     """
     ans = str(answer or "").strip()
@@ -493,6 +532,10 @@ def _extract_synthesis_metadata(
         cand_act = act_match.group(1).strip().upper()
         if cand_act.startswith("BUY ") or cand_act in ("PASS", "HOLD", "CLOSE"):
             action = cand_act
+    elif re.search(r"(?i)\b(?:buying|buy)\s+NO\b", ans):
+        action = "BUY NO"
+    elif re.search(r"(?i)\b(?:buying|buy)\s+YES\b", ans):
+        action = "BUY YES"
     elif re.search(r"(?i)\bHOLD\b", ans):
         action = "HOLD"
 
@@ -519,9 +562,10 @@ def _extract_synthesis_metadata(
             args = step.get("args") if isinstance(step.get("args"), dict) else {}
             step_ticker = str(args.get("ticker") or args.get("market_id") or "").strip()
             if step_ticker:
-                step_platform = str(
+                plat_raw = str(
                     args.get("platform") or ("kalshi" if step_ticker.startswith("KX") else "polymarket")
-                ).lower()
+                ).strip()
+                step_platform = "Kalshi" if plat_raw.lower() == "kalshi" else ("Polymarket" if plat_raw.lower() == "polymarket" else plat_raw.capitalize())
                 market = f"{step_ticker} on {step_platform}"
                 break
 
@@ -529,6 +573,17 @@ def _extract_synthesis_metadata(
     model_p_str: Optional[str] = None
     market_p_str: Optional[str] = None
 
+    # Check for explicit market probability expressions in ans first so market is known
+    mkt_price_match = re.search(
+        r"(?i)\bmarket\s+(?:implied\s+)?probability\s*:\s*~?\s*(?P<market>\d+(?:\.\d+)?)\s*%(?P<market_side>\s+(?:YES|NO)\b)?",
+        ans,
+    )
+    if mkt_price_match:
+        mk_val = mkt_price_match.group("market")
+        mk_side = (mkt_price_match.group("market_side") or "").strip().upper()
+        market_p_str = f"{mk_val}% {mk_side}".strip()
+
+    # Pattern A: Standard "Model Probability: X% [side] vs Market Price: Y% [side]"
     prob_line_match = re.search(
         r"(?i)\*{0,2}model\s+probability\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
         r"(?P<model>\d+(?:\.\d+)?)\s*%\s*\]?"
@@ -550,19 +605,59 @@ def _extract_synthesis_metadata(
             mk_side = (prob_line_match.group("market_side") or "").strip().upper()
             market_p_str = f"{mk_val}% {mk_side}".strip()
 
+    # Pattern B: Scoped model probability: "Model probability of 74-75°F: 15.6%" or "Model probability of high < 74°F: 25.2%"
     if not model_p_str:
-        est_match = re.search(
+        scoped_model_match = re.search(
+            r"(?i)\bmodel\s+probability(?:\s+of\s+[^:\n\r%]{1,40})?\s*:\s*~?\s*(?P<model>\d+(?:\.\d+)?)\s*%(?P<model_side>\s+(?:YES|NO)\b)?",
+            ans,
+        )
+        if scoped_model_match:
+            m_val = scoped_model_match.group("model")
+            m_side = (scoped_model_match.group("model_side") or "").strip().upper()
+            model_p_str = f"{m_val}% {m_side}".strip()
+
+    # Pattern C: Edge on NO/YES: "Edge on NO: model 74.8% vs market ~65%"
+    if not model_p_str:
+        edge_match = re.search(
+            r"(?i)\bEdge\s+on\s+(?P<side>YES|NO)\s*:\s*model\s+(?P<model>\d+(?:\.\d+)?)\s*%\s*(?:vs\.?|versus)\s*market\s*~?(?P<market>\d+(?:\.\d+)?)\s*%",
+            ans,
+        )
+        if edge_match:
+            model_p_str = f"{edge_match.group('model')}% {edge_match.group('side').upper()}"
+            if not market_p_str and edge_match.group("market"):
+                market_p_str = f"{edge_match.group('market')}%"
+
+    # Pattern D: P(...) equation: "P(high < 74) = 25.2%"
+    if not model_p_str:
+        p_eq_match = re.search(
+            r"(?i)\b(?:model\s+(?:says|estimates?|forecasts?|NO|YES)?\s*)?P\([^)]+\)\s*=\s*~?\s*(?P<val>\d+(?:\.\d+)?)\s*%",
+            ans,
+        )
+        if p_eq_match:
+            model_p_str = f"{p_eq_match.group('val')}%"
+
+    # Pattern E: Estimate match (ignoring market probability lines)
+    if not model_p_str:
+        for est_match in re.finditer(
             r"(?i)(?:my\s+estimate|estimate|forecast|probability)\s*(?:is|of|=|:)?\s*(?:about|maybe|~)?\s*"
             r"(?P<val>\d+(?:\.\d+)?)\s*%\s*(?P<side>YES|NO)?(?:\s*(?:vs\.?|versus|vs\s+market)\s*(?:market)?\s*(?:about|~)?\s*(?P<market>\d+(?:\.\d+)?)\s*%)?",
             ans,
-        )
-        if est_match:
+        ):
+            start_pos = est_match.start()
+            line_start = ans.rfind("\n", 0, start_pos)
+            prefix = ans[line_start + 1:start_pos].lower()
+            if "market" in prefix:
+                if not market_p_str:
+                    market_p_str = f"{est_match.group('val')}%"
+                continue
             val = est_match.group("val")
             side = (est_match.group("side") or "").strip().upper()
             model_p_str = f"{val}% {side}".strip()
-            if est_match.group("market"):
+            if not market_p_str and est_match.group("market"):
                 market_p_str = f"{est_match.group('market')}%"
+            break
 
+    # Pattern F: P(YES)/P(NO)
     if not model_p_str:
         p_side_match = re.search(
             r"(?i)\bP\((?P<side>YES|NO)\)\b[^\n\r%]{0,60}?(?:is|=|:|~|\s)\s*~?\s*(?P<val>\d+(?:\.\d+)?)\s*%",
@@ -571,21 +666,25 @@ def _extract_synthesis_metadata(
         if p_side_match:
             model_p_str = f"{p_side_match.group('val')}% {p_side_match.group('side').upper()}"
 
-    if not model_p_str:
+    # Pattern G: Transcript fallback
+    if not model_p_str or not market_p_str:
         for step in reversed(list(transcript or [])):
             if not isinstance(step, dict):
                 continue
             obs = step.get("observation")
-            if isinstance(obs, str) and ("bracket_probability" in obs or "forecast_probability" in obs):
+            if isinstance(obs, str) and ("bracket_probability" in obs or "forecast_probability" in obs or "market_price" in obs):
                 try:
                     obs_json = json.loads(obs)
                     if isinstance(obs_json, dict):
-                        bp = obs_json.get("bracket_probability") or obs_json.get("forecast_probability")
-                        if bp is not None:
-                            model_p_str = _format_prob_display(bp)
+                        if not model_p_str:
+                            bp = obs_json.get("bracket_probability") or obs_json.get("forecast_probability")
+                            if bp is not None:
+                                model_p_str = _format_prob_display(bp)
+                        if not market_p_str:
                             mp = obs_json.get("market_price")
                             if mp is not None:
                                 market_p_str = _format_prob_display(mp)
+                        if model_p_str and market_p_str:
                             break
                 except Exception:
                     pass
@@ -647,7 +746,7 @@ def _synthesise_thesis(answer: str, transcript: Sequence[Dict[str, Any]]) -> str
     return "\n".join([
         "### 0. Research Delta",
         "- **Template status**: The model did not follow the required template; Foresea reconstructed this record from the tool transcript.",
-        f"- **Original response**: {str(answer or '').strip()[:600] or 'No publishable final response was supplied.'}",
+        f"- **Original response**: {_clean_original_response(answer)}",
         f"- **Strategy**: {action}",
         f"- **New evidence**: Research completed across candidate markets; tools called this cycle: {tool_summary}.",
         "- **Belief update**: Evaluated candidate odds against live venue orderbooks.",
@@ -810,6 +909,8 @@ async def run_tool_loop(
     retry_unusable_final: bool = False,
     required_final_sections: Optional[Sequence[str]] = None,
     max_structure_retries: int = 2,
+    max_reformat_retries: Optional[int] = None,
+    max_unusable_retries: Optional[int] = None,
     token_budget: Optional[int] = None,
     output_token_budget: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -839,7 +940,8 @@ async def run_tool_loop(
         '{"final": "<answer>"} to give your final answer. Do not use any other format.'
     )
     reformat_retries_used = 0
-    max_reformat_retries = 1
+    if max_reformat_retries is None:
+        max_reformat_retries = 3 if (required_final_sections or retry_unusable_final) else 1
     substantive_hint = (
         "That is a verdict with no analysis behind it, and you have not called "
         "any tool this cycle. Do the research first -- check the market and the "
@@ -847,7 +949,9 @@ async def run_tool_loop(
         "it. If the answer really is no action, say why."
     )
     substantive_retry_used = False
-    unusable_retry_used = False
+    unusable_retries_used = 0
+    if max_unusable_retries is None:
+        max_unusable_retries = 3 if (required_final_sections or retry_unusable_final) else 1
     structure_retries_used = 0
     # Why a cycle stopped is not recoverable from `steps`/`truncated` alone:
     # a budget stop and an out-of-steps stop both report steps=max_steps and
@@ -989,10 +1093,10 @@ async def run_tool_loop(
             # gpt-oss-120b both produced at step 0 with no tool calls.
             if (
                 retry_unusable_final
-                and not unusable_retry_used
+                and unusable_retries_used < max_unusable_retries
                 and step < max_steps - 1
             ):
-                unusable_retry_used = True
+                unusable_retries_used += 1
                 messages.append({"role": "assistant", "content": out})
                 messages.append({"role": "user", "content": reformat_hint})
                 continue

@@ -967,6 +967,23 @@ class DeclaredThesisProbabilityTests(unittest.TestCase):
         self.assertIsNotNone(declared)
         self.assertEqual(declared["model_probability"], 0.62)
 
+    def test_parses_convex_conviction_and_conviction_score(self):
+        thesis = chr(10).join([
+            "- **Action**: BUY YES",
+            "- **Market & Venue**: KXCHEAP on Kalshi",
+            "- **Order Sizing**: convex_conviction (~100 contracts)",
+            "- **Model Probability**: 23% vs **Market Price**: 19%",
+            "- **Conviction**: 85%",
+        ])
+        declared = agent_trading_tick._declared_thesis_execution(thesis)
+        self.assertIsNotNone(declared)
+        self.assertEqual(declared["action"], "BUY YES")
+        self.assertEqual(declared["ticker"], "KXCHEAP")
+        self.assertEqual(declared["sizing_mode"], "convex_conviction")
+        self.assertEqual(declared["model_probability"], 0.23)
+        self.assertEqual(declared["quantity"], 100.0)
+        self.assertAlmostEqual(declared["conviction"], 0.85, places=2)
+
 
 class EventMeritGateTests(unittest.TestCase):
     def test_prompt_requires_event_merit_not_just_a_price_gap(self):
@@ -2263,7 +2280,54 @@ class ThesisReconciliationTests(unittest.TestCase):
         self.assertNotIn("PAPER ORDER ERROR", reconciled)
         self.assertEqual(result_dict["outcome"], "skipped")
 
+    def test_served_model_matches_normalizes_deepseek_revisions(self):
+        self.assertTrue(
+            agent_trading_tick._served_model_matches(
+                "deepseek-ai/DeepSeek-V4.1-Flash", "deepseek-ai/DeepSeek-V4-Flash"
+            )
+        )
+        self.assertTrue(
+            agent_trading_tick._served_model_matches(
+                "DeepSeek-V4-Flash", "deepseek-ai/DeepSeek-V4.1-Flash"
+            )
+        )
+
+    def test_scads_model_readiness_normalizes_and_fails_open(self):
+        fake_state = {
+            "models": {
+                "group1": [
+                    {"name": "deepseek-ai/DeepSeek-V4.1-Flash", "real_name": "deepseek-v4.1-flash", "state": "running"},
+                ]
+            }
+        }
+        with mock.patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = fake_state
+            state, detail = agent_trading_tick._scads_model_readiness("deepseek-v4-flash")
+            self.assertEqual(state, "running")
+            self.assertIn("running", detail)
+
+            # An unlisted model fails open (returns None, None)
+            state_unlisted, detail_unlisted = agent_trading_tick._scads_model_readiness("non-existent-model")
+            self.assertIsNone(state_unlisted)
+            self.assertIsNone(detail_unlisted)
+
+    def test_thesis_forecast_records_fallback_standalone_probability(self):
+        thesis = (
+            "### 0. Research Delta\n- **Strategy**: PASS\n\n"
+            "### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXSTANDALONE on Kalshi\n\n"
+            "### 3. Model Edge & Valuation\n- **Model Probability**: 42%\n"
+        )
+        candidates = [{"platform": "Kalshi", "ident": "KXSTANDALONE", "probability": 0.50}]
+        records = agent_trading_tick._thesis_forecast_records(thesis, [], candidates, "evidence_edge")
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["ticker"], "KXSTANDALONE")
+        self.assertEqual(records[0]["platform"], "kalshi")
+        self.assertEqual(records[0]["model_probability"], 0.42)
+        self.assertEqual(records[0]["market_probability"], 0.50)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
