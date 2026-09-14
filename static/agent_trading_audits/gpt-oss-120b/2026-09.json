@@ -7591,6 +7591,207 @@
       "outcome": "rejected",
       "record_hash": "e5547c5a8da0107e0074d99930f8dff20a5b880f15c7f02b8176793d961e37af",
       "recorded_at": "2026-09-14T08:08:22.691510+00:00"
+    },
+    {
+      "action_id": "e7728e83-7d92-4dbf-9b41-6b7ddb6b4ad2",
+      "agent_id": "gpt-oss-120b",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_assumed_full",
+          "filled_quantity": 28766.814803
+        },
+        "quote": {
+          "marketable": true,
+          "observed_ask": 0.01,
+          "source": "live_venue_quote",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.01,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "cash_before": 8672.25181,
+          "cash_required": 307.603551,
+          "concentration_cap": 1300.837771,
+          "cycle_id": "30m:994100",
+          "cycle_spend_after": 307.603551,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 376.97954,
+          "daily_risk_before": 69.375989,
+          "daily_risk_limit": 2601.675543,
+          "drawdown_after": 0.138065,
+          "fee": 19.935403,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 293.068148,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 287.668148,
+          "open_markets_after": 1,
+          "per_cycle_spend_limit": 1734.450362,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.69,
+          "eligible": true,
+          "kelly_fraction": 0.25,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.08,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 307.603551,
+          "target_quantity": 28766.8148028093
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994100",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": -307.603551028093,
+        "cash_required": 307.603551028093,
+        "fee": 19.935403,
+        "netting_payout": 0.0,
+        "notional": 287.668148028093,
+        "price": 0.01,
+        "quantity": 28766.8148028093,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXHIGHNY-26SEP14-T74"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "14b9d9176ad16493aac5c46cc49c462854b2fd75e4b829fd6ef5f54d333b95b3",
+      "recorded_at": "2026-09-14T10:10:55.418493+00:00"
+    },
+    {
+      "action_id": "4eaccf86-1146-4610-b07a-9288f9993deb",
+      "agent_id": "gpt-oss-120b",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "marketable": true,
+          "observed_ask": 0.01,
+          "source": "live_venue_quote",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.01,
+          "quantity": 15
+        },
+        "risk": {
+          "allowed": false,
+          "cash_before": 8364.648259,
+          "cash_required": 0.160395,
+          "concentration_cap": 1300.837771,
+          "cycle_id": "30m:994100",
+          "cycle_spend_after": 307.763946,
+          "cycle_spend_before": 307.603551,
+          "cycle_trade_count_after": 2,
+          "cycle_trade_count_before": 1,
+          "daily_risk_after": 377.139935,
+          "daily_risk_before": 376.97954,
+          "daily_risk_limit": 2601.675543,
+          "drawdown_after": 0.138066,
+          "fee": 0.010395,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 293.218148,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 0.15,
+          "open_markets_after": 1,
+          "per_cycle_spend_limit": 1734.450362,
+          "reasons": [
+            "close_exceeds_open_position"
+          ],
+          "risk_reducing": true
+        },
+        "sizing": {
+          "applied": false,
+          "mode": "close"
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994100",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.160395,
+        "fee": 0.010395,
+        "netting_payout": 0.0,
+        "notional": 0.15,
+        "price": 0.01,
+        "quantity": 15.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXHIGHNY-26SEP14-T74"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "8c6f768f9e0c3bad6ace35c3d763db238281fe374e3a5cc46009b6e394160ce4",
+      "recorded_at": "2026-09-14T10:10:58.843660+00:00"
+    },
+    {
+      "action_id": "f717d43e-421e-4b6c-8ea3-3c469c57c8f1",
+      "agent_id": "gpt-oss-120b",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_sizing",
+          "filled_quantity": 0.0
+        },
+        "risk": {
+          "reasons": [
+            "no_executable_price"
+          ],
+          "rejected_before_sizing": true
+        },
+        "status": "rejected_before_sizing",
+        "version": 1
+      },
+      "cycle_id": "30m:994100",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": 1.0,
+        "quantity": 15.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXHIGHNY-26SEP14-T74"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "f38281f14f131afca6d1347c1686b6adc1cfe500889d1b0b6ea148077de2809b",
+      "recorded_at": "2026-09-14T10:11:01.876947+00:00"
     }
   ],
   "month": "2026-09",
