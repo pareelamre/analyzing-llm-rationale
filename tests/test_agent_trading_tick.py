@@ -967,6 +967,23 @@ class DeclaredThesisProbabilityTests(unittest.TestCase):
         self.assertIsNotNone(declared)
         self.assertEqual(declared["model_probability"], 0.62)
 
+    def test_parses_convex_conviction_and_conviction_score(self):
+        thesis = chr(10).join([
+            "- **Action**: BUY YES",
+            "- **Market & Venue**: KXCHEAP on Kalshi",
+            "- **Order Sizing**: convex_conviction (~100 contracts)",
+            "- **Model Probability**: 23% vs **Market Price**: 19%",
+            "- **Conviction**: 85%",
+        ])
+        declared = agent_trading_tick._declared_thesis_execution(thesis)
+        self.assertIsNotNone(declared)
+        self.assertEqual(declared["action"], "BUY YES")
+        self.assertEqual(declared["ticker"], "KXCHEAP")
+        self.assertEqual(declared["sizing_mode"], "convex_conviction")
+        self.assertEqual(declared["model_probability"], 0.23)
+        self.assertEqual(declared["quantity"], 100.0)
+        self.assertAlmostEqual(declared["conviction"], 0.85, places=2)
+
 
 class EventMeritGateTests(unittest.TestCase):
     def test_prompt_requires_event_merit_not_just_a_price_gap(self):

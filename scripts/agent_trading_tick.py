@@ -1739,19 +1739,22 @@ _TRADING_INSTRUCTION = (
     "gaps -- your profit comes from being right where you genuinely know more, and "
     "every trade pays a spread and a fee whether or not it was worth taking.\n\n"
     "SIZING: For every NEW position, call place_trade with your calibrated probability "
-    "(as model_probability) and exactly one sizing_mode: quarter_kelly "
-    "(25% Kelly, 50% market shrinkage, 8% account cap) or edge_kelly "
-    "(50% Kelly, 10 percentage-point edge minimum, 25% market shrinkage, "
-    "8% account cap). The tool accepts your calibrated deviation from the market price, "
-    "whether passed as P(YES) or contract probability, and calculates the final quantity "
-    "from the live ask and current account value; never invent a quantity larger than its "
-    "result. For a pure exit, use sizing_mode='close' and do not increase the "
-    "position. For an exact close, use the currently held quantity, including "
-    "any fractional contracts. CLOSE ACCOUNTING: buying the opposite binary "
-    "contract pays $1.00 per matched pair, so close P&L is quantity × (1 - "
-    "existing average entry - live opposite ask) minus fees. Do not call the "
-    "close order's gross cash outlay an additional loss or compare it directly "
-    "with the original cost basis.\n\n"
+    "(as model_probability) and exactly one sizing_mode: (1) convex_conviction "
+    "(30% Kelly, 15% market shrinkage further reduced by conviction, 1.2pp edge minimum, "
+    "6% account cap, with positive-skew payout boosting -- USE THIS when your forecast is "
+    "close to the market [1.5-8pp edge] backed by high research conviction, especially on "
+    "cheap underpriced contracts [<35c] where payout odds [3:1 to 9:1] produce disproportionate "
+    "winnings over losses; you may optionally pass conviction [0.0 to 1.0] in place_trade args), "
+    "(2) quarter_kelly (25% Kelly, 50% market shrinkage, 8% account cap), or (3) edge_kelly "
+    "(50% Kelly, 10 percentage-point edge minimum, 25% market shrinkage, 8% account cap). "
+    "The tool accepts your calibrated deviation from the market price, whether passed as P(YES) "
+    "or contract probability, and calculates the final quantity from the live ask and current "
+    "account value; never invent a quantity larger than its result. For a pure exit, use "
+    "sizing_mode='close' and do not increase the position. For an exact close, use the currently "
+    "held quantity, including any fractional contracts. CLOSE ACCOUNTING: buying the opposite "
+    "binary contract pays $1.00 per matched pair, so close P&L is quantity × (1 - "
+    "existing average entry - live opposite ask) minus fees. Do not call the close order's "
+    "gross cash outlay an additional loss or compare it directly with the original cost basis.\n\n"
     "EXECUTION CONTRACT: A final BUY YES, BUY NO, SELL YES, SELL NO, or CLOSE is "
     "a commitment to act in this shadow account. Call place_trade BEFORE writing "
     "that final action. If the tool rejects or cannot fill the order, say so plainly "
@@ -2336,7 +2339,8 @@ def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
     sizing_text = _THESIS_SIZING_RE.search(text)
     sizing_value = sizing_text.group(1).lower() if sizing_text else text.lower()
     sizing_mode = (
-        "edge_kelly" if "edge kelly" in sizing_value
+        "convex_conviction" if ("convex" in sizing_value or "conviction" in sizing_value)
+        else "edge_kelly" if "edge kelly" in sizing_value
         else "quarter_kelly" if ("quarter kelly" in sizing_value or "quarter-kelly" in sizing_value or "kelly" in sizing_value)
         else "quarter_kelly" if action.startswith("BUY ")
         else None
@@ -2345,6 +2349,19 @@ def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
     qty_match = re.search(r"~?(\d+(?:\.\d+)?)\s*contracts?", sizing_value)
     quantity = float(qty_match.group(1)) if qty_match else None
 
+    conv_match = re.search(
+        r"(?:\*{0,2}conviction\*{0,2})\s*[:=]?\s*\*{0,2}\s*~?\s*(\d+(?:\.\d+)?)\s*(?:%|\b)",
+        text,
+        re.IGNORECASE,
+    )
+    conviction = None
+    if conv_match:
+        try:
+            raw_c = float(conv_match.group(1))
+            conviction = raw_c / 100.0 if raw_c > 1.0 else raw_c
+        except (ValueError, TypeError):
+            pass
+
     return {
         "action": action,
         "ticker": ticker,
@@ -2352,6 +2369,7 @@ def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
         "model_probability": probability,
         "sizing_mode": sizing_mode,
         "quantity": quantity,
+        "conviction": conviction,
     }
 
 
@@ -2630,6 +2648,8 @@ def _reconcile_thesis_execution(
             args["quantity"] = quantity
         if probability is not None:
             args["model_probability"] = probability
+        if decision.get("conviction") is not None:
+            args["conviction"] = decision["conviction"]
 
         result = benchmark_tools.place_trade(
             args,

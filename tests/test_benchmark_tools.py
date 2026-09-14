@@ -757,6 +757,77 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertTrue(edge_implied["clears"])
         self.assertAlmostEqual(edge_implied["gross_edge"], 0.12, places=4)
 
+    def test_convex_conviction_sizing_and_asymmetric_boost(self):
+        """Convex conviction boosts positive-skew payoffs (cheap contracts) and dampens favorites."""
+        # 20c contract with 5pp edge (model = 0.25): payout odds b = 4.0 (skew boost)
+        plan_cheap = benchmark_tools._sizing_plan(
+            {"sizing_mode": "convex_conviction", "model_probability": 0.25},
+            price=0.20, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan_cheap["eligible"])
+        self.assertEqual(plan_cheap["mode"], "convex_conviction")
+        self.assertLessEqual(plan_cheap["target_fraction"], 0.06)
+
+        # 80c contract with 5pp edge (model = 0.85): payout odds b = 0.25 (skew dampening)
+        plan_dear = benchmark_tools._sizing_plan(
+            {"sizing_mode": "convex_conviction", "model_probability": 0.85},
+            price=0.80, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan_dear["eligible"])
+        # On a win, the cheap positive-skew contract yields a profit disproportionately larger than the favorite
+        profit_cheap = (plan_cheap["target_notional"] / 0.20) - plan_cheap["target_notional"]
+        profit_dear = (plan_dear["target_notional"] / 0.80) - plan_dear["target_notional"]
+        self.assertGreater(profit_cheap, profit_dear)
+        # Downside capital at risk is strictly lower or capped
+        self.assertLess(plan_cheap["target_notional"], plan_dear["target_notional"])
+
+    def test_convex_conviction_with_epistemic_conviction_score(self):
+        """Passing explicit conviction reduces market shrinkage towards market price."""
+        plan_default = benchmark_tools._sizing_plan(
+            {"sizing_mode": "convex_conviction", "model_probability": 0.25},
+            price=0.20, side="yes", account_value=10_000.0,
+        )
+        plan_high_conv = benchmark_tools._sizing_plan(
+            {"sizing_mode": "convex_conviction", "model_probability": 0.25, "conviction": 0.90},
+            price=0.20, side="yes", account_value=10_000.0,
+        )
+        self.assertLess(plan_high_conv["market_shrinkage"], plan_default["market_shrinkage"])
+        self.assertGreater(plan_high_conv["raw_kelly"], plan_default["raw_kelly"])
+
+    def test_convex_conviction_allows_close_forecast_on_cheap_contracts(self):
+        """18c contract with a 2.5pp edge is eligible under convex_conviction but rejected by edge_kelly."""
+        plan_convex = benchmark_tools._sizing_plan(
+            {"sizing_mode": "convex_conviction", "model_probability": 0.205},
+            price=0.18, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan_convex["eligible"])
+        self.assertAlmostEqual(plan_convex["edge"], 0.025, places=4)
+
+        plan_edge = benchmark_tools._sizing_plan(
+            {"sizing_mode": "edge_kelly", "model_probability": 0.205},
+            price=0.18, side="yes", account_value=10_000.0,
+        )
+        self.assertFalse(plan_edge["eligible"])
+        self.assertEqual(plan_edge["reason"], "edge_below_threshold")
+
+    def test_asymmetric_hurdle_discount_in_edge_clears_fees(self):
+        """Positive-skew contracts (<50c) receive an asymmetric hurdle discount for close-to-market edges."""
+        # 15c contract with 1.5pp net edge under convex_conviction passes scaled hurdle
+        cheap_edge = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.17, "sizing_mode": "convex_conviction"},
+            price=0.15, quantity=100, fee=0.50, side="yes", risk_reducing=False,
+        )
+        self.assertTrue(cheap_edge["clears"])
+        self.assertLess(cheap_edge["min_net_edge"], 0.012)
+
+        # 80c contract with 1.5pp net edge fails standard fee floor
+        dear_edge = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.82},
+            price=0.80, quantity=100, fee=0.50, side="yes", risk_reducing=False,
+        )
+        self.assertFalse(dear_edge["clears"])
+        self.assertEqual(dear_edge["min_net_edge"], 0.02)
+
     def test_place_trade_returns_skipped_and_rejected_when_kelly_sizing_ineligible(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
