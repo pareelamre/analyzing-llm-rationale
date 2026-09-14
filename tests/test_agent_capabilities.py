@@ -1115,6 +1115,40 @@ class ThesisTemplateConformanceTests(unittest.TestCase):
         self.assertIn("- **Market & Venue**: KXHIGHNY-26SEP07-B77.5 on Kalshi", synth)
         self.assertIn("- **Action**: PASS", synth)
 
+    def test_synthesise_thesis_handles_scoped_model_probability_and_market_implied(self):
+        answer = (
+            "Let me analyze the weather data:\n"
+            "- Current observation: 73.0°F at 18:51 UTC (2:51 PM ET)\n"
+            "- NWS forecast: 74°F at 3PM, 73°F at 4PM\n"
+            "- Model projected high: 76.0°F\n"
+            "- Model probability of 74-75°F: 15.6%\n"
+            "- Market implied probability: 96% (YES at 0.93/0.96)\n"
+            "So buying NO..."
+        )
+        transcript = [
+            {"action": "weather_market_research", "args": {"ticker": "KXHIGHNY-26SEP14-B74.5"}},
+        ]
+        synth = ac._synthesise_thesis(answer, transcript)
+        self.assertIn("- **Model Probability**: 15.6% vs **Market Price**: 96%", synth)
+        self.assertIn("- **Market & Venue**: KXHIGHNY-26SEP14-B74.5 on Kalshi", synth)
+        self.assertIn("- **Action**: BUY NO", synth)
+
+    def test_synthesise_thesis_cleans_json_thought_in_original_response(self):
+        answer = '{"thought": "The search results for Oura are very strong: Oura has filed for a Nasdaq listing."}'
+        synth = ac._synthesise_thesis(answer, [])
+        self.assertIn(
+            "- **Original response**: The search results for Oura are very strong: Oura has filed for a Nasdaq listing.",
+            synth,
+        )
+        self.assertNotIn('{"thought":', synth)
+
+    def test_normalize_action_recognizes_alternative_final_keys(self):
+        res1 = ac._normalize_action({"thesis": "### 0. Research Delta\n- **Strategy**: PASS"})
+        self.assertEqual(res1.get("final"), "### 0. Research Delta\n- **Strategy**: PASS")
+
+        res2 = ac._normalize_action({"thought": "### 0. Research Delta\n### 1. Decision & Execution\n- Action: PASS"})
+        self.assertIn("### 0. Research Delta", res2.get("final", ""))
+
     def test_it_asks_more_than_once_before_giving_up(self):
         # One retry is a coin flip for a model that rambles.
         asked = []

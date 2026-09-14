@@ -14041,7 +14041,7 @@ except Exception as exc:  # pragma: no cover - defensive production fallback.
         "qwen3-8-27b": "Qwen/Qwen3.8-27B",
         "minimax-m3": "MiniMaxAI/MiniMax-M3",
         "glm-5-3-flash": "zai-org/GLM-5.3-Flash",
-        "deepseek-v4-flash": "deepseek-ai/DeepSeek-V4-Flash",
+        "deepseek-v4-flash": "deepseek-ai/DeepSeek-V4.1-Flash",
     }
     _SCADS_CHAT_MODEL_OPTIONS = ()
     _SCADS_MODEL_FALLBACKS = {"gpt-oss-120b": ("google/gemma-4-26B-A4B-it",)}

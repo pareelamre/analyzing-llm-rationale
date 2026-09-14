@@ -224,7 +224,7 @@ SCADS_STATUS_PRECHECK = os.environ.get("AGENT_TRADING_SCADS_STATUS_PRECHECK", "t
 }
 SCADS_STATUS_URL = os.environ.get("AGENT_TRADING_SCADS_STATUS_URL", "https://llm.scads.ai/status/state.json")
 SCADS_STATUS_TIMEOUT_S = max(0.1, float(os.environ.get("AGENT_TRADING_SCADS_STATUS_TIMEOUT_S", "5")))
-SCADS_UNAVAILABLE_STATES = {"down", "timeout", "not_listed"}
+SCADS_UNAVAILABLE_STATES = {"down", "timeout"}
 # AgentAnalyzeRequest.question used to have a tight 2000-char server-side
 # limit (see server.py) that was found silently destroying almost an entire
 # candidates block, including every Polymarket candidate, down to a mid-word
@@ -2782,6 +2782,42 @@ def _thesis_forecast_records(
                 "strategy": strategy,
                 "evidence_delta": _excerpt(evidence.group(1), 600) if evidence else None,
             })
+    else:
+        model_probability = _extract_thesis_probability(thesis or "")
+        if model_probability is not None:
+            ticker = ""
+            platform = ""
+            if market:
+                ticker = _normalise_forecast_ticker(market.group(1))
+                platform = market.group(2).lower()
+            else:
+                loose_match = _LOOSE_ACTION_MARKET_RE.search(thesis or "")
+                if loose_match:
+                    ticker = _normalise_forecast_ticker(loose_match.group(2))
+                    platform = loose_match.group(3).lower()
+                else:
+                    for step in transcript or []:
+                        if not isinstance(step, dict):
+                            continue
+                        args = step.get("args") or {}
+                        if not isinstance(args, dict):
+                            continue
+                        t = args.get("ticker") or args.get("market_id")
+                        if t:
+                            ticker = _normalise_forecast_ticker(t)
+                            platform = str(args.get("platform") or ("kalshi" if str(t).startswith("KX") else "polymarket")).strip().lower()
+                            break
+            if ticker and platform:
+                market_probability = _candidate_probability(candidates, platform, ticker)
+                records.append({
+                    "platform": platform,
+                    "ticker": ticker,
+                    "model_probability": model_probability,
+                    "market_probability": market_probability,
+                    "action": action.group(1).strip() if action else None,
+                    "strategy": strategy,
+                    "evidence_delta": _excerpt(evidence.group(1), 600) if evidence else None,
+                })
 
     # A trade cannot reach the ledger without model_probability in benchmark
     # mode. Preserve that durable input if a provider failed to echo it in the
@@ -2829,6 +2865,13 @@ def _expected_provider_identity(model: str) -> str:
     return str(identity or "").strip()
 
 
+def _normalize_model_name(name: str) -> str:
+    s = (name or "").strip().lower().split(":", 1)[0].rsplit("/", 1)[-1]
+    if s in {"deepseek-v4-flash", "deepseek-v4.1-flash"}:
+        return "deepseek-v4-flash"
+    return s
+
+
 def _served_model_matches(expected: str, served: str) -> bool:
     """Whether the provider answered with the model this agent asked for.
 
@@ -2840,7 +2883,9 @@ def _served_model_matches(expected: str, served: str) -> bool:
     got = (served or "").strip().lower().split(":", 1)[0]
     if not exp or not got:
         return True
-    return exp == got or exp.rsplit("/", 1)[-1] == got.rsplit("/", 1)[-1]
+    if exp == got or exp.rsplit("/", 1)[-1] == got.rsplit("/", 1)[-1]:
+        return True
+    return _normalize_model_name(exp) == _normalize_model_name(got)
 
 
 def _persist_thesis_forecasts(
@@ -3157,10 +3202,19 @@ def _scads_model_readiness(model: str) -> Tuple[Optional[str], Optional[str]]:
         )
         for item in records:
             names = {str(item.get("name") or "").strip(), str(item.get("real_name") or "").strip()}
+            matched = False
             if target in names:
+                matched = True
+            else:
+                norm_target = _normalize_model_name(target)
+                for n in names:
+                    if _normalize_model_name(n) == norm_target:
+                        matched = True
+                        break
+            if matched:
                 state = str(item.get("state") or "unknown").strip().lower()
                 return state, f"SCADS status check reports {target} as {state}."
-        return "not_listed", f"SCADS status check does not list configured model {target}."
+        return None, None
     except Exception as exc:  # noqa: BLE001 - availability checks must fail open
         logger.info("SCADS status precheck unavailable for model=%s: %s", model, type(exc).__name__)
         return None, None
