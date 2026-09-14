@@ -65,14 +65,16 @@ def _candidate_payload(candidate: StrategyCandidate) -> dict[str, Any]:
         "fee_per_share": str(candidate.fee_per_share),
         "slippage_per_share": str(candidate.slippage_per_share),
         "calibration_observations": [dict(item) for item in candidate.calibration_observations],
+        "research_snapshot_ids": list(candidate.research_snapshot_ids),
     }
 
 
 def _restore_candidate(payload: Any) -> StrategyCandidate:
-    if not isinstance(payload, Mapping) or set(payload) != {
+    required = {
         "instrument", "snapshot", "yes_depth", "no_depth", "fee_per_share",
         "slippage_per_share", "calibration_observations",
-    }:
+    }
+    if not isinstance(payload, Mapping) or set(payload) not in (required, required | {"research_snapshot_ids"}):
         raise StrategyRunError("stored strategy candidate schema is invalid")
     observations = payload["calibration_observations"]
     if not isinstance(observations, list) or any(not isinstance(item, Mapping) for item in observations):
@@ -86,6 +88,7 @@ def _restore_candidate(payload: Any) -> StrategyCandidate:
             Decimal(str(payload["fee_per_share"])),
             Decimal(str(payload["slippage_per_share"])),
             tuple(dict(item) for item in observations),
+            tuple(str(item) for item in payload.get("research_snapshot_ids", ())),
         )
     except (ArithmeticError, KeyError, TypeError, ValueError) as exc:
         raise StrategyRunError("stored strategy candidate is malformed") from exc

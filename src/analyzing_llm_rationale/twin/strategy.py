@@ -197,6 +197,7 @@ class StrategyCandidate:
     fee_per_share: Decimal
     slippage_per_share: Decimal
     calibration_observations: tuple[Mapping[str, Any], ...] = ()
+    research_snapshot_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.snapshot.instrument_id != self.instrument.id:
@@ -212,6 +213,10 @@ class StrategyCandidate:
         if any(not isinstance(item, Mapping) for item in observations):
             raise ValueError("calibration observations must be objects")
         object.__setattr__(self, "calibration_observations", observations)
+        research_snapshots = tuple(str(item).strip() for item in self.research_snapshot_ids)
+        if any(not item for item in research_snapshots) or len(set(research_snapshots)) != len(research_snapshots):
+            raise ValueError("research snapshot identities must be unique and nonempty")
+        object.__setattr__(self, "research_snapshot_ids", research_snapshots)
 
     @property
     def midpoint(self) -> Optional[Decimal]:
@@ -659,7 +664,9 @@ class ForeseaEdgeStrategy:
             forecast = result.forecast
             if (
                 forecast.instrument_id != candidate.instrument.id
-                or result.proposal.market_snapshot_id != candidate.snapshot.id
+                or result.proposal.market_snapshot_id not in {
+                    candidate.snapshot.id, *candidate.research_snapshot_ids,
+                }
                 or not forecast.as_of <= now < forecast.expires_at
             ):
                 steps.append(StrategyStep("research", "pass", "forecast_stale_or_mismatched", forecast.id))
@@ -848,13 +855,23 @@ def _hash(payload: Mapping[str, Any]) -> str:
     return sha256(encoded).hexdigest()
 
 
-def load_strategy_policy(path: Path) -> StrategyPolicy:
+def load_strategy_policy(path: Path, *, shadow_trial: bool = False) -> StrategyPolicy:
     """Load the shared YAML with fail-closed absolute monetary limits."""
     data = load_yaml(path)
     raw = data.get("strategy")
     if not isinstance(raw, Mapping) or raw.get("mode") != "shadow" or raw.get("live_enabled") is not False:
         raise ValueError("twin strategy configuration must remain explicitly shadow-only")
-    risk = raw.get("risk")
+    if shadow_trial:
+        trial = data.get("shadow_trial")
+        if (
+            not isinstance(trial, Mapping) or trial.get("mode") != "shadow"
+            or trial.get("live_enabled") is not False
+        ):
+            raise ValueError("shadow trial configuration must remain explicitly shadow-only")
+        raw = {**raw, "config_version": trial.get("config_version")}
+        risk = trial.get("risk")
+    else:
+        risk = raw.get("risk")
     if not isinstance(risk, Mapping):
         raise ValueError("twin strategy risk configuration is required")
     return StrategyPolicy(

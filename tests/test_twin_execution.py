@@ -83,6 +83,33 @@ def reserved(*, environment="shadow", autonomous=True, reserved_cash="2.70", man
 
 
 class TwinExecutionTests(unittest.TestCase):
+    def test_autonomous_simulation_requires_zero_authority_shadow_context(self):
+        store, _, trade_intent, command, claim, context = reserved()
+        simulation = replace(
+            context, runtime_live_enabled=False, mandate=None, readiness_hash=None,
+            simulation=True,
+        )
+        result = submit_claimed_command(
+            store, command=command, intent=trade_intent, claim=claim,
+            context=simulation, now=NOW,
+            submit=lambda _: {"acknowledgement": {"acknowledged": True}},
+        )
+        self.assertEqual(result.disposition, SubmissionDisposition.ACKNOWLEDGED)
+
+        live = reserved(environment="live")
+        live_context = replace(
+            live[-1], runtime_live_enabled=False, mandate=None,
+            readiness_hash=None, simulation=True,
+        )
+        writes = []
+        with self.assertRaisesRegex(ExecutionBlocked, "zero-authority shadow"):
+            submit_claimed_command(
+                live[0], command=live[3], intent=live[2], claim=live[4],
+                context=live_context, now=NOW,
+                submit=lambda _: writes.append("live"),
+            )
+        self.assertEqual(writes, [])
+
     def test_acknowledgement_keeps_one_prepared_identity_and_never_becomes_fill(self):
         store, _, trade_intent, command, claim, context = reserved()
         writes = []

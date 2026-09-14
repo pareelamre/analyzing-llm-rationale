@@ -115,6 +115,35 @@ class TwinSimulatorTests(unittest.TestCase):
 
         self.assertEqual(cycle(), cycle())
 
+    def test_account_snapshot_restores_orders_positions_and_duplicate_identity(self):
+        assumptions = ShadowAssumptions(fee_rate=Decimal(".01"))
+        venue = ShadowVenue(
+            account_id="shadow-account-001", seed=7, starting_cash=Decimal("10"),
+            assumptions=assumptions,
+        )
+        order = intent()
+        preview = venue.preview(order, risk(order), instrument(), book(), now=NOW)
+        first = venue.submit(command(order), preview, now=NOW)
+        persisted = venue.account(received_at=NOW)
+
+        restored = ShadowVenue.from_account_snapshot(
+            account_id="shadow-account-001", seed=7, snapshot=persisted,
+            assumptions=assumptions,
+        )
+        repeated_preview = restored.preview(
+            order, risk(order), instrument(), book(), now=NOW + timedelta(seconds=1),
+        )
+        repeated = restored.submit(
+            command(order), repeated_preview, now=NOW + timedelta(seconds=1),
+        )
+        updated = restored.account(received_at=NOW + timedelta(seconds=1))
+
+        self.assertEqual(repeated, first)
+        self.assertEqual(updated.available_cash, persisted.available_cash)
+        self.assertEqual(updated.holdings, persisted.holdings)
+        self.assertEqual(updated.fills, persisted.fills)
+        self.assertEqual(updated.generation, persisted.generation + 1)
+
     def test_initial_complete_account_is_generation_one(self):
         account = ShadowVenue(
             account_id="shadow-account-001", seed=1,

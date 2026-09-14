@@ -99,6 +99,8 @@ class ShadowPreview:
     seed: int
     simulator_version: str
     assumptions_hash: str
+    instrument: Instrument
+    intent: TradeIntent
 
     @property
     def planned_quantity(self) -> Decimal:
@@ -121,6 +123,43 @@ class ShadowReceipt:
     action: ProposalAction
     cash_delta: Decimal
     settled_payout: Decimal = _ZERO
+    instrument: Optional[Instrument] = None
+    intent: Optional[TradeIntent] = None
+
+    def __post_init__(self) -> None:
+        if (
+            not self.order_id.startswith("shadow-order:")
+            or self.order_id != f"shadow-order:{self.client_order_id}"
+            or not self.intent_hash or not self.preview_hash or not self.instrument_id
+        ):
+            raise ValueError("shadow receipt identity is invalid")
+        outcome = str(self.outcome).lower().strip()
+        expected_outcome, _ = _action(self.action)
+        if outcome != expected_outcome or self.status not in {
+            "open", "partial", "filled", "cancelled", "settled",
+        }:
+            raise ValueError("shadow receipt outcome or status is invalid")
+        object.__setattr__(self, "outcome", outcome)
+        for name in (
+            "filled_quantity", "remaining_quantity", "cancelled_quantity",
+            "fee", "settled_payout",
+        ):
+            object.__setattr__(self, name, _nonnegative(name, getattr(self, name)))
+        cash_delta = Decimal(self.cash_delta)
+        if not cash_delta.is_finite():
+            raise ValueError("shadow receipt cash delta must be finite")
+        object.__setattr__(self, "cash_delta", cash_delta)
+        if self.instrument is None or self.intent is None:
+            raise ValueError("shadow receipt requires immutable instrument and intent metadata")
+        if (
+            self.instrument.id != self.instrument_id
+            or self.intent.instrument_id != self.instrument_id
+            or self.intent.intent_hash != self.intent_hash
+            or self.intent.action is not self.action
+            or self.filled_quantity + self.remaining_quantity + self.cancelled_quantity
+            != self.intent.quantity
+        ):
+            raise ValueError("shadow receipt metadata is inconsistent")
 
 
 @dataclass(frozen=True)
@@ -183,6 +222,58 @@ class ShadowVenue:
         self._events: list[ShadowEvent] = []
         self._fills: list[dict[str, Any]] = []
         self._settlements: list[dict[str, Any]] = []
+        self._generation_base = 0
+
+    @classmethod
+    def from_account_snapshot(
+        cls, *, account_id: str, seed: int, snapshot: AccountSnapshot,
+        assumptions: Optional[ShadowAssumptions] = None,
+    ) -> "ShadowVenue":
+        """Restore the complete simulator authority from its canonical snapshot."""
+        if snapshot.completeness is not Completeness.COMPLETE or snapshot.divergence:
+            raise ValueError("shadow restore requires a complete divergence-free snapshot")
+        venue = cls(
+            account_id=account_id, scope_id=snapshot.scope_id, seed=seed,
+            starting_cash=snapshot.available_cash, assumptions=assumptions,
+        )
+        venue._generation_base = snapshot.generation
+        for holding in snapshot.holdings:
+            instrument_id, separator, outcome = holding.instrument_id.rpartition(":")
+            if not separator or outcome not in {"yes", "no"} or holding.quantity <= _ZERO:
+                raise ValueError("shadow snapshot holding identity is invalid")
+            key = (instrument_id, outcome)
+            venue._positions[key] = holding.quantity
+            venue._basis[key] = holding.basis
+            venue._marks[key] = holding.liquidation_value / holding.quantity
+        for row in snapshot.orders:
+            try:
+                instrument = Instrument(**dict(row["instrument"]))
+                intent = TradeIntent.from_storage(dict(row["intent"]))
+                action = ProposalAction(str(row["action"]))
+                receipt = ShadowReceipt(
+                    str(row["order_id"]), str(row["client_order_id"]),
+                    str(row["intent_hash"]), str(row["preview_hash"]),
+                    Decimal(str(row["filled_quantity"])),
+                    Decimal(str(row["remaining_quantity"])),
+                    Decimal(str(row["cancelled_quantity"])),
+                    Decimal(str(row["fee"])), str(row["status"]),
+                    str(row["instrument_id"]), str(row["outcome"]), action,
+                    Decimal(str(row["cash_delta"])),
+                    Decimal(str(row.get("settled_payout", "0"))), instrument, intent,
+                )
+            except (ArithmeticError, KeyError, TypeError, ValueError) as exc:
+                raise ValueError("shadow snapshot order is not restorable") from exc
+            if (
+                receipt.instrument_id != instrument.id
+                or receipt.intent_hash != intent.intent_hash
+                or intent.instrument_id != instrument.id
+                or intent.account_scope_id != snapshot.scope_id
+            ):
+                raise ValueError("shadow snapshot order identity is inconsistent")
+            venue._orders[receipt.order_id] = receipt
+        venue._fills = [dict(item) for item in snapshot.fills]
+        venue._settlements = [dict(item) for item in snapshot.settlements]
+        return venue
 
     def preview(
         self, intent: TradeIntent, risk: RiskResult, instrument: Instrument,
@@ -245,6 +336,7 @@ class ShadowVenue:
             _hash(body), intent.intent_hash, snapshot.id, snapshot.received_at, instrument.id,
             intent.action, outcome, intent.quantity, intent.limit_price, liquidation_bid, tuple(planned), fee,
             cash_delta, self.seed, SIMULATOR_VERSION, self.assumptions_hash,
+            instrument, intent,
         )
         existing = self._previews.get(intent.intent_hash)
         if existing is not None and existing != preview:
@@ -291,6 +383,7 @@ class ShadowVenue:
             order_id, command.client_order_id, command.intent_hash, preview.preview_hash,
             quantity, preview.requested_quantity - quantity, _ZERO, preview.planned_fee,
             status, preview.instrument_id, outcome, preview.action, preview.planned_cash_delta,
+            instrument=preview.instrument, intent=preview.intent,
         )
         self._orders[order_id] = receipt
         self._event("order_acknowledged", order_id, now, market_snapshot_id=preview.market_snapshot_id)
@@ -431,12 +524,19 @@ class ShadowVenue:
             "instrument_id": receipt.instrument_id, "outcome": receipt.outcome,
             "status": receipt.status, "filled_quantity": receipt.filled_quantity,
             "remaining_quantity": receipt.remaining_quantity,
+            "intent_hash": receipt.intent_hash, "preview_hash": receipt.preview_hash,
+            "cancelled_quantity": receipt.cancelled_quantity, "fee": receipt.fee,
+            "action": receipt.action.value, "cash_delta": receipt.cash_delta,
+            "settled_payout": receipt.settled_payout,
+            "instrument": receipt.instrument.to_storage() if receipt.instrument is not None else None,
+            "intent": receipt.intent.to_storage() if receipt.intent is not None else None,
         } for receipt in sorted(self._orders.values(), key=lambda item: item.order_id))
         return AccountSnapshot(
             # Generation zero is never durable account authority.  The initial
             # empty shadow portfolio is the first complete observation; each
             # subsequent event advances that observation monotonically.
-            scope_id=self.scope_id, generation=len(self._events) + 1, received_at=received_at,
+            scope_id=self.scope_id, generation=self._generation_base + len(self._events) + 1,
+            received_at=received_at,
             completeness=Completeness.COMPLETE, available_cash=self._cash, total_cash=self._cash,
             reserved_cash=_ZERO, settled_cash=self._cash, holdings=holdings,
             position_basis=sum((item.basis for item in holdings), _ZERO),
@@ -476,7 +576,7 @@ class ShadowVenue:
         self, event_type: str, order_id: str, occurred_at: datetime, *, quantity: Decimal = _ZERO,
         cash_delta: Decimal = _ZERO, fee: Decimal = _ZERO, market_snapshot_id: Optional[str] = None,
     ) -> None:
-        sequence = len(self._events) + 1
+        sequence = self._generation_base + len(self._events) + 1
         self._events.append(ShadowEvent(
             f"shadow-event:{self.run.run_id[:12]}:{sequence}", sequence, event_type, order_id,
             occurred_at, quantity, cash_delta, fee, market_snapshot_id,

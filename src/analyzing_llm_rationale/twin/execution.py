@@ -79,6 +79,7 @@ class ExecutionContext:
     mandate: Optional[Mandate] = None
     readiness_hash: Optional[str] = None
     pause_state: PauseState = PauseState()
+    simulation: bool = False
 
 
 @dataclass(frozen=True)
@@ -139,7 +140,13 @@ def _assert_authorized(
             raise ExecutionBlocked("reservation does not cover notional, fees, and slippage")
 
     mandate = context.mandate
-    if context.autonomous:
+    if context.simulation:
+        if (
+            not context.autonomous or context.scope.environment != "shadow"
+            or context.runtime_live_enabled or mandate is not None
+        ):
+            raise ExecutionBlocked("simulation requires autonomous zero-authority shadow context")
+    elif context.autonomous:
         if mandate is None:
             raise ExecutionBlocked("autonomous mandate is inactive")
         try:

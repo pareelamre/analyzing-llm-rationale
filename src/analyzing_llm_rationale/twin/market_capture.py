@@ -73,6 +73,15 @@ class CapturedTradingCost:
             "source": self.source,
         }
 
+    def fee_per_share_at(self, price: Decimal) -> Decimal:
+        """Evaluate the captured fee model at an executable bid or ask."""
+        price = Decimal(str(price))
+        if not price.is_finite() or not Decimal("0") < price < Decimal("1"):
+            raise MarketCaptureError("fee evaluation price is invalid")
+        if self.model == "kalshi_quadratic":
+            return _kalshi_taker_fee_per_share(price, self.rate)
+        return self.rate * price * (Decimal("1") - price)
+
     @classmethod
     def from_storage(cls, payload: Any) -> "CapturedTradingCost":
         expected = {
@@ -92,6 +101,8 @@ class CapturedMarket:
     no_ask_depth: Decimal
     settlement_rules: str
     trading_cost: CapturedTradingCost | None = None
+    yes_bid_depth: Decimal | None = None
+    no_bid_depth: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self.snapshot.instrument_id != self.instrument.id:
@@ -103,6 +114,17 @@ class CapturedMarket:
                 raise MarketCaptureError("captured market depth is invalid") from exc
             if not value.is_finite() or value <= 0:
                 raise MarketCaptureError("captured market depth must be positive")
+            object.__setattr__(self, name, value)
+        for name in ("yes_bid_depth", "no_bid_depth"):
+            raw = getattr(self, name)
+            if raw is None:
+                continue
+            try:
+                value = Decimal(str(raw))
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                raise MarketCaptureError("captured market bid depth is invalid") from exc
+            if not value.is_finite() or value <= 0:
+                raise MarketCaptureError("captured market bid depth must be positive")
             object.__setattr__(self, name, value)
         if not isinstance(self.settlement_rules, str) or not self.settlement_rules.strip():
             raise MarketCaptureError("captured market needs exact settlement rules")
@@ -117,6 +139,8 @@ class CapturedMarket:
             "no_ask_depth": str(self.no_ask_depth),
             "settlement_rules": self.settlement_rules,
             "trading_cost": None if self.trading_cost is None else self.trading_cost.to_storage(),
+            "yes_bid_depth": None if self.yes_bid_depth is None else str(self.yes_bid_depth),
+            "no_bid_depth": None if self.no_bid_depth is None else str(self.no_bid_depth),
         }
 
     @classmethod
@@ -127,6 +151,9 @@ class CapturedMarket:
         }, {
             "instrument", "snapshot", "yes_ask_depth", "no_ask_depth",
             "settlement_rules", "trading_cost",
+        }, {
+            "instrument", "snapshot", "yes_ask_depth", "no_ask_depth",
+            "settlement_rules", "trading_cost", "yes_bid_depth", "no_bid_depth",
         }):
             raise MarketCaptureError("stored captured market schema is invalid")
         try:
@@ -138,6 +165,10 @@ class CapturedMarket:
                 str(payload["settlement_rules"]),
                 CapturedTradingCost.from_storage(payload["trading_cost"])
                 if payload.get("trading_cost") is not None else None,
+                Decimal(str(payload["yes_bid_depth"]))
+                if payload.get("yes_bid_depth") is not None else None,
+                Decimal(str(payload["no_bid_depth"]))
+                if payload.get("no_bid_depth") is not None else None,
             )
         except (ArithmeticError, KeyError, TypeError, ValueError) as exc:
             raise MarketCaptureError("stored captured market is malformed") from exc
@@ -389,7 +420,7 @@ def _depth_at(levels: Sequence[tuple[Decimal, Decimal]], price: Decimal) -> Deci
 def _polymarket_depth(
     market: Mapping[str, Any], books: Mapping[str, Mapping[str, Any]],
     snapshot: MarketSnapshot,
-) -> tuple[Decimal, Decimal] | None:
+) -> tuple[Decimal, Decimal, Decimal | None, Decimal | None] | None:
     tokens = market.get("clobTokenIds")
     if isinstance(tokens, str):
         import json
@@ -399,25 +430,37 @@ def _polymarket_depth(
             return None
     if not isinstance(tokens, Sequence) or len(tokens) != 2:
         return None
-    depths: list[Decimal] = []
-    for token, ask in zip(tokens, (snapshot.yes_ask, snapshot.no_ask)):
+    ask_depths: list[Decimal] = []
+    bid_depths: list[Decimal | None] = []
+    for token, ask, bid in zip(
+        tokens, (snapshot.yes_ask, snapshot.no_ask),
+        (snapshot.yes_bid, snapshot.no_bid),
+    ):
         book = books.get(str(token))
         if not isinstance(book, Mapping) or ask is None:
             return None
-        depths.append(_depth_at(_levels(book.get("asks")), ask))
-    return (depths[0], depths[1]) if min(depths) > 0 else None
+        ask_depths.append(_depth_at(_levels(book.get("asks")), ask))
+        bid_depth = _depth_at(_levels(book.get("bids")), bid) if bid is not None else Decimal("0")
+        bid_depths.append(bid_depth if bid_depth > 0 else None)
+    return (*ask_depths, *bid_depths) if min(ask_depths) > 0 else None
 
 
 def _kalshi_depth(
     market: Mapping[str, Any], books: Mapping[str, Mapping[str, Any]],
     snapshot: MarketSnapshot,
-) -> tuple[Decimal, Decimal] | None:
+) -> tuple[Decimal, Decimal, Decimal | None, Decimal | None] | None:
     direct = (
         _decimal(market.get("yes_ask_size_fp") or market.get("yes_ask_size")),
         _decimal(market.get("no_ask_size_fp") or market.get("no_ask_size")),
+        _decimal(market.get("yes_bid_size_fp") or market.get("yes_bid_size")),
+        _decimal(market.get("no_bid_size_fp") or market.get("no_bid_size")),
     )
     if direct[0] and direct[1]:
-        return direct[0], direct[1]
+        return (
+            direct[0], direct[1],
+            direct[2] if direct[2] and direct[2] > 0 else None,
+            direct[3] if direct[3] and direct[3] > 0 else None,
+        )
     book = next(iter(books.values()), None)
     if not isinstance(book, Mapping):
         return None
@@ -430,7 +473,13 @@ def _kalshi_depth(
         return None
     yes_depth = _depth_at(no_bids, Decimal("1") - snapshot.yes_ask)
     no_depth = _depth_at(yes_bids, Decimal("1") - snapshot.no_ask)
-    return (yes_depth, no_depth) if min(yes_depth, no_depth) > 0 else None
+    yes_bid_depth = _depth_at(yes_bids, snapshot.yes_bid) if snapshot.yes_bid is not None else Decimal("0")
+    no_bid_depth = _depth_at(no_bids, snapshot.no_bid) if snapshot.no_bid is not None else Decimal("0")
+    return (
+        yes_depth, no_depth,
+        yes_bid_depth if yes_bid_depth > 0 else None,
+        no_bid_depth if no_bid_depth > 0 else None,
+    ) if min(yes_depth, no_depth) > 0 else None
 
 
 def _settlement_rules(venue: str, market: Mapping[str, Any]) -> str:
@@ -586,7 +635,7 @@ def capture_markets(
             continue
         markets.append(CapturedMarket(
             instrument, snapshot, depth[0], depth[1],
-            _settlement_rules(venue, market), trading_cost,
+            _settlement_rules(venue, market), trading_cost, depth[2], depth[3],
         ))
         market_capture_attempts.add(1, {"venue": venue, "outcome": "captured"})
     return MarketCaptureBatch(now, tuple(markets), tuple(rejections))

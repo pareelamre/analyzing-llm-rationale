@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from hashlib import sha256
 from typing import Any, Mapping, Protocol, Sequence
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
@@ -64,6 +64,43 @@ class NewsPipelinePublicArticleGateway:
 
     def search(self, query: str, *, limit: int) -> Sequence[Mapping[str, Any]]:
         return self._pipeline.fetch_summarize_rank(query, top_k=limit)
+
+
+def captured_market_listing_evidence(
+    *, instrument: Instrument, rules: str, retrieved_at: datetime,
+) -> tuple[PublicEvidence, ...]:
+    """Build a deterministic public fallback from the captured venue listing.
+
+    The listing is already part of the immutable market capture.  It keeps a
+    shadow observation usable when third-party news search is unavailable,
+    while preserving the exact venue URL and settlement text used by the
+    decision.  It is evidence about the contract, not independent news.
+    """
+    observed = _utc(retrieved_at)
+    venue_id = str(instrument.venue_instrument_id).strip()
+    title = str(instrument.display_title or instrument.venue_instrument_id).strip()
+    rule_text = re.sub(r"\s+", " ", str(rules or "")).strip()
+    if not venue_id or not title or not rule_text:
+        raise PublicEvidenceError("captured market listing is incomplete")
+    if instrument.venue == "kalshi":
+        source_id = (
+            "https://api.elections.kalshi.com/trade-api/v2/markets/"
+            + quote(venue_id, safe="-._~")
+        )
+    elif instrument.venue == "polymarket":
+        source_id = (
+            "https://gamma-api.polymarket.com/markets/"
+            + quote(venue_id, safe="-._~")
+        )
+    else:
+        raise PublicEvidenceError("captured market listing venue is unsupported")
+    text = f"{title}. Contract rules: {rule_text}"[:1200]
+    identity = "evidence-" + sha256(
+        f"{source_id}\n{instrument.created_at.isoformat()}\n{text}".encode("utf-8")
+    ).hexdigest()[:24]
+    return (PublicEvidence(
+        identity, source_id, text, _utc(instrument.created_at), observed,
+    ),)
 
 
 def _utc(value: datetime) -> datetime:
