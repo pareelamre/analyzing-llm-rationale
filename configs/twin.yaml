@@ -46,6 +46,23 @@ strategy:
     max_daily_realized_loss: "0"
     max_drawdown: "0.10"
 
+# Simulation dollars are an evaluation fixture. They grant no venue authority
+# and are loaded only after the private runtime proves shadow mode, zero live
+# capital, and no mandate. The base strategy limits above remain fail closed.
+shadow_trial:
+  config_version: foresea-edge-shadow-trial-v1
+  mode: shadow
+  live_enabled: false
+  risk:
+    kelly_fraction: "0.10"
+    max_order_cash: "10"
+    max_market_loss: "10"
+    max_cluster_loss: "25"
+    max_total_loss: "50"
+    max_trailing_additions: "1"
+    max_daily_realized_loss: "10"
+    max_drawdown: "0.10"
+
 # A replay run freezes these timestamps into its config hash. Move them only
 # when intentionally producing a new out-of-sample evaluation cohort.
 replay:

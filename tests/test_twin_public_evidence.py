@@ -7,6 +7,7 @@ from analyzing_llm_rationale.twin.public_evidence import (
     PublicEvidenceError,
     PublicEvidencePolicy,
     acquire_public_evidence,
+    captured_market_listing_evidence,
 )
 
 NOW = datetime(2026, 9, 13, 12, tzinfo=timezone.utc)
@@ -91,6 +92,38 @@ class PublicEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(PublicEvidenceError, "unavailable"):
             acquire_public_evidence(
                 Gateway(error=RuntimeError("offline")), instrument=instrument(), now=NOW,
+            )
+
+    def test_captured_listing_is_a_deterministic_public_fallback(self):
+        evidence = captured_market_listing_evidence(
+            instrument=instrument(), rules="The contract resolves YES after passage.",
+            retrieved_at=NOW,
+        )
+        repeat = captured_market_listing_evidence(
+            instrument=instrument(), rules="The contract resolves YES after passage.",
+            retrieved_at=NOW + timedelta(minutes=1),
+        )
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(
+            evidence[0].source_id,
+            "https://api.elections.kalshi.com/trade-api/v2/markets/KXTEST",
+        )
+        self.assertIn("Contract rules", evidence[0].text)
+        self.assertEqual(evidence[0].id, repeat[0].id)
+        self.assertEqual(repeat[0].retrieved_at, NOW + timedelta(minutes=1))
+
+    def test_captured_listing_rejects_unsupported_or_incomplete_markets(self):
+        with self.assertRaisesRegex(PublicEvidenceError, "unsupported"):
+            captured_market_listing_evidence(
+                instrument=replace(
+                    instrument(), id="other:live:KXTEST", venue="other",
+                ), rules="rules",
+                retrieved_at=NOW,
+            )
+        with self.assertRaisesRegex(PublicEvidenceError, "incomplete"):
+            captured_market_listing_evidence(
+                instrument=replace(instrument(), display_title=None), rules="",
+                retrieved_at=NOW,
             )
 
     def test_policy_is_bounded(self):

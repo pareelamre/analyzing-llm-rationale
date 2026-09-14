@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -239,6 +240,23 @@ class TwinStrategyTests(unittest.TestCase):
         )
         self.assertEqual(changed.decision, "INTENT")
 
+    def test_forecast_from_research_capture_is_rescored_on_fresh_compatible_book(self):
+        researched = candidate()
+        refreshed_at = NOW + timedelta(seconds=5)
+        refreshed = replace(
+            candidate(suffix="002", at=refreshed_at, yes_ask=".41"),
+            research_snapshot_ids=(researched.snapshot.id,),
+        )
+        cycle = strategy().run_cycle(
+            scope=scope(), now=refreshed_at,
+            reconcile=lambda: state(at=refreshed_at),
+            load_position_market=lambda _position: None,
+            discover=lambda: (refreshed,),
+            research=lambda _item: research_result(researched),
+        )
+        self.assertEqual(cycle.decision, "INTENT")
+        self.assertEqual(cycle.intent.market_version, refreshed.snapshot.id)
+
     def test_full_buy_partial_fill_revised_forecast_close_and_settlement(self):
         entry_engine = strategy()
         entry_candidate = candidate()
@@ -359,6 +377,10 @@ class TwinStrategyTests(unittest.TestCase):
         self.assertEqual(loaded.max_new_positions_per_cycle, 1)
         self.assertEqual(loaded.risk_limits.max_order_cash, Decimal("0"))
         self.assertEqual(loaded.risk_limits.max_total_loss, Decimal("0"))
+        trial = load_strategy_policy(config_path, shadow_trial=True)
+        self.assertEqual(trial.config_version, "foresea-edge-shadow-trial-v1")
+        self.assertEqual(trial.risk_limits.max_order_cash, Decimal("10"))
+        self.assertEqual(trial.risk_limits.max_total_loss, Decimal("50"))
 
 
 if __name__ == "__main__":

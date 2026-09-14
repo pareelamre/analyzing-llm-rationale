@@ -1,9 +1,9 @@
 """Environment-built private worker app used by the two Cloud Run services."""
 from __future__ import annotations
 
+import logging
 import os
 import socket
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
@@ -21,18 +21,26 @@ from .budget import (
     estimate_request_cost,
 )
 from .cycle_runtime import DatastoreStrategyRunStore, StrategyRun, StrategyRunPhase
+from .execution import (
+    ExecutionContext,
+    SubmissionDisposition,
+    SubmissionUnknown,
+    submit_claimed_command,
+)
 from .market_capture import (
+    CapturedMarket,
     DatastoreMarketCaptureStore,
     LiveMarketDataGateway,
     MarketCapturePolicy,
     capture_markets,
 )
-from .models import AccountScope
+from .models import AccountScope, CommandState, Instrument, ProposalAction, TradeIntent
 from .public_evidence import (
     NewsPipelinePublicArticleGateway,
     PublicEvidenceError,
     PublicEvidencePolicy,
     acquire_public_evidence,
+    captured_market_listing_evidence,
 )
 from .research_gateway import (
     DatastorePublicEvidenceCache,
@@ -50,6 +58,7 @@ from .research_gateway import (
     restore_research_capture,
     restore_research_result,
 )
+from .risk import RiskExposure
 from .runtime import (
     HttpResearchJobGateway,
     PrivateTwinRuntime,
@@ -58,11 +67,12 @@ from .runtime import (
     create_private_worker_app,
 )
 from .scheduler import CloudTasksConfig, CloudTasksDispatcher, ShadowCycleSchedule
-from .simulator import ShadowVenue
-from .store import DatastoreTwinStore
+from .simulator import CapturedBook, DepthLevel, ShadowAssumptions, ShadowVenue
+from .store import DatastoreTwinStore, TwinStoreError
 from .strategy import (
     DatastoreStrategyStore,
     ForeseaEdgeStrategy,
+    HeldPosition,
     StrategyAccountState,
     StrategyCandidate,
     StrategyCycle,
@@ -84,6 +94,7 @@ from .worker import (
     WorkerRole,
 )
 
+logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 repair_authorizations = metrics.get_meter(__name__).create_counter(
     "twin.research.repair_authorizations", unit="1",
@@ -133,20 +144,25 @@ def _reconcile_shadow_account(
 ) -> tuple[AccountScope, StrategyAccountState]:
     """Refresh one durable, zero-authority account generation for shadow decisions."""
     scope = AccountScope(
-        scope_id, "foresea-edge-v1", "shadow", "foresea-edge-v1", "simulation",
+        scope_id, "foresea-edge-v1", "shadow", "foresea-edge-v1", "shadow",
         "USD", "shadow-venue-v3", account_epoch,
         datetime(2020, 1, 1, tzinfo=timezone.utc),
     )
     prior = snapshot_store.load(scope_id)
     if prior is None:
-        snapshot = ShadowVenue(
+        venue = ShadowVenue(
             account_id="shadow-account-foresea-edge-v1",
             scope_id=scope_id,
             seed=20260913,
             starting_cash=Decimal("1000"),
-        ).account(received_at=now)
+        )
     else:
-        snapshot = replace(prior, generation=prior.generation + 1, received_at=now)
+        venue = ShadowVenue.from_account_snapshot(
+            account_id="shadow-account-foresea-edge-v1",
+            seed=20260913,
+            snapshot=prior,
+        )
+    snapshot = venue.account(received_at=now)
     snapshot = snapshot_store.save(snapshot)
     projection = twin_store.register_account(
         scope, venue_available_cash=snapshot.available_cash,
@@ -160,16 +176,250 @@ def _reconcile_shadow_account(
             scope.id, venue_available_cash=snapshot.available_cash,
             loss_limit=strategy_policy.risk_limits.max_total_loss,
         )
-    portfolio_complete = not any((
-        snapshot.holdings, snapshot.orders, snapshot.fills, snapshot.settlements,
-    ))
+    positions: list[HeldPosition] = []
+    exposures: list[RiskExposure] = []
+    portfolio_complete = not snapshot.divergence
+    order_rows = [dict(row) for row in snapshot.orders]
+    for holding in snapshot.holdings:
+        instrument_id, separator, outcome = holding.instrument_id.rpartition(":")
+        matching = [
+            row for row in order_rows
+            if row.get("instrument_id") == instrument_id
+            and row.get("outcome") == outcome
+            and str(row.get("action") or "").startswith("BUY_")
+            and isinstance(row.get("instrument"), dict)
+            and isinstance(row.get("intent"), dict)
+        ]
+        if not separator or not matching:
+            portfolio_complete = False
+            continue
+        try:
+            instruments = [Instrument(**dict(row["instrument"])) for row in matching]
+            intents = [TradeIntent.from_storage(dict(row["intent"])) for row in matching]
+            instrument = instruments[0]
+            if any(item != instrument for item in instruments):
+                raise ValueError("position instrument versions diverged")
+            opened_at = min(item.created_at for item in intents)
+            pending_sell = sum((
+                Decimal(str(row.get("remaining_quantity", "0")))
+                for row in order_rows
+                if row.get("instrument_id") == instrument_id
+                and row.get("outcome") == outcome
+                and str(row.get("action") or "").startswith("SELL_")
+            ), Decimal("0"))
+            positions.append(HeldPosition(
+                instrument, outcome, holding.quantity, opened_at,
+                min(
+                    instrument.close_at,
+                    opened_at + timedelta(seconds=strategy_policy.maximum_holding_seconds),
+                ),
+                instrument.settlement_spec_hash, strategy_policy.config_version,
+                pending_sell_quantity=min(pending_sell, holding.quantity),
+            ))
+            exposures.append(RiskExposure(
+                instrument.id, instrument.cluster_id, instrument.venue,
+                holding.basis, "inventory",
+            ))
+        except (ArithmeticError, KeyError, TypeError, ValueError):
+            portfolio_complete = False
+    if snapshot.settlements or any(
+        str(row.get("action") or "").startswith("SELL_") for row in order_rows
+    ):
+        # Realized-PnL state is deliberately not inferred from partial history.
+        portfolio_complete = False
+    current_equity = snapshot.conservative_liquidation_value
     state = StrategyAccountState(
-        snapshot, projection, (), (), Decimal("0"), Decimal("0"),
-        snapshot.conservative_liquidation_value,
-        snapshot.conservative_liquidation_value,
+        snapshot, projection, tuple(positions), tuple(exposures),
+        Decimal("0"), Decimal("0"), max(Decimal("1000"), current_equity),
+        current_equity,
         portfolio_complete=portfolio_complete,
     )
     return scope, state
+
+
+def _shadow_book(market: CapturedMarket, intent: TradeIntent) -> CapturedBook:
+    outcome = "yes" if intent.action in {ProposalAction.BUY_YES, ProposalAction.SELL_YES} else "no"
+    buying = intent.action in {ProposalAction.BUY_YES, ProposalAction.BUY_NO}
+    if outcome == "yes":
+        price = market.snapshot.yes_ask if buying else market.snapshot.yes_bid
+        depth = market.yes_ask_depth if buying else market.yes_bid_depth
+    else:
+        price = market.snapshot.no_ask if buying else market.snapshot.no_bid
+        depth = market.no_ask_depth if buying else market.no_bid_depth
+    if price is None or depth is None or depth <= 0:
+        raise ValueError("captured executable side has no exact depth")
+    return CapturedBook(market.snapshot, outcome, (DepthLevel(price, depth),))
+
+
+@tracer.start_as_current_span("twin.shadow.execute_cycle")
+def _execute_shadow_cycle(
+    cycle: StrategyCycle, *, capture, snapshot_store, twin_store,
+    scope: AccountScope, now: datetime, worker_id: str,
+):
+    """Reserve and simulate one accepted intent with restart-safe identities."""
+    if cycle.decision != "INTENT" or cycle.intent is None or cycle.risk_result is None:
+        return None
+    intent, risk = cycle.intent, cycle.risk_result
+    market = next((
+        item for item in capture.markets
+        if item.instrument.id == intent.instrument_id
+        and item.snapshot.id == intent.market_version
+    ), None)
+    if market is None:
+        raise ValueError("accepted intent has no matching immutable market capture")
+    prior = snapshot_store.load(scope.id)
+    if prior is None:
+        raise ValueError("shadow account snapshot is unavailable")
+    price = intent.limit_price
+    fee_per_share = (
+        market.trading_cost.fee_per_share_at(price)
+        if market.trading_cost is not None else Decimal("0")
+    )
+    fee_rate = fee_per_share / price if price > 0 else Decimal("0")
+    venue = ShadowVenue.from_account_snapshot(
+        account_id="shadow-account-foresea-edge-v1", seed=20260913,
+        snapshot=prior, assumptions=ShadowAssumptions(fee_rate=fee_rate),
+    )
+    twin_store.reserve_intent(
+        intent, cash=risk.cash, max_loss=risk.max_loss, now=now,
+        preconditions=risk.reservation_preconditions,
+    )
+    command = twin_store.command_for_intent(intent)
+    order_id = f"shadow-order:{command.client_order_id}"
+    receipt = next((
+        item for item in prior.orders if item.get("order_id") == order_id
+    ), None)
+    if command.state in {
+        CommandState.FILLED, CommandState.REJECTED, CommandState.CANCELLED,
+    }:
+        return command
+    claim = twin_store.claim_command(command.id, worker_id=worker_id, now=now)
+    if claim is None:
+        current = twin_store.command_for_intent(intent)
+        if current.state in {
+            CommandState.FILLED, CommandState.REJECTED, CommandState.CANCELLED,
+        }:
+            return current
+        raise WorkerPaused("shadow_command_claim_in_flight")
+
+    if receipt is not None and command.state in {
+        CommandState.SUBMITTING, CommandState.SUBMISSION_UNKNOWN,
+        CommandState.ACKNOWLEDGED, CommandState.PARTIALLY_FILLED,
+    }:
+        status = str(receipt.get("status") or "")
+        target = (
+            CommandState.FILLED if status == "filled"
+            else CommandState.PARTIALLY_FILLED if status == "partial"
+            else CommandState.CANCELLED if status == "cancelled"
+            else CommandState.ACKNOWLEDGED
+        )
+        current = command
+        if (
+            current.state is CommandState.SUBMITTING
+            or current.state is CommandState.SUBMISSION_UNKNOWN
+            and target is CommandState.CANCELLED
+        ):
+            current = twin_store.transition_command(
+                command.id, target=CommandState.ACKNOWLEDGED,
+                fence=claim.fence, worker_id=claim.worker_id,
+            )
+        if current.state is target:
+            return current
+        return twin_store.transition_command(
+            command.id, target=target, fence=claim.fence,
+            worker_id=claim.worker_id,
+        )
+    if command.state is CommandState.SUBMISSION_UNKNOWN:
+        return twin_store.transition_command(
+            command.id, target=CommandState.REJECTED,
+            fence=claim.fence, worker_id=claim.worker_id,
+        )
+
+    preview = venue.preview(
+        intent, risk, market.instrument, _shadow_book(market, intent), now=now,
+    )
+
+    def persist_simulation(current):
+        response = venue.submit(current, preview, now=now)
+        simulated = venue.status(order_id)
+        if intent.time_in_force == "IOC" and simulated.remaining_quantity > 0:
+            venue.cancel(order_id, now=now)
+        proposed = venue.account(received_at=now)
+        saved = snapshot_store.save(proposed)
+        if saved != proposed:
+            raise TwinStoreError("a newer shadow account generation won the submission race")
+        return response
+
+    try:
+        result = submit_claimed_command(
+            twin_store, command=command, intent=intent, claim=claim,
+            context=ExecutionContext(
+                scope, intent.policy_version, intent.strategy_version,
+                intent.market_version, False, autonomous=True, simulation=True,
+            ),
+            now=now, submit=persist_simulation,
+        )
+    except SubmissionUnknown as exc:
+        raise WorkerPaused("shadow_submission_requires_reconciliation") from exc
+    if result.disposition is not SubmissionDisposition.ACKNOWLEDGED:
+        return result.command
+    status = venue.status(order_id).status
+    target = (
+        CommandState.FILLED if status == "filled"
+        else CommandState.PARTIALLY_FILLED if status == "partial"
+        else CommandState.CANCELLED if status == "cancelled"
+        else None
+    )
+    try:
+        return (
+            twin_store.transition_command(
+            result.command.id, target=target, fence=claim.fence,
+            worker_id=claim.worker_id,
+            ) if target is not None else result.command
+        )
+    except TwinStoreError as exc:
+        raise WorkerPaused("shadow_fill_state_requires_reconciliation") from exc
+
+
+@tracer.start_as_current_span("twin.strategy.refresh_decision_market")
+def _refresh_decision_markets(
+    run: StrategyRun, *, market_capture_store, market_data_gateway,
+    market_capture_policy, now: datetime,
+):
+    """Capture executable prices after research and retain only compatible contracts."""
+    capture_id = run.id + ":decision"
+    capture = market_capture_store.get(capture_id)
+    if capture is None:
+        capture = capture_markets(
+            market_data_gateway, now=now, policy=market_capture_policy,
+        )
+        market_capture_store.record(capture_id, capture)
+    originals = {item.instrument.id: item for item in run.candidates}
+    candidates = []
+    for market in capture.markets:
+        original = originals.get(market.instrument.id)
+        if original is None or market.trading_cost is None:
+            continue
+        if (
+            market.instrument.settlement_spec_hash != original.instrument.settlement_spec_hash
+            or market.instrument.capability_version != original.instrument.capability_version
+            or market.instrument.tick_size != original.instrument.tick_size
+            or market.instrument.min_quantity != original.instrument.min_quantity
+            or market.instrument.fee_version != original.instrument.fee_version
+        ):
+            continue
+        candidates.append(StrategyCandidate(
+            market.instrument, market.snapshot,
+            market.yes_ask_depth, market.no_ask_depth,
+            max(
+                market.trading_cost.yes_fee_per_share,
+                market.trading_cost.no_fee_per_share,
+            ),
+            market.instrument.tick_size,
+            original.calibration_observations,
+            (original.snapshot.id,),
+        ))
+    return capture, tuple(candidates)
 
 
 def _stable_id(prefix: str, *parts: object) -> str:
@@ -207,10 +457,17 @@ def _prepare_strategy_research(
         try:
             research_capture = captures.get_capture(assignment_id)
             if research_capture is None:
-                evidence = acquire_public_evidence(
-                    evidence_gateway, instrument=market.instrument, now=now,
-                    policy=PublicEvidencePolicy(max_evidence=5),
-                )
+                try:
+                    evidence = acquire_public_evidence(
+                        evidence_gateway, instrument=market.instrument, now=now,
+                        policy=PublicEvidencePolicy(max_evidence=5),
+                    )
+                except PublicEvidenceError:
+                    evidence = captured_market_listing_evidence(
+                        instrument=market.instrument,
+                        rules=market.settlement_rules,
+                        retrieved_at=now,
+                    )
                 as_of = datetime.now(timezone.utc)
                 research_capture = PublicResearchCapture(
                     market.instrument, market.snapshot, market.settlement_rules,
@@ -401,6 +658,7 @@ def _maintenance_operation(
     if job.kind in {WorkerJobKind.RECONCILE, WorkerJobKind.EXIT}:
         raise WorkerDegraded("account_maintenance_adapter_unconfigured")
     if job.kind is WorkerJobKind.STRATEGY:
+        execution_command = None
         if (
             strategy_store is None or strategy_run_store is None
             or market_capture_store is None or market_data_gateway is None
@@ -523,6 +781,13 @@ def _maintenance_operation(
                     expected_revision=run.revision,
                 )
             else:
+                decision_capture, decision_candidates = _refresh_decision_markets(
+                    run, market_capture_store=market_capture_store,
+                    market_data_gateway=market_data_gateway,
+                    market_capture_policy=market_capture_policy,
+                    now=decision_at,
+                )
+                decision_at = datetime.now(timezone.utc)
                 scope, account_state = _reconcile_shadow_account(
                     account_snapshot_store, twin_store,
                     scope_id=run.account_scope_id, account_epoch=run.account_epoch,
@@ -534,7 +799,7 @@ def _maintenance_operation(
                     if result is not None
                 }
                 candidates_by_instrument = {
-                    candidate.instrument.id: candidate for candidate in run.candidates
+                    candidate.instrument.id: candidate for candidate in decision_candidates
                 }
                 cycle = ForeseaEdgeStrategy(
                     store=strategy_store, policy=strategy_policy,
@@ -546,18 +811,43 @@ def _maintenance_operation(
                         position.instrument.id,
                     ),
                     discover=lambda: tuple(
-                        candidate for candidate in run.candidates
+                        candidate for candidate in decision_candidates
                         if candidate.instrument.id in results_by_instrument
                     ),
                     research=lambda candidate: results_by_instrument[candidate.instrument.id],
                 )
-                run = strategy_run_store.save(
-                    run.advance(
-                        StrategyRunPhase.COMPLETE, now=decision_at,
-                        reason=cycle.reason,
-                    ),
-                    expected_revision=run.revision,
-                )
+                execution_capture = decision_capture
+                try:
+                    if execution_capture is None:
+                        raise ValueError("strategy market capture is unavailable")
+                    execution_command = _execute_shadow_cycle(
+                        cycle, capture=execution_capture,
+                        snapshot_store=account_snapshot_store, twin_store=twin_store,
+                        scope=scope, now=decision_at,
+                        worker_id=f"shadow-executor:{job.id}",
+                    )
+                except WorkerPaused:
+                    raise
+                except Exception as exc:
+                    logger.warning(
+                        "Shadow strategy execution failed (%s: %s)",
+                        type(exc).__name__, str(exc),
+                    )
+                    run = strategy_run_store.save(
+                        run.advance(
+                            StrategyRunPhase.BLOCKED, now=decision_at,
+                            reason="shadow_execution_failed",
+                        ),
+                        expected_revision=run.revision,
+                    )
+                else:
+                    run = strategy_run_store.save(
+                        run.advance(
+                            StrategyRunPhase.COMPLETE, now=decision_at,
+                            reason=cycle.reason,
+                        ),
+                        expected_revision=run.revision,
+                    )
         capture = market_capture_store.get(run.id)
         if run.phase not in {StrategyRunPhase.BLOCKED, StrategyRunPhase.COMPLETE}:
             raise WorkerPaused("strategy_run_not_terminal")
@@ -576,10 +866,19 @@ def _maintenance_operation(
                 account_scope_id=job.account_scope_id,
             ))
             cycle = strategy_store.get_cycle(job.payload["strategy_cycle_id"])
+        if (
+            execution_command is None and cycle is not None
+            and cycle.intent is not None and twin_store is not None
+        ):
+            try:
+                execution_command = twin_store.command_for_intent(cycle.intent)
+            except TwinStoreError:
+                pass
         return {
             "status": "complete" if run.phase is StrategyRunPhase.COMPLETE else "blocked",
             "reason": str(run.reason),
             "decision": cycle.decision if cycle is not None else "PASS",
+            "command_state": execution_command.state.value if execution_command is not None else None,
             "strategy_cycle_id": job.payload["strategy_cycle_id"],
             "config_release_id": job.payload["config_release_id"],
             "observation_recorded": recorded,
@@ -697,7 +996,9 @@ def create_environment_app():
         repository_root / "configs" / "twin.yaml",
         repository_root / "configs" / "models.yaml",
     )
-    strategy_policy = load_strategy_policy(repository_root / "configs" / "twin.yaml")
+    strategy_policy = load_strategy_policy(
+        repository_root / "configs" / "twin.yaml", shadow_trial=True,
+    )
 
     if role is WorkerRole.MAINTENANCE:
         from google.cloud import datastore

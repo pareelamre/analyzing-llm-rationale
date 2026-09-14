@@ -3,8 +3,8 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t21_in_progress_account_and_simulation_blocked",
-  "implementation_baseline": "d0cf0a80c",
+  "implementation_status": "t21_in_progress_shadow_execution_ready_for_deploy",
+  "implementation_baseline": "82035b8a38030d95aefaa66d823d9c6ff70521f5",
   "next_task": "T21",
   "live_authorized": false,
   "release_gates": {
@@ -651,8 +651,8 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "private cycles now reconcile a fresh durable shadow account generation and execute the existing Foresea strategy after research while preserving scheduled cycle identity; durable order simulation remains",
-      "branch": "codex/t21-shadow-runtime",
+      "substep": "durable restart-safe shadow IOC execution and official venue-listing evidence fallback are implemented; merge, deploy, and restart the seven-day forward collection window",
+      "branch": "codex/t21-shadow-execution",
       "commit": null,
       "pr_url": null,
       "checks": [
@@ -732,7 +732,16 @@
         "py -m unittest discover -s tests for durable shadow account strategy runtime (pass)",
         "py -m ruff check src tests for durable shadow account strategy runtime (pass)",
         "py -m graphify update . for durable shadow account strategy runtime (pass: 9955 nodes, 25247 edges)",
-        "git diff --check for durable shadow account strategy runtime (pass)"
+        "git diff --check for durable shadow account strategy runtime (pass)",
+        "PR #627 CI and Docker workflows (pass); merged as 82035b8a38030d95aefaa66d823d9c6ff70521f5",
+        "private twin-maintenance revision twin-maintenance-00023-5ck and twin-research revision twin-research-00024-ggc run exact image sha256:f3d139d0b5fcb8a5bc1d71504a8df8a4ddcb9596a6163746f5472cabb57c3d8b",
+        "private /health and /ready smoke after PR #627 (pass); shadow mode, zero live capital, empty mandate; temporary human invoker grants removed",
+        "production strategy cycle captured three live markets without rejection, then failed closed because AP returned 403 and GDELT timed out",
+        "focused official-listing fallback, durable shadow execution, restart reconciliation, captured-depth and zero-authority tests (pass: 69 tests)",
+        "npm ci and npm run frontend:build for shadow execution runtime (pass)",
+        "py -m unittest discover -s tests for shadow execution runtime (pass: 2256 tests; 12 skipped)",
+        "py -m ruff check src tests for shadow execution runtime (pass)",
+        "py -m graphify update . for shadow execution runtime (pass: 9975 nodes, 25406 edges)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -759,11 +768,10 @@
         "src/analyzing_llm_rationale/forecast_ledger.py"
       ],
       "blockers": [
-        "Durable shadow order preview, command submission, fill, cancellation and settlement state are not yet wired into the private cycle runtime.",
         "Compatible audit-grade calibration observations must accumulate before entry intents can qualify.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Persist shadow venue execution state, run accepted intents through durable commands and captured-book simulation, then restart the seven-day collection clock."
+      "handoff": "Merge and deploy the restart-safe shadow execution and evidence fallback revision, verify a production cycle, then restart the seven-day collection clock."
     },
     {
       "id": "T22",

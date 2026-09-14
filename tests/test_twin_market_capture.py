@@ -82,9 +82,16 @@ class MarketCaptureTests(unittest.TestCase):
         self.assertEqual(batch.markets[1].snapshot.yes_ask, Decimal("0.42"))
         self.assertEqual(batch.markets[1].yes_ask_depth, Decimal("7"))
         self.assertEqual(batch.markets[1].no_ask_depth, Decimal("5"))
+        self.assertIsNone(batch.markets[0].yes_bid_depth)
+        self.assertEqual(batch.markets[1].yes_bid_depth, Decimal("8"))
+        self.assertEqual(batch.markets[1].no_bid_depth, Decimal("6"))
         self.assertEqual(batch.markets[1].settlement_rules, "Official Polymarket rule source.")
         self.assertEqual(batch.markets[0].trading_cost.yes_fee_per_share, Decimal("0.0171"))
         self.assertEqual(batch.markets[1].trading_cost.yes_fee_per_share, Decimal("0.009744"))
+        self.assertEqual(
+            batch.markets[1].trading_cost.fee_per_share_at(Decimal(".40")),
+            Decimal(".0096"),
+        )
         self.assertEqual(
             batch.markets[1].instrument.fee_version,
             batch.markets[1].trading_cost.schedule_version,

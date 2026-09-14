@@ -1,6 +1,7 @@
 import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -11,7 +12,12 @@ from analyzing_llm_rationale.twin.budget import (
     InMemoryResearchBudget,
     ModelPrice,
 )
-from analyzing_llm_rationale.twin.market_capture import InMemoryMarketCaptureStore
+from analyzing_llm_rationale.twin.market_capture import (
+    CapturedMarket,
+    CapturedTradingCost,
+    InMemoryMarketCaptureStore,
+    MarketCaptureBatch,
+)
 from analyzing_llm_rationale.twin.research_gateway import (
     InMemoryPublicEvidenceCache,
     InMemoryResearchCaptureStore,
@@ -28,6 +34,7 @@ from analyzing_llm_rationale.twin.runtime_app import (
     _assert_shadow_only,
     _authorize_research_repair,
     _calibration_observations,
+    _execute_shadow_cycle,
     _maintenance_operation,
     _reconcile_shadow_account,
     _recover_stale_research_budgets,
@@ -35,9 +42,11 @@ from analyzing_llm_rationale.twin.runtime_app import (
     _stage_strategy_continuation,
 )
 from analyzing_llm_rationale.twin.scheduler import ShadowCycleSchedule
-from analyzing_llm_rationale.twin.store import InMemoryTwinStore
+from analyzing_llm_rationale.twin.simulator import ShadowVenue
+from analyzing_llm_rationale.twin.store import InMemoryTwinStore, TwinStoreError
 from analyzing_llm_rationale.twin.strategy import (
     InMemoryStrategyStore,
+    StrategyAccountState,
     load_strategy_policy,
     strategy_cycle_key_for_identity,
 )
@@ -50,6 +59,7 @@ from analyzing_llm_rationale.twin.worker import (
     TwinWorker,
     WorkerJob,
     WorkerJobKind,
+    WorkerPaused,
     WorkerRole,
 )
 
@@ -102,6 +112,131 @@ class Dispatcher:
 
 
 class PrivateTwinRuntimeTests(unittest.TestCase):
+    def test_shadow_cycle_persists_one_fenced_simulated_order_across_retries(self):
+        from tests.test_twin_strategy import (
+            candidate,
+            research_result,
+            scope,
+            strategy,
+        )
+
+        market = candidate()
+        shadow_scope = replace(scope(), environment="shadow")
+        account_store = InMemoryAccountSnapshotStore()
+        twin_store = InMemoryTwinStore()
+        account = ShadowVenue(
+            account_id="shadow-account-foresea-edge-v1", seed=20260913,
+            scope_id=shadow_scope.id, starting_cash=Decimal("100"),
+        ).account(received_at=NOW - timedelta(seconds=1))
+        account_store.save(account)
+        projection = twin_store.register_account(
+            shadow_scope, venue_available_cash=account.available_cash,
+            loss_limit=Decimal("100"),
+        )
+        state = StrategyAccountState(
+            account, projection, (), (), Decimal("0"), Decimal("0"),
+            Decimal("100"), Decimal("100"),
+        )
+        cycle = strategy().run_cycle(
+            scope=shadow_scope, now=NOW, reconcile=lambda: state,
+            load_position_market=lambda _position: None,
+            discover=lambda: (market,), research=lambda item: research_result(item),
+        )
+        self.assertEqual(cycle.decision, "INTENT")
+        captured = CapturedMarket(
+            market.instrument, market.snapshot, Decimal("10"), Decimal("10"),
+            "Exact settlement rules.",
+            CapturedTradingCost(
+                "kalshi_quadratic", Decimal(".01"), Decimal(".01"),
+                Decimal(".01"), "fee-v1", "test.capture",
+            ),
+            Decimal("10"), Decimal("10"),
+        )
+        batch = MarketCaptureBatch(NOW, (captured,), ())
+
+        first = _execute_shadow_cycle(
+            cycle, capture=batch, snapshot_store=account_store,
+            twin_store=twin_store, scope=shadow_scope, now=NOW,
+            worker_id="shadow-worker",
+        )
+        persisted = account_store.load(shadow_scope.id)
+        repeated = _execute_shadow_cycle(
+            cycle, capture=batch, snapshot_store=account_store,
+            twin_store=twin_store, scope=shadow_scope, now=NOW + timedelta(seconds=1),
+            worker_id="shadow-worker",
+        )
+
+        self.assertIn(first.state.value, {"filled", "cancelled"})
+        self.assertEqual(repeated.id, first.id)
+        self.assertEqual(len(persisted.orders), 1)
+        self.assertEqual(len(persisted.fills), 1)
+        self.assertLess(persisted.available_cash, Decimal("100"))
+
+    def test_shadow_cycle_recovers_saved_receipt_after_ack_persistence_failure(self):
+        from tests.test_twin_strategy import candidate, research_result, scope, strategy
+
+        class FailFirstAcknowledgement(InMemoryTwinStore):
+            def __init__(self):
+                super().__init__()
+                self.failed = False
+
+            def transition_command(self, command_id, *, target, fence, worker_id):
+                if target.value == "acknowledged" and not self.failed:
+                    self.failed = True
+                    raise TwinStoreError("injected acknowledgement write failure")
+                return super().transition_command(
+                    command_id, target=target, fence=fence, worker_id=worker_id,
+                )
+
+        market = candidate()
+        shadow_scope = replace(scope(), environment="shadow")
+        account_store = InMemoryAccountSnapshotStore()
+        twin_store = FailFirstAcknowledgement()
+        account = ShadowVenue(
+            account_id="shadow-account-foresea-edge-v1", seed=20260913,
+            scope_id=shadow_scope.id, starting_cash=Decimal("100"),
+        ).account(received_at=NOW - timedelta(seconds=1))
+        account_store.save(account)
+        projection = twin_store.register_account(
+            shadow_scope, venue_available_cash=Decimal("100"),
+            loss_limit=Decimal("100"),
+        )
+        state = StrategyAccountState(
+            account, projection, (), (), Decimal("0"), Decimal("0"),
+            Decimal("100"), Decimal("100"),
+        )
+        cycle = strategy().run_cycle(
+            scope=shadow_scope, now=NOW, reconcile=lambda: state,
+            load_position_market=lambda _position: None,
+            discover=lambda: (market,), research=lambda item: research_result(item),
+        )
+        captured = CapturedMarket(
+            market.instrument, market.snapshot, Decimal("10"), Decimal("10"),
+            "Exact settlement rules.",
+            CapturedTradingCost(
+                "kalshi_quadratic", Decimal(".01"), Decimal(".01"),
+                Decimal(".01"), "fee-v1", "test.capture",
+            ), Decimal("10"), Decimal("10"),
+        )
+        batch = MarketCaptureBatch(NOW, (captured,), ())
+
+        with self.assertRaisesRegex(WorkerPaused, "requires_reconciliation"):
+            _execute_shadow_cycle(
+                cycle, capture=batch, snapshot_store=account_store,
+                twin_store=twin_store, scope=shadow_scope, now=NOW,
+                worker_id="first-worker",
+            )
+        recovered = _execute_shadow_cycle(
+            cycle, capture=batch, snapshot_store=account_store,
+            twin_store=twin_store, scope=shadow_scope,
+            now=NOW + timedelta(seconds=31), worker_id="recovery-worker",
+        )
+        persisted = account_store.load(shadow_scope.id)
+
+        self.assertIn(recovered.state.value, {"filled", "cancelled"})
+        self.assertEqual(len(persisted.orders), 1)
+        self.assertEqual(len(persisted.fills), 1)
+
     def test_calibration_loader_accepts_only_audit_grade_resolved_twin_history(self):
         good = {
             "forecast_id": "forecast-1", "instrument_id": "kalshi:demo:one",
@@ -473,14 +608,7 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
 
         class EvidenceGateway:
             def search(self, _query, *, limit):
-                self.limit = limit
-                return [{
-                    "title": "Relevant public report",
-                    "summary": "Verified public evidence for the captured market.",
-                    "url": "https://example.com/report",
-                    "publish_date": (current - timedelta(hours=1)).isoformat(),
-                    "relevance": 0.9,
-                }]
+                raise RuntimeError(f"third-party evidence unavailable at limit {limit}")
 
         class TitledGateway(Gateway):
             def fetch(self, venue, identifier):
@@ -490,20 +618,23 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         batch = capture_markets(TitledGateway(), now=current)
         cycle_id = strategy_cycle_key_for_identity(
             scope_id="shadow-scope:foresea-edge-v1", account_epoch=1,
-            now=current, config_version="foresea-edge-shadow-v1",
+            now=current, config_version="foresea-edge-shadow-trial-v1",
             bucket_seconds=300,
         )
         capture_store.record(cycle_id, batch)
         results = InMemoryResearchResultStore()
         account_snapshots = InMemoryAccountSnapshotStore()
         twin_store = InMemoryTwinStore()
-        strategy_policy = load_strategy_policy(Path("configs/twin.yaml"))
+        strategy_policy = load_strategy_policy(
+            Path("configs/twin.yaml"), shadow_trial=True,
+        )
+        from tests.test_twin_strategy import calibration_rows
         strategy_job = jobs.add(WorkerJob(
             "strategy-job-001", "shadow-scope:foresea-edge-v1",
             WorkerJobKind.STRATEGY,
             {
                 "strategy_cycle_id": cycle_id,
-                "config_release_id": "foresea-edge-shadow-v1",
+                "config_release_id": "foresea-edge-shadow-trial-v1",
                 "account_epoch_id": "1",
             },
             current + timedelta(minutes=5), created_at=current,
@@ -513,10 +644,20 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             jobs, budget, strategy_job, store, run_store, capture_store, Gateway(),
             None, captures, results, cache, EvidenceGateway(), policy, dispatcher,
             account_snapshots, twin_store, strategy_policy,
+            lambda: calibration_rows(),
         )
         self.assertEqual(pending["status"], "pending", pending)
         self.assertEqual(pending["research_job_count"], 1)
         research_job = jobs.get(dispatcher.ids[0])
+        fallback_capture = captures.get_capture(
+            research_job.payload["research_assignment_id"],
+        )
+        self.assertTrue(
+            fallback_capture.evidence[0].source_id.startswith((
+                "https://api.elections.kalshi.com/trade-api/v2/markets/",
+                "https://gamma-api.polymarket.com/markets/",
+            )),
+        )
         self.assertEqual(research_job.payload["strategy_cycle_id"], cycle_id)
         claimed = jobs.claim(
             research_job.id, worker_id="research-worker", now=current + timedelta(seconds=1),
@@ -550,13 +691,20 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             jobs, budget, continuation, store, run_store, capture_store, Gateway(),
             None, captures, results, cache, EvidenceGateway(), policy, dispatcher,
             account_snapshots, twin_store, strategy_policy,
+            lambda: calibration_rows(),
         )
-        self.assertEqual(resumed["run_phase"], "complete")
-        self.assertEqual(resumed["decision"], "PASS")
-        self.assertEqual(store.get_cycle(cycle_id).reason, "no_candidate_qualified")
-        self.assertEqual(
-            account_snapshots.load("shadow-scope:foresea-edge-v1").generation, 1,
+        self.assertEqual(resumed["run_phase"], "complete", resumed)
+        self.assertEqual(resumed["decision"], "INTENT")
+        self.assertIn(
+            resumed["command_state"],
+            {"filled", "partially_filled", "acknowledged", "cancelled"},
         )
+        self.assertEqual(store.get_cycle(cycle_id).reason, "entry_eligible")
+        persisted_account = account_snapshots.load("shadow-scope:foresea-edge-v1")
+        self.assertGreater(persisted_account.generation, 1)
+        self.assertEqual(len(persisted_account.orders), 1)
+        self.assertEqual(persisted_account.orders[0]["remaining_quantity"], Decimal("0"))
+        self.assertIn(persisted_account.orders[0]["status"], {"filled", "cancelled"})
 
     def test_repair_authorization_is_fenced_and_research_identity_bound(self):
         jobs = InMemoryWorkerJobs()
