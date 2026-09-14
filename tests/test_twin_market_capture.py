@@ -140,6 +140,15 @@ class MarketCaptureTests(unittest.TestCase):
         self.assertEqual([item.instrument.venue for item in batch.markets], ["polymarket"])
         self.assertEqual(batch.rejections[0].reason, "data_unavailable")
 
+    def test_live_observation_clock_stamps_each_completed_fetch(self):
+        ticks = iter((NOW + timedelta(seconds=1), NOW + timedelta(seconds=2)))
+        batch = capture_markets(
+            Gateway(), now=NOW, observation_clock=lambda: next(ticks),
+        )
+        self.assertEqual(batch.observed_at, NOW + timedelta(seconds=2))
+        self.assertEqual(batch.markets[0].snapshot.received_at, NOW + timedelta(seconds=1))
+        self.assertEqual(batch.markets[1].snapshot.received_at, NOW + timedelta(seconds=2))
+
     def test_policy_bounds_market_and_discovery_work(self):
         with self.assertRaisesRegex(Exception, "candidate limit"):
             MarketCapturePolicy(max_candidates=7)

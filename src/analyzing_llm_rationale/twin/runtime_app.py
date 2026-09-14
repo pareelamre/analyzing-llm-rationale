@@ -392,6 +392,7 @@ def _refresh_decision_markets(
     if capture is None:
         capture = capture_markets(
             market_data_gateway, now=now, policy=market_capture_policy,
+            observation_clock=lambda: datetime.now(timezone.utc),
         )
         market_capture_store.record(capture_id, capture)
     originals = {item.instrument.id: item for item in run.candidates}
@@ -468,7 +469,10 @@ def _prepare_strategy_research(
                         rules=market.settlement_rules,
                         retrieved_at=now,
                     )
-                as_of = datetime.now(timezone.utc)
+                # All inputs in this capture are stamped against the bounded
+                # preparation instant. Slow public-source failures must not age
+                # an otherwise fresh snapshot while the fallback is assembled.
+                as_of = now
                 research_capture = PublicResearchCapture(
                     market.instrument, market.snapshot, market.settlement_rules,
                     as_of, evidence,
@@ -685,6 +689,7 @@ def _maintenance_operation(
                 capture = capture_markets(
                     market_data_gateway, now=datetime.now(timezone.utc),
                     policy=market_capture_policy,
+                    observation_clock=lambda: datetime.now(timezone.utc),
                 )
                 market_capture_store.record(run.id, capture)
             prepared_at = datetime.now(timezone.utc)

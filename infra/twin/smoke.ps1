@@ -39,8 +39,15 @@ function Get-ServiceEvidence {
         throw "$Service readiness response is invalid"
     }
     $revision = [string]$description.status.latestReadyRevisionName
+    $createdRevision = [string]$description.status.latestCreatedRevisionName
     $traffic = @($description.status.traffic | Where-Object { $_.percent -gt 0 })
-    if ([string]::IsNullOrWhiteSpace($revision) -or $traffic.Count -ne 1 -or $traffic[0].percent -ne 100) {
+    if (
+        [string]::IsNullOrWhiteSpace($revision) -or
+        $revision -ne $createdRevision -or
+        $traffic.Count -ne 1 -or
+        $traffic[0].percent -ne 100 -or
+        [string]$traffic[0].revisionName -ne $revision
+    ) {
         throw "$Service does not have one fully promoted ready revision"
     }
     $containers = @($description.spec.template.spec.containers)
