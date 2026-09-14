@@ -32,11 +32,14 @@ def poly_market(**updates):
     return result
 
 
-def books(*, include_no=True, zero=False):
+def books(*, include_no=True, zero=False, timestamp=None):
     level = {"price": "0.50", "size": "0" if zero else "10"}
     result = {"yes-token-001": {"bids": [level], "asks": [level]}}
     if include_no:
         result["no-token-001"] = {"bids": [level], "asks": [level]}
+    if timestamp is not None:
+        for book in result.values():
+            book["timestamp"] = timestamp
     return result
 
 
@@ -112,6 +115,21 @@ class TwinMarketTests(unittest.TestCase):
         suspended = normalize_market("polymarket", poly_market(acceptingOrders=False), received_at=NOW, sequence=1, orderbooks=books())
         self.assertIn(RejectionReason.PASS_STALE_DATA, future.reasons)
         self.assertIn(RejectionReason.PASS_UNSUPPORTED_INSTRUMENT, suspended.reasons)
+
+    def test_polymarket_uses_fresh_clob_timestamp_instead_of_market_metadata(self):
+        timestamp = str(int(NOW.timestamp() * 1000))
+        accepted = normalize_market(
+            "polymarket",
+            poly_market(updatedAt=(NOW - timedelta(minutes=5)).isoformat()),
+            received_at=NOW, sequence=1, orderbooks=books(timestamp=timestamp),
+        )
+        stale = normalize_market(
+            "polymarket", poly_market(), received_at=NOW, sequence=2,
+            orderbooks=books(timestamp=str(int((NOW - timedelta(minutes=1)).timestamp() * 1000))),
+        )
+        self.assertTrue(accepted.eligible)
+        self.assertEqual(accepted.snapshot.venue_at, NOW)
+        self.assertIn(RejectionReason.PASS_STALE_DATA, stale.reasons)
 
     def test_same_title_with_different_settlement_condition_has_distinct_identity(self):
         first = normalize_market("polymarket", poly_market(title="Will X?"), received_at=NOW, sequence=1, orderbooks=books())

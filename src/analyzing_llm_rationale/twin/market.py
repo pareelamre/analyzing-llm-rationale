@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Any, Mapping, Optional, Sequence
@@ -62,6 +62,13 @@ def _timestamp(raw: Any) -> Optional[datetime]:
     value = _text(raw)
     if not value:
         return None
+    try:
+        epoch = Decimal(value)
+        if epoch.is_finite() and epoch >= 0:
+            seconds = epoch / (Decimal("1000") if epoch >= Decimal("100000000000") else Decimal("1"))
+            return datetime.fromtimestamp(float(seconds), tz=timezone.utc)
+    except (InvalidOperation, OSError, OverflowError, ValueError):
+        pass
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
@@ -232,7 +239,7 @@ def _normalize_polymarket(
     condition_id, market_id = _identifier(market.get("conditionId") or market.get("condition_id")), _identifier(market.get("id"))
     outcomes, tokens = [_text(item).lower() for item in _list(market.get("outcomes"))], [_identifier(item) for item in _list(market.get("clobTokenIds"))]
     close_at = _timestamp(market.get("endDate") or market.get("endDateIso"))
-    venue_at = _timestamp(market.get("updatedAt") or market.get("updated_at")) or received_at
+    market_venue_at = _timestamp(market.get("updatedAt") or market.get("updated_at"))
     category = _text(market.get("category") or "other")
     settlement = _text(market.get("rules") or market.get("description") or market.get("resolutionSource"))
     status = "open" if bool(market.get("active", True)) and not bool(market.get("closed", False)) and bool(market.get("acceptingOrders", True)) else "closed"
@@ -244,6 +251,13 @@ def _normalize_polymarket(
         reasons.append(RejectionReason.PASS_UNSUPPORTED_INSTRUMENT)
     yes_book = orderbooks.get(str(tokens[0])) if len(tokens) == 2 else None
     no_book = orderbooks.get(str(tokens[1])) if len(tokens) == 2 else None
+    book_times = tuple(
+        item for item in (
+            _timestamp(yes_book.get("timestamp")) if isinstance(yes_book, Mapping) else None,
+            _timestamp(no_book.get("timestamp")) if isinstance(no_book, Mapping) else None,
+        ) if item is not None
+    )
+    venue_at = min(book_times) if len(book_times) == 2 else market_venue_at or received_at
 
     def consistent_book_value(*keys: str) -> Optional[Decimal]:
         values = []
@@ -259,7 +273,12 @@ def _normalize_polymarket(
     minimum = minimum or consistent_book_value("min_order_size", "minimum_order_size")
     if not condition_id or not market_id or tick is None or minimum is None or tick == 0 or minimum == 0:
         reasons.append(RejectionReason.PASS_INCOMPLETE_DATA)
-    if venue_at > received_at:
+    if (
+        venue_at > received_at
+        or any(item > received_at for item in book_times)
+        or (received_at - venue_at).total_seconds() > stale_after_seconds
+        or market_venue_at is not None and market_venue_at > received_at
+    ):
         reasons.append(RejectionReason.PASS_STALE_DATA)
     if reasons:
         return MarketAssessment(None, None, _reason_set(*reasons))

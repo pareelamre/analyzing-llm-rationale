@@ -3,8 +3,8 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t21_in_progress_shadow_execution_ready_for_deploy",
-  "implementation_baseline": "82035b8a38030d95aefaa66d823d9c6ff70521f5",
+  "implementation_status": "t21_in_progress_quote_timestamp_fix_ready_for_deploy",
+  "implementation_baseline": "b628dedf74a81bfd92b9e4f4c4de68fca576da17",
   "next_task": "T21",
   "live_authorized": false,
   "release_gates": {
@@ -651,8 +651,8 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "durable restart-safe shadow IOC execution and official venue-listing evidence fallback are implemented; merge, deploy, and restart the seven-day forward collection window",
-      "branch": "codex/t21-shadow-execution",
+      "substep": "restart-safe shadow execution is deployed; the follow-up binds Polymarket freshness to CLOB timestamps and guarantees new private revisions receive traffic before smoke verification",
+      "branch": "codex/twin-deploy-promote-latest",
       "commit": null,
       "pr_url": null,
       "checks": [
@@ -741,7 +741,19 @@
         "npm ci and npm run frontend:build for shadow execution runtime (pass)",
         "py -m unittest discover -s tests for shadow execution runtime (pass: 2256 tests; 12 skipped)",
         "py -m ruff check src tests for shadow execution runtime (pass)",
-        "py -m graphify update . for shadow execution runtime (pass: 9975 nodes, 25406 edges)"
+        "py -m graphify update . for shadow execution runtime (pass: 9975 nodes, 25406 edges)",
+        "PR #629 protected test and datastore-integration checks (pass); merged as b628dedf74a81bfd92b9e4f4c4de68fca576da17",
+        "Docker workflow 34834713577 build, public deploy, health/readiness and streamed forecast smoke (pass)",
+        "private twin-maintenance revision twin-maintenance-00025-ltd and twin-research revision twin-research-00026-9z4 run exact image sha256:f7ffcccabc17506f28e91fc6a8645f4f4851d36d222a6019c70d1a3eff388c54",
+        "private authenticated /health and /ready smoke after explicit traffic promotion (pass); shadow mode, zero live capital, empty mandate; temporary human invokers removed",
+        "production scheduler cycle on promoted revision proved the remaining research-input failure was stale Gamma metadata used as quote time despite fresh CLOB order-book timestamps",
+        "live read-only corrected timestamp probe (pass: three captured Polymarket markets; all fallback research captures validate with 0.3-12.1 second quote age)",
+        "PowerShell parse and dry-run checks for mandatory private latest-revision traffic promotion (pass)",
+        "focused market timestamp, capture clock, evidence fallback and runtime tests (pass: 45 tests)",
+        "npm ci and npm run frontend:build for quote timestamp and deployment promotion fix (pass)",
+        "py -m unittest discover -s tests for quote timestamp and deployment promotion fix (pass: 2308 tests; 12 skipped)",
+        "py -m ruff check src tests for quote timestamp and deployment promotion fix (pass)",
+        "py -m graphify update . for quote timestamp and deployment promotion fix (pass: 10090 nodes, 25699 edges)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -771,7 +783,7 @@
         "Compatible audit-grade calibration observations must accumulate before entry intents can qualify.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Merge and deploy the restart-safe shadow execution and evidence fallback revision, verify a production cycle, then restart the seven-day collection clock."
+      "handoff": "Merge and deploy the CLOB timestamp and private traffic-promotion fix, verify a production research continuation, then restart the seven-day collection clock."
     },
     {
       "id": "T22",

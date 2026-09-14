@@ -141,6 +141,15 @@ Invoke-Gcloud @("run", "services", "update", "twin-maintenance", "--region", $Re
 Invoke-Gcloud @("run", "services", "update", "twin-research", "--region", $Region, "--project", $ProjectId,
     "--update-env-vars", "FORESEA_TWIN_MAINTENANCE_URL=$maintenanceUrl,FORESEA_TWIN_MAINTENANCE_AUDIENCE=$maintenanceUrl,FORESEA_TWIN_RESEARCH_AUDIENCE=$researchUrl")
 
+# A service may have traffic pinned to a named older revision. Deploying and
+# updating its template still creates the new revision in that case, but does
+# not promote it. Move both services to the ready revision built above before
+# the smoke test so the test cannot accidentally validate old code.
+foreach ($service in @("twin-research", "twin-maintenance")) {
+    Invoke-Gcloud @("run", "services", "update-traffic", $service, "--region", $Region,
+        "--project", $ProjectId, "--to-latest")
+}
+
 $schedulerFlags = @("--schedule", "*/5 * * * *", "--time-zone", "UTC",
     "--uri", "$maintenanceUrl/internal/twin/dispatch", "--http-method", "POST",
     "--oidc-service-account-email", $schedulerServiceAccount, "--oidc-token-audience", $maintenanceUrl,

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from hashlib import sha256
-from typing import Any, Mapping, Optional, Protocol, Sequence
+from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
 
 from opentelemetry import metrics, trace
 
@@ -561,6 +561,7 @@ def _verified_trading_cost(
 def capture_markets(
     gateway: MarketDataGateway, *, now: datetime,
     policy: MarketCapturePolicy | None = None, sequence_start: int = 1,
+    observation_clock: Callable[[], datetime] | None = None,
 ) -> MarketCaptureBatch:
     """Capture at most three deterministic executable market observations."""
     if now.tzinfo is None or now.utcoffset() is None or sequence_start < 1:
@@ -588,6 +589,7 @@ def capture_markets(
             if index < len(discovered[venue]):
                 identities.append((venue, discovered[venue][index]))
     markets: list[CapturedMarket] = []
+    observed_at = now
     for venue, identifier in identities:
         if len(markets) >= policy.max_candidates:
             break
@@ -596,9 +598,13 @@ def capture_markets(
         except MarketDataError:
             rejections.append(MarketCaptureRejection(venue, identifier, "data_unavailable"))
             continue
+        received_at = observation_clock() if observation_clock is not None else now
+        if received_at.tzinfo is None or received_at.utcoffset() is None or received_at < now:
+            raise MarketCaptureError("market observation clock moved backwards or is timezone-naive")
+        observed_at = max(observed_at, received_at)
         try:
             assessment = normalize_market(
-                venue, market, received_at=now,
+                venue, market, received_at=received_at,
                 sequence=sequence_start + len(markets), orderbooks=books,
                 min_horizon_seconds=int(policy.min_close_days * 86400),
                 max_horizon_seconds=int(policy.max_close_days * 86400),
@@ -638,4 +644,4 @@ def capture_markets(
             _settlement_rules(venue, market), trading_cost, depth[2], depth[3],
         ))
         market_capture_attempts.add(1, {"venue": venue, "outcome": "captured"})
-    return MarketCaptureBatch(now, tuple(markets), tuple(rejections))
+    return MarketCaptureBatch(observed_at, tuple(markets), tuple(rejections))
