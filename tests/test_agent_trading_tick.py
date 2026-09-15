@@ -984,6 +984,66 @@ class DeclaredThesisProbabilityTests(unittest.TestCase):
         self.assertEqual(declared["quantity"], 100.0)
         self.assertAlmostEqual(declared["conviction"], 0.85, places=2)
 
+    def test_parses_probe_kelly_scaled_edge_and_flat_probe_sizing(self):
+        for raw_mode, expected in (
+            ("probe_kelly (~50 contracts)", "probe_kelly"),
+            ("probe (~20 contracts)", "probe_kelly"),
+            ("scaled_edge (~40 contracts)", "scaled_edge"),
+            ("proportional (~30 contracts)", "scaled_edge"),
+            ("flat_probe (~10 contracts)", "flat_probe"),
+            ("micro (~5 contracts)", "flat_probe"),
+        ):
+            with self.subTest(raw_mode=raw_mode):
+                thesis = "\n".join([
+                    "- **Action**: BUY YES",
+                    "- **Market & Venue**: KXPROBE on Kalshi",
+                    f"- **Order Sizing**: {raw_mode}",
+                    "- **Model Probability**: 21% vs **Market Price**: 20%",
+                ])
+                declared = agent_trading_tick._declared_thesis_execution(thesis)
+                self.assertIsNotNone(declared)
+                self.assertEqual(declared["sizing_mode"], expected)
+
+    def test_reconcile_rescues_insufficient_edge_with_probe_fallback(self):
+        """When an agent declares BUY with edge_kelly on a 3pp edge, reconciliation rescues it via probe_kelly."""
+        thesis = "\n".join([
+            "### 0. Research Delta",
+            "Slight edge identified.",
+            "### 1. Decision & Unified Card",
+            "- **Action**: BUY YES",
+            "- **Market & Venue**: KXTHIN on Kalshi",
+            "- **Order Sizing**: edge_kelly",
+            "- **Model Probability**: 53% vs **Market Price**: 50%",
+        ])
+        candidate = {
+            "platform": "kalshi",
+            "ident": "KXTHIN",
+            "yes_ask": 0.50,
+            "no_ask": 0.50,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.dict(os.environ, {
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "acct.sqlite"),
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+            }):
+                # Mock live ask so order crosses book
+                with mock.patch("analyzing_llm_rationale.benchmark_tools._resolve_shadow_marketability") as mock_mkt:
+                    mock_mkt.return_value = {
+                        "marketable": True,
+                        "status": "marketable",
+                        "real_ask": 0.50,
+                        "price": 0.50,
+                    }
+                    updated_thesis, record = agent_trading_tick._reconcile_thesis_execution(
+                        agent_id="model-thin",
+                        thesis=thesis,
+                        candidates=[candidate],
+                        transcript=[],
+                    )
+                self.assertEqual(record["outcome"], "filled")
+                self.assertIn("PAPER ORDER FILLED", updated_thesis)
+                self.assertIn("rescued via probe_kelly fallback", updated_thesis)
+
 
 class EventMeritGateTests(unittest.TestCase):
     def test_prompt_requires_event_merit_not_just_a_price_gap(self):

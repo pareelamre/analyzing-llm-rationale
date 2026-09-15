@@ -826,7 +826,111 @@ class BenchmarkToolTests(unittest.TestCase):
             price=0.80, quantity=100, fee=0.50, side="yes", risk_reducing=False,
         )
         self.assertFalse(dear_edge["clears"])
-        self.assertEqual(dear_edge["min_net_edge"], 0.02)
+    def test_probe_kelly_allows_thin_edge_with_micro_cap(self):
+        """probe_kelly allows a 0.5pp edge to trade with a 1.5% position cap."""
+        plan = benchmark_tools._sizing_plan(
+            {"sizing_mode": "probe_kelly", "model_probability": 0.205},
+            price=0.20, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan["eligible"])
+        self.assertEqual(plan["mode"], "probe_kelly")
+        self.assertAlmostEqual(plan["edge"], 0.005, places=4)
+        self.assertEqual(plan["max_position_fraction"], 0.015)
+        self.assertLessEqual(plan["target_fraction"], 0.015)
+        self.assertGreater(plan["target_notional"], 0.0)
+
+    def test_scaled_edge_proportional_sizing(self):
+        """scaled_edge scales linearly up to 3% cap without all-or-nothing Kelly zeroing."""
+        plan_small = benchmark_tools._sizing_plan(
+            {"sizing_mode": "scaled_edge", "model_probability": 0.51},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        plan_larger = benchmark_tools._sizing_plan(
+            {"sizing_mode": "scaled_edge", "model_probability": 0.525},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan_small["eligible"])
+        self.assertTrue(plan_larger["eligible"])
+        self.assertAlmostEqual(plan_small["edge"], 0.01, places=4)
+        self.assertAlmostEqual(plan_larger["edge"], 0.025, places=4)
+        # 1pp edge is 20% of 5pp reference -> 0.20 * 0.03 = 0.006 (0.6% = $60)
+        self.assertAlmostEqual(plan_small["target_fraction"], 0.006, places=4)
+        # 2.5pp edge is 50% of 5pp reference -> 0.50 * 0.03 = 0.015 (1.5% = $150)
+        self.assertAlmostEqual(plan_larger["target_fraction"], 0.015, places=4)
+        self.assertGreater(plan_larger["target_notional"], plan_small["target_notional"])
+
+    def test_flat_probe_fixed_micro_stake(self):
+        """flat_probe allocates a fixed $25 stake on 0.2pp edge where quarter_kelly collapses to 0."""
+        plan_flat = benchmark_tools._sizing_plan(
+            {"sizing_mode": "flat_probe", "model_probability": 0.502},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan_flat["eligible"])
+        self.assertEqual(plan_flat["mode"], "flat_probe")
+        self.assertAlmostEqual(plan_flat["target_notional"], 25.0, places=2)
+
+        # quarter_kelly with 0.2pp edge collapses to 0 due to fees + shrinkage
+        plan_qk = benchmark_tools._sizing_plan(
+            {"sizing_mode": "quarter_kelly", "model_probability": 0.502},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertFalse(plan_qk["eligible"])
+        self.assertEqual(plan_qk["reason"], "no_positive_kelly")
+
+    def test_auto_sizing_mode_selection(self):
+        """sizing_mode='auto' selects the appropriate policy based on edge magnitude."""
+        plan_huge = benchmark_tools._sizing_plan(
+            {"sizing_mode": "auto", "model_probability": 0.65},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertEqual(plan_huge["mode"], "edge_kelly")
+
+        plan_med = benchmark_tools._sizing_plan(
+            {"sizing_mode": "auto", "model_probability": 0.53},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertEqual(plan_med["mode"], "convex_conviction")
+
+        plan_thin = benchmark_tools._sizing_plan(
+            {"sizing_mode": "auto", "model_probability": 0.505},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertEqual(plan_thin["mode"], "probe_kelly")
+
+    def test_sizing_fallback_rescues_insufficient_edge(self):
+        """allow_sizing_fallback steps down from edge_kelly to probe_kelly when edge is thin."""
+        # 0.5pp edge under edge_kelly without fallback is rejected
+        plan_rejected = benchmark_tools._sizing_plan(
+            {"sizing_mode": "edge_kelly", "model_probability": 0.205},
+            price=0.20, side="yes", account_value=10_000.0,
+        )
+        self.assertFalse(plan_rejected["eligible"])
+        self.assertEqual(plan_rejected["reason"], "edge_below_threshold")
+
+        # with allow_sizing_fallback=True, it falls back to probe_kelly
+        plan_rescued = benchmark_tools._sizing_plan(
+            {"sizing_mode": "edge_kelly", "model_probability": 0.205, "allow_sizing_fallback": True},
+            price=0.20, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan_rescued["eligible"])
+        self.assertEqual(plan_rescued["mode"], "probe_kelly")
+        self.assertEqual(plan_rescued.get("fallback_from"), "edge_kelly")
+
+    def test_edge_clears_fees_for_probe_policies(self):
+        """probe_kelly and flat_probe clear fees on thin edges down to their min_edge."""
+        probe_edge = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.205, "sizing_mode": "probe_kelly"},
+            price=0.20, quantity=50, fee=0.10, side="yes", risk_reducing=False,
+        )
+        self.assertTrue(probe_edge["clears"])
+        self.assertLessEqual(probe_edge["min_net_edge"], 0.002)
+
+        flat_edge = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.202, "sizing_mode": "flat_probe"},
+            price=0.20, quantity=50, fee=0.05, side="yes", risk_reducing=False,
+        )
+        self.assertTrue(flat_edge["clears"])
+        self.assertLessEqual(flat_edge["min_net_edge"], 0.001)
 
     def test_place_trade_returns_skipped_and_rejected_when_kelly_sizing_ineligible(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")

@@ -170,6 +170,30 @@ AGENT_SIZING_POLICIES: Dict[str, AgentSizingPolicy] = {
         max_position_fraction=0.06,
         min_edge=0.012,
     ),
+    "probe_kelly": AgentSizingPolicy(
+        key="probe_kelly",
+        label="Probe Kelly · 1.5% micro cap",
+        kelly_fraction=0.15,
+        market_shrinkage=0.10,
+        max_position_fraction=0.015,
+        min_edge=0.002,
+    ),
+    "scaled_edge": AgentSizingPolicy(
+        key="scaled_edge",
+        label="Scaled Edge · Proportional 3% cap",
+        kelly_fraction=0.0,
+        market_shrinkage=0.05,
+        max_position_fraction=0.03,
+        min_edge=0.002,
+    ),
+    "flat_probe": AgentSizingPolicy(
+        key="flat_probe",
+        label="Flat Micro Probe · $25 stake",
+        kelly_fraction=0.0,
+        market_shrinkage=0.0,
+        max_position_fraction=0.005,
+        min_edge=0.001,
+    ),
 }
 
 
@@ -467,9 +491,22 @@ def _sizing_plan(
         return {"mode": "manual", "applied": False}
     if requested == "close":
         return {"mode": "close", "applied": False}
-    policy = AGENT_SIZING_POLICIES.get(requested)
-    if policy is None:
-        choices = ", ".join((*AGENT_SIZING_POLICIES.keys(), "close"))
+    alias_map = {
+        "probe": "probe_kelly",
+        "probe_kelly": "probe_kelly",
+        "proportional": "scaled_edge",
+        "proportional_edge": "scaled_edge",
+        "scaled": "scaled_edge",
+        "scaled_edge": "scaled_edge",
+        "flat": "flat_probe",
+        "micro": "flat_probe",
+        "micro_stake": "flat_probe",
+        "micro_probe": "flat_probe",
+        "flat_probe": "flat_probe",
+    }
+    canonical_mode = alias_map.get(requested, requested)
+    if canonical_mode != "auto" and canonical_mode not in AGENT_SIZING_POLICIES:
+        choices = ", ".join((*AGENT_SIZING_POLICIES.keys(), "auto", "close"))
         raise ValueError(f"sizing_mode must be one of {choices}")
     if not 0.0 < price < 1.0:
         raise ValueError("Kelly sizing requires an executable price between 0 and 1")
@@ -482,17 +519,43 @@ def _sizing_plan(
         model_yes_probability = _clean_probability(args.get("model_probability"), name="model_probability")
         model_side_probability = model_yes_probability if side == "yes" else 1.0 - model_yes_probability
     edge = model_side_probability - price
+
+    if canonical_mode == "auto":
+        if edge >= 0.10 and price >= 0.40:
+            policy = AGENT_SIZING_POLICIES["edge_kelly"]
+        elif edge >= 0.012:
+            policy = AGENT_SIZING_POLICIES["convex_conviction"]
+        elif edge >= 0.002:
+            policy = AGENT_SIZING_POLICIES["probe_kelly"]
+        elif edge >= 0.001:
+            policy = AGENT_SIZING_POLICIES["flat_probe"]
+        else:
+            policy = AGENT_SIZING_POLICIES["probe_kelly"]
+    else:
+        policy = AGENT_SIZING_POLICIES[canonical_mode]
+
+    allow_fallback = bool(args.get("allow_sizing_fallback") or args.get("fallback_to_probe") or args.get("fallback"))
+    fallback_from = None
     if edge < policy.min_edge:
-        return {
-            "mode": policy.key,
-            "label": policy.label,
-            "applied": True,
-            "eligible": False,
-            "edge": round(edge, 6),
-            "min_edge": policy.min_edge,
-            "max_position_fraction": policy.max_position_fraction,
-            "reason": "edge_below_threshold",
-        }
+        if allow_fallback and edge >= 0.001:
+            fallback_from = policy.key
+            if edge >= 0.012:
+                policy = AGENT_SIZING_POLICIES["convex_conviction"]
+            elif edge >= 0.002:
+                policy = AGENT_SIZING_POLICIES["probe_kelly"]
+            else:
+                policy = AGENT_SIZING_POLICIES["flat_probe"]
+        else:
+            return {
+                "mode": policy.key,
+                "label": policy.label,
+                "applied": True,
+                "eligible": False,
+                "edge": round(edge, 6),
+                "min_edge": policy.min_edge,
+                "max_position_fraction": policy.max_position_fraction,
+                "reason": "edge_below_threshold",
+            }
 
     # Match the published Mark-to-Market definitions: Quarter Kelly shrinks
     # halfway to market; Edge Kelly uses 25% shrinkage and half Kelly.
@@ -540,6 +603,61 @@ def _sizing_plan(
             "max_position_fraction": policy.max_position_fraction,
             "reason": "fee_exceeds_payoff",
         }
+
+    if policy.key == "flat_probe":
+        max_notional = account_value * policy.max_position_fraction
+        target_notional = min(25.0, max_notional)
+        target_fraction = target_notional / account_value if account_value else 0.0
+        res = {
+            "mode": policy.key,
+            "label": policy.label,
+            "applied": True,
+            "eligible": target_notional > 1e-9 and edge >= policy.min_edge,
+            "edge": round(edge, 6),
+            "min_edge": policy.min_edge,
+            "kelly_fraction": policy.kelly_fraction,
+            "market_shrinkage": 0.0,
+            "effective_market_shrinkage": 0.0,
+            "calibration_reliability": reliability,
+            "raw_kelly": 0.0,
+            "target_fraction": round(target_fraction, 6),
+            "max_position_fraction": policy.max_position_fraction,
+            "target_notional": round(target_notional, 6),
+            "fee_per_contract": round(fee_per_contract, 6),
+            "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
+            "reason": "edge_below_threshold" if edge < policy.min_edge else None,
+        }
+        if fallback_from:
+            res["fallback_from"] = fallback_from
+        return res
+
+    if policy.key == "scaled_edge":
+        scale = min(1.0, max(0.0, edge / 0.05))
+        target_fraction = min(policy.max_position_fraction, policy.max_position_fraction * scale)
+        target_notional = account_value * target_fraction
+        res = {
+            "mode": policy.key,
+            "label": policy.label,
+            "applied": True,
+            "eligible": target_notional > 1e-9 and edge >= policy.min_edge,
+            "edge": round(edge, 6),
+            "min_edge": policy.min_edge,
+            "kelly_fraction": policy.kelly_fraction,
+            "market_shrinkage": round(effective_shrinkage, 6),
+            "effective_market_shrinkage": round(1.0 - kept, 6),
+            "calibration_reliability": reliability,
+            "raw_kelly": round(target_fraction, 6),
+            "target_fraction": round(target_fraction, 6),
+            "max_position_fraction": policy.max_position_fraction,
+            "target_notional": round(target_notional, 6),
+            "fee_per_contract": round(fee_per_contract, 6),
+            "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
+            "reason": "edge_below_threshold" if edge < policy.min_edge else None,
+        }
+        if fallback_from:
+            res["fallback_from"] = fallback_from
+        return res
+
     odds = (1.0 - effective_cost) / effective_cost
     raw_kelly = max(0.0, (p_win * odds - (1.0 - p_win)) / odds)
     if policy.key == "convex_conviction" and odds > 0:
@@ -551,7 +669,36 @@ def _sizing_plan(
         raw_kelly *= skew_multiplier
     target_fraction = min(policy.kelly_fraction * raw_kelly, policy.max_position_fraction)
     target_notional = account_value * target_fraction
-    return {
+    if policy.key == "probe_kelly" and target_notional <= 1e-9 and edge >= policy.min_edge:
+        target_notional = min(25.0, account_value * policy.max_position_fraction)
+        target_fraction = target_notional / account_value if account_value else 0.0
+    if target_notional <= 1e-9 and allow_fallback and edge >= 0.001:
+        fb_policy = AGENT_SIZING_POLICIES["flat_probe"]
+        max_notional = account_value * fb_policy.max_position_fraction
+        target_notional = min(25.0, max_notional)
+        target_fraction = target_notional / account_value if account_value else 0.0
+        return {
+            "mode": fb_policy.key,
+            "label": fb_policy.label,
+            "applied": True,
+            "eligible": target_notional > 1e-9,
+            "edge": round(edge, 6),
+            "min_edge": fb_policy.min_edge,
+            "kelly_fraction": fb_policy.kelly_fraction,
+            "market_shrinkage": 0.0,
+            "effective_market_shrinkage": 0.0,
+            "calibration_reliability": reliability,
+            "raw_kelly": 0.0,
+            "target_fraction": round(target_fraction, 6),
+            "max_position_fraction": fb_policy.max_position_fraction,
+            "target_notional": round(target_notional, 6),
+            "fee_per_contract": round(fee_per_contract, 6),
+            "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
+            "reason": None,
+            "fallback_from": policy.key,
+        }
+
+    res = {
         "mode": policy.key,
         "label": policy.label,
         "applied": True,
@@ -570,6 +717,9 @@ def _sizing_plan(
         "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
         "reason": "no_positive_kelly" if target_notional <= 1e-9 else None,
     }
+    if fallback_from:
+        res["fallback_from"] = fallback_from
+    return res
 
 
 # Memoized per process (not a "rate" -> value dict of size >1): a shadow-
@@ -2472,10 +2622,23 @@ def _edge_clears_fees(
     net_edge = gross_edge - fee_per_contract
     floor = _min_net_edge()
     sizing_mode = str(args.get("sizing_mode") or "").strip().lower().replace("-", "_")
-    if sizing_mode == "convex_conviction":
-        policy = AGENT_SIZING_POLICIES.get("convex_conviction")
-        if policy is not None:
-            floor = min(floor, policy.min_edge)
+    alias_map = {
+        "probe": "probe_kelly",
+        "probe_kelly": "probe_kelly",
+        "proportional": "scaled_edge",
+        "proportional_edge": "scaled_edge",
+        "scaled": "scaled_edge",
+        "scaled_edge": "scaled_edge",
+        "flat": "flat_probe",
+        "micro": "flat_probe",
+        "micro_stake": "flat_probe",
+        "micro_probe": "flat_probe",
+        "flat_probe": "flat_probe",
+    }
+    canonical_mode = alias_map.get(sizing_mode, sizing_mode)
+    policy = AGENT_SIZING_POLICIES.get(canonical_mode)
+    if policy is not None and policy.min_edge > 0:
+        floor = min(floor, policy.min_edge)
     # Asymmetric hurdle discount: on cheap contracts (<50c), payout odds b = (1-c)/c
     # are >= 1.0, generating substantially higher return-on-investment per dollar risked.
     # Scale down the fee floor proportionally for positive-skew contracts while holding
@@ -3157,7 +3320,13 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 if reason == "edge_below_threshold" and edge_val is not None and min_edge_val is not None:
                     msg = (
                         f"No trade: the selected Kelly sizing policy found no eligible stake "
-                        f"({policy_label}: edge {edge_val:+.1%} below required {min_edge_val:.1%})."
+                        f"({policy_label}: edge {edge_val:+.1%} below required {min_edge_val:.1%}). "
+                        f"(Hint: consider sizing_mode='probe_kelly', 'scaled_edge', or 'flat_probe' for thin-edge trades)."
+                    )
+                elif reason == "no_positive_kelly":
+                    msg = (
+                        f"No trade: the selected Kelly sizing policy found no eligible stake ({reason}). "
+                        f"(Hint: consider sizing_mode='probe_kelly', 'scaled_edge', or 'flat_probe' for thin-edge trades)."
                     )
                 else:
                     msg = f"No trade: the selected Kelly sizing policy found no eligible stake ({reason})."
@@ -3231,8 +3400,9 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "rejected": True,
                     "reason": "kelly_sizing_required",
                     "message": (
-                        "Autonomous new positions require sizing_mode='quarter_kelly' or "
-                        "'edge_kelly' plus model_probability; manual quantities are not allowed."
+                        "Autonomous new positions require a valid sizing_mode ('quarter_kelly', "
+                        "'edge_kelly', 'convex_conviction', 'probe_kelly', 'scaled_edge', 'flat_probe') "
+                        "plus model_probability; manual quantities are not allowed."
                     ),
                     "mode": mode,
                     "submitted": False,

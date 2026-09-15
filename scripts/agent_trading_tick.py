@@ -1745,8 +1745,15 @@ _TRADING_INSTRUCTION = (
     "close to the market [1.5-8pp edge] backed by high research conviction, especially on "
     "cheap underpriced contracts [<35c] where payout odds [3:1 to 9:1] produce disproportionate "
     "winnings over losses; you may optionally pass conviction [0.0 to 1.0] in place_trade args), "
-    "(2) quarter_kelly (25% Kelly, 50% market shrinkage, 8% account cap), or (3) edge_kelly "
-    "(50% Kelly, 10 percentage-point edge minimum, 25% market shrinkage, 8% account cap). "
+    "(2) quarter_kelly (25% Kelly, 50% market shrinkage, 8% account cap), (3) edge_kelly "
+    "(50% Kelly, 10 percentage-point edge minimum, 25% market shrinkage, 8% account cap), "
+    "(4) probe_kelly (15% micro-Kelly, 10% market shrinkage, 0.2pp edge minimum, 1.5% account cap "
+    "-- USE THIS when your forecast has a small or subtle edge [0.2-1.5pp] and you want fractional "
+    "Kelly sizing without being rejected by higher edge gates), (5) scaled_edge (linear proportional "
+    "sizing up to 3% cap, 0.2pp edge minimum -- USE THIS for smooth edge-proportional sizing that avoids "
+    "Kelly's all-or-nothing cutoff on thin edges), or (6) flat_probe (fixed $25 micro-stake, 0.1pp edge "
+    "minimum, 0.5% cap -- USE THIS for exploratory or toehold positions on small positive EV where fees "
+    "would otherwise zero out Kelly). "
     "The tool accepts your calibrated deviation from the market price, whether passed as P(YES) "
     "or contract probability, and calculates the final quantity from the live ask and current "
     "account value; never invent a quantity larger than its result. For a pure exit, use "
@@ -2340,6 +2347,9 @@ def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
     sizing_value = sizing_text.group(1).lower() if sizing_text else text.lower()
     sizing_mode = (
         "convex_conviction" if ("convex" in sizing_value or "conviction" in sizing_value)
+        else "flat_probe" if ("flat_probe" in sizing_value or "flat probe" in sizing_value or "flat" in sizing_value or "micro" in sizing_value)
+        else "probe_kelly" if ("probe_kelly" in sizing_value or "probe kelly" in sizing_value or "probe" in sizing_value)
+        else "scaled_edge" if ("scaled_edge" in sizing_value or "scaled edge" in sizing_value or "scaled" in sizing_value or "proportional" in sizing_value)
         else "edge_kelly" if "edge kelly" in sizing_value
         else "quarter_kelly" if ("quarter kelly" in sizing_value or "quarter-kelly" in sizing_value or "kelly" in sizing_value)
         else "quarter_kelly" if action.startswith("BUY ")
@@ -2663,12 +2673,46 @@ def _reconcile_thesis_execution(
         })
         execution = result.get("execution") if isinstance(result, dict) else {}
         filled_quantity = float((execution or {}).get("filled_quantity") or 0)
+        fallback_mode = None
+        if action.startswith("BUY ") and not (bool(result.get("ok")) and filled_quantity > 0):
+            reason_str = str(result.get("reason") or "")
+            rejection_reasons = result.get("rejection_reasons") or []
+            if (
+                reason_str in {"edge_below_threshold", "no_positive_kelly", "edge_below_fee_floor"}
+                or "edge_below_fee_floor" in rejection_reasons
+            ):
+                for fb_mode in ("probe_kelly", "scaled_edge", "flat_probe"):
+                    if fb_mode == sizing_mode:
+                        continue
+                    fb_args = dict(args)
+                    fb_args["sizing_mode"] = fb_mode
+                    fb_res = benchmark_tools.place_trade(
+                        fb_args,
+                        benchmark_tools.ToolContext(agent_id=agent_id, model=agent_id, require_kelly_sizing=True),
+                    )
+                    fb_exec = fb_res.get("execution") if isinstance(fb_res, dict) else {}
+                    fb_filled = float((fb_exec or {}).get("filled_quantity") or 0)
+                    if bool(fb_res.get("ok")) and fb_filled > 0:
+                        fallback_mode = fb_mode
+                        filled_quantity = fb_filled
+                        result = fb_res
+                        execution = fb_exec
+                        transcript.append({
+                            "action": "place_trade",
+                            "args": fb_args,
+                            "observation": benchmark_tools.observation(fb_res),
+                            "source": "thesis_execution_reconciliation_fallback",
+                        })
+                        break
+
         if bool(result.get("ok")) and filled_quantity > 0:
             outcome = "filled"
             detail = (
                 f"Filled {filled_quantity:g} {str(side).upper()} contracts on {decision['ticker']} "
                 f"at ${float(result.get('normalized_order', {}).get('price') or price):.3f}."
             )
+            if fallback_mode:
+                detail += f" (rescued via {fallback_mode} fallback from insufficient edge on {sizing_mode})"
             status = "PAPER ORDER FILLED"
         elif bool(result.get("skipped")):
             outcome = "skipped"
