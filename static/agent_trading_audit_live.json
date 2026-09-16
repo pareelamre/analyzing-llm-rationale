@@ -1232,6 +1232,89 @@
     ],
     "gemma-4-26b-a4b-it": [
       {
+        "action_id": "bd6ae03b-d339-4f3b-8508-94221f8b8118",
+        "agent_id": "gemma-4-26b-a4b-it",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 5701.080849
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.14,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.14,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 10093.740806,
+            "cash_required": 825.607729,
+            "concentration_cap": 1548.057241,
+            "cycle_id": "30m:994196",
+            "cycle_spend_after": 825.607729,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 825.607729,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3096.114482,
+            "drawdown_after": 0.012692,
+            "fee": 27.45641,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 798.151319,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 798.151319,
+            "open_markets_after": 3,
+            "per_cycle_spend_limit": 2064.076321,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.84,
+            "eligible": true,
+            "kelly_fraction": 0.5,
+            "market_shrinkage": 0.25,
+            "max_position_fraction": 0.08,
+            "mode": "edge_kelly",
+            "reason": null,
+            "target_notional": 825.630528,
+            "target_quantity": 5701.080848501588
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994196",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -825.6077287902224,
+          "cash_required": 825.6077287902224,
+          "fee": 27.45641,
+          "netting_payout": 0.0,
+          "notional": 798.1513187902224,
+          "price": 0.14,
+          "quantity": 5701.080848501588,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "israel-x-iran-ceasefire-continues-through-september-30"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "4aad48c56441abdd4e169319c9f97df93d538902b4463a2d7b7fbe5b773390d7",
+        "recorded_at": "2026-09-16T10:09:59.705128+00:00"
+      },
+      {
         "action_id": "43a7ff8b-5b82-4195-bf40-daea4a32f29e",
         "agent_id": "gemma-4-26b-a4b-it",
         "audit": {
@@ -15454,6 +15537,89 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "2e30e50b-298e-4d70-ade8-8b6850f0b304",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_quote_unavailable",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "marketable": false,
+            "observed_ask": null,
+            "source": "live_venue_quote",
+            "status": "shadow_quote_unavailable"
+          },
+          "requested_order": {
+            "price": 0.55,
+            "quantity": "100"
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 7988.052442,
+            "cash_required": 35.423992,
+            "concentration_cap": 1198.207866,
+            "cycle_id": "30m:994196",
+            "cycle_spend_after": 35.423992,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 114.932215,
+            "daily_risk_before": 79.508223,
+            "daily_risk_limit": 2396.415733,
+            "drawdown_after": 0.201303,
+            "fee": 1.08178,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 34.342212,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 34.342212,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1597.610488,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.05,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 35.423992,
+            "target_quantity": 62.44038555153842
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994196",
+        "event_type": "unfilled_order",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 0.55,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXCLEMSONSWINNEY-26DEC01"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "66d26a257f9b08f3e60b25f80c7dd5b20b8867e5c8446856cbac322aad040171",
+        "recorded_at": "2026-09-16T10:14:19.107273+00:00"
+      },
+      {
         "action_id": "ee733702-6aae-46f9-97f4-d12aa25463df",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -26653,7 +26819,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-16T08:20:45.003438+00:00",
+  "generated_at": "2026-09-16T10:24:15.036113+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
