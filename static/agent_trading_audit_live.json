@@ -18328,6 +18328,83 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "ad825743-46f7-41a4-9b42-a9ea4fb44a0a",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "marketable": false,
+            "observed_ask": null,
+            "source": "live_venue_quote",
+            "status": "shadow_quote_unavailable"
+          },
+          "requested_order": {
+            "price": 0.6,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "cash_before": 7988.052442,
+            "cash_required": 0.6168,
+            "concentration_cap": 1198.207866,
+            "cycle_id": "30m:994264",
+            "cycle_spend_after": 0.6168,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.6168,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2396.415733,
+            "drawdown_after": 0.201196,
+            "fee": 0.0168,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 0.6,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 0.6,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1597.610488,
+            "reasons": [
+              "close_exceeds_open_position"
+            ],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994264",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.6168,
+          "fee": 0.0168,
+          "netting_payout": 0.0,
+          "notional": 0.6,
+          "price": 0.6,
+          "quantity": 1.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXCLEMSONSWINNEY-26DEC01"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "283978d9306666786efba7007d2bae3a19a6e8439a3e61359af2e3729204956e",
+        "recorded_at": "2026-09-17T20:30:13.449996+00:00"
+      },
+      {
         "action_id": "04b059f3-99da-4ded-9db9-3e5d75fe6613",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -27829,6 +27906,89 @@
     ],
     "qwen3-8-27b": [
       {
+        "action_id": "5477a34f-331f-4f53-aad0-90295522e389",
+        "agent_id": "qwen3-8-27b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 350.245455
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.61,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.61,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 9643.13361,
+            "cash_required": 216.982667,
+            "concentration_cap": 1507.269452,
+            "cycle_id": "30m:994265",
+            "cycle_spend_after": 216.982667,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 309.030212,
+            "daily_risk_before": 92.047545,
+            "daily_risk_limit": 3014.538903,
+            "drawdown_after": 0.003196,
+            "fee": 3.33294,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 213.649727,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 213.649727,
+            "open_markets_after": 6,
+            "per_cycle_spend_limit": 2009.692602,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.09,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 216.984064,
+            "target_quantity": 350.24545478289104
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994265",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -216.98266741756353,
+          "cash_required": 216.98266741756353,
+          "fee": 3.33294,
+          "netting_payout": 0.0,
+          "notional": 213.64972741756353,
+          "price": 0.61,
+          "quantity": 350.24545478289104,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "will-afd-win-the-most-seats-in-the-2026-mecklenburg-vorpommern-parliamentary-elections"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "7299524b840033ceedcc9194632239bcc2452293e41f1fac9e5e9057f16d4e7c",
+        "recorded_at": "2026-09-17T20:41:48.960297+00:00"
+      },
+      {
         "action_id": "95c6810b-c1d9-4789-96df-1eee6f33d899",
         "agent_id": "qwen3-8-27b",
         "audit": {
@@ -30364,7 +30524,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-17T18:38:10.977485+00:00",
+  "generated_at": "2026-09-17T20:43:21.026666+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
