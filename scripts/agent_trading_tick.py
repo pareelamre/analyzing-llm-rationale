@@ -1308,10 +1308,15 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
 def _build_candidates_block(held_quotes: List[Dict[str, Any]], new_quotes: List[Dict[str, Any]]) -> str:
     lines = ["=== Markets you can act on this cycle (Kalshi and Polymarket) ==="]
     if held_quotes:
-        lines.append("Markets you currently hold (buying the opposite side closes the position):")
+        lines.append(
+            "Markets you currently hold (Active Portfolio Inventory -- default is HOLD to maturity; "
+            "do NOT liquidate or flip sides on noise; only close if thesis is fundamentally invalidated):"
+        )
         lines.extend(_fmt_candidate_line(q) for q in held_quotes)
     if new_quotes:
-        lines.append("New candidate markets:")
+        lines.append(
+            "New candidate markets (Evaluate for book expansion -- allocate your BUY action here to grow your diversified book):"
+        )
         lines.extend(_fmt_candidate_line(q) for q in new_quotes)
     if not held_quotes and not new_quotes:
         lines.append("(No priced candidates this cycle.)")
@@ -1680,6 +1685,21 @@ async def _call_agent_analyze(question: str):
 
 
 _TRADING_INSTRUCTION = (
+    "INSTITUTIONAL MARKET MAKER & PROP DESK DISCIPLINE: You operate as a professional "
+    "quantitative market maker and proprietary trading desk. Your mandate is systematic "
+    "inventory management, spread awareness, and portfolio book building (targeting 4 to 8 "
+    "concurrent positions, up to the 10-market portfolio cap) -- NOT naive retail day-trading "
+    "churn. The leaderboard is won by cumulative net return, where turnover friction (crossing "
+    "bid-ask spreads and paying taker fees) is the number one destroyer of trading capital.\n\n"
+    "PORTFOLIO INVENTORY MANAGEMENT (DEFAULT: HOLD): When you hold open positions in your book, "
+    "your default action on those holdings is strictly HOLD until event resolution or convergence. "
+    "Prediction market prices oscillate with minor intraday noise and normal orderbook spread "
+    "bounce; a 1-3 cent fluctuation is NEVER an invalidation or reason to exit. Never flip sides "
+    "(YES <-> NO) on the same ticker or liquidate inventory without definitive, dated contradictory "
+    "evidence (such as an official cancellation, signed agreement, or statutory ruling) that "
+    "fundamentally disproves your original thesis. If existing holdings have intact theses, maintain "
+    "HOLD on them and allocate your cycle's research and trading capacity (place_trade) to NEW "
+    "Candidate Markets to add uncorrelated positive-EV exposure and expand your book.\n\n"
     "Decide what, if anything, to do this cycle. place_trade on any ticker "
     "above using its [kalshi]/[polymarket] tag as the platform arg (buying "
     "the opposite side of a held position closes it); use web_search for "
@@ -1704,7 +1724,9 @@ _TRADING_INSTRUCTION = (
     "evidence update from this cycle and an explicit comparison with the prior view. "
     "Do not re-open or add risk solely because a previous thesis, search result, or "
     "market candidate is still visible. If there is no material evidence delta, HOLD "
-    "or PASS; a fresh quote alone is not research.\n\n"
+    "or PASS; a fresh quote alone is not research. Conversely, do NOT exit a held position "
+    "simply because no new news occurred this cycle -- in prediction markets, no news means "
+    "your thesis remains intact and time decay works in your favour: HOLD.\n\n"
     "YOU ARE COMPETING. Eight agents trade this board against the same "
     "candidates, the same starting bankroll and the same guards, and the "
     "standings above are live. The objective is to finish top by return, and "
@@ -1762,6 +1784,10 @@ _TRADING_INSTRUCTION = (
     "binary contract pays $1.00 per matched pair, so close P&L is quantity × (1 - "
     "existing average entry - live opposite ask) minus fees. Do not call the close order's "
     "gross cash outlay an additional loss or compare it directly with the original cost basis.\n\n"
+    "WHIPSAW PROTECTION & SIZING: Never whipsaw by opening opposing positions on held tickers. "
+    "If an existing position is fundamentally invalidated by verified facts, use "
+    "sizing_mode='close' for an orderly liquidation. Never open an opposing position "
+    "as a speculative trade against your own book.\n\n"
     "EXECUTION CONTRACT: A final BUY YES, BUY NO, SELL YES, SELL NO, or CLOSE is "
     "a commitment to act in this shadow account. Call place_trade BEFORE writing "
     "that final action. If the tool rejects or cannot fill the order, say so plainly "

@@ -10,7 +10,7 @@ from analyzing_llm_rationale.twin.market_capture import (
     capture_markets,
 )
 
-NOW = datetime(2026, 9, 13, tzinfo=timezone.utc)
+NOW = datetime.now(timezone.utc)
 
 
 def kalshi_market():
@@ -18,7 +18,7 @@ def kalshi_market():
         "ticker": "KXTEST", "status": "active",
         "close_time": (NOW + timedelta(days=2)).isoformat(),
         "rules_primary": "Official Kalshi rule source.", "category": "politics",
-        "tick_size": "0.01", "min_contracts": "1",
+        "tick_size": "0.01", "min_contracts": "0.5",
         "yes_bid_dollars": "0.40", "yes_ask_dollars": "0.42",
         "no_bid_dollars": "0.58", "no_ask_dollars": "0.60",
         "yes_ask_size_fp": "12.5", "no_ask_size_fp": "9.5",

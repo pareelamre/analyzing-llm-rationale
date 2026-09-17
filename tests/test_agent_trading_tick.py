@@ -480,6 +480,20 @@ class CandidateLineFormattingTests(unittest.TestCase):
         # ...and immediately guards the inference it invites.
         self.assertIn("picking better, not by picking more", text)
 
+    def test_the_instruction_embeds_market_maker_discipline(self):
+        text = agent_trading_tick._TRADING_INSTRUCTION
+        self.assertIn("INSTITUTIONAL MARKET MAKER & PROP DESK DISCIPLINE", text)
+        self.assertIn("PORTFOLIO INVENTORY MANAGEMENT (DEFAULT: HOLD)", text)
+        self.assertIn("Never flip sides (YES <-> NO) on the same ticker", text)
+        self.assertIn("WHIPSAW PROTECTION & SIZING", text)
+
+    def test_candidates_block_frames_held_inventory_and_expansion(self):
+        held = [_quote("KXHELD", bid=0.40, ask=0.42)]
+        new_cands = [_quote("KXNEW", bid=0.10, ask=0.12)]
+        block = agent_trading_tick._build_candidates_block(held, new_cands)
+        self.assertIn("Active Portfolio Inventory -- default is HOLD", block)
+        self.assertIn("Evaluate for book expansion", block)
+
     def test_candidates_are_ranked_by_the_edge_they_require(self):
         # The menu, not the gate, was the binding constraint on trade rate.
         # A trade needs its edge to beat half-spread + fee + floor; measured
