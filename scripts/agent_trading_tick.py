@@ -818,7 +818,11 @@ def _build_portfolio_block(
             else:
                 lines.append(_fmt_open_position(p, quote, now=now))
     else:
-        lines.append("Open positions: none.")
+        lines.append(
+            "Open positions: none. (You currently hold 0 contracts across all markets; 100% in cash. "
+            "Do NOT call sizing_mode='close' or attempt to exit, as there are no open positions to close; "
+            "any new trade must use an entry sizing mode like 'probe_kelly', 'scaled_edge', or 'quarter_kelly')."
+        )
     if exit_notes:
         lines.append(exit_notes)
     if learning_block:
@@ -999,13 +1003,23 @@ def _build_learning_block(conn, agent_id: str) -> str:
         brier = float(forecast_summary["brier_score"])
         market_brier = forecast_summary["market_brier_score"]
         bias = float(forecast_summary["probability_bias"])
-        bias_note = (
-            "your P(YES) has averaged above the outcome rate; damp YES confidence"
-            if bias > 0.05 else
-            "your P(YES) has averaged below the outcome rate; do not automatically chase favourites"
-            if bias < -0.05 else
-            "your average P(YES) is close to the observed YES rate"
-        )
+        if bias > 0.15:
+            bias_note = (
+                f"CRITICAL CALIBRATION WARNING: your historical P(YES) has averaged {bias:+.1%} above real outcomes "
+                f"(market Brier {float(market_brier):.3f} vs your Brier {brier:.3f}). You are losing money by overestimating YES. "
+                "You MUST apply Bayesian shrinkage: regress your estimated probability 50% toward the market price "
+                "(P_calibrated = 0.5 * P_model + 0.5 * P_market). Never buy speculative YES on low-probability milestones (<30c)"
+            )
+        elif bias > 0.05:
+            bias_note = (
+                f"your P(YES) has averaged {bias:+.1%} above the outcome rate; damp YES confidence and shrink towards market price"
+            )
+        elif bias < -0.05:
+            bias_note = (
+                f"your P(YES) has averaged {bias:+.1%} below the outcome rate; do not automatically chase favourites"
+            )
+        else:
+            bias_note = "your average P(YES) is close to the observed YES rate"
         market_note = (
             f" versus market Brier {float(market_brier):.3f}"
             if market_brier is not None else ""
@@ -1923,7 +1937,12 @@ _TRADING_INSTRUCTION = (
     "Price orders off the live yes/no bid/ask shown above -- not an "
     "estimate. Never guess a price or reuse your entry price for the "
     "opposite side when closing: yes and no move independently. A real "
-    "mispricing against your own view is exactly when to trade it.\n\n"
+    "mispricing against your own view is exactly when to trade it. "
+    "IMMEDIATE-OR-CANCEL (IOC) PRICING DISCIPLINE: In immediate-or-cancel execution, placing a "
+    "limit order at the bid or mid-price will NEVER cross the book and will immediately cancel with "
+    "0 filled contracts. You MUST set `price` at or slightly above the live ASK for the side you are "
+    "buying (read the exact live YES ask or NO ask from the candidate quote). A marketable buy always "
+    "fills at the lowest available ask on the book, never worse, so pricing at the ask guarantees execution.\n\n"
     "RESEARCH QUALITY GATE: A new position requires at least one dated, material "
     "evidence update from this cycle and an explicit comparison with the prior view. "
     "Do not re-open or add risk solely because a previous thesis, search result, or "
@@ -1964,6 +1983,12 @@ _TRADING_INSTRUCTION = (
     "it. Prefer a smaller number of well-understood events to broad coverage of thin "
     "gaps -- your profit comes from being right where you genuinely know more, and "
     "every trade pays a spread and a fee whether or not it was worth taking.\n\n"
+    "LONGSHOT & MILESTONE SPECULATION GUARD: Contracts trading under 25c (such as cryptocurrency "
+    "price milestones, extreme weather anomalies, or unexpected sports/political upsets) suffer from "
+    "severe retail longshot bias and almost always expire worthless at 0c. Buying YES on low-probability "
+    "milestones is the single largest source of model losses on this board. NEVER buy YES on cheap "
+    "milestones or extreme anomalies without verified primary-source confirmation that the event has "
+    "already occurred or is mathematically guaranteed. Prefer BUY NO when the crowd overpays for hype, or PASS.\n\n"
     "SIZING: For every NEW position, call place_trade with your calibrated probability "
     "(as model_probability) and exactly one sizing_mode: (1) convex_conviction "
     "(30% Kelly, 15% market shrinkage further reduced by conviction, 1.2pp edge minimum, "

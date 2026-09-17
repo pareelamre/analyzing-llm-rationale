@@ -2291,7 +2291,7 @@
       } catch (e) {}
     })();
   </script>
-
+
   <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
@@ -7048,7 +7048,15 @@ function _agentTradingActivityLine(a) {
     return `${platformTag}<span style="font-weight:600">Settled</span> ${tickerHtml} — ${pnlBadge}`;
   }
   if (a.type === 'rejected_trade') {
-    return `${platformTag}<span class="eb-badge" style="background:rgba(245,158,11,0.15);color:#d97706;font-weight:600;">REJECTED</span> ${tickerHtml}`;
+    const reasons = Array.isArray(a.reasons) && a.reasons.length
+      ? ` <span style="color:var(--text-dim);font-size:12px;">(${escHtml(a.reasons.join(', '))})</span>`
+      : '';
+    const sideBadge = a.side
+      ? `<span class="eb-badge" style="background:${String(a.side).toLowerCase() === 'yes' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};color:${String(a.side).toLowerCase() === 'yes' ? '#059669' : '#dc2626'};font-weight:700;">${escHtml(String(a.side).toUpperCase())}</span> `
+      : '';
+    const qty = a.quantity != null ? `<b>${Number(a.quantity).toLocaleString(undefined, {maximumFractionDigits: 2})}</b> ` : '';
+    const price = a.price != null ? `@ $${Number(a.price).toFixed(3)} ` : '';
+    return `${platformTag}<span class="eb-badge" style="background:rgba(245,158,11,0.15);color:#d97706;font-weight:600;">REJECTED</span> ${sideBadge}${qty}on ${tickerHtml} ${price}${reasons}`;
   }
   if (a.type === 'unfilled_order') {
     return `${platformTag}<span class="eb-badge" style="background:rgba(245,158,11,0.15);color:#d97706;font-weight:600;">UNFILLED</span> ${tickerHtml} <span style="color:var(--text-dim);font-size:12px;">No executable paper fill was recorded.</span>`;

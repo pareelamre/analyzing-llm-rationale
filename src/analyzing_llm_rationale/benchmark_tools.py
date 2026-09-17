@@ -3641,13 +3641,29 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "trade.mode": mode,
                     "trade.submitted": False,
                 })
+                if "close_exceeds_open_position" in guard["reasons"]:
+                    rejection_message = (
+                        f"Trade rejected: close_exceeds_open_position. You currently hold 0 open contracts to close in "
+                        f"{ticker} on {platform}. You cannot exit a position you do not hold. If you want to open a new "
+                        "position, use an entry sizing_mode ('quarter_kelly', 'probe_kelly', 'scaled_edge') with your "
+                        "model_probability instead of sizing_mode='close'."
+                    )
+                elif "edge_below_fee_floor" in guard["reasons"]:
+                    rejection_message = (
+                        "Trade rejected: edge_below_fee_floor. Stated edge does not clear round-trip venue fees and execution spread. "
+                        "Choose a market with a larger edge or use sizing_mode='probe_kelly'/'flat_probe' if eligible."
+                    )
+                elif guard["reasons"]:
+                    rejection_message = f"Trade rejected by benchmark risk guards before execution ({', '.join(guard['reasons'])})."
+                else:
+                    rejection_message = "Trade rejected by benchmark risk guards before execution."
                 _finish_tool(tool, start, "rejected")
                 return {
                     "ok": False,
                     "tool": tool,
                     "rejected": True,
                     "reason": guard["reasons"][0] if guard["reasons"] else "risk_guard",
-                    "message": "Trade rejected by benchmark risk guards before execution.",
+                    "message": rejection_message,
                     "mode": mode,
                     "submitted": False,
                     "normalized_order": normalized,
