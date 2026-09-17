@@ -164,6 +164,127 @@ def _poly_quote(ident, question="Q?", bid=0.4, ask=0.45, close="2026-09-01T00:00
 
 
 class CandidateSelectionTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(agent_trading_tick, "MTM_CANDIDATE_QUOTA", 0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_discover_candidates_reserves_mtm_high_edge_candidates(self):
+        mtm_data = {
+            "edge_board": [
+                {
+                    "ident": "poly-mtm-1",
+                    "platform": "Polymarket",
+                    "question": "Will X happen?",
+                    "market_bid": 0.30,
+                    "market_ask": 0.32,
+                    "market_probability": 0.31,
+                    "model_probability": 0.55,
+                    "executable_edge": 0.23,
+                    "edge": 0.24,
+                    "side": "YES",
+                    "spread": 0.02,
+                    "discrepancy_status": "genuine_candidate",
+                },
+                {
+                    "ident": "kalshi-mtm-1",
+                    "platform": "Kalshi",
+                    "question": "Will Y happen?",
+                    "market_bid": 0.40,
+                    "market_ask": 0.42,
+                    "market_probability": 0.41,
+                    "model_probability": 0.20,
+                    "executable_edge": 0.18,
+                    "edge": -0.21,
+                    "side": "NO",
+                    "spread": 0.02,
+                    "discrepancy_status": "genuine_candidate",
+                },
+            ]
+        }
+        general = [_quote("KXGENERAL")]
+        with (
+            mock.patch.object(market_data, "list_kalshi", return_value=general),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 3),
+            mock.patch.object(agent_trading_tick, "WEATHER_CANDIDATE_QUOTA", 0),
+            mock.patch.object(agent_trading_tick, "MTM_CANDIDATE_QUOTA", 2),
+            mock.patch("builtins.open", mock.mock_open(read_data=json.dumps(mtm_data))),
+            mock.patch.object(Path, "exists", return_value=True),
+        ):
+            found = agent_trading_tick._discover_candidates(set())
+
+        idents = [q["ident"] for q in found]
+        self.assertIn("poly-mtm-1", idents)
+        self.assertIn("kalshi-mtm-1", idents)
+        self.assertIn("KXGENERAL", idents)
+
+    def test_discover_mtm_edge_candidates_filters_and_formats(self):
+        mtm_data = {
+            "edge_board": [
+                {
+                    "ident": "high-edge-1",
+                    "platform": "Polymarket",
+                    "question": "High edge Q?",
+                    "market_bid": 0.15,
+                    "market_ask": 0.17,
+                    "market_probability": 0.16,
+                    "model_probability": 0.40,
+                    "executable_edge": 0.22,
+                    "edge": 0.24,
+                    "side": "YES",
+                    "spread": 0.02,
+                    "discrepancy_status": "genuine_candidate",
+                },
+                {
+                    "ident": "low-edge-2",
+                    "platform": "Kalshi",
+                    "question": "Low edge Q?",
+                    "executable_edge": 0.005,
+                    "discrepancy_status": "normal",
+                },
+                {
+                    "ident": "wide-spread-3",
+                    "platform": "Kalshi",
+                    "question": "Wide spread Q?",
+                    "executable_edge": 0.10,
+                    "spread": 0.25,
+                    "discrepancy_status": "wide_spread",
+                },
+            ]
+        }
+        with (
+            mock.patch("builtins.open", mock.mock_open(read_data=json.dumps(mtm_data))),
+            mock.patch.object(Path, "exists", return_value=True),
+        ):
+            candidates = agent_trading_tick._discover_mtm_edge_candidates(set(), limit=5)
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["ident"], "high-edge-1")
+        self.assertEqual(candidates[0]["mtm_executable_edge"], 0.22)
+        self.assertEqual(candidates[0]["mtm_side"], "YES")
+
+    def test_fmt_candidate_line_renders_mtm_quant_forecast_signal(self):
+        quote = {
+            "ident": "KXTEST-MTM",
+            "platform": "kalshi",
+            "question": "Will economic indicator rise?",
+            "yes_bid": 0.20,
+            "yes_ask": 0.22,
+            "no_bid": 0.78,
+            "no_ask": 0.80,
+            "probability": 0.21,
+            "mtm_model_probability": 0.45,
+            "mtm_market_probability": 0.21,
+            "mtm_executable_edge": 0.23,
+            "mtm_side": "YES",
+        }
+        line = agent_trading_tick._fmt_candidate_line(quote)
+        self.assertIn("Quant forecast signal:", line)
+        self.assertIn("Model P(YES)=0.45 vs Market=0.21", line)
+        self.assertIn("+23.0pp executable edge on YES", line)
+        self.assertIn("MTM high-edge forecast engine", line)
+
     def test_discover_candidates_excludes_known_tickers_and_caps_count(self):
         listed = [_quote("KXA"), _quote("KXB"), _quote("KXC"), _quote("KXD")]
         with (
@@ -173,6 +294,7 @@ class CandidateSelectionTests(unittest.TestCase):
         ):
             found = agent_trading_tick._discover_candidates({"KXA"})
         self.assertEqual([q["ident"] for q in found], ["KXB", "KXC"])
+
 
     def test_discover_candidates_skips_unpriced_markets(self):
         unpriced = dict(_quote("KXE"))
