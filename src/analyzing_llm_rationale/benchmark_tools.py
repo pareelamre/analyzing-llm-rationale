@@ -475,9 +475,43 @@ def _edge_reliability(
     }
 
 
+def _calculate_lead_days(close_time_raw: Any, *, now: Optional[datetime] = None) -> Optional[float]:
+    """Return lead days until close_time_raw from now, or None if unparseable/absent."""
+    if not close_time_raw:
+        return None
+    try:
+        cdt = datetime.fromisoformat(str(close_time_raw).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if cdt.tzinfo is None:
+        cdt = cdt.replace(tzinfo=timezone.utc)
+    reference = now or datetime.now(timezone.utc)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=timezone.utc)
+    return max(0.0, (cdt - reference).total_seconds() / 86400.0)
+
+
+def _classify_horizon_bucket(lead_days: Optional[float]) -> str:
+    """Classify lead days into published track-record horizon buckets."""
+    if lead_days is None:
+        return "unknown"
+    if lead_days < 1.0:
+        return "<1d"
+    if lead_days <= 3.0:
+        return "1-3d"
+    if lead_days <= 7.0:
+        return "3-7d"
+    if lead_days <= 14.0:
+        return "7-14d"
+    if lead_days <= 30.0:
+        return "14-30d"
+    return "30d+"
+
+
 def _sizing_plan(
     args: Mapping[str, Any], *, price: float, side: str, account_value: float,
     platform: str = "kalshi", category: Optional[str] = None,
+    lead_days: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Derive an executable stake from the agent's declared sizing choice.
 
@@ -520,6 +554,28 @@ def _sizing_plan(
         model_side_probability = model_yes_probability if side == "yes" else 1.0 - model_yes_probability
     edge = model_side_probability - price
 
+    # Resolve lead days & horizon bucket
+    if lead_days is None:
+        raw_days = args.get("lead_days") or args.get("lead_time_days")
+        if raw_days is not None:
+            try:
+                lead_days = float(raw_days)
+            except (TypeError, ValueError):
+                lead_days = None
+        if lead_days is None:
+            close_raw = (
+                args.get("expected_expiration_time")
+                or args.get("close_time")
+                or args.get("resolve_time")
+            )
+            lead_days = _calculate_lead_days(close_raw)
+
+    horizon_bucket = _classify_horizon_bucket(lead_days)
+    is_validated_horizon = (horizon_bucket == "14-30d")
+    trade_category = category or args.get("category")
+    is_weather = str(trade_category or "").strip().lower() == "weather"
+    is_short_horizon = (lead_days is not None and lead_days < 7.0 and not is_weather)
+
     if canonical_mode == "auto":
         if edge >= 0.10 and price >= 0.40:
             policy = AGENT_SIZING_POLICIES["edge_kelly"]
@@ -534,27 +590,38 @@ def _sizing_plan(
     else:
         policy = AGENT_SIZING_POLICIES[canonical_mode]
 
+    effective_min_edge = policy.min_edge
+    if is_short_horizon:
+        # Near-term (<7d) non-weather contracts suffer from breaking-news information lag
+        # and negative empirical skill (-0.3pp to -0.7pp). Enforce a 4pp minimum edge hurdle.
+        effective_min_edge = max(effective_min_edge, 0.04)
+
     allow_fallback = bool(args.get("allow_sizing_fallback") or args.get("fallback_to_probe") or args.get("fallback"))
     fallback_from = None
-    if edge < policy.min_edge:
-        if allow_fallback and edge >= 0.001:
+    if edge < effective_min_edge:
+        if allow_fallback and edge >= (0.02 if is_short_horizon else 0.001):
             fallback_from = policy.key
-            if edge >= 0.012:
+            if edge >= 0.012 and not is_short_horizon:
                 policy = AGENT_SIZING_POLICIES["convex_conviction"]
-            elif edge >= 0.002:
+            elif edge >= 0.002 and not is_short_horizon:
                 policy = AGENT_SIZING_POLICIES["probe_kelly"]
             else:
                 policy = AGENT_SIZING_POLICIES["flat_probe"]
+            effective_min_edge = max(policy.min_edge, 0.04) if is_short_horizon else policy.min_edge
         else:
+            reason = "short_horizon_insufficient_edge" if is_short_horizon else "edge_below_threshold"
             return {
                 "mode": policy.key,
                 "label": policy.label,
                 "applied": True,
                 "eligible": False,
                 "edge": round(edge, 6),
-                "min_edge": policy.min_edge,
+                "min_edge": effective_min_edge,
                 "max_position_fraction": policy.max_position_fraction,
-                "reason": "edge_below_threshold",
+                "reason": reason,
+                "lead_days": round(lead_days, 1) if lead_days is not None else None,
+                "horizon": horizon_bucket,
+                "horizon_validated": is_validated_horizon,
             }
 
     # Match the published Mark-to-Market definitions: Quarter Kelly shrinks
@@ -572,6 +639,14 @@ def _sizing_plan(
         except (ValueError, TypeError):
             pass
 
+    if is_short_horizon:
+        # Defensive shrinkage for near-term noise and information lag
+        effective_shrinkage = max(effective_shrinkage, 0.50)
+    elif is_validated_horizon:
+        # Validated 14-30d golden window (+1.4pp empirical skill, 84.4% accuracy)
+        # allows full conviction scaling
+        effective_shrinkage = max(0.10, effective_shrinkage * 0.85)
+
     reliability = _edge_reliability(edge, _published_edge_calibration())
     kept = (1.0 - effective_shrinkage) * reliability["weight"]
     p_win = price + kept * (model_side_probability - price)
@@ -582,7 +657,6 @@ def _sizing_plan(
     # quantity, so fee-per-contract is a closed form and there is no
     # circularity between size and fee. Polymarket charges category-based
     # dynamic taker fees (0% on geopolitics and world events).
-    trade_category = category or args.get("category")
     fee_per_contract = (
         _kalshi_fee(price, 1.0)
         if platform == "kalshi"
@@ -599,9 +673,12 @@ def _sizing_plan(
             "applied": True,
             "eligible": False,
             "edge": round(edge, 6),
-            "min_edge": policy.min_edge,
+            "min_edge": effective_min_edge,
             "max_position_fraction": policy.max_position_fraction,
             "reason": "fee_exceeds_payoff",
+            "lead_days": round(lead_days, 1) if lead_days is not None else None,
+            "horizon": horizon_bucket,
+            "horizon_validated": is_validated_horizon,
         }
 
     if policy.key == "flat_probe":
@@ -612,9 +689,9 @@ def _sizing_plan(
             "mode": policy.key,
             "label": policy.label,
             "applied": True,
-            "eligible": target_notional > 1e-9 and edge >= policy.min_edge,
+            "eligible": target_notional > 1e-9 and edge >= effective_min_edge,
             "edge": round(edge, 6),
-            "min_edge": policy.min_edge,
+            "min_edge": effective_min_edge,
             "kelly_fraction": policy.kelly_fraction,
             "market_shrinkage": 0.0,
             "effective_market_shrinkage": 0.0,
@@ -625,7 +702,10 @@ def _sizing_plan(
             "target_notional": round(target_notional, 6),
             "fee_per_contract": round(fee_per_contract, 6),
             "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
-            "reason": "edge_below_threshold" if edge < policy.min_edge else None,
+            "reason": "edge_below_threshold" if edge < effective_min_edge else None,
+            "lead_days": round(lead_days, 1) if lead_days is not None else None,
+            "horizon": horizon_bucket,
+            "horizon_validated": is_validated_horizon,
         }
         if fallback_from:
             res["fallback_from"] = fallback_from
@@ -639,9 +719,9 @@ def _sizing_plan(
             "mode": policy.key,
             "label": policy.label,
             "applied": True,
-            "eligible": target_notional > 1e-9 and edge >= policy.min_edge,
+            "eligible": target_notional > 1e-9 and edge >= effective_min_edge,
             "edge": round(edge, 6),
-            "min_edge": policy.min_edge,
+            "min_edge": effective_min_edge,
             "kelly_fraction": policy.kelly_fraction,
             "market_shrinkage": round(effective_shrinkage, 6),
             "effective_market_shrinkage": round(1.0 - kept, 6),
@@ -652,7 +732,10 @@ def _sizing_plan(
             "target_notional": round(target_notional, 6),
             "fee_per_contract": round(fee_per_contract, 6),
             "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
-            "reason": "edge_below_threshold" if edge < policy.min_edge else None,
+            "reason": "edge_below_threshold" if edge < effective_min_edge else None,
+            "lead_days": round(lead_days, 1) if lead_days is not None else None,
+            "horizon": horizon_bucket,
+            "horizon_validated": is_validated_horizon,
         }
         if fallback_from:
             res["fallback_from"] = fallback_from
@@ -669,10 +752,10 @@ def _sizing_plan(
         raw_kelly *= skew_multiplier
     target_fraction = min(policy.kelly_fraction * raw_kelly, policy.max_position_fraction)
     target_notional = account_value * target_fraction
-    if policy.key == "probe_kelly" and target_notional <= 1e-9 and edge >= policy.min_edge:
+    if policy.key == "probe_kelly" and target_notional <= 1e-9 and edge >= effective_min_edge:
         target_notional = min(25.0, account_value * policy.max_position_fraction)
         target_fraction = target_notional / account_value if account_value else 0.0
-    if target_notional <= 1e-9 and allow_fallback and edge >= 0.001:
+    if target_notional <= 1e-9 and allow_fallback and edge >= (0.02 if is_short_horizon else 0.001):
         fb_policy = AGENT_SIZING_POLICIES["flat_probe"]
         max_notional = account_value * fb_policy.max_position_fraction
         target_notional = min(25.0, max_notional)
@@ -683,7 +766,7 @@ def _sizing_plan(
             "applied": True,
             "eligible": target_notional > 1e-9,
             "edge": round(edge, 6),
-            "min_edge": fb_policy.min_edge,
+            "min_edge": effective_min_edge,
             "kelly_fraction": fb_policy.kelly_fraction,
             "market_shrinkage": 0.0,
             "effective_market_shrinkage": 0.0,
@@ -696,6 +779,9 @@ def _sizing_plan(
             "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
             "reason": None,
             "fallback_from": policy.key,
+            "lead_days": round(lead_days, 1) if lead_days is not None else None,
+            "horizon": horizon_bucket,
+            "horizon_validated": is_validated_horizon,
         }
 
     res = {
@@ -704,7 +790,7 @@ def _sizing_plan(
         "applied": True,
         "eligible": target_notional > 1e-9,
         "edge": round(edge, 6),
-        "min_edge": policy.min_edge,
+        "min_edge": effective_min_edge,
         "kelly_fraction": policy.kelly_fraction,
         "market_shrinkage": round(effective_shrinkage, 6),
         "effective_market_shrinkage": round(1.0 - kept, 6),
@@ -716,6 +802,9 @@ def _sizing_plan(
         "fee_per_contract": round(fee_per_contract, 6),
         "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
         "reason": "no_positive_kelly" if target_notional <= 1e-9 else None,
+        "lead_days": round(lead_days, 1) if lead_days is not None else None,
+        "horizon": horizon_bucket,
+        "horizon_validated": is_validated_horizon,
     }
     if fallback_from:
         res["fallback_from"] = fallback_from
@@ -2982,6 +3071,7 @@ def _resolve_shadow_marketability(
     """
     weather_brief: Optional[Dict[str, Any]] = None
     category: Optional[str] = None
+    lead_days: Optional[float] = None
     try:
         from analyzing_llm_rationale import market_data
         from analyzing_llm_rationale.accounting import MarketQuote
@@ -2996,6 +3086,14 @@ def _resolve_shadow_marketability(
         quote = MarketQuote.from_mapping(raw_quote)
         real_ask = quote.ask(side)
         category = raw_quote.get("category")
+        close_raw = (
+            raw_quote.get("expected_expiration_time")
+            or raw_quote.get("close_time")
+            or raw_quote.get("resolve_time")
+            or raw_quote.get("endDate")
+            or raw_quote.get("endDateIso")
+        )
+        lead_days = _calculate_lead_days(close_raw)
     except Exception:
         real_ask = None
 
@@ -3007,6 +3105,7 @@ def _resolve_shadow_marketability(
             "status": "shadow_quote_unavailable",
             "weather_brief": weather_brief,
             "category": category,
+            "lead_days": lead_days,
         }
 
     if requested_price is None:
@@ -3017,6 +3116,7 @@ def _resolve_shadow_marketability(
             "status": "shadow_price_from_live_quote",
             "weather_brief": weather_brief,
             "category": category,
+            "lead_days": lead_days,
         }
 
     marketable = requested_price + 1e-9 >= real_ask
@@ -3027,6 +3127,7 @@ def _resolve_shadow_marketability(
         "status": "shadow_filled_at_market" if marketable else "shadow_unfilled_below_market",
         "weather_brief": weather_brief,
         "category": category,
+        "lead_days": lead_days,
     }
 
 
@@ -3054,6 +3155,7 @@ def _trade_audit_context(
         "mode", "applied", "eligible", "reason", "model_probability",
         "market_probability", "edge", "target_quantity", "target_notional",
         "max_position_fraction", "kelly_fraction", "market_shrinkage",
+        "lead_days", "horizon", "horizon_validated",
     )
     guard_keys = (
         "allowed", "reasons", "cycle_id", "cash_before", "cash_required",
@@ -3075,6 +3177,7 @@ def _trade_audit_context(
             "marketable": bool(market_check.get("marketable")),
             "status": str(market_check.get("status") or "not_checked"),
             "observed_ask": market_check.get("real_ask"),
+            "lead_days": market_check.get("lead_days"),
         },
         "sizing": {key: sizing.get(key) for key in sizing_keys if key in sizing},
         "risk": {key: guard.get(key) for key in guard_keys if key in guard},
@@ -3297,6 +3400,11 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                         "fill_status": "no_executable_price",
                     },
                 }
+            trade_lead_days = args.get("lead_days") or market_check.get("lead_days")
+            try:
+                trade_lead_days = float(trade_lead_days) if trade_lead_days is not None else None
+            except (TypeError, ValueError):
+                trade_lead_days = None
             sizing = _sizing_plan(
                 args,
                 price=executable_price,
@@ -3304,6 +3412,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 account_value=_risk_guard_policy().account_value,
                 platform=platform,
                 category=trade_category,
+                lead_days=trade_lead_days,
             )
             if sizing.get("applied") and not sizing.get("eligible"):
                 sizing_actions.add(1, {"mode": str(sizing["mode"]), "outcome": "skipped"})
@@ -3311,13 +3420,22 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "outcome": "skipped",
                     "trade.sizing_mode": str(sizing["mode"]),
                     "trade.sizing_reason": str(sizing.get("reason") or "no_positive_kelly"),
+                    "trade.lead_days": trade_lead_days if trade_lead_days is not None else -1.0,
+                    "trade.horizon": str(sizing.get("horizon") or "unknown"),
+                    "trade.horizon_validated": bool(sizing.get("horizon_validated")),
                 })
                 _finish_tool(tool, start, "skipped")
                 reason = str(sizing.get("reason") or "no_positive_kelly")
                 edge_val = sizing.get("edge")
                 min_edge_val = sizing.get("min_edge")
                 policy_label = str(sizing.get("label") or "Kelly")
-                if reason == "edge_below_threshold" and edge_val is not None and min_edge_val is not None:
+                if reason == "short_horizon_insufficient_edge" and edge_val is not None and min_edge_val is not None:
+                    msg = (
+                        f"No trade: market resolution is under 7 days ({sizing.get('horizon', '<7d')}) where "
+                        f"empirical LLM skill vs market is unproven. Required defensive edge is {min_edge_val:.1%}, "
+                        f"but model edge is only {edge_val:+.1%}."
+                    )
+                elif reason == "edge_below_threshold" and edge_val is not None and min_edge_val is not None:
                     msg = (
                         f"No trade: the selected Kelly sizing policy found no eligible stake "
                         f"({policy_label}: edge {edge_val:+.1%} below required {min_edge_val:.1%}). "

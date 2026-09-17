@@ -846,6 +846,15 @@ function escHtml(s) {
                 self.assertNotIn('id="trQty" type="number" step="1"', index)
                 self.assertIn("maximumFractionDigits: 2", index)
 
+    def test_edge_board_validated_horizon_filter(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertIn("_ebHorizonFilter = 'all'", index)
+                self.assertIn("function _onEbHorizonFilter(horizon)", index)
+                self.assertIn("14–30d (Validated)", index)
+                self.assertIn("Validated horizon: 14–30d ahead", index)
+                self.assertIn("_ebHorizonFilter === '14_30d'", index)
+
 
 if __name__ == "__main__":
     unittest.main()

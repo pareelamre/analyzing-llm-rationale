@@ -8431,6 +8431,7 @@ function _renderVenueWithFee(platform, category, question) {
 let _ebSearchQuery = '';
 let _ebVenueFilter = 'all';
 let _ebQualityFilter = 'all';
+let _ebHorizonFilter = 'all';
 let _ebSortBy = 'edge';
 
 function _filterAndSortBoard(board) {
@@ -8451,6 +8452,14 @@ function _filterAndSortBoard(board) {
     filtered = filtered.filter(e => e.credibility_grade === 'A' || e.credibility_grade === 'B' || e.is_credible === true);
   } else if (_ebQualityFilter === 'exclude_thin') {
     filtered = filtered.filter(e => e.discrepancy_status !== 'thin_market' && e.discrepancy_status !== 'wide_spread');
+  }
+  if (_ebHorizonFilter === '14_30d') {
+    filtered = filtered.filter(e => {
+      const bucket = String(e.lead_bucket || e.horizon || '').toLowerCase();
+      if (bucket === '14-30d') return true;
+      const days = Number(e.lead_days);
+      return Number.isFinite(days) && days >= 14.0 && days <= 30.0;
+    });
   }
 
   // Sort
@@ -8481,6 +8490,12 @@ function _onEbVenueFilter(venue) {
 
 function _onEbQualityFilter(quality) {
   _ebQualityFilter = quality;
+  _ebPage = 0;
+  _renderBoardContainer();
+}
+
+function _onEbHorizonFilter(horizon) {
+  _ebHorizonFilter = horizon;
   _ebPage = 0;
   _renderBoardContainer();
 }
@@ -8517,6 +8532,9 @@ function _renderBoardPage(board, page) {
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'all' ? 'active' : ''}" onclick="_onEbQualityFilter('all')">All</button>
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'credible' ? 'active' : ''}" onclick="_onEbQualityFilter('credible')" title="Grade A or B credibility only">Grade A/B</button>
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'exclude_thin' ? 'active' : ''}" onclick="_onEbQualityFilter('exclude_thin')" title="Exclude thin liquidity and wide spreads">Liquid only</button>
+      <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Horizon:</span>
+      <button type="button" class="eb-filter-pill ${_ebHorizonFilter === 'all' ? 'active' : ''}" onclick="_onEbHorizonFilter('all')">All</button>
+      <button type="button" class="eb-filter-pill ${_ebHorizonFilter === '14_30d' ? 'active' : ''}" onclick="_onEbHorizonFilter('14_30d')" title="Validated horizon: 14–30d ahead (+1.40pp empirical skill over market)">14–30d (Validated)</button>
     </div>
     <div style="display:flex;gap:6px;align-items:center">
       <span style="font-size:11px;color:var(--text-dim)">Sort:</span>
