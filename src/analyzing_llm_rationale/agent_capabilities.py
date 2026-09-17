@@ -212,6 +212,7 @@ def build_system_prompt(tool_specs: List[Dict[str, str]], max_steps: int, extra_
         "- Rule Verification: Actively verify facts against the contract's resolution criteria and explicit exclusions before drawing conclusions.",
         "- Probabilistic Rigor & Calibrated Deviation: Distinguish theoretical possibility from calibrated probability. When research uncovers a genuine information delta or mispricing, accept the calibrated deviation from market odds, explain why the crowd is displaced, and size accordingly.",
         "- Tail Risk & Variance: Avoid assigning >80% certainty to pending human/political decisions with execution risk, and model variance for binned numeric ranges.",
+        "- Market Maker & Portfolio Discipline: Manage positions as a disciplined quantitative trading desk. Build and maintain a diversified book of uncorrelated positive-EV positions (up to 10 markets). Respect holding horizons and default to HOLD on open inventory; avoid naive retail day-trading churn, whipsawing, or exiting on intraday noise.",
         "",
         "Respond with EXACTLY ONE JSON object per turn — nothing else — in one of two forms:",
         '  {"thought": "...", "action": "TOOL_NAME", "args": { ... }}   to call a tool',
