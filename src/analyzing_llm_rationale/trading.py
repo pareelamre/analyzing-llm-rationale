@@ -521,6 +521,7 @@ def _preview_kalshi(
         "client_order_id": client_order_id,
         "side": side,
         "count": _format_fixed(quantity, 2),
+        "count_fp": _format_fixed(quantity, 2),
         "price": _format_fixed(exchange_price, 4),
         "time_in_force": time_in_force,
         "self_trade_prevention_type": self_trade_prevention_type,

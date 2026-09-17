@@ -839,7 +839,15 @@ function escHtml(s) {
                 self.assertIn("if (stats.length) {", track_loader)
                 self.assertNotIn("Motion.animate('#trackBody .tr-stat'", track_loader)
 
+    def test_manual_trade_input_and_board_support_decimal_contracts(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertIn('id="trQty" type="number" step="any" min="0.01"', index)
+                self.assertNotIn('id="trQty" type="number" step="1"', index)
+                self.assertIn("maximumFractionDigits: 2", index)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

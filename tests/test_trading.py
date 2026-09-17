@@ -323,6 +323,33 @@ class TradingTests(unittest.TestCase):
         self.assertIn("KALSHI-ACCESS-SIGNATURE", captured["headers"])
         self.assertEqual(result["venue_response"]["acknowledgement"]["status"], "acknowledged")
 
+    def test_kalshi_and_polymarket_support_decimal_contract_quantities(self):
+        kalshi_preview = trading.preview_order({
+            "platform": "kalshi",
+            "ticker": "KX-TEST",
+            "action": "buy",
+            "outcome": "yes",
+            "price": "0.45",
+            "quantity": 10.55,
+        })
+        k_order = kalshi_preview["normalized_order"]["exchange_order"]
+        self.assertEqual(k_order["count"], "10.55")
+        self.assertEqual(k_order["count_fp"], "10.55")
+        self.assertEqual(kalshi_preview["normalized_order"]["quantity"], 10.55)
+
+        poly_preview = trading.preview_order({
+            "platform": "polymarket",
+            "token_id": "tok-123",
+            "action": "buy",
+            "outcome": "yes",
+            "price": "0.45",
+            "quantity": 25.5,
+        })
+        p_order = poly_preview["normalized_order"]["exchange_order"]
+        self.assertEqual(p_order["size"], 25.5)
+        self.assertEqual(poly_preview["normalized_order"]["quantity"], 25.5)
+
 
 if __name__ == "__main__":
     unittest.main()
+
