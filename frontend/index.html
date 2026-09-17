@@ -7015,51 +7015,14 @@ function _toggleAgentPositions(agentId) {
 }
 
 window._agentActivityFilter = window._agentActivityFilter || 'all';
-window._agentRetiredActivityCache = window._agentRetiredActivityCache || {};
-window._agentRetiredActivityLoading = window._agentRetiredActivityLoading || {};
-window._agentRetiredActivityErrors = window._agentRetiredActivityErrors || {};
 
-function _agentAuditRecordToActivity(record) {
-  const market = record && typeof record.market === 'object' ? record.market : {};
-  const execution = record && typeof record.execution === 'object' ? record.execution : {};
-  return {
-    agent_id: record?.agent_id || '',
-    archived: true,
-    platform: market.platform || '',
-    price: execution.price,
-    quantity: execution.quantity,
-    realized_pnl: execution.realized_pnl,
-    side: market.side || '',
-    ticker: market.ticker || '',
-    ts: record?.recorded_at || '',
-    type: record?.event_type || 'note',
-  };
-}
-
-async function _filterAgentActivity(modelId, retired = false) {
+function _filterAgentActivity(modelId) {
   window._agentActivityFilter = modelId;
-  if (retired && !Object.prototype.hasOwnProperty.call(window._agentRetiredActivityCache, modelId)
-      && !window._agentRetiredActivityLoading[modelId]) {
-    window._agentRetiredActivityLoading[modelId] = true;
-    delete window._agentRetiredActivityErrors[modelId];
-    if (window._lastAgentBoardData) renderAgentTradingBoard(window._lastAgentBoardData);
-    try {
-      const response = await _liveJsonFetch(`/agent-trading/audits?agent_id=${encodeURIComponent(modelId)}&limit=${AGENTIC_RENDER_MAX_ACTIVITY_ITEMS}`);
-      if (!response.ok) throw new Error('Archived records could not be loaded.');
-      const payload = await _readJson(response);
-      window._agentRetiredActivityCache[modelId] = Array.isArray(payload?.items)
-        ? payload.items.map(_agentAuditRecordToActivity)
-        : [];
-    } catch (err) {
-      window._agentRetiredActivityErrors[modelId] = err?.message || 'Archived records could not be loaded.';
-    } finally {
-      delete window._agentRetiredActivityLoading[modelId];
-    }
-  }
   if (window._lastAgentBoardData) {
     renderAgentTradingBoard(window._lastAgentBoardData);
   }
 }
+
 
 function _agentTradingActivityLine(a) {
   const platform = a.platform ? escHtml(String(a.platform).toUpperCase()) : '';
@@ -7355,30 +7318,6 @@ function renderAgentTradingBoard(d) {
       </td>
     </tr>`;
   }).join('');
-  const retiredTableRows = retiredArtifacts.length
-    ? `<tr class="agentic-retired-divider"><td colspan="9">Retired models · read-only archived records</td></tr>${retiredArtifacts.map(item => {
-        const agentId = String(item?.agent_id || '');
-        const records = Math.max(0, Number(item?.records) || 0);
-        const archivedAccountValue = Number(item?.account_value);
-        const archivedPnl = Number(item?.total_pnl);
-        const archivedReturnPct = Number(item?.return_pct);
-        const hasArchivedAccountValue = Number.isFinite(archivedAccountValue);
-        const hasArchivedPnl = Number.isFinite(archivedPnl);
-        const hasArchivedReturnPct = Number.isFinite(archivedReturnPct);
-        const archivedValueTitle = 'Final archived shadow-account book value, replayed from immutable paper-trade records. It is cash plus open cost basis, not a current market mark.';
-        const archivedPnlColor = archivedPnl >= 0 ? '#0a7' : '#c33';
-        return `<tr class="eb-row agentic-retired-row" style="cursor:pointer" title="Open this model's archived paper-trading records" onclick="_filterAgentActivity('${escAttr(agentId)}', true)">
-          <td data-label="Rank">—</td>
-          <td data-label="Model"><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span><span class="agentic-retired-tag">Retired</span></td>
-          <td data-label="Cycle">Archived</td>
-          <td data-label="Account value" title="${escAttr(archivedValueTitle)}"><b>${hasArchivedAccountValue ? _usd(archivedAccountValue) : '—'}</b></td>
-          <td data-label="Net P&amp;L" style="color:${hasArchivedPnl ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedPnl ? `${archivedPnl >= 0 ? '+' : ''}${_usd(archivedPnl)}` : '—'}</td>
-          <td data-label="Return" style="color:${hasArchivedReturnPct ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedReturnPct ? _roiPct(archivedReturnPct / 100) : '—'}</td><td data-label="Win rate">—</td>
-          <td data-label="Records"><span class="agentic-retired-records">${records.toLocaleString()} record${records === 1 ? '' : 's'} · view</span></td>
-          <td data-label="Open">—</td>
-        </tr>`;
-      }).join('')}`
-    : '';
   const healthSummary = Object.entries(modelHealth).sort(([a], [b]) => a.localeCompare(b)).map(([agentId, health]) =>
     _healthBadge({ ...(health || {}), agent_id: agentId }, { withModel: true })
   ).join('');
@@ -7391,11 +7330,6 @@ function renderAgentTradingBoard(d) {
     : '';
   // Model filter pill bar
   const activeFilter = window._agentActivityFilter || 'all';
-  const selectedRetiredArtifact = retiredArtifactsById[activeFilter];
-  const selectedRetired = Boolean(selectedRetiredArtifact);
-  const retiredActivity = selectedRetired ? window._agentRetiredActivityCache[activeFilter] : null;
-  const retiredActivityLoading = selectedRetired && Boolean(window._agentRetiredActivityLoading[activeFilter]);
-  const retiredActivityError = selectedRetired ? window._agentRetiredActivityErrors[activeFilter] : '';
   const filterPills = [
     `<button type="button" class="eb-view-tab ${activeFilter === 'all' ? 'active' : ''}" onclick="_filterAgentActivity('all')">All Models</button>`
   ];
@@ -7405,27 +7339,21 @@ function renderAgentTradingBoard(d) {
       `<button type="button" class="eb-view-tab ${activeFilter === aId ? 'active' : ''}" onclick="_filterAgentActivity('${escAttr(aId)}')">${escHtml(_ebModelHead(aId))}</button>`
     );
   });
-  retiredArtifacts.forEach(item => {
-    const aId = String(item?.agent_id || '');
-    filterPills.push(
-      `<button type="button" class="eb-view-tab ${activeFilter === aId ? 'active' : ''}" title="View archived paper-trading records" onclick="_filterAgentActivity('${escAttr(aId)}', true)">${escHtml(_ebModelHead(aId))}<span class="agentic-retired-tag">Retired</span></button>`
-    );
-  });
 
-  let filteredActivity = selectedRetired
-    ? (Array.isArray(retiredActivity) ? retiredActivity : [])
-    : activeFilter === 'all'
-      ? activity
-      : activity.filter(a => a.agent_id === activeFilter);
+  const retiredModelIds = new Set((d.retired_artifacts || []).map(item => String(item?.agent_id || '')));
+  let filteredActivity = (activeFilter === 'all'
+    ? activity
+    : activity.filter(a => a.agent_id === activeFilter)
+  ).filter(a => !retiredModelIds.has(String(a.agent_id || '')) && !a.archived);
   const hasVisibleThesis = filteredActivity.some(a => a.type === 'thesis');
-  const latestThesis = selectedRetired || activeFilter === 'all' ? null : latestTheses[activeFilter];
-  const learningSummary = selectedRetired || activeFilter === 'all'
+  const latestThesis = activeFilter === 'all' ? null : latestTheses[activeFilter];
+  const learningSummary = activeFilter === 'all'
     ? ''
     : _agentForecastLearningSummary(forecastLearning[activeFilter], activeFilter);
   // The board's global activity window may be filled by other models. Keep a
   // selected model's own latest thesis visible even when it falls outside that
   // window, rather than rendering an empty feed for a healthy model.
-  if (activeFilter !== 'all' && !hasVisibleThesis && latestThesis) {
+  if (activeFilter !== 'all' && !hasVisibleThesis && latestThesis && !retiredModelIds.has(String(latestThesis.agent_id || ''))) {
     filteredActivity = [latestThesis, ...filteredActivity];
   }
 
@@ -7436,7 +7364,7 @@ function renderAgentTradingBoard(d) {
     const isThesis = a.type === 'thesis';
     return `<article class="agentic-activity ${isThesis ? 'agentic-activity--thesis' : ''}">
       <div class="agentic-activity-meta">
-        <span><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b>${a.archived ? '<span class="agentic-retired-tag">Retired</span>' : ''} · <span style="text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escHtml(a.type || '')}</span></span>
+        <span><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b> · <span style="text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escHtml(a.type || '')}</span></span>
         <span>${escHtml(when)}</span>
       </div>
       <div class="agentic-activity-body">${body}</div>
@@ -7451,22 +7379,16 @@ function renderAgentTradingBoard(d) {
     </section>
     ${healthSummary ? `<div class="agentic-health-summary"><span class="agentic-health-summary-label">Cycle health</span>${healthSummary}</div>` : ''}
     ${weatherOperationalSummary}
-    <div class="agentic-table-wrap"><table class="eb-table agentic-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades / records</th><th>Open</th></tr></thead><tbody>${tableRows}${retiredTableRows}</tbody></table></div>
+    <div class="agentic-table-wrap"><table class="eb-table agentic-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades / records</th><th>Open</th></tr></thead><tbody>${tableRows}</tbody></table></div>
     <div class="agentic-feed-head">
-      <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : _ebModelLabel(activeFilter))}${selectedRetired ? '<span class="agentic-retired-tag">Retired</span>' : ''}</span>
+      <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : _ebModelLabel(activeFilter))}</span>
     </div>
     <div class="agentic-filterbar">
       ${filterPills.join('')}
     </div>
     ${learningSummary}
-    <div class="agentic-activity-list">${retiredActivityLoading
-      ? '<p class="text-sm text-gray-500">Loading archived paper-trading records…</p>'
-      : retiredActivityError
-        ? `<p class="text-sm text-gray-500">${escHtml(retiredActivityError)} <a href="#" onclick="event.preventDefault(); delete window._agentRetiredActivityErrors['${escAttr(activeFilter)}']; _filterAgentActivity('${escAttr(activeFilter)}', true);" style="text-decoration:underline">Retry</a></p>`
-        : activityRows || (selectedRetired
-          ? `<p class="text-sm text-gray-500">No archived paper-trading records were found for ${escHtml(_ebModelLabel(activeFilter))}.</p>`
-          : activeFilter !== 'all'
-            ? `<p class="text-sm text-gray-500">No published thesis for ${escHtml(_ebModelLabel(activeFilter))} yet. Its next scheduled research run will retry automatically.</p>`
+    <div class="agentic-activity-list">${activityRows || (activeFilter !== 'all'
+      ? `<p class="text-sm text-gray-500">No published thesis for ${escHtml(_ebModelLabel(activeFilter))} yet. Its next scheduled research run will retry automatically.</p>`
       : '<p class="text-sm text-gray-500">No activity matching this filter.</p>')}</div>`;
   const svgEl = document.getElementById('agentTradingSvg');
   if (svgEl) _attachEquityHover(svgEl);

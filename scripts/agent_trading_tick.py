@@ -26,6 +26,8 @@ Env:
   AGENT_TRADING_MAX_CLOSE_DAYS     candidate discovery window, days (default 90)
   AGENT_TRADING_WEATHER_CANDIDATE_QUOTA  source-verified NWS weather candidates
                                           reserved per cycle (default 1)
+  AGENT_TRADING_MTM_CANDIDATE_QUOTA      mark-to-market high-edge candidates
+                                          reserved per cycle (default 2)
   FORESEA_AGENT_MAX_ORDER_NOTIONAL_PCT   per-order cap, fraction of current
                                           account value (default 0.08)
   FORESEA_AGENT_CONCENTRATION_LIMIT      per-ticker cap, fraction of current
@@ -156,6 +158,17 @@ weather_candidate_discovery_duration = meter.create_histogram(
     unit="s",
     description="Duration of bounded weather candidate discovery",
 )
+mtm_candidate_discoveries = meter.create_counter(
+    "agent_trading.mtm_candidates.discovery",
+    unit="1",
+    description="Mark-to-market edge candidates offered to a shadow-trading cycle",
+)
+mtm_candidate_discovery_duration = meter.create_histogram(
+    "agent_trading.mtm_candidates.discovery.duration",
+    unit="s",
+    description="Duration of mark-to-market edge candidate discovery",
+)
+
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -189,6 +202,10 @@ MAX_CANDIDATE_HURDLE = float(os.environ.get("AGENT_TRADING_MAX_CANDIDATE_HURDLE"
 WEATHER_CANDIDATE_QUOTA = max(
     0, min(CANDIDATE_COUNT, int(os.environ.get("AGENT_TRADING_WEATHER_CANDIDATE_QUOTA", "1")))
 )
+MTM_CANDIDATE_QUOTA = max(
+    0, min(CANDIDATE_COUNT, int(os.environ.get("AGENT_TRADING_MTM_CANDIDATE_QUOTA", "2")))
+)
+
 # ``agent_analyze`` already retries individual provider calls. Retrying the
 # complete ReAct cycle here can replay research/tool work after a transient
 # provider failure and, more importantly, multiply requests during an upstream
@@ -1302,6 +1319,20 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     weather_context = weather_markets.format_weather_market_brief(quote)
     if weather_context:
         line += f"\n    {weather_context}"
+    mtm_edge = quote.get("mtm_executable_edge")
+    model_p = quote.get("mtm_model_probability")
+    mkt_p = quote.get("mtm_market_probability")
+    side = quote.get("mtm_side")
+    if mtm_edge is not None and model_p is not None and mkt_p is not None and side:
+        try:
+            edge_val = float(mtm_edge) * 100
+            line += (
+                f"\n    Quant forecast signal: Model P(YES)={float(model_p):.2f} vs Market={float(mkt_p):.2f} "
+                f"-> {edge_val:+.1f}pp executable edge on {str(side).upper()} "
+                f"(MTM high-edge forecast engine)"
+            )
+        except (TypeError, ValueError):
+            pass
     return line
 
 
@@ -1461,8 +1492,143 @@ def _discover_weather_candidates(known_tickers: set, *, limit: int) -> List[Dict
             weather_candidate_discovery_duration.record(time.perf_counter() - started)
 
 
+def _discover_mtm_edge_candidates(known_tickers: set, *, limit: int) -> List[Dict[str, Any]]:
+    """Reserve room for verified high-edge forecast candidates from mark-to-market live data."""
+    if limit <= 0:
+        return []
+    started = time.perf_counter()
+    with tracer.start_as_current_span("agent_trading.mtm_candidates.discover") as span:
+        mtm_path_str = os.environ.get("AGENT_TRADING_MTM_PATH") or os.environ.get("TRACK_MTM_PATH")
+        mtm_path = Path(mtm_path_str) if mtm_path_str else (ROOT / "static" / "mark_to_market_live.json")
+        if not mtm_path.exists():
+            span.set_attribute("outcome", "file_not_found")
+            mtm_candidate_discoveries.add(1, {"outcome": "file_not_found"})
+            return []
+        try:
+            with open(mtm_path, encoding="utf-8") as f:
+                data = json.load(f)
+            edge_board = data.get("edge_board", [])
+            if not isinstance(edge_board, list):
+                return []
+
+            candidates: List[Dict[str, Any]] = []
+            for item in edge_board:
+                if not isinstance(item, dict):
+                    continue
+                ident = str(item.get("ident") or "").strip()
+                if not ident or ident in known_tickers:
+                    continue
+                exec_edge = item.get("executable_edge")
+                if exec_edge is None:
+                    continue
+                try:
+                    exec_edge_f = float(exec_edge)
+                except (TypeError, ValueError):
+                    continue
+                if exec_edge_f < 0.02:
+                    continue
+                spread = item.get("spread")
+                if spread is not None:
+                    try:
+                        if float(spread) > 0.15:
+                            continue
+                    except (TypeError, ValueError):
+                        pass
+                status = str(item.get("discrepancy_status") or "").strip().lower()
+                if status == "wide_spread":
+                    continue
+                candidates.append(item)
+
+            candidates.sort(key=lambda x: float(x.get("executable_edge") or 0.0), reverse=True)
+
+            kalshi_cands = [c for c in candidates if str(c.get("platform") or "").strip().lower() == "kalshi"]
+            poly_cands = [c for c in candidates if str(c.get("platform") or "").strip().lower() != "kalshi"]
+
+            selected_items: List[Dict[str, Any]] = []
+            iter_k = iter(kalshi_cands)
+            iter_p = iter(poly_cands)
+            while len(selected_items) < limit:
+                added = False
+                try:
+                    selected_items.append(next(iter_k))
+                    added = True
+                    if len(selected_items) >= limit:
+                        break
+                except StopIteration:
+                    pass
+                try:
+                    selected_items.append(next(iter_p))
+                    added = True
+                    if len(selected_items) >= limit:
+                        break
+                except StopIteration:
+                    pass
+                if not added:
+                    break
+
+            if len(selected_items) < limit:
+                for c in candidates:
+                    if c not in selected_items:
+                        selected_items.append(c)
+                        if len(selected_items) >= limit:
+                            break
+
+            quotes: List[Dict[str, Any]] = []
+            for item in selected_items:
+                ident = str(item.get("ident") or "").strip()
+                known_tickers.add(ident)
+                platform = str(item.get("platform") or "kalshi").strip().lower()
+                market_p = item.get("market_probability")
+                model_p = item.get("model_probability")
+                exec_edge = item.get("executable_edge")
+                side = item.get("side")
+                q: Dict[str, Any] = {
+                    "ident": ident,
+                    "platform": platform,
+                    "question": item.get("question", ""),
+                    "market_bid": item.get("market_bid"),
+                    "market_ask": item.get("market_ask"),
+                    "yes_bid": item.get("market_bid"),
+                    "yes_ask": item.get("market_ask"),
+                    "market_probability": market_p,
+                    "probability": market_p,
+                    "volume": item.get("market_volume", 0.0),
+                    "liquidity": item.get("market_liquidity", 0.0),
+                    "close_time": item.get("resolve_time") or item.get("close_time"),
+                    "expected_expiration_time": item.get("resolve_time"),
+                    "resolution_criteria": item.get("resolution_criteria") or item.get("description", ""),
+                    "mtm_model_probability": model_p,
+                    "mtm_market_probability": market_p,
+                    "mtm_executable_edge": exec_edge,
+                    "mtm_edge": item.get("edge"),
+                    "mtm_side": side,
+                    "mtm_stance": item.get("stance"),
+                }
+                quotes.append(q)
+
+            outcome = "offered" if quotes else "none_eligible"
+            span.set_attributes({
+                "mtm.candidates.scanned": len(candidates),
+                "mtm.candidates.offered": len(quotes),
+                "outcome": outcome,
+            })
+            mtm_candidate_discoveries.add(len(quotes) or 1, {"outcome": outcome})
+            return quotes
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            mtm_candidate_discoveries.add(1, {"outcome": "failure"})
+            logger.warning("MTM candidate discovery failed", exc_info=True)
+            return []
+        finally:
+            mtm_candidate_discovery_duration.record(time.perf_counter() - started)
+
+
 def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
-    new_quotes = _discover_weather_candidates(known_tickers, limit=WEATHER_CANDIDATE_QUOTA)
+    new_quotes: List[Dict[str, Any]] = []
+    new_quotes.extend(_discover_weather_candidates(known_tickers, limit=WEATHER_CANDIDATE_QUOTA))
+    new_quotes.extend(_discover_mtm_edge_candidates(known_tickers, limit=MTM_CANDIDATE_QUOTA))
     # Round-robin one candidate at a time across venues (rather than filling
     # Kalshi's share first) so a shortfall in one venue's listing doesn't
     # starve the other's, and consecutive candidates aren't all one venue.
