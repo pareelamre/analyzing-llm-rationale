@@ -932,6 +932,46 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertTrue(flat_edge["clears"])
         self.assertLessEqual(flat_edge["min_net_edge"], 0.001)
 
+    def test_horizon_aware_sizing_guard(self):
+        """Short-horizon (<7d) contracts require 4pp defensive edge; 14-30d validated allows full conviction."""
+        # 1. Short horizon (<7d) with 2pp edge is rejected for non-weather (normally 1.2pp is enough)
+        plan_short_thin = benchmark_tools._sizing_plan(
+            {"sizing_mode": "convex_conviction", "model_probability": 0.52, "lead_days": 3.5},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertFalse(plan_short_thin["eligible"])
+        self.assertEqual(plan_short_thin["reason"], "short_horizon_insufficient_edge")
+        self.assertEqual(plan_short_thin["horizon"], "3-7d")
+        self.assertFalse(plan_short_thin["horizon_validated"])
+
+        # 2. Short horizon (<7d) with 5pp edge clears hurdle but applies defensive shrinkage (>= 50%)
+        plan_short_wide = benchmark_tools._sizing_plan(
+            {"sizing_mode": "convex_conviction", "model_probability": 0.55, "lead_days": 2.0},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan_short_wide["eligible"])
+        self.assertEqual(plan_short_wide["horizon"], "1-3d")
+        self.assertGreaterEqual(plan_short_wide["market_shrinkage"], 0.50)
+
+        # 3. Weather contract (<7d) is exempt from the 4pp hurdle
+        plan_weather = benchmark_tools._sizing_plan(
+            {"sizing_mode": "convex_conviction", "model_probability": 0.525, "lead_days": 1.5, "category": "weather"},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan_weather["eligible"])
+        self.assertEqual(plan_weather["horizon"], "1-3d")
+
+        # 4. Validated 14-30d horizon allows full conviction scaling
+        plan_validated = benchmark_tools._sizing_plan(
+            {"sizing_mode": "convex_conviction", "model_probability": 0.53, "lead_days": 20.0},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        self.assertTrue(plan_validated["eligible"])
+        self.assertTrue(plan_validated["horizon_validated"])
+        self.assertEqual(plan_validated["horizon"], "14-30d")
+        # Validated shrinkage is discounted below standard convex_conviction 15% shrinkage
+        self.assertLess(plan_validated["market_shrinkage"], 0.15)
+
     def test_place_trade_returns_skipped_and_rejected_when_kelly_sizing_ineligible(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 

@@ -285,6 +285,60 @@ class CandidateSelectionTests(unittest.TestCase):
         self.assertIn("+23.0pp executable edge on YES", line)
         self.assertIn("MTM high-edge forecast engine", line)
 
+    def test_discover_mtm_edge_candidates_prioritizes_validated_14_30d_horizon(self):
+        mtm_data = {
+            "edge_board": [
+                {
+                    "ident": "kalshi-macro-long",
+                    "platform": "Kalshi",
+                    "question": "Macro market 60 days out?",
+                    "executable_edge": 0.25,
+                    "lead_bucket": "30d+",
+                    "lead_days": 60.0,
+                    "discrepancy_status": "genuine_candidate",
+                },
+                {
+                    "ident": "kalshi-validated-horizon",
+                    "platform": "Kalshi",
+                    "question": "Validated market 20 days out?",
+                    "executable_edge": 0.12,
+                    "lead_bucket": "14-30d",
+                    "lead_days": 20.0,
+                    "discrepancy_status": "genuine_candidate",
+                },
+            ]
+        }
+        with (
+            mock.patch("builtins.open", mock.mock_open(read_data=json.dumps(mtm_data))),
+            mock.patch.object(Path, "exists", return_value=True),
+        ):
+            candidates = agent_trading_tick._discover_mtm_edge_candidates(set(), limit=1)
+
+        # The 14-30d validated candidate floats to the top despite lower raw edge than 30d+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["ident"], "kalshi-validated-horizon")
+        self.assertEqual(candidates[0]["lead_bucket"], "14-30d")
+        self.assertEqual(candidates[0]["lead_days"], 20.0)
+
+    def test_fmt_candidate_line_renders_validated_horizon_signal(self):
+        quote = {
+            "ident": "KXTEST-VAL",
+            "platform": "kalshi",
+            "question": "Will policy pass Senate?",
+            "yes_bid": 0.30,
+            "yes_ask": 0.32,
+            "probability": 0.31,
+            "lead_bucket": "14-30d",
+            "lead_days": 21.0,
+            "mtm_model_probability": 0.60,
+            "mtm_market_probability": 0.31,
+            "mtm_executable_edge": 0.28,
+            "mtm_side": "YES",
+        }
+        line = agent_trading_tick._fmt_candidate_line(quote)
+        self.assertIn("Lead time validation: 14-30d ahead window (+1.40pp empirical skill", line)
+        self.assertIn("[Validated 14-30d Horizon]", line)
+
     def test_discover_candidates_excludes_known_tickers_and_caps_count(self):
         listed = [_quote("KXA"), _quote("KXB"), _quote("KXC"), _quote("KXD")]
         with (
