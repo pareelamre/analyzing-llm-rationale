@@ -578,6 +578,17 @@ PRE_EXPIRY_EXIT_HOURS = 24.0
 PRE_EXPIRY_EXIT_LOSS = 0.30
 PRE_EXPIRY_EXIT_RULE = "pre_expiry_exit_rule"
 
+#: Close a winning position automatically once it has captured this fraction of maximum potential profit...
+DEFAULT_EARLY_HARVEST_PROFIT_RATIO = 0.85
+#: ...and its live executable bid is at least this high.
+DEFAULT_EARLY_HARVEST_MIN_BID = 0.85
+EARLY_HARVEST_RULE = "early_profit_harvest_rule"
+
+
+def _early_harvest_enabled() -> bool:
+    raw = str(os.environ.get("FORESEA_AGENT_EARLY_HARVEST", "on")).strip().lower()
+    return raw not in {"0", "off", "false", "no", "disabled"}
+
 
 def _pre_expiry_exit_enabled() -> bool:
     raw = str(os.environ.get("FORESEA_AGENT_PRE_EXPIRY_EXIT", "on")).strip().lower()
@@ -784,6 +795,151 @@ def _fmt_pre_expiry_exits(outcomes: List[Dict[str, Any]]) -> Optional[str]:
     return "\n".join(lines)
 
 
+def _early_profit_harvest_candidates(
+    positions: List[Dict[str, Any]],
+    held_quotes: List[Dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> List[Dict[str, Any]]:
+    """Held positions that have captured >= 85% of total potential profit.
+
+    Holding a winning position to settlement risks losing 85c-95c to gain the
+    last 5c-15c (a 1:10 or worse risk/reward ratio), while also exposing the
+    account to last-minute oracle/settlement disputes and liquidity black holes.
+    Closing at >= 85c bid when >= 85% of profit is already captured locks in
+    the win, raises the account's Sharpe ratio, and recycles capital.
+    """
+    if not _early_harvest_enabled():
+        return []
+    quotes_by_key = {
+        (str(q.get("platform") or "kalshi").lower(), q["ident"]): q
+        for q in held_quotes if q.get("ident")
+    }
+    chosen: List[Dict[str, Any]] = []
+    profit_ratio_threshold = float(
+        os.environ.get("FORESEA_AGENT_EARLY_HARVEST_PROFIT_RATIO", DEFAULT_EARLY_HARVEST_PROFIT_RATIO)
+    )
+    min_bid_threshold = float(
+        os.environ.get("FORESEA_AGENT_EARLY_HARVEST_MIN_BID", DEFAULT_EARLY_HARVEST_MIN_BID)
+    )
+
+    for position in positions:
+        platform = str(position.get("platform") or "kalshi").lower()
+        if platform != "kalshi":
+            continue
+        quote = quotes_by_key.get((platform, position["ticker"]))
+        if quote is None:
+            continue
+        # Market must still be open
+        hours = _hours_until(quote.get("close_time"), now=now)
+        if hours is not None and hours <= 0:
+            continue
+        side = str(position["side"])
+        bid = _backtested_exit_price(quote, side)
+        avg_entry = float(position["avg_entry_price"])
+        if bid is None or bid <= 0 or avg_entry <= 0 or avg_entry >= 1.0:
+            continue
+        max_possible_profit = 1.0 - avg_entry
+        if max_possible_profit <= 0.05:
+            # Entered at >= 0.95: not a candidate for profit-harvest
+            continue
+        current_captured_profit = bid - avg_entry
+        if current_captured_profit <= 0:
+            continue
+        profit_ratio = current_captured_profit / max_possible_profit
+        if profit_ratio >= profit_ratio_threshold and bid >= min_bid_threshold:
+            chosen.append({
+                "platform": platform,
+                "ticker": position["ticker"],
+                "side": side.lower(),
+                "quantity": float(position["quantity"]),
+                "bid": bid,
+                "avg_entry": avg_entry,
+                "profit_captured_pct": profit_ratio,
+                "hours_left": hours,
+            })
+    return chosen
+
+
+def _run_early_profit_harvest_exits(
+    agent_id: str,
+    held_quotes: List[Dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> List[Dict[str, Any]]:
+    """Close qualifying winning positions to harvest profits and de-risk."""
+    if not _early_harvest_enabled():
+        return []
+    if benchmark_tools._use_datastore_account_store():
+        return []
+    try:
+        with benchmark_tools._account_transaction() as conn:
+            summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
+        targets = _early_profit_harvest_candidates(summary["open_positions"], held_quotes, now=now)
+    except Exception:
+        logger.warning("early profit harvest selection failed agent=%s; no exits this cycle", agent_id, exc_info=True)
+        return []
+    ctx = benchmark_tools.ToolContext(
+        agent_id=agent_id, require_kelly_sizing=True, initiated_by=EARLY_HARVEST_RULE,
+    )
+    outcomes: List[Dict[str, Any]] = []
+    for target in targets:
+        order = {
+            "platform": target["platform"],
+            "ticker": target["ticker"],
+            "side": "no" if target["side"] == "yes" else "yes",
+            "sizing_mode": "close",
+        }
+        try:
+            result = benchmark_tools.place_trade(order, ctx)
+        except Exception as exc:
+            logger.warning("early harvest exit raised agent=%s ticker=%s", agent_id, target["ticker"], exc_info=True)
+            result = {"ok": False, "error": str(exc)}
+        execution = result.get("execution") or {}
+        filled = float(execution.get("filled_quantity") or 0.0)
+        if not result.get("ok"):
+            status = "failed"
+        elif filled <= benchmark_tools.MIN_POSITION_QUANTITY:
+            status = "unfilled"
+        elif filled + benchmark_tools.MIN_POSITION_QUANTITY < target["quantity"]:
+            status = "partial"
+        else:
+            status = "closed"
+        detail = (
+            result.get("reason") or result.get("error") or execution.get("fill_status") or ""
+        )
+        if status != "closed":
+            logger.warning(
+                "early harvest exit %s agent=%s ticker=%s detail=%s",
+                status, agent_id, target["ticker"], detail,
+            )
+        outcomes.append({**target, "status": status, "filled_quantity": filled, "detail": str(detail)})
+    return outcomes
+
+
+def _fmt_early_harvest_exits(outcomes: List[Dict[str, Any]]) -> Optional[str]:
+    """Tell the agent which winning positions the harvest rule locked in."""
+    if not outcomes:
+        return None
+    lines = [
+        "=== Automatic profit-harvest exits this cycle ===",
+        f"Rule: a winning position that has captured >= {DEFAULT_EARLY_HARVEST_PROFIT_RATIO:.0%} of maximum potential "
+        f"profit (at bid >= ${DEFAULT_EARLY_HARVEST_MIN_BID:.2f}) is closed to de-risk and lock in realized gains.",
+    ]
+    for o in outcomes:
+        where = (
+            f"  - {o['ticker']} {o['side'].upper()}: {o['quantity']:.1f} contracts, "
+            f"captured {o['profit_captured_pct']:.0%} of max profit at bid {o['bid']:.2f} (entry: {o['avg_entry']:.2f})"
+        )
+        if o["status"] == "closed":
+            lines.append(where + " -> profit harvested & closed.")
+        elif o["status"] == "partial":
+            lines.append(where + f" -> only {o['filled_quantity']:.1f} filled; remainder open.")
+        else:
+            lines.append(where + f" -> NOT closed ({o['status']}: {o['detail'] or 'no detail'}).")
+    return "\n".join(lines)
+
+
 def _build_portfolio_block(
     conn,
     agent_id: str,
@@ -855,6 +1011,11 @@ def _learning_lesson(action_type: str, realized_pnl: float, initiated_by: Option
             f"{PRE_EXPIRY_EXIT_LOSS:.0%} below your entry within {PRE_EXPIRY_EXIT_HOURS:.0f}h of "
             "its market closing. Review the entry, not the exit -- the evidence and price you "
             "entered on -- before a comparable exposure."
+        )
+    if initiated_by == EARLY_HARVEST_RULE:
+        return (
+            "The early profit harvest rule closed this position: it captured >= 85% of maximum potential "
+            "profit. The position was de-risked early to lock in realized gains and eliminate settlement tail risk."
         )
     event = "settlement" if action_type == "settlement" else "position close"
     if realized_pnl > 0.005:
@@ -3617,9 +3778,10 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     # portfolio block from those quotes so each held position can state its
     # current value and time left.
     held_quotes = _requote_held(held_positions)
-    # Close positions the pre-expiry rule selects before the agent decides,
-    # so the portfolio it reads is the one it actually holds.
+    # Close positions the pre-expiry and early profit harvest rules select before
+    # the agent decides, so the portfolio it reads is the one it actually holds.
     pre_expiry_exits = _run_pre_expiry_exits(agent_id, held_quotes)
+    early_harvest_exits = _run_early_profit_harvest_exits(agent_id, held_quotes)
     with benchmark_tools._account_transaction() as conn:
         still_held = {
             (str(row["platform"] or "kalshi").lower(), row["ticker"])
@@ -3632,10 +3794,13 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
             q for q in held_quotes
             if (str(q.get("platform") or "kalshi").lower(), q.get("ident")) in still_held
         ]
+        pre_expiry_note = _fmt_pre_expiry_exits(pre_expiry_exits)
+        early_harvest_note = _fmt_early_harvest_exits(early_harvest_exits)
+        combined_exit_notes = "\n\n".join([n for n in (pre_expiry_note, early_harvest_note) if n]) or None
         portfolio_block = _build_portfolio_block(
             conn, agent_id, last_thesis, learning_block, last_transcript,
             held_quotes=held_quotes,
-            exit_notes=_fmt_pre_expiry_exits(pre_expiry_exits),
+            exit_notes=combined_exit_notes,
         )
     known = {q.get("ident") for q in held_quotes if q.get("ident")}
     candidates_file = (
