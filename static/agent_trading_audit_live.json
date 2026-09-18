@@ -2,6 +2,82 @@
   "audits": {
     "deepseek-v4-flash": [
       {
+        "action_id": "1b016fbd-068f-4211-8e4f-175090ac333d",
+        "agent_id": "deepseek-v4-flash",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 7.18
+          },
+          "quote": {
+            "lead_days": 469.8705364648379,
+            "marketable": true,
+            "observed_ask": 0.58,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.58,
+            "quantity": 7.2
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 9076.564639,
+            "cash_required": 0.0,
+            "concentration_cap": 1408.318536,
+            "cycle_id": "30m:994308",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 9.3465,
+            "daily_risk_before": 9.3465,
+            "daily_risk_limit": 2816.637072,
+            "drawdown_after": 0.058465,
+            "fee": 0.122433,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 4.1644,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1877.758048,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994308",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 2.893167,
+          "cash_required": 0.0,
+          "fee": 0.122433,
+          "netting_payout": 7.18,
+          "notional": 4.1644,
+          "price": 0.58,
+          "quantity": 7.18,
+          "realized_pnl": -0.33783299999999983,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXIPOOURA-26OCT01"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "0d01f63b7c0bf5027529368377a5c92004d3250b6693ee7ee81342f585d60597",
+        "recorded_at": "2026-09-18T18:06:25.814008+00:00"
+      },
+      {
         "action_id": "7f6da9f8-2940-4839-890b-8fd957ad293d",
         "agent_id": "deepseek-v4-flash",
         "audit": {
@@ -20321,6 +20397,47 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "d747d078-9419-423c-8fa2-1eee0fd38813",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_sizing",
+            "filled_quantity": 0.0
+          },
+          "risk": {
+            "reasons": [
+              "no_executable_price"
+            ],
+            "rejected_before_sizing": true
+          },
+          "status": "rejected_before_sizing",
+          "version": 1
+        },
+        "cycle_id": "30m:994308",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 1.0,
+          "quantity": 57.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXHIGHNY-26SEP18-T80"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "a131473daf5513145a98a4d66afc12cccdf34f79198f6a704821c1b0949f3b54",
+        "recorded_at": "2026-09-18T18:18:55.607780+00:00"
+      },
+      {
         "action_id": "9beb989f-fa2c-4d41-94e0-7e8b19a7fb8a",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -33547,7 +33664,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-18T16:43:22.523309+00:00",
+  "generated_at": "2026-09-18T18:26:04.000218+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
