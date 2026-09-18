@@ -106,6 +106,8 @@ POLYMARKET_CATEGORY_FEE_RATES: Dict[str, float] = {
 }
 DEFAULT_POLYMARKET_FEE_RATE = 0.04
 IMMEDIATE_TIME_IN_FORCE = "immediate_or_cancel"
+DEFAULT_MAX_BID_ASK_SPREAD = 0.12
+DEFAULT_MAX_SPREAD_RATIO = 0.25
 
 
 @dataclass(frozen=True)
@@ -131,6 +133,8 @@ class RiskGuardPolicy:
     max_open_markets: int
     max_trades_per_cycle: int
     duplicate_trade_cooldown_seconds: int
+    max_bid_ask_spread: float = DEFAULT_MAX_BID_ASK_SPREAD
+    max_spread_ratio: float = DEFAULT_MAX_SPREAD_RATIO
 
 
 @dataclass(frozen=True)
@@ -373,6 +377,12 @@ def _risk_guard_policy() -> RiskGuardPolicy:
             DEFAULT_DUPLICATE_TRADE_COOLDOWN_SECONDS,
             minimum=0,
         ),
+        max_bid_ask_spread=_env_float(
+            "FORESEA_AGENT_MAX_BID_ASK_SPREAD", DEFAULT_MAX_BID_ASK_SPREAD,
+        ),
+        max_spread_ratio=_env_float(
+            "FORESEA_AGENT_MAX_SPREAD_RATIO", DEFAULT_MAX_SPREAD_RATIO,
+        ),
     )
 
 
@@ -591,6 +601,19 @@ def _sizing_plan(
         policy = AGENT_SIZING_POLICIES[canonical_mode]
 
     effective_min_edge = policy.min_edge
+    effective_max_position_fraction = policy.max_position_fraction
+    is_tail_favorite = price >= 0.85
+    is_tail_longshot = price <= 0.10
+
+    if is_tail_favorite:
+        # Steamroller protection: Buying contracts >= 85c yields <= 15c upside with >= 85c downside.
+        # Enforce elevated shrinkage and tighter position cap (max 15%) against black-swan tail risk.
+        effective_min_edge = max(effective_min_edge, 0.03)
+        effective_max_position_fraction = min(effective_max_position_fraction, 0.15)
+    elif is_tail_longshot:
+        # Lottery ticket protection: Cap longshot position size to max 10% of account.
+        effective_max_position_fraction = min(effective_max_position_fraction, 0.10)
+
     if is_short_horizon:
         # Near-term (<7d) non-weather contracts suffer from breaking-news information lag
         # and negative empirical skill (-0.3pp to -0.7pp). Enforce a 4pp minimum edge hurdle.
@@ -617,7 +640,7 @@ def _sizing_plan(
                 "eligible": False,
                 "edge": round(edge, 6),
                 "min_edge": effective_min_edge,
-                "max_position_fraction": policy.max_position_fraction,
+                "max_position_fraction": effective_max_position_fraction,
                 "reason": reason,
                 "lead_days": round(lead_days, 1) if lead_days is not None else None,
                 "horizon": horizon_bucket,
@@ -638,6 +661,11 @@ def _sizing_plan(
             effective_shrinkage = policy.market_shrinkage * max(0.20, 1.0 - 0.75 * conv_val)
         except (ValueError, TypeError):
             pass
+
+    if is_tail_favorite:
+        # Steamroller protection: Buying contracts >= 85c yields <= 15c upside with >= 85c downside.
+        # Enforce elevated shrinkage (min 40%) against black-swan tail risk.
+        effective_shrinkage = max(effective_shrinkage, 0.40)
 
     if is_short_horizon:
         # Defensive shrinkage for near-term noise and information lag
@@ -674,7 +702,7 @@ def _sizing_plan(
             "eligible": False,
             "edge": round(edge, 6),
             "min_edge": effective_min_edge,
-            "max_position_fraction": policy.max_position_fraction,
+            "max_position_fraction": effective_max_position_fraction,
             "reason": "fee_exceeds_payoff",
             "lead_days": round(lead_days, 1) if lead_days is not None else None,
             "horizon": horizon_bucket,
@@ -682,7 +710,7 @@ def _sizing_plan(
         }
 
     if policy.key == "flat_probe":
-        max_notional = account_value * policy.max_position_fraction
+        max_notional = account_value * effective_max_position_fraction
         target_notional = min(25.0, max_notional)
         target_fraction = target_notional / account_value if account_value else 0.0
         res = {
@@ -698,7 +726,7 @@ def _sizing_plan(
             "calibration_reliability": reliability,
             "raw_kelly": 0.0,
             "target_fraction": round(target_fraction, 6),
-            "max_position_fraction": policy.max_position_fraction,
+            "max_position_fraction": effective_max_position_fraction,
             "target_notional": round(target_notional, 6),
             "fee_per_contract": round(fee_per_contract, 6),
             "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
@@ -713,7 +741,7 @@ def _sizing_plan(
 
     if policy.key == "scaled_edge":
         scale = min(1.0, max(0.0, edge / 0.05))
-        target_fraction = min(policy.max_position_fraction, policy.max_position_fraction * scale)
+        target_fraction = min(effective_max_position_fraction, effective_max_position_fraction * scale)
         target_notional = account_value * target_fraction
         res = {
             "mode": policy.key,
@@ -728,7 +756,7 @@ def _sizing_plan(
             "calibration_reliability": reliability,
             "raw_kelly": round(target_fraction, 6),
             "target_fraction": round(target_fraction, 6),
-            "max_position_fraction": policy.max_position_fraction,
+            "max_position_fraction": effective_max_position_fraction,
             "target_notional": round(target_notional, 6),
             "fee_per_contract": round(fee_per_contract, 6),
             "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
@@ -750,10 +778,10 @@ def _sizing_plan(
         # favorites (b < 1.0) are dampened to protect against negative skew.
         skew_multiplier = min(2.0, max(0.4, odds ** 0.35))
         raw_kelly *= skew_multiplier
-    target_fraction = min(policy.kelly_fraction * raw_kelly, policy.max_position_fraction)
+    target_fraction = min(policy.kelly_fraction * raw_kelly, effective_max_position_fraction)
     target_notional = account_value * target_fraction
     if policy.key == "probe_kelly" and target_notional <= 1e-9 and edge >= effective_min_edge:
-        target_notional = min(25.0, account_value * policy.max_position_fraction)
+        target_notional = min(25.0, account_value * effective_max_position_fraction)
         target_fraction = target_notional / account_value if account_value else 0.0
     if target_notional <= 1e-9 and allow_fallback and edge >= (0.02 if is_short_horizon else 0.001):
         fb_policy = AGENT_SIZING_POLICIES["flat_probe"]
@@ -797,7 +825,7 @@ def _sizing_plan(
         "calibration_reliability": reliability,
         "raw_kelly": round(raw_kelly, 6),
         "target_fraction": round(target_fraction, 6),
-        "max_position_fraction": policy.max_position_fraction,
+        "max_position_fraction": effective_max_position_fraction,
         "target_notional": round(target_notional, 6),
         "fee_per_contract": round(fee_per_contract, 6),
         "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
@@ -2756,6 +2784,7 @@ def _check_trade_guards(
     sizing: Optional[Mapping[str, Any]] = None,
     strict_risk_management: bool = False,
     category: Optional[str] = None,
+    market_check: Optional[Mapping[str, Any]] = None,
 ) -> tuple[bool, Dict[str, Any], RiskGuardPolicy]:
     policy = _risk_guard_policy()
     settlements = _settle_agent_open_positions(agent_id, policy)
@@ -2844,10 +2873,15 @@ def _check_trade_guards(
         if drawdown_after > policy.max_drawdown_limit + 1e-9:
             reasons.append("drawdown_limit")
 
+    spread_info = (market_check or {}).get("spread_check") if isinstance(market_check, dict) else None
+    if strict_risk_management and not risk_reducing and spread_info and not spread_info.get("clears", True):
+        reasons.append("wide_bid_ask_spread")
+
     detail = {
         "allowed": not reasons,
         "reasons": reasons,
         "edge_after_fees": edge_check,
+        "spread_check": spread_info,
         "account_value": round(policy.account_value, 6),
         "cash_before": round(cash_before, 6),
         "concentration_limit": policy.concentration_limit,
@@ -3085,6 +3119,20 @@ def _resolve_shadow_marketability(
         weather_brief = classify_weather_market(raw_quote).as_dict()
         quote = MarketQuote.from_mapping(raw_quote)
         real_ask = quote.ask(side)
+        if side == "yes":
+            explicit_bid = (
+                raw_quote.get("yes_bid")
+                if raw_quote.get("yes_bid") is not None
+                else raw_quote.get("market_bid")
+                if raw_quote.get("market_bid") is not None
+                else raw_quote.get("best_bid")
+                if raw_quote.get("best_bid") is not None
+                else raw_quote.get("bid")
+            )
+            real_bid = float(explicit_bid) if explicit_bid is not None else None
+        else:
+            explicit_bid = raw_quote.get("no_bid")
+            real_bid = float(explicit_bid) if explicit_bid is not None else None
         category = raw_quote.get("category")
         close_raw = (
             raw_quote.get("expected_expiration_time")
@@ -3096,6 +3144,24 @@ def _resolve_shadow_marketability(
         lead_days = _calculate_lead_days(close_raw)
     except Exception:
         real_ask = None
+        real_bid = None
+
+    max_spread = _env_float("FORESEA_AGENT_MAX_BID_ASK_SPREAD", DEFAULT_MAX_BID_ASK_SPREAD)
+    max_ratio = _env_float("FORESEA_AGENT_MAX_SPREAD_RATIO", DEFAULT_MAX_SPREAD_RATIO)
+    spread = (real_ask - real_bid) if (real_bid is not None and real_bid > 0 and real_ask is not None and real_ask > 0) else None
+    spread_ratio = (spread / real_ask) if (spread is not None and real_ask is not None and real_ask > 0) else None
+    spread_clears = True
+    if spread is not None and spread_ratio is not None:
+        if spread > max_spread + 1e-9 or spread_ratio > max_ratio + 1e-9:
+            spread_clears = False
+    spread_check = {
+        "real_bid": round(real_bid, 4) if real_bid is not None else None,
+        "spread": round(spread, 4) if spread is not None else None,
+        "spread_ratio": round(spread_ratio, 4) if spread_ratio is not None else None,
+        "clears": spread_clears,
+        "max_spread": max_spread,
+        "max_ratio": max_ratio,
+    }
 
     if real_ask is None or real_ask <= 0:
         return {
@@ -3106,6 +3172,7 @@ def _resolve_shadow_marketability(
             "weather_brief": weather_brief,
             "category": category,
             "lead_days": lead_days,
+            "spread_check": spread_check,
         }
 
     if requested_price is None:
@@ -3117,6 +3184,7 @@ def _resolve_shadow_marketability(
             "weather_brief": weather_brief,
             "category": category,
             "lead_days": lead_days,
+            "spread_check": spread_check,
         }
 
     marketable = requested_price + 1e-9 >= real_ask
@@ -3128,6 +3196,7 @@ def _resolve_shadow_marketability(
         "weather_brief": weather_brief,
         "category": category,
         "lead_days": lead_days,
+        "spread_check": spread_check,
     }
 
 
@@ -3177,6 +3246,8 @@ def _trade_audit_context(
             "marketable": bool(market_check.get("marketable")),
             "status": str(market_check.get("status") or "not_checked"),
             "observed_ask": market_check.get("real_ask"),
+            "observed_bid": (market_check.get("spread_check") or {}).get("real_bid"),
+            "spread": (market_check.get("spread_check") or {}).get("spread"),
             "lead_days": market_check.get("lead_days"),
         },
         "sizing": {key: sizing.get(key) for key in sizing_keys if key in sizing},
@@ -3582,6 +3653,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 sizing=sizing,
                 strict_risk_management=ctx.require_kelly_sizing,
                 category=trade_category,
+                market_check=market_check,
             )
             guard["gross_notional_override"] = verified_reduce_only_close
             if not allowed:
@@ -3647,6 +3719,18 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                         f"{ticker} on {platform}. You cannot exit a position you do not hold. If you want to open a new "
                         "position, use an entry sizing_mode ('quarter_kelly', 'probe_kelly', 'scaled_edge') with your "
                         "model_probability instead of sizing_mode='close'."
+                    )
+                elif "wide_bid_ask_spread" in guard["reasons"]:
+                    spread_info = (market_check.get("spread_check") or {}) if isinstance(market_check, dict) else {}
+                    spread_val = float(spread_info.get("spread") or 0.0)
+                    ratio_val = float(spread_info.get("spread_ratio") or 0.0)
+                    max_s = float(spread_info.get("max_spread", DEFAULT_MAX_BID_ASK_SPREAD))
+                    max_r = float(spread_info.get("max_ratio", DEFAULT_MAX_SPREAD_RATIO))
+                    rejection_message = (
+                        f"Trade rejected: wide_bid_ask_spread. The executable spread is "
+                        f"${spread_val:.2f} ({ratio_val:.0%} of ask price), exceeding the allowable "
+                        f"threshold (${max_s:.2f} / {max_r:.0%}). Taking wide spreads pays excessive "
+                        "liquidity tolls to market makers. Wait for spread compression or trade a more liquid market."
                     )
                 elif "edge_below_fee_floor" in guard["reasons"]:
                     rejection_message = (

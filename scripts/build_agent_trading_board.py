@@ -440,6 +440,14 @@ def _risk_limits() -> Dict[str, Any]:
             "FORESEA_AGENT_MAX_DRAWDOWN_LIMIT",
             benchmark_tools.DEFAULT_MAX_DRAWDOWN_LIMIT,
         ),
+        "max_bid_ask_spread": benchmark_tools._env_float(
+            "FORESEA_AGENT_MAX_BID_ASK_SPREAD",
+            benchmark_tools.DEFAULT_MAX_BID_ASK_SPREAD,
+        ),
+        "max_spread_ratio": benchmark_tools._env_float(
+            "FORESEA_AGENT_MAX_SPREAD_RATIO",
+            benchmark_tools.DEFAULT_MAX_SPREAD_RATIO,
+        ),
     }
 
 
