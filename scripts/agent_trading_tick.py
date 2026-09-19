@@ -1830,7 +1830,7 @@ def _discover_mtm_edge_candidates(known_tickers: set, *, limit: int) -> List[Dic
             mtm_candidate_discovery_duration.record(time.perf_counter() - started)
 
 
-def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
+def _discover_candidates(known_tickers: set, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
     new_quotes: List[Dict[str, Any]] = []
     new_quotes.extend(_discover_weather_candidates(known_tickers, limit=WEATHER_CANDIDATE_QUOTA))
     new_quotes.extend(_discover_mtm_edge_candidates(known_tickers, limit=MTM_CANDIDATE_QUOTA))
@@ -1894,10 +1894,33 @@ def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
     k_eligible = [q for q in kalshi_pool if _edge_hurdle_pp(q) <= MAX_CANDIDATE_HURDLE]
     p_eligible = [q for q in poly_pool if _edge_hurdle_pp(q) <= MAX_CANDIDATE_HURDLE]
 
-    # Prioritize markets in the validated 14-30d ahead horizon while keeping tightest hurdle
+    profile = benchmark_tools.get_agent_profile(agent_id or MODEL)
+
+    # Prioritize markets in the agent's specialized niche while keeping tightest hurdle
     def _hurdle_sort_key(q: Dict[str, Any]) -> tuple:
-        is_val = 0 if _is_validated_horizon_data(q) else 1
-        return (is_val, _edge_hurdle_pp(q))
+        prob = q.get("probability")
+        try:
+            price = float(prob) if prob is not None else 0.5
+        except (ValueError, TypeError):
+            price = 0.5
+
+        forbidden_penalty = 0
+        if profile and profile.forbidden_price_range:
+            p_low, p_high = profile.forbidden_price_range
+            if (p_low - 1e-9) <= price <= (p_high + 1e-9):
+                forbidden_penalty = 1
+
+        horizon_penalty = 0
+        if profile and profile.horizon_preference == "underpriced_skew":
+            # Gemma favors cheap contracts (<= 0.40 on YES or NO)
+            is_underpriced = price <= 0.40 or (1.0 - price) <= 0.40
+            horizon_penalty = 0 if is_underpriced else 1
+        elif profile and profile.horizon_preference == "14-30d":
+            horizon_penalty = 0 if _is_validated_horizon_data(q) else 1
+        else:
+            horizon_penalty = 0 if _is_validated_horizon_data(q) else 1
+
+        return (forbidden_penalty, horizon_penalty, _edge_hurdle_pp(q))
 
     k_eligible.sort(key=_hurdle_sort_key)
     p_eligible.sort(key=_hurdle_sort_key)
@@ -2446,6 +2469,36 @@ def _own_capability_line(agent_id: str) -> str:
     )
 
 
+def _agent_tactical_profile_block(agent_id: Optional[str]) -> str:
+    """Render the agent model's specialized role and tactical mandate."""
+    profile = benchmark_tools.get_agent_profile(agent_id)
+    if not profile:
+        return ""
+    lines = [
+        "=== YOUR SPECIALIZED TRADING PROFILE & TACTICAL MANDATE ===",
+        f"Agent Model: {profile.model_id} · Assigned Role: {profile.role_title}",
+        f"Mandate: {profile.tactical_mandate}",
+    ]
+    constraints = []
+    if profile.max_contract_price is not None:
+        constraints.append(f"Price ceiling: <= ${profile.max_contract_price:.2f} (strictly enforced by risk guard)")
+    if profile.forbidden_price_range is not None:
+        constraints.append(
+            f"Forbidden price band: ${profile.forbidden_price_range[0]:.2f}-${profile.forbidden_price_range[1]:.2f} (coin-flip ban)"
+        )
+    if profile.min_profile_edge is not None:
+        constraints.append(f"Minimum net edge hurdle: >= {profile.min_profile_edge:.1%} (overtrading fee defense)")
+    if profile.max_trades_per_cycle is not None:
+        constraints.append(f"Max trades per cycle: {profile.max_trades_per_cycle} (churn cap)")
+    if profile.preferred_sizing_mode is not None:
+        constraints.append(f"Recommended sizing mode: sizing_mode='{profile.preferred_sizing_mode}'")
+    if profile.horizon_preference is not None:
+        constraints.append(f"Preferred horizon: {profile.horizon_preference}")
+    if constraints:
+        lines.append("Profile Rules & Guardrails:\n  - " + "\n  - ".join(constraints))
+    return "\n".join(lines)
+
+
 def _assemble_question(portfolio_block: str, candidates_block: str,
                        agent_id: Optional[str] = None) -> str:
     as_of = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -2456,9 +2509,10 @@ def _assemble_question(portfolio_block: str, candidates_block: str,
     )
     notes_block = _recalled_notes_block(agent_id or MODEL)
     standings_block = _leaderboard_block(agent_id or MODEL)
+    profile_block = _agent_tactical_profile_block(agent_id or MODEL)
     return "\n\n".join(filter(None, [
         time_anchor, portfolio_block, notes_block, standings_block,
-        candidates_block, _TRADING_INSTRUCTION,
+        profile_block, candidates_block, _TRADING_INSTRUCTION,
     ]))
 
 
@@ -3826,7 +3880,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
                     exc,
                 )
     if not new_quotes:
-        new_quotes = _discover_candidates(known)
+        new_quotes = _discover_candidates(known, agent_id=agent_id)
     weather_candidates_offered = _weather_candidate_count(new_quotes)
 
     # Every agent-trading risk guard scales off FORESEA_AGENT_ACCOUNT_VALUE,
