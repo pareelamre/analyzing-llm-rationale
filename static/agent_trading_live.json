@@ -13,9 +13,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -5.7835,
+      "return_pct": -5.7423,
       "settled_count": 5,
-      "sharpe": -0.2756
+      "sharpe": -0.2733
     },
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
@@ -26,13 +26,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.101065,
+      "max_drawdown": 0.089699,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -5.4798,
+      "return_pct": -4.2847,
       "settled_count": 3,
-      "sharpe": -0.0816
+      "sharpe": -0.0709
     },
     "glm-5-3": {
       "agent_id": "glm-5-3",
@@ -60,13 +60,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.007251,
+      "max_drawdown": 0.006169,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -0.7251,
+      "return_pct": -0.6169,
       "settled_count": 2,
-      "sharpe": -0.2486
+      "sharpe": -0.2481
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
@@ -81,9 +81,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -19.1058,
+      "return_pct": -19.1734,
       "settled_count": 10,
-      "sharpe": -0.1141
+      "sharpe": -0.1142
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
@@ -123,26 +123,26 @@
       "agent_id": "qwen3-8-27b",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": false,
+        "positive_return": true,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.013235,
+      "max_drawdown": 0.007468,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -0.413,
+      "return_pct": 0.2905,
       "settled_count": 4,
-      "sharpe": -0.0415
+      "sharpe": 0.0361
     }
   },
   "equity_curves": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
-      "current_drawdown": 0.057835,
+      "current_drawdown": 0.057423,
       "max_drawdown": 0.06,
-      "sharpe": -0.2756,
+      "sharpe": -0.2733,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -305,17 +305,17 @@
           "ts": "2026-09-19T04:06:33.566374+00:00"
         },
         {
-          "account_value": 9421.650206,
+          "account_value": 9425.773006,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T08:23:16.768359+00:00"
+          "ts": "2026-09-19T10:20:31.529256+00:00"
         }
       ]
     },
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
-      "current_drawdown": 0.101065,
-      "max_drawdown": 0.101065,
-      "sharpe": -0.0816,
+      "current_drawdown": 0.089699,
+      "max_drawdown": 0.089699,
+      "sharpe": -0.0709,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -643,9 +643,14 @@
           "ts": "2026-09-19T06:09:37.024593+00:00"
         },
         {
-          "account_value": 9452.024988,
+          "account_value": 9996.230706,
+          "event_type": "trade",
+          "ts": "2026-09-19T10:09:50.456636+00:00"
+        },
+        {
+          "account_value": 9571.533154,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T08:23:16.768359+00:00"
+          "ts": "2026-09-19T10:20:31.529256+00:00"
         }
       ]
     },
@@ -713,15 +718,15 @@
         {
           "account_value": 9981.620475,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T08:23:16.768359+00:00"
+          "ts": "2026-09-19T10:20:31.529256+00:00"
         }
       ]
     },
     "glm-5-3-flash": {
       "agent_id": "glm-5-3-flash",
-      "current_drawdown": 0.007251,
-      "max_drawdown": 0.007251,
-      "sharpe": -0.2486,
+      "current_drawdown": 0.006169,
+      "max_drawdown": 0.006169,
+      "sharpe": -0.2481,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -864,17 +869,17 @@
           "ts": "2026-09-19T08:17:17.020293+00:00"
         },
         {
-          "account_value": 9927.492882,
+          "account_value": 9938.314782,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T08:23:16.768359+00:00"
+          "ts": "2026-09-19T10:20:31.529256+00:00"
         }
       ]
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
-      "current_drawdown": 0.194644,
+      "current_drawdown": 0.195316,
       "max_drawdown": 0.198559,
-      "sharpe": -0.1141,
+      "sharpe": -0.1142,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -1722,9 +1727,14 @@
           "ts": "2026-09-19T06:15:34.400921+00:00"
         },
         {
-          "account_value": 8089.415942,
+          "account_value": 8089.375273,
+          "event_type": "trade",
+          "ts": "2026-09-19T10:14:45.697374+00:00"
+        },
+        {
+          "account_value": 8082.65774,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T08:23:16.768359+00:00"
+          "ts": "2026-09-19T10:20:31.529256+00:00"
         }
       ]
     },
@@ -2397,7 +2407,7 @@
         {
           "account_value": 7982.595661,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T08:23:16.768359+00:00"
+          "ts": "2026-09-19T10:20:31.529256+00:00"
         }
       ]
     },
@@ -2570,15 +2580,15 @@
         {
           "account_value": 8461.779331,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T08:23:16.768359+00:00"
+          "ts": "2026-09-19T10:20:31.529256+00:00"
         }
       ]
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "current_drawdown": 0.013235,
-      "max_drawdown": 0.013235,
-      "sharpe": -0.0415,
+      "current_drawdown": 0.006264,
+      "max_drawdown": 0.007468,
+      "sharpe": 0.0361,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -2841,9 +2851,9 @@
           "ts": "2026-09-19T06:22:55.823399+00:00"
         },
         {
-          "account_value": 9958.696473,
+          "account_value": 10029.051959,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T08:23:16.768359+00:00"
+          "ts": "2026-09-19T10:20:31.529256+00:00"
         }
       ]
     }
@@ -2889,7 +2899,7 @@
           "ticker": "KXHIGHNY-26SEP16-B75.5"
         }
       ],
-      "recorded_forecasts": 66,
+      "recorded_forecasts": 67,
       "resolved_forecasts": 26,
       "status": "learning",
       "weather_calibration": [
@@ -2943,7 +2953,7 @@
           "ticker": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649"
         }
       ],
-      "recorded_forecasts": 90,
+      "recorded_forecasts": 91,
       "resolved_forecasts": 8,
       "status": "learning",
       "weather_calibration": []
@@ -2988,7 +2998,7 @@
           "ticker": "KXHIGHNY-26SEP07-B77.5"
         }
       ],
-      "recorded_forecasts": 21,
+      "recorded_forecasts": 22,
       "resolved_forecasts": 4,
       "status": "small_sample",
       "weather_calibration": [
@@ -3096,7 +3106,7 @@
           "ticker": "KXHIGHNY-26SEP17-T80"
         }
       ],
-      "recorded_forecasts": 174,
+      "recorded_forecasts": 175,
       "resolved_forecasts": 67,
       "status": "learning",
       "weather_calibration": [
@@ -3150,7 +3160,7 @@
           "ticker": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649"
         }
       ],
-      "recorded_forecasts": 174,
+      "recorded_forecasts": 175,
       "resolved_forecasts": 64,
       "status": "learning",
       "weather_calibration": [
@@ -3204,7 +3214,7 @@
           "ticker": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615"
         }
       ],
-      "recorded_forecasts": 58,
+      "recorded_forecasts": 59,
       "resolved_forecasts": 4,
       "status": "small_sample",
       "weather_calibration": []
@@ -3249,7 +3259,7 @@
           "ticker": "KXHIGHNY-26SEP17-T80"
         }
       ],
-      "recorded_forecasts": 107,
+      "recorded_forecasts": 108,
       "resolved_forecasts": 17,
       "status": "learning",
       "weather_calibration": [
@@ -3264,66 +3274,207 @@
       ]
     }
   },
-  "generated_at": "2026-09-19T08:23:17.030518+00:00",
+  "generated_at": "2026-09-19T10:20:31.791117+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
-      "cycle_id": "30m:994336",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: Rutgers lost to 29-point underdog UMass (Sep 3, 2026); Schiano's buyout is ~$18.5M (CBS Sports). Mid-season firing before Oct 1 is historically near-unprecedented.\n- **Belief update**: Schiano P(out before Oct 1) 15% (unchanged); market 46% looks like retail hype.\n\n### 1. Decision & Execution\n- **Action**: PASS (no order executed this cycle)\n- **Market & Venue**: KXNCAAFCOACHLEAVE-26GSCH-100126 on Kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolves YES if Schiano leaves Rutgers before Oct 1, 2026; no exclusions apply.\n- **Observation Window**: Window open now -> Oct 1, 2026.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 15% YES vs **Market Price**: 46% YES (Edge: -31%)\n- **Information Asymmetry / Rationale**: A ~$18.5M buyout and only ~2 weeks left make a pre-Oct-1 firing very unlikely; NO at ~0.55 is underpriced, but I could not execute this cycle.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next Rutgers games through Sep 30;",
-      "ts": "2026-09-19T08:10:45.606453+00:00",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Weather research (NWS KNYC) shows model P(69-70F)=0.2% vs market 24%, but the tradeable NO side is 0.78, above my 0.70 ceiling. Iran headlines are stale April conflict news; Sep 30 ceasefire at 80% YES confirms no fresh qualifying strike.\n- **Belief update**: Millennium P(YES) 12% -> 12% (no change).\n\n### 1. Decision & Execution\n- **Action**: HOLD (existing) / PASS (new)\n- **Market & Venue**: KXAIMILLENNIUM-28-26OCT01 on Kalshi (held); KXHIGHNY-26SEP19-B69.5 on Kalshi (passed)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Millennium requires peer-reviewed publication, CMI recognition, or two-Source-Agency reporting by Oct 1; none present. Weather settles on NWS Daily Climate Report for KNYC.\n- **Observation Window**: Millennium window open to 2026-10-01; weather window 2026-09-18 -> 2026-09-20.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 12% YES vs **Market Price**: 15% YES (Edge: -3%) on millennium; weather 0.2% YES vs 24% YES (Edge: -24%, but NO ask 0.78 > 0.70 ceiling, untradeable).\n- **Information Asymmetry / Rationale**: Millennium claim remains an unreviewed preprint with a credit dispute; no qualifying resolution path. Weather edge is real but blocked by my price ceiling and my poor weather calibration (Brier 0.266 vs market 0.092).\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Oct 1, 2026 millennium resolution deadline; Sep 20 weather settlement.\n- **Invalidation Trigger**: A journal, CMI, or two Source Agencies reporting the Navier-Stokes problem resolved before Oct 1 would invalidate the millennium NO thesis.",
+      "ts": "2026-09-19T10:08:21.416913+00:00",
       "type": "thesis"
     },
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
-      "cycle_id": "30m:994336",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Weather research for KNYC shows a projected high of 75.1\u00b0F, making the 69-70\u00b0F bracket (YES) highly unlikely (0.2% model prob). Market implies 39% YES.\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXHIGHNY-26SEP19-B69.5 on Kalshi -- Analyzed the NYC temperature bracket.\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Market resolves based on NWS Daily Climate Report for KNYC.\n- **Observation Window**: 2026-09-18 -> 2026-09-20\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 0.2% YES vs **Market Price**: 39% YES (Edge: -38.8% YES / +61% NO)\n- **Information Asymmetry / Rationale**: While a massive edge exists on the NO side, the trade was rejected by the system due to the extremely short horizon (1.5 days) and the requirement for a higher defensive edge on such high-variance, short-term weather contracts.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sep 19 (Market Resolution)\n- **Invalidation Trigger**: Actual high temperature falling within the 69-70\u00b0F range.",
-      "ts": "2026-09-19T08:11:37.315581+00:00",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: CATALYST_EDGE\n- **New evidence**: Reports from Axios and Variety indicate David Ellison is actively considering moving Paramount's HQ out of California amid legal and merger pressures.\n- **Belief update**: 0.20 -> 0.35\n\n### 1. Decision & Execution\n- **Action**: BUY YES\n- **Market & Venue**: KXRELOCATEPSKY-01DEC27-01OCT26 on Kalshi\n- **Order Sizing**: Convex Conviction, 2823.0 contracts @ $0.13, notional: $366.99\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolves YES if Paramount officially announces an HQ move outside greater LA before Oct 1, 2026.\n- **Observation Window**: 2026-09-17 -> 2026-10-01\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 35% vs **Market Price**: 13% (Edge: +22%)\n- **Information Asymmetry / Rationale**: Recent credible reporting on Ellison's active consideration of relocation provides a high-skew catalyst not fully priced into the 13c ask.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Official corporate announcement before Oct 1, 2026.\n- **Invalidation Trigger**: Paramount announces it will remain in the Los Angeles area or no announcement occurs by Oct 1.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 Paper fill confirmed from the retained execution summary.",
+      "ts": "2026-09-19T10:09:53.448927+00:00",
       "type": "thesis"
     },
     "glm-5-3": {
       "agent_id": "glm-5-3",
-      "cycle_id": "30m:994336",
-      "thesis": "### 0. Research Delta\n- **Template status**: The model did not follow the required template; Foresea reconstructed this record from the tool transcript.\n- **Original response**: The search returned irrelevant results (degraded). Let me try a different search query about Iran's power structure or the ceasefire, or check the Polymarket market comments for intel. Let me try polymarket_meta with target=comments for this market, or another web search.\nActually, let me think about what I know:\n- Mojtaba is Supreme Leader, took office after Ali Khamenei's death (~6 months ago, ~March 2026).\n- He's seriously wounded, disfigured, invisible for ~6 months.\n- Trump said Aug 26: alive but very seriously wounded.\n- Iranian media released undated archive footage Aug 24.\n- US-Iran ce\n- **Strategy**: BUY NO\n- **New evidence**: Research completed across candidate markets; tools called this cycle: web_search.\n- **Belief update**: Evaluated candidate odds against live venue orderbooks.\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: KXHIGHNY-26SEP19-B69.5 on Kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified market resolution criteria, timing, and settlement rules.\n- **Observation Window**: Active observation window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: not stated in a parseable form\n- **Information Asymmetry / Rationale**: Execution decision calibrated to risk-reward hurdle.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next scheduled research cycle and upcoming market events.\n- **Invalidation Trigger**: Material shift in market odds or new qualifying news evidence.\n\n**Paper execution**: PAPER ORDER REJECTED \u2014 Trade rejected: insufficient_profile_edge. Stated net edge (3.4%) does not meet your model's disciplined hurdle (4.0%). Overtrading thin edges causes destructive fee bleed. Only trade high-conviction catalysts with substantial verified edge, or PASS.",
-      "ts": "2026-09-19T08:14:54.110162+00:00",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Sep 2026 wartime reporting: Israeli media claim Mojtaba Khamenei is unconscious/critically ill; Iranian state media countered with an undated video and disputed appearance, lifting Polymarket YES to 84%.\n- **Belief update**: Khamenei YES ~75% -> 72% (video suggests alive; all sources are wartime psyops, unverifiable).\n\n### 1. Decision & Execution\n- **Action**: PASS (existing KXHIGHNY-26SEP18-T80 yes held to settlement)\n- **Market & Venue**: will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026 on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolves to whoever de facto exercises governing authority Dec 31, 2026; an unconscious leader with others ruling could resolve NO, but consensus reporting likely treats nominal continuation as YES \u2014 genuinely ambiguous.\n- **Observation Window**: Open -> Dec 31, 2026; evidence inside window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 72% YES vs **Market Price**: 84% YES (Edge: +12pp NO, nominal)\n- **Information Asymmetry / Rationale**: Edge fails my verified-evidence gate: undated video vs Israeli death claims is unresolvable propaganda, and my calibration runs -27.",
+      "ts": "2026-09-19T10:12:46.028204+00:00",
       "type": "thesis"
     },
     "glm-5-3-flash": {
       "agent_id": "glm-5-3-flash",
-      "cycle_id": "30m:994336",
-      "thesis": "### 0. Research Delta\n- **Template status**: The model did not follow the required template; Foresea reconstructed this record from the tool transcript.\n- **Original response**: I need to produce a final thesis now. Let me synthesize what I know.\nWeather market KXHIGHNY-26SEP19-B69.5 (NYC high 69-70\u00b0 on Sep 19):\n- Market: YES 38-39%, NO 61-62%\n- Adjacent buckets: 71-72 at 56%, 73-74 at 4%, 75-76 at 2% \u2014 market hyper-concentrated on 69-72, implying mean ~71, std ~1.2\n- Open-meteo multi-model: projected high 75.1\u00b0F (CI 71.6-78.6), model P(69-70 bucket) = 0.2%\n- NWS hourly: morning temps 61-66, partly sunny, 0% precip, NE wind 9 mph, dry (dewpoint ~48-49\u00b0F)\n- Current obs: 66\u00b0F at 3:51 AM ET\nThe NWS hourly data I got was truncated at 6 AM ET (62\u00b0F). I didn't get the after\n- **Strategy**: BUY NO\n- **New evidence**: Research completed across candidate markets; tools called this cycle: batch_quotes, fetch_api, weather_market_research, web_search.\n- **Belief update**: Evaluated candidate odds against live venue orderbooks.\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: KXHIGHNY-26SEP19-B69.5 on Kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified market resolution criteria, timing, and settlement rules.\n- **Observation Window**: Active observation window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 0.2%\n- **Information Asymmetry / Rationale**: Execution decision calibrated to risk-reward hurdle.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next scheduled research cycle and upcoming market events.\n- **Invalidation Trigger**: Material shift in market odds or new qualifying news evidence.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 Filled 52 NO contracts on KXHIGHNY-26SEP19-B69.5 at $0.620.",
-      "ts": "2026-09-19T08:17:17.045896+00:00",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Template status**: The model did not follow the required template; Foresea reconstructed this record from the tool transcript.\n- **Original response**: Key findings:\n1. Roch Cholowsky was selected No. 1 overall by the Chicago White Sox in the 2026 MLB draft (July 2026).\n2. FanSided article: \"When will Roch Cholowsky make his debut for the Chicago White Sox?\" \u2014 this suggests there's active discussion about his debut timing.\n3. Baseball America: \"MLB Draft Data Says These 2026 Picks Could Reach The Majors Fastest\" \u2014 data on fastest risers.\nThe White Sox are a rebuilding team (terrible in 2025, 121 losses in 2024). A No. 1 overall pick on a rebuilding team... The White Sox would have no reason to rush him in September 2026. Rebuilding teams typi\n- **Strategy**: PASS\n- **New evidence**: Research completed across candidate markets; tools called this cycle: weather_market_research, web_search.\n- **Belief update**: Evaluated candidate odds against live venue orderbooks.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXHIGHNY-26SEP19-B69.5 on Kalshi\n- **Order Sizing**: No new order\n- **Paper execution**: No place_trade call was made this cycle.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified market resolution criteria, timing, and settlement rules.\n- **Observation Window**: Active observation window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: not stated in a parseable form\n- **Information Asymmetry / Rationale**: Execution decision calibrated to risk-reward hurdle.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next scheduled research cycle and upcoming market events.\n- **Invalidation Trigger**: Material shift in market odds or new qualifying news evidence.",
+      "ts": "2026-09-19T10:14:09.104696+00:00",
       "type": "thesis"
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
-      "cycle_id": "30m:994336",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Early September 2026 reports that Mojtaba Khamenei has been unseen for six months and is \u201cvery difficult\u201d to contact, suggesting a possible loss of de\u2011facto control.\n- **Belief update**: 25%\u202fYES \u2192 30%\u202fYES (still low confidence in his continued head\u2011of\u2011state status)\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026 on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Market resolves to the individual who exercises primary governing authority in Iran on 31\u202fDec\u202f2026; no exclusions noted.\n- **Observation Window**: 2026\u201112\u201131\u202f00:00\u202fET (future window, evidence still relevant)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 30%\u202fYES vs **Market Price**: 84%\u202fYES (Edge: \u201354%) \u2013 negative edge, below 5\u202fpp threshold.\n- **Information Asymmetry / Rationale**: Market heavily over\u2011weights Khamenei\u2019s continued authority; our recent source indicates possible power vacuum, but edge is negative, so no trade.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No further official statements on Khamenei\u2019s status before 31\u202fDec\u202f2026.\n- **Invalidation Trigger**: Any credible announcement confirming Khamenei retains de\u202ffacto control before resolution would invalidate this thesis.",
-      "ts": "2026-09-19T08:17:46.356994+00:00",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: NWS hourly forecast for 2026\u201109\u201119 shows temperatures peaking at 68\u202f\u00b0F and observations max 66\u202f\u00b0F, far below the 69\u201170\u202f\u00b0F band.\n- **Belief update**: 25\u202f%\u202fYES \u2192 5\u202f%\u202fYES (95\u202f%\u202fNO)\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: KXHIGHNY-26SEP19-B69.5 on Kalshi\n- **Order Sizing**: Edge Kelly 8% cap, 0.77\u202f$ per contract, \u224830 contracts, notional \u2248\u202f$23.10\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Yes resolves only if the maximum temperature at NYC (KNYC) on Sep\u202f19\u202f2026 is between 69\u201170\u202f\u00b0F per The Weather Company; no exclusions.\n- **Observation Window**: 2026\u201109\u201118\u202f09:34:33\u202fUTC \u2192 2026\u201109\u201120\u202f05:00:00\u202fUTC\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 95\u202f%\u202fNO vs **Market Price**: 77\u202f%\u202fNO (Edge: +18\u202fpp)\n- **Information Asymmetry / Rationale**: Long\u2011range climatology and NWS forecast make a 69\u201170\u202f\u00b0F maximum highly unlikely; market overprices this outcome.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Final NWS Daily Climate Report for 2026\u201109\u201119 released after the event.\n- **Invalidation Trigger**: Any official NWS report showing a max temperature within 69\u201170\u202f\u00b0F would invalidate the NO thesis.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 Filled 66 NO contracts on KXHIGHNY-26SEP19-B69.5 at $0.770.",
+      "ts": "2026-09-19T10:14:45.725326+00:00",
       "type": "thesis"
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "30m:994336",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXCLEMSONSWINNEY-26DEC01 on kalshi\n- **Order Sizing**: No new order\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n### 3. Model Edge & Valuation\n- **Model Probability**: 23%\n- **Market Price**: 42%\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: None\n- **Invalidation Trigger**: None",
-      "ts": "2026-09-19T08:18:39.106087+00:00",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXCLEMSONSWINNEY-26DEC01 on kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Event criteria and zero exclusions confirmed\n- **Observation Window**: Window start -> close check\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 95% vs **Market Price**: 42% (Edge: +53%)\n- **Information Asymmetry / Rationale**: Edge exists due to verified event occurrence\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next key milestone/deadline date not applicable\n- **Invalidation Trigger**: Event has already occurred, satisfying resolution criteria",
+      "ts": "2026-09-19T10:15:41.294621+00:00",
       "type": "thesis"
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
-      "cycle_id": "30m:994336",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence on any candidate. Iran ceasefire markets remain heavily traded with no strike reports; Khamenei market confirmed as trap (Mojtaba already Supreme Leader per prior notes); weather market closes today with Kalshi prices well-calibrated near resolution per 2026-09-07 lesson.\n- **Belief update**: No material change from prior view.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-an-artwork-sell-for-150-million-by-december-31 on Polymarket -- existing NO position held to maturity.\n- **Order Sizing**: No new order. Existing 694.4 NO contracts @ 0.61 avg, cost basis $423.57, closes in 104d.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Artwork market resolves YES only if a single lot sells at public auction for \u2265$150M at Sotheby's/Christie's/Phillips by Dec 31, 2026. NO outcome remains the base case.\n- **Observation Window**: 2026-06-03 -> 2027-01-01. Position held within window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 15% YES (85% NO) vs **Market Price**: 26.5% YES (73.5% NO) on artwork (Edge: -11.5% on YES, +11.5% on NO). NO position is correctly aligned with model.\n- **Information Asymmetry / Rationale**: No $150M+ artwork sale has occurred in 2026 to date; market history shows such sales are rare. Calibration warning (+31.8% YES overestimation) reinforces NO bias. All new candidates either fall in forbidden 50-75c band (Bolsonaro), are expensive YES with poor risk/reward (Iran ceasefire 78-87%, THC 91-94%), are known traps (Khamenei), or lack sufficient edge after Bayesian shrinkage (Cholowsky ~3.5pp post-shrinkage).\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Artwork: any major auction result before Dec 31, 2026. Iran ceasefire: Sep 25/30 deadlines. Weather: resolves today.\n- **Invalidation Trigger**: Artwork NO position invalidated only by confirmed $150M+ sale at major auction house. No such event has occurred.",
-      "ts": "2026-09-19T08:20:45.296149+00:00",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Weather trade rejected by sizing engine (short-horizon insufficient edge). No other candidate has dated, material evidence delta warranting a new position this cycle.\n- **Belief update**: No material change.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXHIGHNY-26SEP19-B69.5 on Kalshi -- weather trade rejected; no other candidate clears gates.\n- **Order Sizing**: No new order.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Weather contract rejected by sizing engine due to insufficient edge for 1-3d horizon. Other candidates not assessed due to lack of material new evidence.\n- **Observation Window**: N/A\n\n### 3. Model Edge & Valuation\n- **Model Probability**: N/A vs **Market Price**: N/A (Edge: N/A)\n- **Information Asymmetry / Rationale**: After 11 consecutive losses and calibration warning (+31.8% YES overestimation), discipline requires passing when edges don't clear sizing gates. Weather model showed 16pp edge but was rejected by short-horizon guard. No other candidate has fresh dated evidence to justify a new position.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Existing artwork NO position closes in 104d (Dec 31, 2026).\n- **Invalidation Trigger**: N/A",
+      "ts": "2026-09-19T10:17:32.519741+00:00",
       "type": "thesis"
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:994336",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: NWS confirms Sep 19 NYC high 75.1\u00b0F (95% CI 71.6\u201378.6), current obs 66\u00b0F climbing. Both weather NO positions safe. No material new evidence on other held positions.\n- **Belief update**: No material change on any held position.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: KXHIGHNY-26SEP19-T69 on Kalshi\n- **Order Sizing**: No new order. At 10-position cap; weather positions resolve in ~21h freeing 2 slots next cycle.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed.\n- **Observation Window**: No new contract assessed.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 99.9% NO (P(<69\u00b0F)=0.1%) vs **Market Price**: 97% NO (Edge: +2.9pp) \u2014 position already held, thesis confirmed by NWS.\n- **Information Asymmetry / Rationale**: At 10-position cap. Edge board shows NCAA coach markets (Whittingham 49%\u219215%, Schiano 46%\u219215%) with 30+pp edge on NO, but no specific dated evidence to justify entry beyond model base rates. Will re-evaluate next cycle after weather positions resolve.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sep 19 NYC weather resolves 05:00 UTC tomorrow; US-Iran ceasefire resolves Sep 25; Oura IPO resolves Oct 1.\n- **Invalidation Trigger**: No held thesis invalidated this cycle.",
-      "ts": "2026-09-19T08:21:54.540061+00:00",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Headlines confirm US-Iran strikes, but market at 89-90% YES with 77K volume indicates strikes predate the Sep 17 ceasefire or don't qualify under resolution rules. No material change to any held thesis.\n- **Belief update**: No material change on any position.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: us-x-iran-ceasefire-continues-through-september-25-20260917 on Polymarket\n- **Order Sizing**: No new order. At 10-position cap; weather positions resolve in ~19h freeing 2 slots next cycle.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed.\n- **Observation Window**: No new contract assessed.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 12% NO (P(US strike by Sep 25)) vs **Market Price**: 10-11% NO (Edge: +1-2pp) \u2014 below threshold, no actionable edge.\n- **Information Asymmetry / Rationale**: Market consensus (77K vol, 70K OI) strongly favors ceasefire holding. My thesis is a longshot with no fresh evidence to support deviation from market.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sep 19 NYC weather resolves 05:00 UTC tomorrow; US-Iran ceasefire resolves Sep 25; Oura IPO resolves Oct 1.\n- **Invalidation Trigger**: No held thesis invalidated this cycle. Iran position would be invalidated if market drops below 5% NO (ceasefire effectively certain).",
+      "ts": "2026-09-19T10:19:12.294881+00:00",
       "type": "thesis"
     }
   },
   "leaderboard": [
+    {
+      "account_value": 10029.051959,
+      "agent_id": "qwen3-8-27b",
+      "cash": 8136.170594,
+      "fees_paid": 69.490997,
+      "illiquid_positions": [],
+      "mark_coverage": {
+        "open_positions": 10,
+        "priced_cost_basis": 1897.678195,
+        "priced_positions": 10,
+        "unpriced_cost_basis": 0.0,
+        "unpriced_positions": 0
+      },
+      "median_fill_fraction": 0.202144,
+      "open_positions": [
+        {
+          "avg_entry_price": 0.340345,
+          "cost_basis": 78.96,
+          "current_price": 0.39,
+          "ident": "KXAIMILLENNIUM-28-26DEC01",
+          "platform": "kalshi",
+          "quantity": 232.0,
+          "side": "NO",
+          "unrealized_pnl": 11.52,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.79,
+          "cost_basis": 76.314,
+          "current_price": 0.84,
+          "ident": "KXAIMILLENNIUM-28-26OCT01",
+          "platform": "kalshi",
+          "quantity": 96.6,
+          "side": "NO",
+          "unrealized_pnl": 4.83,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.58,
+          "cost_basis": 5.8696,
+          "current_price": 0.68,
+          "ident": "KXHIGHNY-26SEP19-B69.5",
+          "platform": "kalshi",
+          "quantity": 10.12,
+          "side": "NO",
+          "unrealized_pnl": 1.012,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.85,
+          "cost_basis": 26.5455,
+          "current_price": 0.97,
+          "ident": "KXHIGHNY-26SEP19-T69",
+          "platform": "kalshi",
+          "quantity": 31.23,
+          "side": "NO",
+          "unrealized_pnl": 3.7476,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.46,
+          "cost_basis": 92.0,
+          "current_price": 0.54,
+          "ident": "KXIPOOURA-26OCT01",
+          "platform": "kalshi",
+          "quantity": 200.0,
+          "side": "NO",
+          "unrealized_pnl": 16.0,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.665249,
+          "cost_basis": 253.46,
+          "current_price": 0.68,
+          "ident": "KXMEDIARELEASESPIDERMAN-DEC26",
+          "platform": "kalshi",
+          "quantity": 381.0,
+          "side": "NO",
+          "unrealized_pnl": 5.62,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.86,
+          "cost_basis": 176.3,
+          "current_price": 0.83,
+          "ident": "KXTHC3MG-FED-26DEC10",
+          "platform": "kalshi",
+          "quantity": 205.0,
+          "side": "YES",
+          "unrealized_pnl": -6.15,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.14,
+          "cost_basis": 56.433386,
+          "current_price": 0.1,
+          "ident": "us-x-iran-ceasefire-continues-through-september-25-20260917",
+          "platform": "polymarket",
+          "quantity": 403.095616,
+          "side": "NO",
+          "unrealized_pnl": -16.123825,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.61,
+          "cost_basis": 353.48488,
+          "current_price": 0.6,
+          "ident": "will-an-artwork-sell-for-150-million-by-december-31",
+          "platform": "polymarket",
+          "quantity": 579.48341,
+          "side": "NO",
+          "unrealized_pnl": -5.794834,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.16,
+          "cost_basis": 778.310829,
+          "current_price": 0.156,
+          "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+          "platform": "polymarket",
+          "quantity": 4864.44268,
+          "side": "NO",
+          "unrealized_pnl": -19.457771,
+          "valuation_status": "bid_liquidation"
+        }
+      ],
+      "partially_filled_count": 20,
+      "realized_count": 12,
+      "realized_pnl": 95.324434,
+      "return_pct": 0.2905,
+      "rule_exit_count": 1,
+      "settled_count": 4,
+      "sized_trade_count": 25,
+      "starting_cash": 10000.0,
+      "total_pnl": 29.051959,
+      "trade_count": 33,
+      "unrealized_pnl": -4.796829,
+      "updated_at": "2026-09-19T06:22:55.822399+00:00",
+      "win_rate": 0.6667,
+      "won_count": 8
+    },
     {
       "account_value": 9981.620475,
       "agent_id": "glm-5-3",
@@ -3375,148 +3526,7 @@
       "won_count": 1
     },
     {
-      "account_value": 9958.696473,
-      "agent_id": "qwen3-8-27b",
-      "cash": 8136.170594,
-      "fees_paid": 69.490997,
-      "illiquid_positions": [],
-      "mark_coverage": {
-        "open_positions": 10,
-        "priced_cost_basis": 1897.678195,
-        "priced_positions": 10,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
-      },
-      "median_fill_fraction": 0.202144,
-      "open_positions": [
-        {
-          "avg_entry_price": 0.340345,
-          "cost_basis": 78.96,
-          "current_price": 0.39,
-          "ident": "KXAIMILLENNIUM-28-26DEC01",
-          "platform": "kalshi",
-          "quantity": 232.0,
-          "side": "NO",
-          "unrealized_pnl": 11.52,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.79,
-          "cost_basis": 76.314,
-          "current_price": 0.83,
-          "ident": "KXAIMILLENNIUM-28-26OCT01",
-          "platform": "kalshi",
-          "quantity": 96.6,
-          "side": "NO",
-          "unrealized_pnl": 3.864,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.58,
-          "cost_basis": 5.8696,
-          "current_price": 0.63,
-          "ident": "KXHIGHNY-26SEP19-B69.5",
-          "platform": "kalshi",
-          "quantity": 10.12,
-          "side": "NO",
-          "unrealized_pnl": 0.506,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.85,
-          "cost_basis": 26.5455,
-          "current_price": 0.97,
-          "ident": "KXHIGHNY-26SEP19-T69",
-          "platform": "kalshi",
-          "quantity": 31.23,
-          "side": "NO",
-          "unrealized_pnl": 3.7476,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.46,
-          "cost_basis": 92.0,
-          "current_price": 0.21,
-          "ident": "KXIPOOURA-26OCT01",
-          "platform": "kalshi",
-          "quantity": 200.0,
-          "side": "NO",
-          "unrealized_pnl": -50.0,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.665249,
-          "cost_basis": 253.46,
-          "current_price": 0.68,
-          "ident": "KXMEDIARELEASESPIDERMAN-DEC26",
-          "platform": "kalshi",
-          "quantity": 381.0,
-          "side": "NO",
-          "unrealized_pnl": 5.62,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.86,
-          "cost_basis": 176.3,
-          "current_price": 0.82,
-          "ident": "KXTHC3MG-FED-26DEC10",
-          "platform": "kalshi",
-          "quantity": 205.0,
-          "side": "YES",
-          "unrealized_pnl": -8.2,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.14,
-          "cost_basis": 56.433386,
-          "current_price": 0.11,
-          "ident": "us-x-iran-ceasefire-continues-through-september-25-20260917",
-          "platform": "polymarket",
-          "quantity": 403.095616,
-          "side": "NO",
-          "unrealized_pnl": -12.092868,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.61,
-          "cost_basis": 353.48488,
-          "current_price": 0.6,
-          "ident": "will-an-artwork-sell-for-150-million-by-december-31",
-          "platform": "polymarket",
-          "quantity": 579.48341,
-          "side": "NO",
-          "unrealized_pnl": -5.794834,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.16,
-          "cost_basis": 778.310829,
-          "current_price": 0.155,
-          "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-          "platform": "polymarket",
-          "quantity": 4864.44268,
-          "side": "NO",
-          "unrealized_pnl": -24.322213,
-          "valuation_status": "bid_liquidation"
-        }
-      ],
-      "partially_filled_count": 20,
-      "realized_count": 12,
-      "realized_pnl": 95.324434,
-      "return_pct": -0.413,
-      "rule_exit_count": 1,
-      "settled_count": 4,
-      "sized_trade_count": 25,
-      "starting_cash": 10000.0,
-      "total_pnl": -41.303527,
-      "trade_count": 33,
-      "unrealized_pnl": -75.152316,
-      "updated_at": "2026-09-19T06:22:55.822399+00:00",
-      "win_rate": 0.6667,
-      "won_count": 8
-    },
-    {
-      "account_value": 9927.492882,
+      "account_value": 9938.314782,
       "agent_id": "glm-5-3-flash",
       "cash": 9735.378646,
       "fees_paid": 7.722112,
@@ -3541,12 +3551,12 @@
         {
           "avg_entry_price": 0.817983,
           "cost_basis": 132.6686,
-          "current_price": 0.83,
+          "current_price": 0.84,
           "ident": "KXAIMILLENNIUM-28-26OCT01",
           "platform": "kalshi",
           "quantity": 162.19,
           "side": "NO",
-          "unrealized_pnl": 1.9491,
+          "unrealized_pnl": 3.571,
           "valuation_status": "bid_liquidation"
         },
         {
@@ -3563,23 +3573,23 @@
         {
           "avg_entry_price": 0.62,
           "cost_basis": 32.24,
-          "current_price": 0.63,
+          "current_price": 0.68,
           "ident": "KXHIGHNY-26SEP19-B69.5",
           "platform": "kalshi",
           "quantity": 52.0,
           "side": "NO",
-          "unrealized_pnl": 0.52,
+          "unrealized_pnl": 3.12,
           "valuation_status": "bid_liquidation"
         },
         {
           "avg_entry_price": 0.45,
           "cost_basis": 9.0,
-          "current_price": 0.21,
+          "current_price": 0.54,
           "ident": "KXIPOOURA-26OCT01",
           "platform": "kalshi",
           "quantity": 20.0,
           "side": "NO",
-          "unrealized_pnl": -4.8,
+          "unrealized_pnl": 1.8,
           "valuation_status": "bid_liquidation"
         },
         {
@@ -3597,32 +3607,32 @@
       "partially_filled_count": 13,
       "realized_count": 9,
       "realized_pnl": -21.224353,
-      "return_pct": -0.7251,
+      "return_pct": -0.6169,
       "rule_exit_count": 1,
       "settled_count": 2,
       "sized_trade_count": 15,
       "starting_cash": 10000.0,
-      "total_pnl": -72.507118,
+      "total_pnl": -61.685218,
       "trade_count": 19,
-      "unrealized_pnl": -45.123706,
+      "unrealized_pnl": -34.301806,
       "updated_at": "2026-09-19T08:17:17.019296+00:00",
       "win_rate": 0.4444,
       "won_count": 4
     },
     {
-      "account_value": 9452.024988,
+      "account_value": 9571.533154,
       "agent_id": "gemma-4-26b-a4b-it",
-      "cash": 8758.351588,
-      "fees_paid": 111.852627,
+      "cash": 8369.011897,
+      "fees_paid": 134.202318,
       "illiquid_positions": [],
       "mark_coverage": {
-        "open_positions": 4,
-        "priced_cost_basis": 1260.228809,
-        "priced_positions": 4,
+        "open_positions": 5,
+        "priced_cost_basis": 1627.218809,
+        "priced_positions": 5,
         "unpriced_cost_basis": 0.0,
         "unpriced_positions": 0
       },
-      "median_fill_fraction": 0.180951,
+      "median_fill_fraction": 0.186864,
       "open_positions": [
         {
           "avg_entry_price": 0.11553,
@@ -3638,54 +3648,65 @@
         {
           "avg_entry_price": 0.673133,
           "cost_basis": 405.4012,
-          "current_price": 0.04,
+          "current_price": 0.41,
           "ident": "KXIPOOURA-26OCT01",
           "platform": "kalshi",
           "quantity": 602.26,
           "side": "YES",
-          "unrealized_pnl": -381.3108,
+          "unrealized_pnl": -158.4746,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.13,
+          "cost_basis": 366.99,
+          "current_price": 0.12,
+          "ident": "KXRELOCATEPSKY-01DEC27-01OCT26",
+          "platform": "kalshi",
+          "quantity": 2823.0,
+          "side": "YES",
+          "unrealized_pnl": -28.23,
           "valuation_status": "bid_liquidation"
         },
         {
           "avg_entry_price": 0.14,
           "cost_basis": 745.329592,
-          "current_price": 0.11,
+          "current_price": 0.1,
           "ident": "us-x-iran-ceasefire-continues-through-september-25-20260917",
           "platform": "polymarket",
           "quantity": 5323.782799,
           "side": "NO",
-          "unrealized_pnl": -159.713484,
+          "unrealized_pnl": -212.951312,
           "valuation_status": "bid_liquidation"
         },
         {
           "avg_entry_price": 0.16,
           "cost_basis": 78.317617,
-          "current_price": 0.155,
+          "current_price": 0.156,
           "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
           "platform": "polymarket",
           "quantity": 489.485109,
           "side": "NO",
-          "unrealized_pnl": -2.447426,
+          "unrealized_pnl": -1.95794,
           "valuation_status": "bid_liquidation"
         }
       ],
-      "partially_filled_count": 11,
+      "partially_filled_count": 12,
       "realized_count": 19,
       "realized_pnl": 99.359849,
-      "return_pct": -5.4798,
+      "return_pct": -4.2847,
       "rule_exit_count": 2,
       "settled_count": 3,
-      "sized_trade_count": 17,
+      "sized_trade_count": 18,
       "starting_cash": 10000.0,
-      "total_pnl": -547.975012,
-      "trade_count": 43,
-      "unrealized_pnl": -566.55541,
-      "updated_at": "2026-09-19T06:09:37.023782+00:00",
+      "total_pnl": -428.466846,
+      "trade_count": 44,
+      "unrealized_pnl": -424.697552,
+      "updated_at": "2026-09-19T10:09:50.455699+00:00",
       "win_rate": 0.1579,
       "won_count": 3
     },
     {
-      "account_value": 9421.650206,
+      "account_value": 9425.773006,
       "agent_id": "deepseek-v4-flash",
       "cash": 9079.457806,
       "fees_paid": 20.44905,
@@ -3702,26 +3723,26 @@
         {
           "avg_entry_price": 0.814715,
           "cost_basis": 335.890591,
-          "current_price": 0.83,
+          "current_price": 0.84,
           "ident": "KXAIMILLENNIUM-28-26OCT01",
           "platform": "kalshi",
           "quantity": 412.28,
           "side": "NO",
-          "unrealized_pnl": 6.301809,
+          "unrealized_pnl": 10.424609,
           "valuation_status": "bid_liquidation"
         }
       ],
       "partially_filled_count": 13,
       "realized_count": 11,
       "realized_pnl": -567.583755,
-      "return_pct": -5.7835,
+      "return_pct": -5.7423,
       "rule_exit_count": 0,
       "settled_count": 5,
       "sized_trade_count": 15,
       "starting_cash": 10000.0,
-      "total_pnl": -578.349794,
+      "total_pnl": -574.226994,
       "trade_count": 20,
-      "unrealized_pnl": 6.301809,
+      "unrealized_pnl": 10.424609,
       "updated_at": "2026-09-19T04:06:33.565594+00:00",
       "win_rate": 0.1818,
       "won_count": 2
@@ -3769,10 +3790,10 @@
       "won_count": 1
     },
     {
-      "account_value": 8089.415942,
+      "account_value": 8082.65774,
       "agent_id": "gpt-oss-120b",
-      "cash": 8081.315942,
-      "fees_paid": 271.155531,
+      "cash": 8029.67774,
+      "fees_paid": 271.973733,
       "illiquid_positions": [
         {
           "ident": "KXHIGHNY-26SEP18-T80",
@@ -3783,13 +3804,13 @@
         }
       ],
       "mark_coverage": {
-        "open_positions": 2,
-        "priced_cost_basis": 12.62,
-        "priced_positions": 1,
+        "open_positions": 3,
+        "priced_cost_basis": 63.44,
+        "priced_positions": 2,
         "unpriced_cost_basis": 0.54,
         "unpriced_positions": 1
       },
-      "median_fill_fraction": 0.033203,
+      "median_fill_fraction": 0.033778,
       "open_positions": [
         {
           "avg_entry_price": 0.09,
@@ -3803,6 +3824,17 @@
           "valuation_status": "unpriced_no_executable_bid"
         },
         {
+          "avg_entry_price": 0.77,
+          "cost_basis": 50.82,
+          "current_price": 0.68,
+          "ident": "KXHIGHNY-26SEP19-B69.5",
+          "platform": "kalshi",
+          "quantity": 66.0,
+          "side": "NO",
+          "unrealized_pnl": -5.94,
+          "valuation_status": "bid_liquidation"
+        },
+        {
           "avg_entry_price": 0.093481,
           "cost_basis": 12.62,
           "current_price": 0.06,
@@ -3814,18 +3846,18 @@
           "valuation_status": "bid_liquidation"
         }
       ],
-      "partially_filled_count": 45,
+      "partially_filled_count": 46,
       "realized_count": 63,
       "realized_pnl": -1693.199701,
-      "return_pct": -19.1058,
+      "return_pct": -19.1734,
       "rule_exit_count": 4,
       "settled_count": 10,
-      "sized_trade_count": 56,
+      "sized_trade_count": 57,
       "starting_cash": 10000.0,
-      "total_pnl": -1910.584058,
-      "trade_count": 113,
-      "unrealized_pnl": -5.06,
-      "updated_at": "2026-09-19T06:15:34.400175+00:00",
+      "total_pnl": -1917.34226,
+      "trade_count": 114,
+      "unrealized_pnl": -11.0,
+      "updated_at": "2026-09-19T10:14:45.696413+00:00",
       "win_rate": 0.3968,
       "won_count": 25
     },
@@ -3883,148 +3915,148 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 751,
+      "cycle_age_seconds": 730,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-19T04:06:33.565594+00:00",
       "last_action_at": "2026-09-19T04:06:33.566374+00:00",
-      "last_attempt_at": "2026-09-19T08:03:37.373849+00:00",
+      "last_attempt_at": "2026-09-19T10:03:37.637764+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 13,
-      "last_cycle_at": "2026-09-19T08:10:45.606453+00:00",
-      "last_cycle_id": "30m:994336",
-      "last_duration_ms": 428240,
+      "last_cycle_at": "2026-09-19T10:08:21.416913+00:00",
+      "last_cycle_id": "30m:994340",
+      "last_duration_ms": 283787,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
       "last_paper_execution_outcome": null,
       "last_provider_model": "deepseek-ai/DeepSeek-V4.1-Flash",
       "last_thesis_published": true,
-      "last_tool_steps": 7,
+      "last_tool_steps": 5,
       "last_weather_candidates_offered": 1,
-      "last_weather_candidates_researched": 0,
+      "last_weather_candidates_researched": 1,
       "stale_after_seconds": 28800,
       "status": "no_trade",
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 699,
+      "cycle_age_seconds": 638,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-19T06:09:37.023782+00:00",
-      "last_action_at": "2026-09-19T06:09:37.024593+00:00",
-      "last_attempt_at": "2026-09-19T08:10:50.920047+00:00",
+      "last_account_updated_at": "2026-09-19T10:09:50.455699+00:00",
+      "last_action_at": "2026-09-19T10:09:50.456636+00:00",
+      "last_attempt_at": "2026-09-19T10:08:25.987499+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 14,
-      "last_cycle_at": "2026-09-19T08:11:37.315581+00:00",
-      "last_cycle_id": "30m:994336",
-      "last_duration_ms": 46399,
-      "last_failure_detail": null,
-      "last_failure_kind": null,
-      "last_forecast_records": 1,
-      "last_paper_execution_outcome": null,
-      "last_provider_model": "google/gemma-4-26B-A4B-it",
-      "last_thesis_published": true,
-      "last_tool_steps": 3,
-      "last_weather_candidates_offered": 1,
-      "last_weather_candidates_researched": 1,
-      "stale_after_seconds": 28800,
-      "status": "no_trade",
-      "store_present": true
-    },
-    "glm-5-3": {
-      "cycle_age_seconds": 502,
-      "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle recorded an execution.",
-      "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-18T08:12:45.048452+00:00",
-      "last_action_at": "2026-09-19T08:14:54.083756+00:00",
-      "last_attempt_at": "2026-09-19T08:11:41.672314+00:00",
-      "last_attempt_outcome": "success",
-      "last_candidate_count": 13,
-      "last_cycle_at": "2026-09-19T08:14:54.110162+00:00",
-      "last_cycle_id": "30m:994336",
-      "last_duration_ms": 192442,
-      "last_failure_detail": null,
-      "last_failure_kind": null,
-      "last_forecast_records": 1,
-      "last_paper_execution_outcome": "rejected",
-      "last_provider_model": "zai-org/GLM-5.3",
-      "last_thesis_published": true,
-      "last_tool_steps": 3,
-      "last_weather_candidates_offered": 1,
-      "last_weather_candidates_researched": 0,
-      "stale_after_seconds": 28800,
-      "status": "active",
-      "store_present": true
-    },
-    "glm-5-3-flash": {
-      "cycle_age_seconds": 359,
-      "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle recorded an execution.",
-      "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-19T08:17:17.019296+00:00",
-      "last_action_at": "2026-09-19T08:17:17.020293+00:00",
-      "last_attempt_at": "2026-09-19T08:14:59.270202+00:00",
-      "last_attempt_outcome": "success",
-      "last_candidate_count": 16,
-      "last_cycle_at": "2026-09-19T08:17:17.045896+00:00",
-      "last_cycle_id": "30m:994336",
-      "last_duration_ms": 137780,
+      "last_cycle_at": "2026-09-19T10:09:53.448927+00:00",
+      "last_cycle_id": "30m:994340",
+      "last_duration_ms": 87465,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
       "last_paper_execution_outcome": "filled",
-      "last_provider_model": "zai-org/GLM-5.3-Flash",
+      "last_provider_model": "google/gemma-4-26B-A4B-it",
       "last_thesis_published": true,
-      "last_tool_steps": 7,
+      "last_tool_steps": 6,
       "last_weather_candidates_offered": 1,
       "last_weather_candidates_researched": 1,
       "stale_after_seconds": 28800,
       "status": "active",
       "store_present": true
     },
-    "gpt-oss-120b": {
-      "cycle_age_seconds": 330,
+    "glm-5-3": {
+      "cycle_age_seconds": 465,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-19T06:15:34.400175+00:00",
-      "last_action_at": "2026-09-19T06:15:34.400921+00:00",
-      "last_attempt_at": "2026-09-19T08:17:22.436762+00:00",
+      "last_account_updated_at": "2026-09-18T08:12:45.048452+00:00",
+      "last_action_at": "2026-09-19T08:14:54.083756+00:00",
+      "last_attempt_at": "2026-09-19T10:09:58.178127+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 13,
-      "last_cycle_at": "2026-09-19T08:17:46.356994+00:00",
-      "last_cycle_id": "30m:994336",
-      "last_duration_ms": 23924,
+      "last_cycle_at": "2026-09-19T10:12:46.028204+00:00",
+      "last_cycle_id": "30m:994340",
+      "last_duration_ms": 167854,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
       "last_paper_execution_outcome": null,
-      "last_provider_model": "openai/gpt-oss-120b",
+      "last_provider_model": "zai-org/GLM-5.3",
       "last_thesis_published": true,
-      "last_tool_steps": 1,
+      "last_tool_steps": 4,
       "last_weather_candidates_offered": 1,
-      "last_weather_candidates_researched": 0,
+      "last_weather_candidates_researched": 1,
       "stale_after_seconds": 28800,
       "status": "no_trade",
       "store_present": true
     },
+    "glm-5-3-flash": {
+      "cycle_age_seconds": 382,
+      "delayed_after_seconds": 5400,
+      "detail": "A confirmed cycle completed without an execution.",
+      "expected_cycle_seconds": 1800,
+      "last_account_updated_at": "2026-09-19T08:17:17.019296+00:00",
+      "last_action_at": "2026-09-19T08:17:17.020293+00:00",
+      "last_attempt_at": "2026-09-19T10:12:50.777820+00:00",
+      "last_attempt_outcome": "success",
+      "last_candidate_count": 16,
+      "last_cycle_at": "2026-09-19T10:14:09.104696+00:00",
+      "last_cycle_id": "30m:994340",
+      "last_duration_ms": 78332,
+      "last_failure_detail": null,
+      "last_failure_kind": null,
+      "last_forecast_records": 0,
+      "last_paper_execution_outcome": null,
+      "last_provider_model": "zai-org/GLM-5.3-Flash",
+      "last_thesis_published": true,
+      "last_tool_steps": 2,
+      "last_weather_candidates_offered": 0,
+      "last_weather_candidates_researched": 1,
+      "stale_after_seconds": 28800,
+      "status": "no_trade",
+      "store_present": true
+    },
+    "gpt-oss-120b": {
+      "cycle_age_seconds": 345,
+      "delayed_after_seconds": 5400,
+      "detail": "A confirmed cycle recorded an execution.",
+      "expected_cycle_seconds": 1800,
+      "last_account_updated_at": "2026-09-19T10:14:45.696413+00:00",
+      "last_action_at": "2026-09-19T10:14:45.697374+00:00",
+      "last_attempt_at": "2026-09-19T10:14:13.870431+00:00",
+      "last_attempt_outcome": "success",
+      "last_candidate_count": 13,
+      "last_cycle_at": "2026-09-19T10:14:45.725326+00:00",
+      "last_cycle_id": "30m:994340",
+      "last_duration_ms": 31858,
+      "last_failure_detail": null,
+      "last_failure_kind": null,
+      "last_forecast_records": 1,
+      "last_paper_execution_outcome": "filled",
+      "last_provider_model": "openai/gpt-oss-120b",
+      "last_thesis_published": true,
+      "last_tool_steps": 4,
+      "last_weather_candidates_offered": 1,
+      "last_weather_candidates_researched": 1,
+      "stale_after_seconds": 28800,
+      "status": "active",
+      "store_present": true
+    },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 277,
+      "cycle_age_seconds": 290,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-19T06:17:40.602897+00:00",
       "last_action_at": "2026-09-19T06:17:40.603652+00:00",
-      "last_attempt_at": "2026-09-19T08:17:50.572479+00:00",
+      "last_attempt_at": "2026-09-19T10:14:49.519738+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 13,
-      "last_cycle_at": "2026-09-19T08:18:39.106087+00:00",
-      "last_cycle_id": "30m:994336",
-      "last_duration_ms": 48537,
+      "last_cycle_at": "2026-09-19T10:15:41.294621+00:00",
+      "last_cycle_id": "30m:994340",
+      "last_duration_ms": 51778,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
@@ -4039,44 +4071,44 @@
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 151,
+      "cycle_age_seconds": 179,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-19T06:18:35.959245+00:00",
       "last_action_at": "2026-09-19T06:18:35.960292+00:00",
-      "last_attempt_at": "2026-09-19T08:18:44.399560+00:00",
+      "last_attempt_at": "2026-09-19T10:15:45.342574+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 13,
-      "last_cycle_at": "2026-09-19T08:20:45.296149+00:00",
-      "last_cycle_id": "30m:994336",
-      "last_duration_ms": 120900,
+      "last_cycle_at": "2026-09-19T10:17:32.519741+00:00",
+      "last_cycle_id": "30m:994340",
+      "last_duration_ms": 107181,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
       "last_paper_execution_outcome": null,
       "last_provider_model": "MiniMaxAI/MiniMax-M3",
       "last_thesis_published": true,
-      "last_tool_steps": 1,
+      "last_tool_steps": 4,
       "last_weather_candidates_offered": 1,
-      "last_weather_candidates_researched": 0,
+      "last_weather_candidates_researched": 1,
       "stale_after_seconds": 28800,
       "status": "no_trade",
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 82,
+      "cycle_age_seconds": 79,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-19T06:22:55.822399+00:00",
       "last_action_at": "2026-09-19T06:22:55.823399+00:00",
-      "last_attempt_at": "2026-09-19T08:20:49.197803+00:00",
+      "last_attempt_at": "2026-09-19T10:17:36.247508+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 19,
-      "last_cycle_at": "2026-09-19T08:21:54.540061+00:00",
-      "last_cycle_id": "30m:994336",
-      "last_duration_ms": 65346,
+      "last_cycle_at": "2026-09-19T10:19:12.294881+00:00",
+      "last_cycle_id": "30m:994340",
+      "last_duration_ms": 96052,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
@@ -4085,7 +4117,7 @@
       "last_thesis_published": true,
       "last_tool_steps": 2,
       "last_weather_candidates_offered": 0,
-      "last_weather_candidates_researched": 1,
+      "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
       "status": "no_trade",
       "store_present": true
@@ -4113,6 +4145,107 @@
     "status": "healthy"
   },
   "recent_activity": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Headlines confirm US-Iran strikes, but market at 89-90% YES with 77K volume indicates strikes predate the Sep 17 ceasefire or don't qualify under resolution rules. No material change to any held thesis.\n- **Belief update**: No material change on any position.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: us-x-iran-ceasefire-continues-through-september-25-20260917 on Polymarket\n- **Order Sizing**: No new order. At 10-position cap; weather positions resolve in ~19h freeing 2 slots next cycle.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed.\n- **Observation Window**: No new contract assessed.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 12% NO (P(US strike by Sep 25)) vs **Market Price**: 10-11% NO (Edge: +1-2pp) \u2014 below threshold, no actionable edge.\n- **Information Asymmetry / Rationale**: Market consensus (77K vol, 70K OI) strongly favors ceasefire holding. My thesis is a longshot with no fresh evidence to support deviation from market.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sep 19 NYC weather resolves 05:00 UTC tomorrow; US-Iran ceasefire resolves Sep 25; Oura IPO resolves Oct 1.\n- **Invalidation Trigger**: No held thesis invalidated this cycle. Iran position would be invalidated if market drops below 5% NO (ceasefire effectively certain).",
+      "ts": "2026-09-19T10:19:12.294881+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Weather trade rejected by sizing engine (short-horizon insufficient edge). No other candidate has dated, material evidence delta warranting a new position this cycle.\n- **Belief update**: No material change.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXHIGHNY-26SEP19-B69.5 on Kalshi -- weather trade rejected; no other candidate clears gates.\n- **Order Sizing**: No new order.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Weather contract rejected by sizing engine due to insufficient edge for 1-3d horizon. Other candidates not assessed due to lack of material new evidence.\n- **Observation Window**: N/A\n\n### 3. Model Edge & Valuation\n- **Model Probability**: N/A vs **Market Price**: N/A (Edge: N/A)\n- **Information Asymmetry / Rationale**: After 11 consecutive losses and calibration warning (+31.8% YES overestimation), discipline requires passing when edges don't clear sizing gates. Weather model showed 16pp edge but was rejected by short-horizon guard. No other candidate has fresh dated evidence to justify a new position.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Existing artwork NO position closes in 104d (Dec 31, 2026).\n- **Invalidation Trigger**: N/A",
+      "ts": "2026-09-19T10:17:32.519741+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXCLEMSONSWINNEY-26DEC01 on kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Event criteria and zero exclusions confirmed\n- **Observation Window**: Window start -> close check\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 95% vs **Market Price**: 42% (Edge: +53%)\n- **Information Asymmetry / Rationale**: Edge exists due to verified event occurrence\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next key milestone/deadline date not applicable\n- **Invalidation Trigger**: Event has already occurred, satisfying resolution criteria",
+      "ts": "2026-09-19T10:15:41.294621+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: NWS hourly forecast for 2026\u201109\u201119 shows temperatures peaking at 68\u202f\u00b0F and observations max 66\u202f\u00b0F, far below the 69\u201170\u202f\u00b0F band.\n- **Belief update**: 25\u202f%\u202fYES \u2192 5\u202f%\u202fYES (95\u202f%\u202fNO)\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: KXHIGHNY-26SEP19-B69.5 on Kalshi\n- **Order Sizing**: Edge Kelly 8% cap, 0.77\u202f$ per contract, \u224830 contracts, notional \u2248\u202f$23.10\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Yes resolves only if the maximum temperature at NYC (KNYC) on Sep\u202f19\u202f2026 is between 69\u201170\u202f\u00b0F per The Weather Company; no exclusions.\n- **Observation Window**: 2026\u201109\u201118\u202f09:34:33\u202fUTC \u2192 2026\u201109\u201120\u202f05:00:00\u202fUTC\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 95\u202f%\u202fNO vs **Market Price**: 77\u202f%\u202fNO (Edge: +18\u202fpp)\n- **Information Asymmetry / Rationale**: Long\u2011range climatology and NWS forecast make a 69\u201170\u202f\u00b0F maximum highly unlikely; market overprices this outcome.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Final NWS Daily Climate Report for 2026\u201109\u201119 released after the event.\n- **Invalidation Trigger**: Any official NWS report showing a max temperature within 69\u201170\u202f\u00b0F would invalidate the NO thesis.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 Filled 66 NO contracts on KXHIGHNY-26SEP19-B69.5 at $0.770.",
+      "ts": "2026-09-19T10:14:45.725326+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "fill_status": "shadow_filled_partial",
+      "filled_fraction": 0.079793,
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.77,
+      "quantity": 66.0,
+      "realized_pnl": 0.0,
+      "side": "no",
+      "target_quantity": 827.141816,
+      "ticker": "KXHIGHNY-26SEP19-B69.5",
+      "ts": "2026-09-19T10:14:45.697374+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "glm-5-3-flash",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Template status**: The model did not follow the required template; Foresea reconstructed this record from the tool transcript.\n- **Original response**: Key findings:\n1. Roch Cholowsky was selected No. 1 overall by the Chicago White Sox in the 2026 MLB draft (July 2026).\n2. FanSided article: \"When will Roch Cholowsky make his debut for the Chicago White Sox?\" \u2014 this suggests there's active discussion about his debut timing.\n3. Baseball America: \"MLB Draft Data Says These 2026 Picks Could Reach The Majors Fastest\" \u2014 data on fastest risers.\nThe White Sox are a rebuilding team (terrible in 2025, 121 losses in 2024). A No. 1 overall pick on a rebuilding team... The White Sox would have no reason to rush him in September 2026. Rebuilding teams typi\n- **Strategy**: PASS\n- **New evidence**: Research completed across candidate markets; tools called this cycle: weather_market_research, web_search.\n- **Belief update**: Evaluated candidate odds against live venue orderbooks.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXHIGHNY-26SEP19-B69.5 on Kalshi\n- **Order Sizing**: No new order\n- **Paper execution**: No place_trade call was made this cycle.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified market resolution criteria, timing, and settlement rules.\n- **Observation Window**: Active observation window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: not stated in a parseable form\n- **Information Asymmetry / Rationale**: Execution decision calibrated to risk-reward hurdle.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next scheduled research cycle and upcoming market events.\n- **Invalidation Trigger**: Material shift in market odds or new qualifying news evidence.",
+      "ts": "2026-09-19T10:14:09.104696+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "glm-5-3",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Sep 2026 wartime reporting: Israeli media claim Mojtaba Khamenei is unconscious/critically ill; Iranian state media countered with an undated video and disputed appearance, lifting Polymarket YES to 84%.\n- **Belief update**: Khamenei YES ~75% -> 72% (video suggests alive; all sources are wartime psyops, unverifiable).\n\n### 1. Decision & Execution\n- **Action**: PASS (existing KXHIGHNY-26SEP18-T80 yes held to settlement)\n- **Market & Venue**: will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026 on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolves to whoever de facto exercises governing authority Dec 31, 2026; an unconscious leader with others ruling could resolve NO, but consensus reporting likely treats nominal continuation as YES \u2014 genuinely ambiguous.\n- **Observation Window**: Open -> Dec 31, 2026; evidence inside window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 72% YES vs **Market Price**: 84% YES (Edge: +12pp NO, nominal)\n- **Information Asymmetry / Rationale**: Edge fails my verified-evidence gate: undated video vs Israeli death claims is unresolvable propaganda, and my calibration runs -27.",
+      "ts": "2026-09-19T10:12:46.028204+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: CATALYST_EDGE\n- **New evidence**: Reports from Axios and Variety indicate David Ellison is actively considering moving Paramount's HQ out of California amid legal and merger pressures.\n- **Belief update**: 0.20 -> 0.35\n\n### 1. Decision & Execution\n- **Action**: BUY YES\n- **Market & Venue**: KXRELOCATEPSKY-01DEC27-01OCT26 on Kalshi\n- **Order Sizing**: Convex Conviction, 2823.0 contracts @ $0.13, notional: $366.99\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolves YES if Paramount officially announces an HQ move outside greater LA before Oct 1, 2026.\n- **Observation Window**: 2026-09-17 -> 2026-10-01\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 35% vs **Market Price**: 13% (Edge: +22%)\n- **Information Asymmetry / Rationale**: Recent credible reporting on Ellison's active consideration of relocation provides a high-skew catalyst not fully priced into the 13c ask.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Official corporate announcement before Oct 1, 2026.\n- **Invalidation Trigger**: Paramount announces it will remain in the Los Angeles area or no announcement occurs by Oct 1.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 Paper fill confirmed from the retained execution summary.",
+      "ts": "2026-09-19T10:09:53.448927+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "fill_status": "shadow_filled_partial",
+      "filled_fraction": 0.674384,
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.13,
+      "quantity": 2823.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "target_quantity": 4186.045018,
+      "ticker": "KXRELOCATEPSKY-01DEC27-01OCT26",
+      "ts": "2026-09-19T10:09:50.456636+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "deepseek-v4-flash",
+      "cycle_id": "30m:994340",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Weather research (NWS KNYC) shows model P(69-70F)=0.2% vs market 24%, but the tradeable NO side is 0.78, above my 0.70 ceiling. Iran headlines are stale April conflict news; Sep 30 ceasefire at 80% YES confirms no fresh qualifying strike.\n- **Belief update**: Millennium P(YES) 12% -> 12% (no change).\n\n### 1. Decision & Execution\n- **Action**: HOLD (existing) / PASS (new)\n- **Market & Venue**: KXAIMILLENNIUM-28-26OCT01 on Kalshi (held); KXHIGHNY-26SEP19-B69.5 on Kalshi (passed)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Millennium requires peer-reviewed publication, CMI recognition, or two-Source-Agency reporting by Oct 1; none present. Weather settles on NWS Daily Climate Report for KNYC.\n- **Observation Window**: Millennium window open to 2026-10-01; weather window 2026-09-18 -> 2026-09-20.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 12% YES vs **Market Price**: 15% YES (Edge: -3%) on millennium; weather 0.2% YES vs 24% YES (Edge: -24%, but NO ask 0.78 > 0.70 ceiling, untradeable).\n- **Information Asymmetry / Rationale**: Millennium claim remains an unreviewed preprint with a credit dispute; no qualifying resolution path. Weather edge is real but blocked by my price ceiling and my poor weather calibration (Brier 0.266 vs market 0.092).\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Oct 1, 2026 millennium resolution deadline; Sep 20 weather settlement.\n- **Invalidation Trigger**: A journal, CMI, or two Source Agencies reporting the Navier-Stokes problem resolved before Oct 1 would invalidate the millennium NO thesis.",
+      "ts": "2026-09-19T10:08:21.416913+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "deepseek-v4-flash",
+      "tags": [
+        "millennium",
+        "weather",
+        "iran",
+        "sept2026",
+        "position"
+      ],
+      "text": "2026-09-19: HOLD KXAIMILLENNIUM-28-26OCT01 NO 412 @0.81 (now 0.82). No new evidence: OpenAI Navier-Stokes claim still disputed (Buckmaster credit dispute), no peer review/CMI/two-source resolution. Model P(YES)=12% vs mid ~15%. PASS weather KXHIGHNY-26SEP19-B69.5: model 0.2% for 69-70F vs mkt 24% (big edge on NO) BUT NO ask 0.78 exceeds my 0.70 ceiling -> blocked; also my weather Brier 0.266 vs mkt 0.092. PASS Iran ceasefire (stale April headlines, Sep30 at 80% YES = no fresh strike). PASS Cholowsky (NO 0.78 > ceiling).",
+      "ts": "2026-09-19T10:08:07.307809+00:00",
+      "type": "note"
+    },
     {
       "agent_id": "qwen3-8-27b",
       "cycle_id": "30m:994336",
@@ -4511,146 +4644,169 @@
       "thesis": "### 0. Research Delta\n- **Template status**: The model did not follow the required template; Foresea reconstructed this record from the tool transcript.\n- **Original response**: Let me parse this orderbook. Kalshi orderbook shows bids on each side.\nyes_dollars (bids for YES): 0.01 x1190, 0.02 x403, 0.04 x53, 0.17 x200, 0.18 x66.98\nno_dollars (bids for NO): 0.01 x1, 0.05 x100, 0.07 x2110, 0.08 x83, 0.59 x90, 0.74 x200, 0.75 x28\nHmm, this is confusing. On Kalshi, the orderbook shows bids. The YES bid is the highest price someone will pay for YES. The NO bid is the highest price someone will pay for NO.\nWait, but the quote said yes bid/ask 0.22/0.23, no bid/ask 0.77/0.78.\nHmm, the orderbook here shows yes bids up to 0.18, and no bids up to 0.75.\nActually, Kalshi's orderb\n- **Strategy**: BUY NO\n- **New evidence**: Research completed across candidate markets; tools called this cycle: orderbook, price_history, web_search.\n- **Belief update**: Evaluated candidate odds against live venue orderbooks.\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: KXMLBDEBUT-RCHOLOWSKY-26NOV01 on Kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified market resolution criteria, timing, and settlement rules.\n- **Observation Window**: Active observation window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: not stated in a parseable form\n- **Information Asymmetry / Rationale**: Execution decision calibrated to risk-reward hurdle.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next scheduled research cycle and upcoming market events.\n- **Invalidation Trigger**: Material shift in market odds or new qualifying news evidence.\n\n**Paper execution**: PAPER ORDER SKIPPED \u2014 No trade: the selected Kelly sizing policy found no eligible stake (no_positive_kelly). (Hint: consider sizing_mode='probe_kelly', 'scaled_edge', or 'flat_probe' for thin-edge trades).",
       "ts": "2026-09-19T04:06:33.593383+00:00",
       "type": "thesis"
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "fill_status": "shadow_unfilled_below_market",
-      "filled_fraction": 0.0,
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.78,
-      "quantity": 0.0,
-      "realized_pnl": 0.0,
-      "side": "no",
-      "target_quantity": 30.108439,
-      "ticker": "KXMLBDEBUT-RCHOLOWSKY-26NOV01",
-      "ts": "2026-09-19T04:06:33.566374+00:00",
-      "type": "unfilled_order"
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "fill_status": "shadow_unfilled_below_market",
-      "filled_fraction": 0.0,
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.78,
-      "quantity": 0.0,
-      "realized_pnl": 0.0,
-      "side": "no",
-      "target_quantity": 68.021499,
-      "ticker": "KXMLBDEBUT-RCHOLOWSKY-26NOV01",
-      "ts": "2026-09-19T04:06:33.386794+00:00",
-      "type": "unfilled_order"
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "fill_status": "shadow_unfilled_below_market",
-      "filled_fraction": 0.0,
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.78,
-      "quantity": 0.0,
-      "realized_pnl": 0.0,
-      "side": "no",
-      "target_quantity": 30.108439,
-      "ticker": "KXMLBDEBUT-RCHOLOWSKY-26NOV01",
-      "ts": "2026-09-19T04:06:33.207868+00:00",
-      "type": "unfilled_order"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:994324",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: Stopgap bill (signed Sep 3, Senate 90-6) delays Section 781 hemp THC ban to Dec 11, 2026. Resolution date is Dec 10 \u2014 one day before the ban takes effect.\n- **Belief update**: P(YES) 90% \u2192 97% (rules explicitly accept 'continuation of pre-Section 781 hemp definition' as qualifying)\n\n### 1. Decision & Execution\n- **Action**: BUY YES\n- **Market & Venue**: KXTHC3MG-FED-26DEC10 on Kalshi\n- **Order Sizing**: Quarter Kelly 8% cap, 205 contracts @ $0.86, notional: $176.30\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Rules explicitly state 'continuation of the pre-Section 781 hemp definition' qualifies for YES. No exclusions apply.\n- **Observation Window**: 2026-08-19 \u2192 2026-12-11T04:59:00Z\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 97% YES vs **Market Price**: 86% YES (Edge: +11pp)\n- **Information Asymmetry / Rationale**: Market underprices the certainty that the stopgap bill keeps 3mg THC lawful through Dec 10. The ban doesn't take effect until Dec 11, and no mechanism exists to accelerate it in 3 weeks.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Dec 10, 2026 11:59 PM ET (resolution snapshot); Dec 11 (ban takes effect)\n- **Invalidation Trigger**: Congress passes new legislation before Dec 10 accelerating the ban (essentially impossible in 3 weeks)\n\n**Paper execution**: PAPER ORDER FILLED \u2014 Paper fill confirmed from the retained execution summary.",
-      "ts": "2026-09-19T02:18:17.318617+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "tags": [
-        "t",
-        "h",
-        "c",
-        ",",
-        " ",
-        "d",
-        "e",
-        "c",
-        "1",
-        "0"
-      ],
-      "text": "KXTHC3MG-FED-26DEC10 (Sep 19): BUY YES 205 @ 0.86, cost $176.30. Evidence: Stopgap bill (signed Sep 3, Senate 90-6) delays Section 781 hemp THC ban to Dec 11, 2026. Resolution date is Dec 10 at 11:59 PM ET - ONE DAY before ban takes effect. Rules explicitly state 'continuation of pre-Section 781 hemp definition' qualifies for YES. P(YES)=97% vs market 86%. Edge 11pp. Resolves Dec 11, 2026. Invalidation: if Congress passes new legislation before Dec 10 that accelerates the ban (essentially impossible in 3 weeks). KXHIGHNY-26SEP19-T69: NWS model high 72.5\u00b0F (95% CI 69.0-76.0), current obs 73.9\u00b0F. P(<69\u00b0F)=2.6% vs market 7%. NO position (31.2 @ 0.85) safe. Resolves Sep 20 05:00 UTC. Brazil: polls diverge sharply (Datafolha Lula leads, others Fl\u00e1vio leads). Market 57/43. No edge above 3pp threshold. PASS. Oura: S-1 filed Sep 3, 15 days before Oct 1. SEC effectiveness 4-8 weeks. NO position (200 @ 0.46) thesis intact. HOLD. All other positions HOLD.",
-      "ts": "2026-09-19T02:18:12.639519+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "fill_status": "shadow_filled_partial",
-      "filled_fraction": 0.224676,
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.86,
-      "quantity": 205.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "target_quantity": 912.425281,
-      "ticker": "KXTHC3MG-FED-26DEC10",
-      "ts": "2026-09-19T02:16:56.180226+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "30m:994324",
-      "thesis": "### 0. Research Delta\n- **Template status**: The model did not follow the required template; Foresea reconstructed this record from the tool transcript.\n- **Original response**: Let me carefully analyze the weather data and decide what to do.\nThe weather market KXHIGHNY-26SEP19-T69 is about whether the high temperature in NYC on Sep 19, 2026 will be below 69\u00b0F.\nKey data:\n- Current observation: 75\u00b0F at 00:51 UTC Sep 19 (8:51 PM EDT Sep 18)\n- NWS forecast for midnight EDT Sep 19: 68\u00b0F\n- Model hourly curve shows: 67.3\u00b0F at 04:00 UTC (midnight EDT)\n- The temperature drops throughout Sep 19\nThe \"high\" for calendar day Sep 19 would be the maximum temperature during Sep 19 (local time). Looking at the NWS forecast, the temperature at midnight EDT Sep 19 is 68\u00b0F, and it drops\n- **Strategy**: BUY YES\n- **New evidence**: Research completed across candidate markets; tools called this cycle: weather_market_research.\n- **Belief update**: Evaluated candidate odds against live venue orderbooks.\n\n### 1. Decision & Execution\n- **Action**: BUY YES\n- **Market & Venue**: KXHIGHNY-26SEP19-T69 on Kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified market resolution criteria, timing, and settlement rules.\n- **Observation Window**: Active observation window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: not stated in a parseable form\n- **Information Asymmetry / Rationale**: Execution decision calibrated to risk-reward hurdle.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next scheduled research cycle and upcoming market events.\n- **Invalidation Trigger**: Material shift in market odds or new qualifying news evidence.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 Filled 4.92 YES contracts on KXHIGHNY-26SEP19-T69 at $0.070.",
-      "ts": "2026-09-19T02:16:00.026683+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "fill_status": "shadow_filled_partial",
-      "filled_fraction": 0.007871,
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.07,
-      "quantity": 4.92,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "target_quantity": 625.062942,
-      "ticker": "KXHIGHNY-26SEP19-T69",
-      "ts": "2026-09-19T02:15:59.906509+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "30m:994324",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXHIGHNY-26SEP19-T69 on kalshi\n- **Order Sizing**: No new order\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n### 3. Model Edge & Valuation\n- **Model Probability**: 20%\n- **Information Asymmetry / Rationale**: Insufficient edge for the given market horizon\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: September 19, 2026\n- **Invalidation Trigger**: The weather forecast is not a definitive invalidation trigger",
-      "ts": "2026-09-19T02:14:10.267007+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "tags": [
-        "Clemson",
-        "Dabo Swinney",
-        "College Football"
-      ],
-      "text": "The situation with Dabo Swinney's coaching position at Clemson is uncertain, with some sources indicating that he may be considering leaving or that his tenure is under scrutiny. Given the uncertainty and lack of clear direction, it's best to pass on this market for now.",
-      "ts": "2026-09-19T02:13:53.509297+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "30m:994324",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No confirmed MLB game appearance for Roch Cholowsky before 2026\u201111\u201101; reports only cover his draft selection and minor\u2011league activity.\n- **Belief update**: 0.15\u202fYES \u2192 0.15\u202fYES (no material change)\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXMLBDEBUT-RCHOLOWSKY-26NOV01 on Kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Event resolves YES if Cholowsky plays in any regular\u2011season or playoff MLB game before 2026\u201111\u201101; no exclusions.\n- **Observation Window**: 2026\u201108\u201119\u202f\u2192\u202f2026\u201111\u201101 (window open)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 15%\u202fYES vs **Market Price**: 21%\u202fYES (Edge:\u202f\u20116\u202fpp on YES,\u202f+6\u202fpp on NO)\n- **Information Asymmetry / Rationale**: Lack of any reported MLB debut means the market\u2019s 21% overstates the true chance; without new evidence the edge is insufficient to justify a trade.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Any MLB roster announcement or game box score before 2026\u201111\u201101.\n- **Invalidation Trigger**: Official MLB game appearance by Cholowsky before 2026\u201111\u201101 would invalidate the PASS thesis.",
-      "ts": "2026-09-19T02:13:36.005120+00:00",
-      "type": "thesis"
     }
   ],
   "recent_cycle_telemetry": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "candidate_count": 19,
+      "cycle_id": "30m:994340",
+      "duration_ms": 96052,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-19T10:19:12.300439+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "81d50724bde34946aadf57808fbbfd78",
+      "settled_count": 0,
+      "started_at": "2026-09-19T10:17:36.247508+00:00",
+      "thesis_published": true,
+      "tool_steps": 2,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "minimax-m3",
+      "candidate_count": 13,
+      "cycle_id": "30m:994340",
+      "duration_ms": 107181,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-19T10:17:32.524022+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "MiniMaxAI/MiniMax-M3",
+      "run_id": "02edac038e9d40618b795fa843723900",
+      "settled_count": 0,
+      "started_at": "2026-09-19T10:15:45.342574+00:00",
+      "thesis_published": true,
+      "tool_steps": 4,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 1
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "candidate_count": 13,
+      "cycle_id": "30m:994340",
+      "duration_ms": 51778,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-19T10:15:41.298334+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "meta-llama/Llama-3.3-70B-Instruct",
+      "run_id": "e735b2a3780a4df1971a4a255f57cd23",
+      "settled_count": 0,
+      "started_at": "2026-09-19T10:14:49.519738+00:00",
+      "thesis_published": true,
+      "tool_steps": 5,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "candidate_count": 13,
+      "cycle_id": "30m:994340",
+      "duration_ms": 31858,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-19T10:14:45.729016+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": "filled",
+      "provider_model": "openai/gpt-oss-120b",
+      "run_id": "9936562654b44613a43e1c9c72b023b2",
+      "settled_count": 0,
+      "started_at": "2026-09-19T10:14:13.870431+00:00",
+      "thesis_published": true,
+      "tool_steps": 4,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 1
+    },
+    {
+      "agent_id": "glm-5-3-flash",
+      "candidate_count": 16,
+      "cycle_id": "30m:994340",
+      "duration_ms": 78332,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-19T10:14:09.110835+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "zai-org/GLM-5.3-Flash",
+      "run_id": "05d19425789e4b7ba86d08e88bb9967a",
+      "settled_count": 0,
+      "started_at": "2026-09-19T10:12:50.777820+00:00",
+      "thesis_published": true,
+      "tool_steps": 2,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 1
+    },
+    {
+      "agent_id": "glm-5-3",
+      "candidate_count": 13,
+      "cycle_id": "30m:994340",
+      "duration_ms": 167854,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-19T10:12:46.032328+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "zai-org/GLM-5.3",
+      "run_id": "f1d73dbc56134bc885cc192d9913be6c",
+      "settled_count": 0,
+      "started_at": "2026-09-19T10:09:58.178127+00:00",
+      "thesis_published": true,
+      "tool_steps": 4,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 1
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "candidate_count": 14,
+      "cycle_id": "30m:994340",
+      "duration_ms": 87465,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-19T10:09:53.453282+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": "filled",
+      "provider_model": "google/gemma-4-26B-A4B-it",
+      "run_id": "ba6af8fedb144fc1a1780b2cd0d1f6b6",
+      "settled_count": 0,
+      "started_at": "2026-09-19T10:08:25.987499+00:00",
+      "thesis_published": true,
+      "tool_steps": 6,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 1
+    },
+    {
+      "agent_id": "deepseek-v4-flash",
+      "candidate_count": 13,
+      "cycle_id": "30m:994340",
+      "duration_ms": 283787,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-19T10:08:21.425554+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "deepseek-ai/DeepSeek-V4.1-Flash",
+      "run_id": "789f5663e9ac42c3884af89a59923731",
+      "settled_count": 0,
+      "started_at": "2026-09-19T10:03:37.637764+00:00",
+      "thesis_published": true,
+      "tool_steps": 5,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 1
+    },
     {
       "agent_id": "qwen3-8-27b",
       "candidate_count": 19,
@@ -5290,166 +5446,6 @@
       "tool_steps": 10,
       "weather_candidates_offered": 1,
       "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "candidate_count": 17,
-      "cycle_id": "30m:994320",
-      "duration_ms": 142951,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-19T00:19:12.395175+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": "attempted_unknown",
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "8ada7b43b33946dd85e9b92ff7c73ff3",
-      "settled_count": 0,
-      "started_at": "2026-09-19T00:16:49.443419+00:00",
-      "thesis_published": true,
-      "tool_steps": 5,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "minimax-m3",
-      "candidate_count": 13,
-      "cycle_id": "30m:994320",
-      "duration_ms": 100183,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-19T00:16:46.119791+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "MiniMaxAI/MiniMax-M3",
-      "run_id": "aa9fc031e0d74a498c53dda1e4ebc8f3",
-      "settled_count": 0,
-      "started_at": "2026-09-19T00:15:05.936005+00:00",
-      "thesis_published": true,
-      "tool_steps": 3,
-      "weather_candidates_offered": 1,
-      "weather_candidates_researched": 1
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "candidate_count": 13,
-      "cycle_id": "30m:994320",
-      "duration_ms": 81388,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-19T00:15:01.440576+00:00",
-      "forecast_records": 2,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "meta-llama/Llama-3.3-70B-Instruct",
-      "run_id": "37988fe600d44180ab8738b332b9cf62",
-      "settled_count": 0,
-      "started_at": "2026-09-19T00:13:40.052138+00:00",
-      "thesis_published": true,
-      "tool_steps": 8,
-      "weather_candidates_offered": 1,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "candidate_count": 13,
-      "cycle_id": "30m:994320",
-      "duration_ms": 51609,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-19T00:13:35.238145+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": "unfilled",
-      "provider_model": "openai/gpt-oss-120b",
-      "run_id": "33026f53406a46a6b46aa4b82d762d33",
-      "settled_count": 0,
-      "started_at": "2026-09-19T00:12:43.628439+00:00",
-      "thesis_published": true,
-      "tool_steps": 4,
-      "weather_candidates_offered": 1,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "glm-5-3-flash",
-      "candidate_count": 16,
-      "cycle_id": "30m:994320",
-      "duration_ms": 149993,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-19T00:12:39.073578+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "zai-org/GLM-5.3-Flash",
-      "run_id": "844c3d6dbd03470c9fd57c18cfecee76",
-      "settled_count": 0,
-      "started_at": "2026-09-19T00:10:09.079722+00:00",
-      "thesis_published": true,
-      "tool_steps": 5,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "glm-5-3",
-      "candidate_count": 13,
-      "cycle_id": "30m:994320",
-      "duration_ms": 113386,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-19T00:10:05.768713+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "zai-org/GLM-5.3",
-      "run_id": "7d58a330fde14ff8969e84382bb3a19c",
-      "settled_count": 0,
-      "started_at": "2026-09-19T00:08:12.382599+00:00",
-      "thesis_published": true,
-      "tool_steps": 5,
-      "weather_candidates_offered": 1,
-      "weather_candidates_researched": 1
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "candidate_count": 14,
-      "cycle_id": "30m:994320",
-      "duration_ms": 77488,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-19T00:08:08.051488+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "google/gemma-4-26B-A4B-it",
-      "run_id": "b42db79c409a41f2ba7763b5bc9e24e4",
-      "settled_count": 0,
-      "started_at": "2026-09-19T00:06:50.562993+00:00",
-      "thesis_published": true,
-      "tool_steps": 4,
-      "weather_candidates_offered": 1,
-      "weather_candidates_researched": 1
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "candidate_count": 13,
-      "cycle_id": "30m:994320",
-      "duration_ms": 225092,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-19T00:06:46.202566+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "deepseek-ai/DeepSeek-V4.1-Flash",
-      "run_id": "2cc2bb8ad90d412c9dd5c9c28195349c",
-      "settled_count": 0,
-      "started_at": "2026-09-19T00:03:01.109802+00:00",
-      "thesis_published": true,
-      "tool_steps": 8,
-      "weather_candidates_offered": 1,
-      "weather_candidates_researched": 0
     }
   ],
   "risk_limits": {
@@ -5459,11 +5455,11 @@
     "max_spread_ratio": 0.25
   },
   "weather_operations": {
-    "candidates_offered": 63,
+    "candidates_offered": 68,
     "forecasted": 34,
-    "researched": 42,
+    "researched": 46,
     "resolved": 0,
-    "traded": 12,
+    "traded": 13,
     "window_hours": 24
   }
 }
