@@ -9,13 +9,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.06,
+      "max_drawdown": 0.060309,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -5.9896,
+      "return_pct": -6.0309,
       "settled_count": 5,
-      "sharpe": -0.3076
+      "sharpe": -0.3099
     },
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
@@ -26,13 +26,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.081975,
+      "max_drawdown": 0.083694,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -3.4725,
+      "return_pct": -3.6532,
       "settled_count": 3,
-      "sharpe": -0.0593
+      "sharpe": -0.0616
     },
     "glm-5-3": {
       "agent_id": "glm-5-3",
@@ -60,13 +60,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.007426,
+      "max_drawdown": 0.008445,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -0.7426,
+      "return_pct": -0.8445,
       "settled_count": 2,
-      "sharpe": -0.2545
+      "sharpe": -0.2518
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
@@ -115,34 +115,34 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -15.3804,
+      "return_pct": -15.2415,
       "settled_count": 2,
-      "sharpe": -0.3035
+      "sharpe": -0.3001
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": true,
+        "positive_return": false,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.008663,
+      "max_drawdown": 0.012838,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.0484,
+      "return_pct": -0.3729,
       "settled_count": 4,
-      "sharpe": 0.0067
+      "sharpe": -0.0385
     }
   },
   "equity_curves": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
-      "current_drawdown": 0.059896,
-      "max_drawdown": 0.06,
-      "sharpe": -0.3076,
+      "current_drawdown": 0.060309,
+      "max_drawdown": 0.060309,
+      "sharpe": -0.3099,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -285,17 +285,17 @@
           "ts": "2026-09-18T20:13:52.451180+00:00"
         },
         {
-          "account_value": 9401.036206,
+          "account_value": 9396.913406,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T00:20:28.856714+00:00"
+          "ts": "2026-09-19T01:26:33.496127+00:00"
         }
       ]
     },
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
-      "current_drawdown": 0.081975,
-      "max_drawdown": 0.081975,
-      "sharpe": -0.0593,
+      "current_drawdown": 0.083694,
+      "max_drawdown": 0.083694,
+      "sharpe": -0.0616,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -618,9 +618,9 @@
           "ts": "2026-09-18T22:11:13.290808+00:00"
         },
         {
-          "account_value": 9652.746711,
+          "account_value": 9634.678911,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T00:20:28.856714+00:00"
+          "ts": "2026-09-19T01:26:33.496127+00:00"
         }
       ]
     },
@@ -668,15 +668,15 @@
         {
           "account_value": 9981.620475,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T00:20:28.856714+00:00"
+          "ts": "2026-09-19T01:26:33.496127+00:00"
         }
       ]
     },
     "glm-5-3-flash": {
       "agent_id": "glm-5-3-flash",
-      "current_drawdown": 0.007426,
-      "max_drawdown": 0.007426,
-      "sharpe": -0.2545,
+      "current_drawdown": 0.008445,
+      "max_drawdown": 0.008445,
+      "sharpe": -0.2518,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -809,9 +809,9 @@
           "ts": "2026-09-18T22:16:05.104125+00:00"
         },
         {
-          "account_value": 9925.744787,
+          "account_value": 9915.54822,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T00:20:28.856714+00:00"
+          "ts": "2026-09-19T01:26:33.496127+00:00"
         }
       ]
     },
@@ -1659,7 +1659,7 @@
         {
           "account_value": 8089.415942,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T00:20:28.856714+00:00"
+          "ts": "2026-09-19T01:26:33.496127+00:00"
         }
       ]
     },
@@ -2327,15 +2327,15 @@
         {
           "account_value": 7982.595661,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T00:20:28.856714+00:00"
+          "ts": "2026-09-19T01:26:33.496127+00:00"
         }
       ]
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
-      "current_drawdown": 0.153804,
+      "current_drawdown": 0.152415,
       "max_drawdown": 0.155641,
-      "sharpe": -0.3035,
+      "sharpe": -0.3001,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -2488,17 +2488,17 @@
           "ts": "2026-09-18T22:18:27.961595+00:00"
         },
         {
-          "account_value": 8461.962576,
+          "account_value": 8475.850238,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T00:20:28.856714+00:00"
+          "ts": "2026-09-19T01:26:33.496127+00:00"
         }
       ]
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "current_drawdown": 0.008663,
-      "max_drawdown": 0.008663,
-      "sharpe": 0.0067,
+      "current_drawdown": 0.012838,
+      "max_drawdown": 0.012838,
+      "sharpe": -0.0385,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -2746,9 +2746,9 @@
           "ts": "2026-09-19T00:18:52.050074+00:00"
         },
         {
-          "account_value": 10004.836557,
+          "account_value": 9962.709425,
           "event_type": "mark_to_market",
-          "ts": "2026-09-19T00:20:28.856714+00:00"
+          "ts": "2026-09-19T01:26:33.496127+00:00"
         }
       ]
     }
@@ -3169,7 +3169,7 @@
       ]
     }
   },
-  "generated_at": "2026-09-19T00:20:29.123333+00:00",
+  "generated_at": "2026-09-19T01:26:33.760264+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -3230,114 +3230,6 @@
   },
   "leaderboard": [
     {
-      "account_value": 10004.836557,
-      "agent_id": "qwen3-8-27b",
-      "cash": 8378.615196,
-      "fees_paid": 65.649381,
-      "illiquid_positions": [],
-      "mark_coverage": {
-        "open_positions": 7,
-        "priced_cost_basis": 1659.075209,
-        "priced_positions": 7,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
-      },
-      "median_fill_fraction": 0.144248,
-      "open_positions": [
-        {
-          "avg_entry_price": 0.340345,
-          "cost_basis": 78.96,
-          "current_price": 0.26,
-          "ident": "KXAIMILLENNIUM-28-26DEC01",
-          "platform": "kalshi",
-          "quantity": 232.0,
-          "side": "NO",
-          "unrealized_pnl": -18.64,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.79,
-          "cost_basis": 76.314,
-          "current_price": 0.78,
-          "ident": "KXAIMILLENNIUM-28-26OCT01",
-          "platform": "kalshi",
-          "quantity": 96.6,
-          "side": "NO",
-          "unrealized_pnl": -0.966,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.85,
-          "cost_basis": 26.5455,
-          "current_price": 0.89,
-          "ident": "KXHIGHNY-26SEP19-T69",
-          "platform": "kalshi",
-          "quantity": 31.23,
-          "side": "NO",
-          "unrealized_pnl": 1.2492,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.46,
-          "cost_basis": 92.0,
-          "current_price": 0.51,
-          "ident": "KXIPOOURA-26OCT01",
-          "platform": "kalshi",
-          "quantity": 200.0,
-          "side": "NO",
-          "unrealized_pnl": 10.0,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.665249,
-          "cost_basis": 253.46,
-          "current_price": 0.68,
-          "ident": "KXMEDIARELEASESPIDERMAN-DEC26",
-          "platform": "kalshi",
-          "quantity": 381.0,
-          "side": "NO",
-          "unrealized_pnl": 5.62,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.61,
-          "cost_basis": 353.48488,
-          "current_price": 0.6,
-          "ident": "will-an-artwork-sell-for-150-million-by-december-31",
-          "platform": "polymarket",
-          "quantity": 579.48341,
-          "side": "NO",
-          "unrealized_pnl": -5.794834,
-          "valuation_status": "bid_liquidation"
-        },
-        {
-          "avg_entry_price": 0.16,
-          "cost_basis": 778.310829,
-          "current_price": 0.155,
-          "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-          "platform": "polymarket",
-          "quantity": 4864.44268,
-          "side": "NO",
-          "unrealized_pnl": -24.322213,
-          "valuation_status": "bid_liquidation"
-        }
-      ],
-      "partially_filled_count": 18,
-      "realized_count": 12,
-      "realized_pnl": 95.324434,
-      "return_pct": 0.0484,
-      "rule_exit_count": 1,
-      "settled_count": 4,
-      "sized_trade_count": 22,
-      "starting_cash": 10000.0,
-      "total_pnl": 4.836557,
-      "trade_count": 30,
-      "unrealized_pnl": -32.853847,
-      "updated_at": "2026-09-19T00:18:52.049297+00:00",
-      "win_rate": 0.6667,
-      "won_count": 8
-    },
-    {
       "account_value": 9981.620475,
       "agent_id": "glm-5-3",
       "cash": 9981.620475,
@@ -3388,7 +3280,115 @@
       "won_count": 1
     },
     {
-      "account_value": 9925.744787,
+      "account_value": 9962.709425,
+      "agent_id": "qwen3-8-27b",
+      "cash": 8378.615196,
+      "fees_paid": 65.649381,
+      "illiquid_positions": [],
+      "mark_coverage": {
+        "open_positions": 7,
+        "priced_cost_basis": 1659.075209,
+        "priced_positions": 7,
+        "unpriced_cost_basis": 0.0,
+        "unpriced_positions": 0
+      },
+      "median_fill_fraction": 0.144248,
+      "open_positions": [
+        {
+          "avg_entry_price": 0.340345,
+          "cost_basis": 78.96,
+          "current_price": 0.26,
+          "ident": "KXAIMILLENNIUM-28-26DEC01",
+          "platform": "kalshi",
+          "quantity": 232.0,
+          "side": "NO",
+          "unrealized_pnl": -18.64,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.79,
+          "cost_basis": 76.314,
+          "current_price": 0.77,
+          "ident": "KXAIMILLENNIUM-28-26OCT01",
+          "platform": "kalshi",
+          "quantity": 96.6,
+          "side": "NO",
+          "unrealized_pnl": -1.932,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.85,
+          "cost_basis": 26.5455,
+          "current_price": 0.93,
+          "ident": "KXHIGHNY-26SEP19-T69",
+          "platform": "kalshi",
+          "quantity": 31.23,
+          "side": "NO",
+          "unrealized_pnl": 2.4984,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.46,
+          "cost_basis": 92.0,
+          "current_price": 0.24,
+          "ident": "KXIPOOURA-26OCT01",
+          "platform": "kalshi",
+          "quantity": 200.0,
+          "side": "NO",
+          "unrealized_pnl": -44.0,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.665249,
+          "cost_basis": 253.46,
+          "current_price": 0.68,
+          "ident": "KXMEDIARELEASESPIDERMAN-DEC26",
+          "platform": "kalshi",
+          "quantity": 381.0,
+          "side": "NO",
+          "unrealized_pnl": 5.62,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.61,
+          "cost_basis": 353.48488,
+          "current_price": 0.62,
+          "ident": "will-an-artwork-sell-for-150-million-by-december-31",
+          "platform": "polymarket",
+          "quantity": 579.48341,
+          "side": "NO",
+          "unrealized_pnl": 5.794834,
+          "valuation_status": "bid_liquidation"
+        },
+        {
+          "avg_entry_price": 0.16,
+          "cost_basis": 778.310829,
+          "current_price": 0.155,
+          "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+          "platform": "polymarket",
+          "quantity": 4864.44268,
+          "side": "NO",
+          "unrealized_pnl": -24.322213,
+          "valuation_status": "bid_liquidation"
+        }
+      ],
+      "partially_filled_count": 18,
+      "realized_count": 12,
+      "realized_pnl": 95.324434,
+      "return_pct": -0.3729,
+      "rule_exit_count": 1,
+      "settled_count": 4,
+      "sized_trade_count": 22,
+      "starting_cash": 10000.0,
+      "total_pnl": -37.290575,
+      "trade_count": 30,
+      "unrealized_pnl": -74.980979,
+      "updated_at": "2026-09-19T00:18:52.049297+00:00",
+      "win_rate": 0.6667,
+      "won_count": 8
+    },
+    {
+      "account_value": 9915.54822,
       "agent_id": "glm-5-3-flash",
       "cash": 9768.462051,
       "fees_paid": 6.863507,
@@ -3413,12 +3413,12 @@
         {
           "avg_entry_price": 0.817983,
           "cost_basis": 132.6686,
-          "current_price": 0.78,
+          "current_price": 0.77,
           "ident": "KXAIMILLENNIUM-28-26OCT01",
           "platform": "kalshi",
           "quantity": 162.19,
           "side": "NO",
-          "unrealized_pnl": -6.1604,
+          "unrealized_pnl": -7.7823,
           "valuation_status": "bid_liquidation"
         },
         {
@@ -3435,54 +3435,54 @@
         {
           "avg_entry_price": 0.14,
           "cost_basis": 0.0532,
-          "current_price": 0.1,
+          "current_price": 0.06,
           "ident": "KXHIGHNY-26SEP19-T69",
           "platform": "kalshi",
           "quantity": 0.38,
           "side": "YES",
-          "unrealized_pnl": -0.0152,
+          "unrealized_pnl": -0.0304,
           "valuation_status": "bid_liquidation"
         },
         {
           "avg_entry_price": 0.45,
           "cost_basis": 9.0,
-          "current_price": 0.51,
+          "current_price": 0.24,
           "ident": "KXIPOOURA-26OCT01",
           "platform": "kalshi",
           "quantity": 20.0,
           "side": "NO",
-          "unrealized_pnl": 1.2,
+          "unrealized_pnl": -4.2,
           "valuation_status": "bid_liquidation"
         },
         {
           "avg_entry_price": 0.4,
           "cost_basis": 63.189342,
-          "current_price": 0.13,
+          "current_price": 0.11,
           "ident": "will-an-artwork-sell-for-150-million-by-december-31",
           "platform": "polymarket",
           "quantity": 157.973356,
           "side": "YES",
-          "unrealized_pnl": -42.652806,
+          "unrealized_pnl": -45.812273,
           "valuation_status": "bid_liquidation"
         }
       ],
       "partially_filled_count": 12,
       "realized_count": 8,
       "realized_pnl": -21.185332,
-      "return_pct": -0.7426,
+      "return_pct": -0.8445,
       "rule_exit_count": 0,
       "settled_count": 2,
       "sized_trade_count": 14,
       "starting_cash": 10000.0,
-      "total_pnl": -74.255213,
+      "total_pnl": -84.45178,
       "trade_count": 17,
-      "unrealized_pnl": -47.768406,
+      "unrealized_pnl": -57.964973,
       "updated_at": "2026-09-18T22:16:05.103287+00:00",
       "win_rate": 0.5,
       "won_count": 4
     },
     {
-      "account_value": 9652.746711,
+      "account_value": 9634.678911,
       "agent_id": "gemma-4-26b-a4b-it",
       "cash": 9529.32052,
       "fees_paid": 86.213287,
@@ -3510,12 +3510,12 @@
         {
           "avg_entry_price": 0.673133,
           "cost_basis": 405.4012,
-          "current_price": 0.07,
+          "current_price": 0.04,
           "ident": "KXIPOOURA-26OCT01",
           "platform": "kalshi",
           "quantity": 602.26,
           "side": "YES",
-          "unrealized_pnl": -363.243,
+          "unrealized_pnl": -381.3108,
           "valuation_status": "bid_liquidation"
         },
         {
@@ -3533,20 +3533,20 @@
       "partially_filled_count": 11,
       "realized_count": 19,
       "realized_pnl": 99.359849,
-      "return_pct": -3.4725,
+      "return_pct": -3.6532,
       "rule_exit_count": 2,
       "settled_count": 3,
       "sized_trade_count": 16,
       "starting_cash": 10000.0,
-      "total_pnl": -347.253289,
+      "total_pnl": -365.321089,
       "trade_count": 42,
-      "unrealized_pnl": -391.473026,
+      "unrealized_pnl": -409.540826,
       "updated_at": "2026-09-18T22:11:13.290068+00:00",
       "win_rate": 0.1579,
       "won_count": 3
     },
     {
-      "account_value": 9401.036206,
+      "account_value": 9396.913406,
       "agent_id": "deepseek-v4-flash",
       "cash": 9079.457806,
       "fees_paid": 20.44905,
@@ -3563,32 +3563,32 @@
         {
           "avg_entry_price": 0.814715,
           "cost_basis": 335.890591,
-          "current_price": 0.78,
+          "current_price": 0.77,
           "ident": "KXAIMILLENNIUM-28-26OCT01",
           "platform": "kalshi",
           "quantity": 412.28,
           "side": "NO",
-          "unrealized_pnl": -14.312191,
+          "unrealized_pnl": -18.434991,
           "valuation_status": "bid_liquidation"
         }
       ],
       "partially_filled_count": 13,
       "realized_count": 11,
       "realized_pnl": -567.583755,
-      "return_pct": -5.9896,
+      "return_pct": -6.0309,
       "rule_exit_count": 0,
       "settled_count": 5,
       "sized_trade_count": 15,
       "starting_cash": 10000.0,
-      "total_pnl": -598.963794,
+      "total_pnl": -603.086594,
       "trade_count": 20,
-      "unrealized_pnl": -14.312191,
+      "unrealized_pnl": -18.434991,
       "updated_at": "2026-09-18T20:13:52.450370+00:00",
       "win_rate": 0.1818,
       "won_count": 2
     },
     {
-      "account_value": 8461.962576,
+      "account_value": 8475.850238,
       "agent_id": "minimax-m3",
       "cash": 8045.332705,
       "fees_paid": 170.414078,
@@ -3605,26 +3605,26 @@
         {
           "avg_entry_price": 0.61,
           "cost_basis": 423.573703,
-          "current_price": 0.6,
+          "current_price": 0.62,
           "ident": "will-an-artwork-sell-for-150-million-by-december-31",
           "platform": "polymarket",
           "quantity": 694.383119,
           "side": "NO",
-          "unrealized_pnl": -6.943831,
+          "unrealized_pnl": 6.943831,
           "valuation_status": "bid_liquidation"
         }
       ],
       "partially_filled_count": 3,
       "realized_count": 11,
       "realized_pnl": -1418.359648,
-      "return_pct": -15.3804,
+      "return_pct": -15.2415,
       "rule_exit_count": 1,
       "settled_count": 2,
       "sized_trade_count": 5,
       "starting_cash": 10000.0,
-      "total_pnl": -1538.037424,
+      "total_pnl": -1524.149762,
       "trade_count": 19,
-      "unrealized_pnl": -6.943831,
+      "unrealized_pnl": 6.943831,
       "updated_at": "2026-09-18T22:18:27.960777+00:00",
       "win_rate": 0.0909,
       "won_count": 1
@@ -3744,7 +3744,7 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 822,
+      "cycle_age_seconds": 4787,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -3770,7 +3770,7 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 740,
+      "cycle_age_seconds": 4705,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -3796,7 +3796,7 @@
       "store_present": true
     },
     "glm-5-3": {
-      "cycle_age_seconds": 623,
+      "cycle_age_seconds": 4587,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -3822,7 +3822,7 @@
       "store_present": true
     },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 469,
+      "cycle_age_seconds": 4434,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -3848,7 +3848,7 @@
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 413,
+      "cycle_age_seconds": 4378,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -3874,7 +3874,7 @@
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 327,
+      "cycle_age_seconds": 4292,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -3900,7 +3900,7 @@
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 222,
+      "cycle_age_seconds": 4187,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -3926,7 +3926,7 @@
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 76,
+      "cycle_age_seconds": 4041,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
