@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 from urllib.parse import urlparse
 
 from opentelemetry import metrics, trace
@@ -199,6 +199,201 @@ AGENT_SIZING_POLICIES: Dict[str, AgentSizingPolicy] = {
         min_edge=0.001,
     ),
 }
+
+
+@dataclass(frozen=True)
+class AgentSpecializationProfile:
+    """Specialized trading profile calibrated to an agent model's empirical strengths."""
+
+    model_id: str
+    role_title: str
+    tactical_mandate: str
+    max_contract_price: Optional[float] = None
+    min_profile_edge: Optional[float] = None
+    forbidden_price_range: Optional[Tuple[float, float]] = None
+    max_trades_per_cycle: Optional[int] = None
+    preferred_sizing_mode: Optional[str] = None
+    horizon_preference: Optional[str] = None
+
+
+AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
+    "gemma-4-26b-a4b-it": AgentSpecializationProfile(
+        model_id="gemma-4-26b-a4b-it",
+        role_title="Positive-Skew Asymmetric Value Sniper",
+        tactical_mandate=(
+            "You are Foresea's #1 realized P&L leader (+$99.36 net realized). Your proven mathematical edge "
+            "is asymmetric payoff betting on underpriced contracts (p <= 0.40, ideally 10c-30c) where 3x to 10x "
+            "payout multipliers compound into substantial gains even with a ~16% win rate. You are strictly "
+            "forbidden from purchasing contracts > 0.45, where poor payoff odds (< 1.2:1) destroy edge. ALWAYS "
+            "size using sizing_mode='convex_conviction' with positive-skew payout boosting. Prioritize Polymarket "
+            "or zero-fee categories to eliminate fee drag."
+        ),
+        max_contract_price=0.45,
+        min_profile_edge=None,
+        forbidden_price_range=None,
+        max_trades_per_cycle=None,
+        preferred_sizing_mode="convex_conviction",
+        horizon_preference="underpriced_skew",
+    ),
+    "qwen3-8-27b": AgentSpecializationProfile(
+        model_id="qwen3-8-27b",
+        role_title="Macro & Calibrated Anchor",
+        tactical_mandate=(
+            "You are Foresea's highest hit-rate trader (63.6% win rate, +$80.66 net realized). Your empirical edge "
+            "is disciplined 14-30 day macro fundamentals, inflation/rates prints, economic data, and high-probability "
+            "political milestones where you have verified +3.52pp skill. Your default action on all open positions is "
+            "strictly HOLD until event resolution or convergence; do not churn or flip. Size new positions using "
+            "sizing_mode='convex_conviction' or 'quarter_kelly'. Focus on high-signal 14-30d horizons."
+        ),
+        max_contract_price=None,
+        min_profile_edge=None,
+        forbidden_price_range=None,
+        max_trades_per_cycle=None,
+        preferred_sizing_mode="convex_conviction",
+        horizon_preference="14-30d",
+    ),
+    "glm-5-3": AgentSpecializationProfile(
+        model_id="glm-5-3",
+        role_title="Patient Deep Reasoner",
+        tactical_mandate=(
+            "You have the lowest fee drag in the fleet ($2.34 total) and 100% historical accuracy on 14-30d horizon "
+            "questions. Your strategy is ultra-patient deep reasoning: never chase speculative noise or intraday "
+            "price blips. Require at least 4.0pp of net edge before executing any new trade. Sizing: use "
+            "sizing_mode='scaled_edge' or 'edge_kelly'. If no candidate offers verified primary-source evidence and "
+            "a >=4pp edge, your optimal action is PASS."
+        ),
+        max_contract_price=None,
+        min_profile_edge=0.04,
+        forbidden_price_range=None,
+        max_trades_per_cycle=None,
+        preferred_sizing_mode="scaled_edge",
+        horizon_preference="14-30d",
+    ),
+    "glm-5-3-flash": AgentSpecializationProfile(
+        model_id="glm-5-3-flash",
+        role_title="Balanced Cost-Efficient Sniper",
+        tactical_mandate=(
+            "You combine low fee burn with 100% historical accuracy on 14-30d horizon markets (50% overall win rate). "
+            "Target contracts with dated catalyst events inside the 14-30d window. Require at least 3.0pp net edge. "
+            "Avoid near-term (<7d) sentiment flips. Sizing: use sizing_mode='scaled_edge' or 'quarter_kelly'. "
+            "When edge is ambiguous, maintain portfolio discipline and PASS."
+        ),
+        max_contract_price=None,
+        min_profile_edge=0.03,
+        forbidden_price_range=None,
+        max_trades_per_cycle=None,
+        preferred_sizing_mode="scaled_edge",
+        horizon_preference="14-30d",
+    ),
+    "gpt-oss-120b": AgentSpecializationProfile(
+        model_id="gpt-oss-120b",
+        role_title="Disciplined Low-Turnover Specialist",
+        tactical_mandate=(
+            "REHABILITATION & OVERTRADING DISCIPLINE: Your previous hyperactive trading (113 trades, $271.16 in fee drag) "
+            "wiped out an otherwise solid 39.7% win rate and caused severe capital destruction. You are now strictly "
+            "rate-limited to at most 1 trade per cycle. You are forbidden from trading thin edges (< 5.0pp net edge). "
+            "Never enter a position unless you have an unpriced, dated catalyst with >= 5pp verified edge. Sizing: use "
+            "sizing_mode='edge_kelly'. If no high-conviction candidate clears the 5pp bar, your required action is PASS."
+        ),
+        max_contract_price=None,
+        min_profile_edge=0.05,
+        forbidden_price_range=None,
+        max_trades_per_cycle=1,
+        preferred_sizing_mode="edge_kelly",
+        horizon_preference=None,
+    ),
+    "llama-3.3-70b-instruct": AgentSpecializationProfile(
+        model_id="llama-3.3-70b-instruct",
+        role_title="14-30d Asymmetric Value Specialist",
+        tactical_mandate=(
+            "HORIZON RESTRICTION & VALUE FOCUS: You suffered severe losses on noisy short-term (<7d) contracts, but "
+            "Foresea's empirical validation proved you possess +2.59pp skill on 14-30 day contracts. You are strictly "
+            "banned from trading short-term (<7d) contracts. You are capped at contract prices <= 0.40 (where payout "
+            "odds >= 1.5:1 provide positive EV for your ~20% hit rate). Sizing: use sizing_mode='convex_conviction' "
+            "on 14-30d contracts under 35c. Do not buy expensive favorites."
+        ),
+        max_contract_price=0.40,
+        min_profile_edge=None,
+        forbidden_price_range=None,
+        max_trades_per_cycle=None,
+        preferred_sizing_mode="convex_conviction",
+        horizon_preference="14-30d",
+    ),
+    "deepseek-v4-flash": AgentSpecializationProfile(
+        model_id="deepseek-v4-flash",
+        role_title="Steamroller Defense & Micro-Probe Sniper",
+        tactical_mandate=(
+            "STEAMROLLER DEFENSE MANDATE: You previously suffered severe capital loss (-$567) by buying expensive 81c "
+            "contracts that collapsed to 0c. You are strictly forbidden from purchasing contracts priced > 0.70. "
+            "Never pick up pennies in front of steamrollers: expensive contracts have catastrophic downside when "
+            "unexpected events hit. Sizing: use sizing_mode='probe_kelly' (1.5% micro cap) or 'scaled_edge' to "
+            "keep exposure contained. Prefer underpriced contracts or PASS."
+        ),
+        max_contract_price=0.70,
+        min_profile_edge=None,
+        forbidden_price_range=None,
+        max_trades_per_cycle=None,
+        preferred_sizing_mode="probe_kelly",
+        horizon_preference=None,
+    ),
+    "minimax-m3": AgentSpecializationProfile(
+        model_id="minimax-m3",
+        role_title="Research Synthesis & Capital Preservation",
+        tactical_mandate=(
+            "CAPITAL PRESERVATION & COIN-FLIP AVOIDANCE: You previously had a 0% win rate (0/10) and paid $9.46 "
+            "average fees on 50c-75c mid-range contracts. You are strictly prohibited from trading within the "
+            "50c-75c dead zone. Focus your deep research on either high-asymmetry underpriced opportunities (<40c) "
+            "or verified high-probability events (>80c). Sizing: use sizing_mode='flat_probe' ($25 fixed toehold) "
+            "or 'probe_kelly' to conserve capital while building empirical edge."
+        ),
+        max_contract_price=None,
+        min_profile_edge=None,
+        forbidden_price_range=(0.50, 0.75),
+        max_trades_per_cycle=None,
+        preferred_sizing_mode="flat_probe",
+        horizon_preference=None,
+    ),
+}
+
+_PROFILE_ALIASES: Dict[str, str] = {
+    "gemma-4-26b": "gemma-4-26b-a4b-it",
+    "google/gemma-4-26b-a4b-it": "gemma-4-26b-a4b-it",
+    "qwen3-8-27b-instruct": "qwen3-8-27b",
+    "qwen/qwen3-8-27b": "qwen3-8-27b",
+    "thudm/glm-5-3": "glm-5-3",
+    "thudm/glm-5-3-flash": "glm-5-3-flash",
+    "openai/gpt-oss-120b": "gpt-oss-120b",
+    "meta-llama/llama-3.3-70b-instruct": "llama-3.3-70b-instruct",
+    "llama-3.3-70b": "llama-3.3-70b-instruct",
+    "deepseek-ai/deepseek-v4-flash": "deepseek-v4-flash",
+    "minimax/minimax-m3": "minimax-m3",
+}
+
+
+def normalize_agent_model_name(name: Optional[str]) -> str:
+    if not name:
+        return ""
+    clean = str(name).strip().lower()
+    if "/" in clean:
+        clean = clean.split("/")[-1]
+    return clean.replace("_", "-")
+
+
+def get_agent_profile(agent_id: Optional[str]) -> Optional[AgentSpecializationProfile]:
+    if not agent_id:
+        return None
+    raw = str(agent_id).strip().lower()
+    if raw in _PROFILE_ALIASES:
+        return AGENT_PROFILES.get(_PROFILE_ALIASES[raw])
+    normalized = normalize_agent_model_name(agent_id)
+    if normalized in AGENT_PROFILES:
+        return AGENT_PROFILES[normalized]
+    if normalized in _PROFILE_ALIASES:
+        return AGENT_PROFILES.get(_PROFILE_ALIASES[normalized])
+    for key, profile in AGENT_PROFILES.items():
+        if key in normalized or normalized in key:
+            return profile
+    return None
 
 
 def _now() -> str:
@@ -2861,17 +3056,34 @@ def _check_trade_guards(
     # addition to the existing single-market and cash checks above.
     if not risk_reducing and cycle_spend_after > policy.per_cycle_spend_limit + 1e-9:
         reasons.append("per_cycle_spend")
+
+    profile = get_agent_profile(agent_id)
+    effective_max_trades = policy.max_trades_per_cycle
+    if profile and profile.max_trades_per_cycle is not None:
+        effective_max_trades = min(effective_max_trades, profile.max_trades_per_cycle)
+
     if strict_risk_management and not risk_reducing:
         if daily_risk_after > policy.daily_risk_limit + 1e-9:
             reasons.append("daily_risk_limit")
         if usage["duplicate_active"]:
             reasons.append("duplicate_cooldown")
-        if cycle_trade_count_after > policy.max_trades_per_cycle:
+        if cycle_trade_count_after > effective_max_trades:
             reasons.append("trade_rate_limit")
         if len(open_markets_after) > policy.max_open_markets:
             reasons.append("open_market_limit")
         if drawdown_after > policy.max_drawdown_limit + 1e-9:
             reasons.append("drawdown_limit")
+
+        if profile is not None:
+            if profile.max_contract_price is not None and price > profile.max_contract_price + 1e-9:
+                reasons.append("profile_price_ceiling_exceeded")
+            if profile.forbidden_price_range is not None:
+                p_low, p_high = profile.forbidden_price_range
+                if (p_low - 1e-9) <= price <= (p_high + 1e-9):
+                    reasons.append("profile_price_band_forbidden")
+            if profile.min_profile_edge is not None:
+                if edge_check.get("checked") and edge_check.get("net_edge", 0.0) < profile.min_profile_edge - 1e-9:
+                    reasons.append("insufficient_profile_edge")
 
     spread_info = (market_check or {}).get("spread_check") if isinstance(market_check, dict) else None
     if strict_risk_management and not risk_reducing and spread_info and not spread_info.get("clears", True):
@@ -2894,7 +3106,7 @@ def _check_trade_guards(
         "daily_risk_limit": round(policy.daily_risk_limit, 6),
         "daily_risk_before": round(daily_risk_before, 6),
         "daily_risk_after": round(daily_risk_after, 6),
-        "max_trades_per_cycle": policy.max_trades_per_cycle,
+        "max_trades_per_cycle": effective_max_trades,
         "cycle_trade_count_before": cycle_trade_count_before,
         "cycle_trade_count_after": cycle_trade_count_after,
         "max_open_markets": policy.max_open_markets,
@@ -2914,6 +3126,16 @@ def _check_trade_guards(
         "cash_delta": round(float(fill.cash_delta), 6),
         "settlements_before_trade": settlements,
         "sizing": sizing_detail,
+        "agent_profile": {
+            "model_id": profile.model_id,
+            "role_title": profile.role_title,
+            "max_contract_price": profile.max_contract_price,
+            "min_profile_edge": profile.min_profile_edge,
+            "forbidden_price_range": profile.forbidden_price_range,
+            "max_trades_per_cycle": profile.max_trades_per_cycle,
+            "preferred_sizing_mode": profile.preferred_sizing_mode,
+            "horizon_preference": profile.horizon_preference,
+        } if profile else None,
     }
     outcome = "allowed" if detail["allowed"] else "rejected"
     risk_guard_checks.add(1, {"outcome": outcome})
@@ -3736,6 +3958,37 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     rejection_message = (
                         "Trade rejected: edge_below_fee_floor. Stated edge does not clear round-trip venue fees and execution spread. "
                         "Choose a market with a larger edge or use sizing_mode='probe_kelly'/'flat_probe' if eligible."
+                    )
+                elif "profile_price_ceiling_exceeded" in guard["reasons"]:
+                    prof = get_agent_profile(agent_id)
+                    ceil_val = prof.max_contract_price if prof and prof.max_contract_price is not None else 0.0
+                    order_price = _as_float(normalized.get("price")) or requested_price or 0.0
+                    rejection_message = (
+                        f"Trade rejected: profile_price_ceiling_exceeded. Order price ${order_price:.2f} exceeds your model's "
+                        f"specialized price ceiling (${ceil_val:.2f}). Your profile mandate requires targeting underpriced "
+                        "asymmetric payoff contracts or steamroller-defensive bounds. PASS or trade cheaper contracts."
+                    )
+                elif "profile_price_band_forbidden" in guard["reasons"]:
+                    prof = get_agent_profile(agent_id)
+                    band_str = (
+                        f"${prof.forbidden_price_range[0]:.2f}-${prof.forbidden_price_range[1]:.2f}"
+                        if prof and prof.forbidden_price_range
+                        else "50c-75c"
+                    )
+                    order_price = _as_float(normalized.get("price")) or requested_price or 0.0
+                    rejection_message = (
+                        f"Trade rejected: profile_price_band_forbidden. Order price ${order_price:.2f} falls within your model's "
+                        f"forbidden dead zone ({band_str}). Your profile prohibits low-EV coin flips that cause fee bleed. "
+                        "Focus on high-asymmetry underpriced opportunities (<40c) or high-certainty events (>80c)."
+                    )
+                elif "insufficient_profile_edge" in guard["reasons"]:
+                    prof = get_agent_profile(agent_id)
+                    hurdle_val = prof.min_profile_edge if prof and prof.min_profile_edge is not None else 0.0
+                    actual_edge = float((guard.get("edge_after_fees") or {}).get("net_edge", 0.0))
+                    rejection_message = (
+                        f"Trade rejected: insufficient_profile_edge. Stated net edge ({actual_edge:.1%}) does not meet "
+                        f"your model's disciplined hurdle ({hurdle_val:.1%}). Overtrading thin edges causes destructive fee bleed. "
+                        "Only trade high-conviction catalysts with substantial verified edge, or PASS."
                     )
                 elif guard["reasons"]:
                     rejection_message = f"Trade rejected by benchmark risk guards before execution ({', '.join(guard['reasons'])})."
