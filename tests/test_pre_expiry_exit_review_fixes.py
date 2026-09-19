@@ -3,10 +3,10 @@
 Eight defects were confirmed before the rule shipped; every verifier had been
 told to default to "not real". Seven are fixed here. The eighth -- the
 Datastore account backend dropping the whole audit block -- predates this
-rule, affects every trade on the Cloud Run tool loop rather than this rule
-(the scheduled tick always runs on SQLite). It is fixed separately and held
-by tests.test_benchmark_datastore_account.DatastoreTradeAuditTests; the rule
-still refuses to run without a SQLite store.
+rule and affected the Cloud Run tool loop rather than the scheduled tick,
+which always runs on SQLite. It was fixed separately, and the Datastore
+account backend has since been removed: place_trade is no longer offered over
+HTTP, so the SQLite store is the only one.
 
   1. Polymarket was judged on its order-book bestBid, but the backtest only had
      Polymarket last-trade marks. The rule is Kalshi-only until Polymarket is
@@ -211,7 +211,7 @@ class LearningLessonTests(_AccountCase):
 
 
 class NeverAbortTheCycleTests(_AccountCase):
-    """Finding 8, and the backend guard that replaces finding 5 for this rule."""
+    """Finding 8."""
 
     def test_a_failure_while_selecting_exits_means_no_exits_not_a_crash(self):
         self.open_yes()
@@ -223,43 +223,6 @@ class NeverAbortTheCycleTests(_AccountCase):
                 self.AGENT, [_quote("KXHELD", bid=0.10, ask=0.12, close=iso(5))], now=NOW,
             )
         self.assertEqual(outcomes, [])
-
-    def test_without_a_sqlite_store_the_rule_does_not_run(self):
-        """Reading SQLite positions while place_trade trades Datastore would mix two books.
-
-        Position loading is made to succeed with a qualifying position, so the
-        only thing standing between the rule and a trade is the backend guard.
-        Without that, a missing store would raise and the cycle-safety handler
-        would return [] anyway -- passing this test for the wrong reason.
-        """
-        import contextlib
-
-        with (
-            mock.patch.dict(os.environ, {}, clear=False),
-            mock.patch.object(benchmark_tools, "_account_transaction", lambda: contextlib.nullcontext(None)),
-            mock.patch.object(benchmark_tools, "_account_summary", return_value={"open_positions": [held()]}),
-            mock.patch.object(benchmark_tools, "place_trade", return_value={"ok": False}) as trade,
-        ):
-            os.environ.pop("FORESEA_AGENT_ACCOUNT_DB_PATH", None)
-            outcomes = agent_trading_tick._run_pre_expiry_exits(
-                self.AGENT, [_quote("KXHELD", bid=0.10, ask=0.12, close=iso(5))], now=NOW,
-            )
-        self.assertEqual(outcomes, [])
-        trade.assert_not_called()
-
-    def test_with_a_sqlite_store_the_same_setup_does_trade(self):
-        """The control: the guard is the difference, not the mocks."""
-        import contextlib
-
-        with (
-            mock.patch.object(benchmark_tools, "_account_transaction", lambda: contextlib.nullcontext(None)),
-            mock.patch.object(benchmark_tools, "_account_summary", return_value={"open_positions": [held()]}),
-            mock.patch.object(benchmark_tools, "place_trade", return_value={"ok": False}) as trade,
-        ):
-            agent_trading_tick._run_pre_expiry_exits(
-                self.AGENT, [_quote("KXHELD", bid=0.10, ask=0.12, close=iso(5))], now=NOW,
-            )
-        trade.assert_called_once()
 
 
 if __name__ == "__main__":

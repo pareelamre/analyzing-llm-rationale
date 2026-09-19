@@ -715,13 +715,6 @@ def _run_pre_expiry_exits(
     """
     if not _pre_expiry_exit_enabled():
         return []
-    if benchmark_tools._use_datastore_account_store():
-        # Positions below are read from the SQLite store, but with no
-        # FORESEA_AGENT_ACCOUNT_DB_PATH place_trade would trade against
-        # Datastore -- reading one book and trading another. The scheduled
-        # tick always sets the path; anything else skips the rule.
-        logger.info("pre-expiry exits skipped agent=%s: no SQLite account store configured", agent_id)
-        return []
     try:
         with benchmark_tools._account_transaction() as conn:
             summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
@@ -869,8 +862,6 @@ def _run_early_profit_harvest_exits(
 ) -> List[Dict[str, Any]]:
     """Close qualifying winning positions to harvest profits and de-risk."""
     if not _early_harvest_enabled():
-        return []
-    if benchmark_tools._use_datastore_account_store():
         return []
     try:
         with benchmark_tools._account_transaction() as conn:
