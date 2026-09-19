@@ -307,6 +307,13 @@ _PROVIDER_BACKOFF_BASE_S = float(os.environ.get("PROVIDER_BACKOFF_BASE_S", "0.5"
 _AGENT_TOOL_PROVIDER_MAX_RETRIES = max(
     0, int(os.environ.get("AGENT_TOOL_PROVIDER_MAX_RETRIES", "4"))
 )
+# Tools that write per-agent state keyed by the caller-chosen model name, not
+# by user: the paper-trading account and the agent's notes. Only the scheduled
+# tick, which calls agent_analyze in-process against its own GCS-synced SQLite
+# store and notes file, may use them. Over HTTP every signed-in caller naming
+# the same model would share one account and one set of notes -- trades nobody
+# publishes and notes other users can read, edit and delete.
+_SYSTEM_ONLY_AGENT_TOOLS = frozenset({"place_trade", "manage_notes"})
 # Agent-loop turns carry the full trading prompt and are not interactive, so
 # they get no wall-clock ceiling by default (<=0 means "await the call").
 # Measured against SCADS: DeepSeek-V4-Flash answers an 83k-token prompt in
@@ -5571,7 +5578,11 @@ class AgentAnalyzeRequest(BaseModel):
     tool_loop: bool = Field(False, description="Use a ReAct tool-using loop (model plans + calls tools) instead of the fixed pipeline.")
     benchmark_tools: bool = Field(
         False,
-        description="When tool_loop=true, expose Foresea's shadow-trading and market-research toolkit.",
+        description=(
+            "When tool_loop=true, expose Foresea's market-research toolkit. place_trade and "
+            "manage_notes are reserved for Foresea's scheduled trading agents and are not "
+            "available over the API."
+        ),
     )
     benchmark_tool_names: Optional[List[str]] = Field(
         None,
@@ -5579,7 +5590,8 @@ class AgentAnalyzeRequest(BaseModel):
         description=(
             "When benchmark_tools=true, restrict the exposed tool set to named Foresea tools -- e.g. "
             "a research-only call passes ['web_search', 'orderbook'], a pure-reasoning call passes [] (no tools, "
-            "so the model must answer on its first turn). Unset exposes all three."
+            "so the model must answer on its first turn). Unset exposes every tool available to the "
+            "caller. Naming place_trade or manage_notes over the API is refused with 403."
         ),
     )
     # No upper bound: an 8-step ceiling silently truncated research-heavy
@@ -15161,7 +15173,12 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
 
     # Optional: ReAct tool-using loop instead of the fixed pipeline below.
     if req.tool_loop:
-        return await _agent_tool_loop(req, request, question, quote, grounding_note)
+        # Reached only in-process: any HTTP request either authenticates and
+        # takes the durable path above, or is refused by _require_auth.
+        return await _agent_tool_loop(
+            req, request, question, quote, grounding_note,
+            allow_system_tools=request is None,
+        )
 
     # 2. Evidence + forecast + edge — reuse the /predict pipeline.
     pred_req = _agent_prediction_request(req, question, quote, grounding_note)
@@ -15330,13 +15347,29 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
 async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                            quote: "Optional[MarketQuote]", grounding_note: Optional[str],
                            *, run: Optional[Dict[str, Any]] = None,
-                           user_id: Optional[str] = None) -> "AgentReport":
+                           user_id: Optional[str] = None,
+                           allow_system_tools: bool = False) -> "AgentReport":
     """ReAct tool-using loop: the model plans and calls tools (forecast, market
     fetch, evidence search, venue scan, track record), then answers. Falls back
     cleanly to a no-edge report if no forecast tool was used.
 
     When `run`/`user_id` are given (the durable /agent/analyze path), each
-    step is persisted to the AgentRun record as it happens via on_step."""
+    step is persisted to the AgentRun record as it happens via on_step.
+
+    `allow_system_tools` exposes _SYSTEM_ONLY_AGENT_TOOLS. Off by default, so
+    a new caller has to opt in; only agent_analyze's in-process path does."""
+    if (
+        req.benchmark_tools
+        and not allow_system_tools
+        and _SYSTEM_ONLY_AGENT_TOOLS & set(req.benchmark_tool_names or ())
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "place_trade and manage_notes are reserved for Foresea's scheduled "
+                "trading agents and are not available over the API."
+            ),
+        )
     from analyzing_llm_rationale import market_data
 
     async def _on_step_start(step: Dict[str, Any]) -> None:
@@ -15808,6 +15841,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             allowed = set(allowed_names)
             tools = {name: fn for name, fn in benchmark_tool_map.items() if name in allowed}
             specs = [s for s in benchmark_specs if s["name"] in allowed]
+        if not allow_system_tools:
+            tools = {name: fn for name, fn in tools.items() if name not in _SYSTEM_ONLY_AGENT_TOOLS}
+            specs = [s for s in specs if s["name"] not in _SYSTEM_ONLY_AGENT_TOOLS]
     else:
         tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
                  "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,

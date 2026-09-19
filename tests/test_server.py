@@ -243,6 +243,25 @@ class _FakeConversationDsClient:
             self.store.pop(key, None)
 
 
+def _agent_test_quote():
+    """A local stand-in for a live Kalshi book, so get_market needs no network."""
+    return server_module.MarketQuote(
+        platform="Kalshi",
+        question="Will X happen?",
+        market_url="https://kalshi.com/markets/x",
+        outcome="Yes",
+        probability=0.48,
+        yes_bid=0.47,
+        yes_ask=0.50,
+    )
+
+
+def _run_agent_in_process(**body):
+    """Call agent_analyze the way scripts/agent_trading_tick.py does: in-process, no HTTP request."""
+    req = server_module.AgentAnalyzeRequest(**body)
+    return asyncio.run(server_module.agent_analyze(req, request=None))
+
+
 class FailingProvider:
     def __init__(self, model_name="failing-model"):
         self.model_name = model_name
@@ -3200,16 +3219,14 @@ class ServerTests(unittest.TestCase):
         # the final report).
         owner_headers = {"Authorization": f"Bearer {_issue_session('step-owner', 'stepowner@example.com', 'Owner', '')}"}
         self.provider.responses = [
-            json.dumps({"thought": "note one", "action": "manage_notes",
-                        "args": {"action": "add", "text": "Track Fed dates."}}),
-            json.dumps({"thought": "note two", "action": "manage_notes",
-                        "args": {"action": "add", "text": "Track CPI dates."}}),
-            json.dumps({"final": "Two notes saved."}),
+            json.dumps({"thought": "check fed", "action": "get_market",
+                        "args": {"platform": "kalshi", "ticker": "KXFED"}}),
+            json.dumps({"thought": "check cpi", "action": "get_market",
+                        "args": {"platform": "kalshi", "ticker": "KXCPI"}}),
+            json.dumps({"final": "Checked both books."}),
         ]
-        with tempfile.TemporaryDirectory() as td, mock.patch.dict(
-            os.environ,
-            {"FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json")},
-            clear=False,
+        with mock.patch.object(
+            server_module, "_fetch_market_quote", new=mock.AsyncMock(return_value=_agent_test_quote())
         ):
             response = self.client.post(
                 "/agent/analyze",
@@ -3230,16 +3247,16 @@ class ServerTests(unittest.TestCase):
         steps = body["steps"]
         self.assertEqual(len(steps), 2)
         self.assertEqual(steps[0]["index"], 0)
-        self.assertEqual(steps[0]["thought"], "note one")
-        self.assertEqual(steps[0]["action"], "manage_notes")
-        self.assertEqual(steps[0]["args"], {"action": "add", "text": "Track Fed dates."})
+        self.assertEqual(steps[0]["thought"], "check fed")
+        self.assertEqual(steps[0]["action"], "get_market")
+        self.assertEqual(steps[0]["args"], {"platform": "kalshi", "ticker": "KXFED"})
         self.assertFalse(steps[0]["error"])
         # Two-phase write: the start-phase and completion-phase hooks update
         # the same record by index rather than appending two entries.
         self.assertIn("started_at", steps[0])
         self.assertIn("completed_at", steps[0])
         self.assertEqual(steps[1]["index"], 1)
-        self.assertEqual(steps[1]["thought"], "note two")
+        self.assertEqual(steps[1]["thought"], "check cpi")
         # The widened request snapshot: benchmark_tools/max_tool_steps are
         # plain non-secret fields, unlike openrouter_api_key/history (see
         # test_agent_run_is_private_durable_and_excludes_provider_secrets).
@@ -3259,13 +3276,14 @@ class ServerTests(unittest.TestCase):
             await real_persist(user_id, run, step)
 
         self.provider.responses = [
-            json.dumps({"thought": "note one", "action": "manage_notes",
-                        "args": {"action": "add", "text": "Track Fed dates."}}),
+            json.dumps({"thought": "check fed", "action": "get_market",
+                        "args": {"platform": "kalshi", "ticker": "KXFED"}}),
             json.dumps({"final": "done"}),
         ]
         with (
-            tempfile.TemporaryDirectory() as td,
-            mock.patch.dict(os.environ, {"FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json")}, clear=False),
+            mock.patch.object(
+                server_module, "_fetch_market_quote", new=mock.AsyncMock(return_value=_agent_test_quote())
+            ),
             mock.patch.object(server_module, "_persist_agent_run_step", side_effect=_flaky_persist),
         ):
             response = self.client.post(
@@ -3851,10 +3869,9 @@ class ServerTests(unittest.TestCase):
         # Since #268 ("expose all foresea tools ... to edgeboard agents"),
         # benchmark mode's default (no explicit benchmark_tool_names filter)
         # exposes the full research toolset alongside place_trade/web_search/
-        # manage_notes, not just those three in isolation -- the safety
-        # boundary that actually matters (place_trade never reaching the
-        # NON-benchmark path) is covered separately by
-        # test_agent_analyze_tool_loop_without_benchmark_tools_excludes_place_trade.
+        # manage_notes to the scheduled trading tick, which calls agent_analyze
+        # in-process. Over HTTP place_trade and manage_notes are withheld; see
+        # test_agent_analyze_over_http_withholds_system_only_tools.
         self.provider.response = {
             "thought": "remember this",
             "action": "manage_notes",
@@ -3865,18 +3882,13 @@ class ServerTests(unittest.TestCase):
             {"FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json")},
             clear=False,
         ):
-            response = self.client.post(
-                "/agent/analyze",
-                json={
-                    "question": "Will the Fed cut rates tomorrow?",
-                    "tool_loop": True,
-                    "benchmark_tools": True,
-                    "max_tool_steps": 1,
-                },
-            )
+            report = _run_agent_in_process(
+                question="Will the Fed cut rates tomorrow?",
+                tool_loop=True,
+                benchmark_tools=True,
+                max_tool_steps=1,
+            ).model_dump()
 
-        self.assertEqual(response.status_code, 200)
-        report = response.json()
         self.assertEqual(report["pipeline"], ["tool_loop", "benchmark_tools"])
         self.assertEqual(report["tool_transcript"][0]["action"], "manage_notes")
         self.assertEqual(
@@ -3970,19 +3982,16 @@ class ServerTests(unittest.TestCase):
     def test_agent_analyze_benchmark_tool_names_restricts_to_a_subset(self):
         # A specialist-pipeline stage (e.g. research-only) passes an explicit
         # subset so it structurally cannot reach place_trade, rather than
-        # relying on the model to just not call it.
+        # relying on the model to just not call it. The tick runs these
+        # stages in-process, where manage_notes is still available.
         self.provider.response = {"thought": "looking", "final": "no trade decided"}
-        response = self.client.post(
-            "/agent/analyze",
-            json={
-                "question": "Research this market.",
-                "tool_loop": True,
-                "benchmark_tools": True,
-                "benchmark_tool_names": ["web_search", "manage_notes"],
-                "max_tool_steps": 1,
-            },
+        _run_agent_in_process(
+            question="Research this market.",
+            tool_loop=True,
+            benchmark_tools=True,
+            benchmark_tool_names=["web_search", "manage_notes"],
+            max_tool_steps=1,
         )
-        self.assertEqual(response.status_code, 200)
         system_prompt = self.provider.calls[0][0]["content"]
         self.assertIn("web_search(", system_prompt)
         self.assertIn("manage_notes(", system_prompt)
@@ -4029,6 +4038,93 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn("manage_notes(", system_prompt)
         self.assertIn("forecast(", system_prompt)
         self.assertIn("scan_markets(", system_prompt)
+
+    def test_agent_analyze_over_http_withholds_system_only_tools(self):
+        # place_trade and manage_notes key their state by the caller-chosen
+        # model name, not by user. Over HTTP every signed-in caller naming the
+        # same model shared one Datastore paper account nobody publishes and
+        # one set of notes other users could read, edit and delete. Only the
+        # scheduled tick, calling in-process, gets them now.
+        self.provider.response = {
+            "thought": "trade it anyway",
+            "action": "place_trade",
+            "args": {"ticker": "KXFAKE", "side": "yes", "price": 0.5, "quantity": 1},
+        }
+        with (
+            mock.patch.object(server_module.benchmark_tools, "place_trade") as place_trade,
+            mock.patch.object(server_module.benchmark_tools, "manage_notes") as manage_notes,
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will the Fed cut rates tomorrow?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "max_tool_steps": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertNotIn("place_trade(", system_prompt)
+        self.assertNotIn("manage_notes(", system_prompt)
+        self.assertNotIn("shadow (paper) mode", system_prompt)
+        # The research toolkit is untouched.
+        for tool in ("web_search(", "forecast(", "orderbook(", "optimize_portfolio("):
+            self.assertIn(tool, system_prompt)
+        # A model that calls place_trade anyway reaches nothing.
+        step = response.json()["tool_transcript"][0]
+        self.assertEqual(step["action"], "place_trade")
+        self.assertIn("unknown tool 'place_trade'", step["observation"])
+        place_trade.assert_not_called()
+        manage_notes.assert_not_called()
+
+    def test_agent_analyze_over_http_refuses_a_named_system_only_tool(self):
+        for names in (["web_search", "place_trade"], ["manage_notes"]):
+            with self.subTest(names=names):
+                response = self.client.post(
+                    "/agent/analyze",
+                    json={
+                        "question": "Research this market.",
+                        "tool_loop": True,
+                        "benchmark_tools": True,
+                        "benchmark_tool_names": names,
+                        "max_tool_steps": 1,
+                    },
+                )
+                self.assertEqual(response.status_code, 403)
+                self.assertIn("scheduled trading agents", response.json()["detail"])
+        self.assertEqual(self.provider.calls, [], "a refused run must not reach the model")
+
+    def test_agent_analyze_over_http_keeps_research_only_subsets(self):
+        self.provider.response = {"thought": "looking", "final": "no trade decided"}
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Research this market.",
+                "tool_loop": True,
+                "benchmark_tools": True,
+                "benchmark_tool_names": ["web_search", "orderbook"],
+                "max_tool_steps": 1,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertIn("web_search(", system_prompt)
+        self.assertIn("orderbook(", system_prompt)
+
+    def test_agent_tool_loop_withholds_system_only_tools_unless_a_caller_opts_in(self):
+        # Safe by default: a future caller of _agent_tool_loop that forgets the
+        # flag gets no trading, rather than one that forgets to turn it off.
+        req = server_module.AgentAnalyzeRequest(
+            question="q", tool_loop=True, benchmark_tools=True,
+            benchmark_tool_names=["place_trade"], max_tool_steps=1,
+        )
+        from fastapi import HTTPException
+
+        with self.assertRaises(HTTPException) as refused:
+            asyncio.run(server_module._agent_tool_loop(req, None, "q", None, None))
+        self.assertEqual(refused.exception.status_code, 403)
 
     def test_every_edge_tool_offered_is_also_explained(self):
         # Agents were handed 24 tools and told what 4 of them do, so cycles
@@ -4082,25 +4178,23 @@ class ServerTests(unittest.TestCase):
                 clear=False,
             ),
         ):
-            response = self.client.post(
-                "/agent/analyze",
-                json={
-                    "question": "Will the Fed cut rates tomorrow?",
-                    "tool_loop": True,
-                    "benchmark_tools": True,
-                    "model": "minimax-m3",
-                    "max_tool_steps": 1,
-                },
+            # In-process, as the tick calls it: manage_notes is how this test
+            # sees the agent_id, and it is not offered over HTTP.
+            report = _run_agent_in_process(
+                question="Will the Fed cut rates tomorrow?",
+                tool_loop=True,
+                benchmark_tools=True,
+                model="minimax-m3",
+                max_tool_steps=1,
             )
 
-            self.assertEqual(response.status_code, 200)
             alt_provider_mock.assert_called_once_with(
                 "minimax-m3",
                 request_timeout_s=server_module._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
             )
             self.assertGreater(len(alt_provider.calls), 0)
             self.assertEqual(len(self.provider.calls), 0)  # server default was never used
-            self.assertEqual(response.json()["served_model_name"], "fake-model")
+            self.assertEqual(report.served_model_name, "fake-model")
 
             notes = json.loads((Path(td) / "notes.json").read_text())
         self.assertIn("minimax-m3", notes)
