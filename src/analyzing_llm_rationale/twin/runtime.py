@@ -224,6 +224,14 @@ class PrivateTwinRuntime:
             return bool(self.maintenance_worker and self.maintenance_worker.execution_ready)
         return bool(self.research_worker and self.research_worker.accepting_work)
 
+    def refresh_readiness(self) -> bool:
+        if self.role is WorkerRole.MAINTENANCE:
+            return bool(
+                self.maintenance_worker
+                and self.maintenance_worker.refresh_readiness()
+            )
+        return self.ready
+
     def authenticate(self, request: Request, allowed: frozenset[str]) -> str:
         header = request.headers.get("authorization", "")
         scheme, separator, token = header.partition(" ")
@@ -268,8 +276,9 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
 
     @app.get("/ready")
     async def ready():
-        payload = {"status": "ready" if runtime.ready else "unready", "role": runtime.role.value}
-        return payload if runtime.ready else JSONResponse(payload, status_code=503)
+        is_ready = runtime.refresh_readiness()
+        payload = {"status": "ready" if is_ready else "unready", "role": runtime.role.value}
+        return payload if is_ready else JSONResponse(payload, status_code=503)
 
     if runtime.role is WorkerRole.MAINTENANCE:
 
@@ -297,9 +306,12 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
         async def maintain(body: JobRequest, request: Request):
             try:
                 runtime.authenticate(request, runtime.identities.dispatcher_accounts)
-                return runtime.maintenance_worker.handle(
+                result = runtime.maintenance_worker.handle(
                     body.job_id, now=runtime.clock(), maintain=runtime.maintenance_operation,
                 )
+                if result.get("status") == "in_progress":
+                    return JSONResponse(result, status_code=409)
+                return result
             except Exception as exc:
                 raise _http_error(exc) from exc
 
@@ -394,9 +406,12 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
         async def research(body: JobRequest, request: Request):
             try:
                 runtime.authenticate(request, runtime.identities.dispatcher_accounts)
-                return runtime.research_worker.handle(
+                result = runtime.research_worker.handle(
                     body.job_id, now=runtime.clock(), research=runtime.research_operation,
                 )
+                if result.get("status") == "in_progress":
+                    return JSONResponse(result, status_code=409)
+                return result
             except Exception as exc:
                 raise _http_error(exc) from exc
 

@@ -3,8 +3,8 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t21_in_progress_quote_timestamp_fix_ready_for_deploy",
-  "implementation_baseline": "b628dedf74a81bfd92b9e4f4c4de68fca576da17",
+  "implementation_status": "t21_in_progress_worker_recovery_ready_for_review",
+  "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
   "next_task": "T21",
   "live_authorized": false,
   "release_gates": {
@@ -651,8 +651,8 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "restart-safe shadow execution is deployed; the follow-up binds Polymarket freshness to CLOB timestamps and guarantees new private revisions receive traffic before smoke verification",
-      "branch": "codex/twin-deploy-promote-latest",
+      "substep": "production reached research_pending; worker readiness, stale-lease recovery, terminal research degradation, and Cloud Tasks retry signaling are ready for protected review",
+      "branch": "codex/twin-readiness-recovery",
       "commit": null,
       "pr_url": null,
       "checks": [
@@ -753,7 +753,17 @@
         "npm ci and npm run frontend:build for quote timestamp and deployment promotion fix (pass)",
         "py -m unittest discover -s tests for quote timestamp and deployment promotion fix (pass: 2308 tests; 12 skipped)",
         "py -m ruff check src tests for quote timestamp and deployment promotion fix (pass)",
-        "py -m graphify update . for quote timestamp and deployment promotion fix (pass: 10090 nodes, 25699 edges)"
+        "py -m graphify update . for quote timestamp and deployment promotion fix (pass: 10090 nodes, 25699 edges)",
+        "PR #630 protected test and datastore-integration checks (pass); merged as 1d8a446dc5b9c1e82143119e6ee582c700371c8f",
+        "Docker workflow 34901390723 build, public deploy, health/readiness and streamed forecast smoke (pass)",
+        "private twin-maintenance revision twin-maintenance-00027-8hd and twin-research revision twin-research-00028-rjg run exact image sha256:0b535bf9153b035f021cbbfeda2f8a42686106b612e6debde44bf3ed05455b7c",
+        "production corrected cycle reached research_pending and created a durable research job; the first result exposed frozen startup readiness and an HTTP 200 in_progress Cloud Tasks retry loss",
+        "focused worker/runtime/store recovery tests (pass: 58 tests; 12 Datastore emulator tests skipped locally)",
+        "npm ci and npm run frontend:build for worker recovery (pass; generated assets restored and excluded)",
+        "py -m unittest discover -s tests for worker recovery (pass: 2382 tests; 12 skipped)",
+        "py -m ruff check src tests for worker recovery (pass)",
+        "py -m graphify update . for worker recovery (pass: 10251 nodes, 26000 edges)",
+        "git diff --check for worker recovery (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -783,7 +793,7 @@
         "Compatible audit-grade calibration observations must accumulate before entry intents can qualify.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Merge and deploy the CLOB timestamp and private traffic-promotion fix, verify a production research continuation, then restart the seven-day collection clock."
+      "handoff": "Merge and deploy worker recovery, verify the expired production research job reaches a terminal continuation, run the four fault drills, then restart the seven-day collection clock."
     },
     {
       "id": "T22",

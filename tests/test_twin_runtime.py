@@ -37,6 +37,7 @@ from analyzing_llm_rationale.twin.runtime_app import (
     _execute_shadow_cycle,
     _maintenance_operation,
     _reconcile_shadow_account,
+    _reconcile_worker_startup,
     _recover_stale_research_budgets,
     _runtime_worker_id,
     _stage_strategy_continuation,
@@ -59,6 +60,7 @@ from analyzing_llm_rationale.twin.worker import (
     TwinWorker,
     WorkerJob,
     WorkerJobKind,
+    WorkerJobStatus,
     WorkerPaused,
     WorkerRole,
 )
@@ -309,7 +311,8 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             jobs=jobs,
             dispatcher=Dispatcher(),
             maintenance_worker=TwinWorker(
-                jobs, worker_id="maintenance-worker", reconcile_startup=lambda: startup,
+                jobs, worker_id="maintenance-worker",
+                reconcile_startup=(startup if callable(startup) else lambda: startup),
             ),
             maintenance_operation=lambda _: {"status": "complete"},
             research_gateway=gateway,
@@ -389,6 +392,57 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(budget.usage(key).uncertain_tokens, 100)
 
+    def test_startup_recovery_refences_stale_research_and_opens_readiness(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(research_job())
+        jobs.claim("research-job", worker_id="lost-worker", now=NOW, lease_seconds=1)
+        budget = InMemoryResearchBudget()
+        key = "foresea-edge:scope-001:2025-01-01"
+        budget.reserve(
+            "budget-001", key=key, estimated_usd=0, estimated_tokens=100,
+            policy=BudgetPolicy(0, 100, 1),
+        )
+        budget.claim("budget-001", key=key)
+
+        dispatcher = Dispatcher()
+        self.assertTrue(
+            _reconcile_worker_startup(
+                jobs, budget, now=NOW + timedelta(seconds=2),
+                dispatcher=dispatcher,
+            ),
+        )
+        self.assertEqual(jobs.get("research-job").status, WorkerJobStatus.QUEUED)
+        self.assertEqual(budget.usage(key).uncertain_tokens, 100)
+        self.assertEqual(dispatcher.ids, ["research-job"])
+
+    def test_startup_recovery_continues_an_expired_research_job(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(replace(research_job(), deadline=NOW + timedelta(seconds=1)))
+        jobs.claim("research-job", worker_id="lost-worker", now=NOW, lease_seconds=1)
+        budget = InMemoryResearchBudget()
+        key = "foresea-edge:scope-001:2025-01-01"
+        budget.reserve(
+            "budget-001", key=key, estimated_usd=0, estimated_tokens=100,
+            policy=BudgetPolicy(0, 100, 1),
+        )
+        budget.claim("budget-001", key=key)
+        run_store = mock.Mock()
+        run_store.get.return_value = mock.Mock(
+            id="strategy-cycle-001", account_scope_id="shadow-scope:foresea-edge-v1",
+            config_release_id="foresea-edge-shadow-trial-v1", account_epoch=1,
+        )
+        dispatcher = Dispatcher()
+
+        self.assertTrue(
+            _reconcile_worker_startup(
+                jobs, budget, now=NOW + timedelta(seconds=2),
+                dispatcher=dispatcher, strategy_run_store=run_store,
+            ),
+        )
+        self.assertEqual(jobs.get("research-job").status, WorkerJobStatus.EXPIRED)
+        self.assertEqual(len(dispatcher.ids), 1)
+        self.assertTrue(dispatcher.ids[0].startswith("strategy-continuation-"))
+
     def test_repair_reservation_is_separate_bounded_and_once_only(self):
         jobs = InMemoryWorkerJobs()
         jobs.add(research_job())
@@ -462,6 +516,31 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
         runtime, _ = self.maintenance_runtime(startup=False)
         with TestClient(create_private_worker_app(runtime)) as client:
             self.assertEqual(client.get("/ready").status_code, 503)
+
+    def test_readiness_rechecks_reconciliation_after_stale_work_clears(self):
+        reconciled = [False]
+        runtime, _ = self.maintenance_runtime(startup=lambda: reconciled[0])
+        with TestClient(create_private_worker_app(runtime)) as client:
+            self.assertEqual(client.get("/ready").status_code, 503)
+            reconciled[0] = True
+            response = client.get("/ready")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["status"], "ready")
+
+    def test_active_maintenance_lease_keeps_cloud_task_retrying(self):
+        runtime, _ = self.maintenance_runtime()
+        self.assertIsNotNone(
+            runtime.jobs.claim(
+                "maintenance-job", worker_id="active-worker", now=NOW,
+            ),
+        )
+        with TestClient(create_private_worker_app(runtime)) as client:
+            response = client.post(
+                "/internal/twin/maintain", json={"job_id": "maintenance-job"},
+                headers=self.auth("dispatcher-token"),
+            )
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json(), {"status": "in_progress"})
 
     def test_route_identity_cannot_be_replaced_by_spoofed_queue_headers(self):
         runtime, _ = self.maintenance_runtime()
@@ -779,6 +858,35 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             self.assertEqual(response.json()["status"], "completed")
             self.assertEqual(client.post("/internal/twin/maintain").status_code, 404)
             self.assertEqual(client.get("/trading/orders").status_code, 404)
+
+    def test_active_research_lease_keeps_cloud_task_retrying(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(research_job())
+        gateway = MaintenanceResearchJobGateway(
+            jobs, authorize_assignment=lambda _: None,
+        )
+        self.assertIsNotNone(
+            gateway.claim("research-job", worker_id="active-worker", now=NOW),
+        )
+        runtime = PrivateTwinRuntime(
+            WorkerRole.RESEARCH,
+            RuntimeIdentityPolicy(
+                "https://twin-research.example", frozenset(),
+                frozenset({DISPATCHER}), frozenset(),
+            ),
+            lambda: NOW,
+            research_worker=TwinResearchWorker(gateway, worker_id="research-worker"),
+            research_operation=lambda _: self.fail("active work must not run twice"),
+            token_verifier=verifier,
+        )
+
+        with TestClient(create_private_worker_app(runtime)) as client:
+            response = client.post(
+                "/internal/twin/research", json={"job_id": "research-job"},
+                headers=self.auth("dispatcher-token"),
+            )
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json(), {"status": "in_progress"})
 
     def test_http_research_gateway_sends_only_identity_bound_contracts(self):
         assignment = {

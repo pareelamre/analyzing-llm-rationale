@@ -234,6 +234,32 @@ class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
         restarted = DatastoreWorkerJobs(datastore.Client(project=project))
         self.assertEqual(restarted.get(job_id).completed_result, {"status": "complete"})
 
+        recover_id = f"worker-recover-{uuid4().hex}"
+        store.add(WorkerJob(
+            recover_id, "scope-001", WorkerJobKind.RECONCILE,
+            {"account_snapshot_id": "snapshot-002"}, now + timedelta(minutes=1),
+        ))
+        lost = store.claim(
+            recover_id, worker_id="lost-worker", now=now, lease_seconds=1,
+        )
+        recovered = store.recover_stale(now=now + timedelta(seconds=2))
+        self.assertIn(recover_id, [item.id for item in recovered])
+        self.assertEqual(store.get(recover_id).status, WorkerJobStatus.QUEUED)
+        replacement = store.claim(
+            recover_id, worker_id="replacement", now=now + timedelta(seconds=2),
+        )
+        self.assertEqual(replacement.fence, lost.fence + 1)
+
+        expired_id = f"worker-expired-{uuid4().hex}"
+        store.add(WorkerJob(
+            expired_id, "scope-001", WorkerJobKind.RECONCILE,
+            {"account_snapshot_id": "snapshot-003"}, now + timedelta(seconds=1),
+        ))
+        store.recover_stale(now=now + timedelta(seconds=2))
+        expired = store.get(expired_id)
+        self.assertEqual(expired.status, WorkerJobStatus.EXPIRED)
+        self.assertEqual(expired.completed_result, {"status": "expired"})
+
     def test_datastore_budget_reservation_is_idempotent_and_unknown_spend_stays_reserved(self):
         from google.cloud import datastore
 
