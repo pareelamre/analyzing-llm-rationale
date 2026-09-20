@@ -90,6 +90,7 @@ from .worker import (
     WorkerJob,
     WorkerJobError,
     WorkerJobKind,
+    WorkerJobStatus,
     WorkerPaused,
     WorkerRole,
 )
@@ -523,16 +524,24 @@ def _prepare_strategy_research(
 
 
 def _stage_strategy_continuation(
-    jobs, strategy_run_store, assignment: ResearchAssignment, *, now: datetime,
+    jobs, strategy_run_store, assignment: ResearchAssignment | WorkerJob, *, now: datetime,
 ) -> WorkerJob | None:
     """Durably stage one unique continuation after a research terminal result."""
-    if assignment.strategy_cycle_id.startswith("legacy-research-cycle:"):
+    if isinstance(assignment, WorkerJob):
+        cycle_id = assignment.payload.get("strategy_cycle_id") or (
+            "legacy-research-cycle:" + sha256(assignment.id.encode()).hexdigest()[:24]
+        )
+        research_job_id = assignment.id
+    else:
+        cycle_id = assignment.strategy_cycle_id
+        research_job_id = assignment.job_id
+    if cycle_id.startswith("legacy-research-cycle:"):
         return None
-    run = strategy_run_store.get(assignment.strategy_cycle_id)
+    run = strategy_run_store.get(cycle_id)
     if run is None:
         raise WorkerJobError("strategy run is unavailable for research continuation")
     return jobs.add(WorkerJob(
-        _stable_id("strategy-continuation-", run.id, assignment.job_id),
+        _stable_id("strategy-continuation-", run.id, research_job_id),
         run.account_scope_id, WorkerJobKind.STRATEGY,
         {
             "strategy_cycle_id": run.id,
@@ -629,6 +638,30 @@ def _recover_stale_research_budgets(
             pass
         recovered += 1
     return recovered
+
+
+def _reconcile_worker_startup(
+    jobs: DatastoreWorkerJobs, budget: DatastoreResearchBudget, *, now: datetime,
+    dispatcher=None, strategy_run_store=None,
+) -> bool:
+    """Resolve durable expired work before opening maintenance readiness."""
+    _recover_stale_research_budgets(jobs, budget, now=now)
+    recovered = jobs.recover_stale(now=now)
+    if dispatcher is not None:
+        for recovered_job in recovered:
+            if recovered_job.status is WorkerJobStatus.QUEUED:
+                dispatcher.enqueue(recovered_job)
+            elif (
+                recovered_job.kind is WorkerJobKind.RESEARCH
+                and recovered_job.status is WorkerJobStatus.EXPIRED
+                and strategy_run_store is not None
+            ):
+                continuation = _stage_strategy_continuation(
+                    jobs, strategy_run_store, recovered_job, now=now,
+                )
+                if continuation is not None:
+                    dispatcher.enqueue(continuation)
+    return not jobs.stale(now=now)
 
 
 def _maintenance_operation(
@@ -1139,7 +1172,14 @@ def create_environment_app():
         )
         worker = TwinWorker(
             jobs, worker_id=worker_id,
-            reconcile_startup=lambda: not jobs.stale(now=now()),
+            reconcile_startup=lambda: _reconcile_worker_startup(
+                jobs, budget, now=now(), dispatcher=dispatcher,
+                strategy_run_store=strategy_run_store,
+            ),
+            # Cloud Run bounds maintenance requests at 120 seconds. Keep the
+            # claim fenced slightly longer so readiness recovery cannot reclaim
+            # work that the platform is still allowing to finish.
+            lease_seconds=125,
         )
         runtime = PrivateTwinRuntime(
             role, identities, now, jobs=jobs, dispatcher=dispatcher,

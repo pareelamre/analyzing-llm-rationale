@@ -28,6 +28,9 @@ queue_lag_seconds = metrics.get_meter(__name__).create_histogram(
 retry_exhaustions = metrics.get_meter(__name__).create_counter(
     "twin.retries.exhausted", unit="1"
 )
+stale_recoveries = metrics.get_meter(__name__).create_counter(
+    "twin.worker.stale_recoveries", unit="1"
+)
 
 
 class WorkerAuthenticationError(PermissionError):
@@ -283,6 +286,7 @@ class WorkerJobs(Protocol):
     def get(self, job_id: str) -> WorkerJob: ...
     def due(self, *, now: datetime) -> tuple[WorkerJob, ...]: ...
     def stale(self, *, now: datetime) -> tuple[WorkerJob, ...]: ...
+    def recover_stale(self, *, now: datetime) -> tuple[WorkerJob, ...]: ...
 
 
 class InMemoryWorkerJobs:
@@ -386,6 +390,37 @@ class InMemoryWorkerJobs:
                     )
                 )
             ), key=lambda job: (job.deadline, job.id)))
+
+    def recover_stale(self, *, now: datetime) -> tuple[WorkerJob, ...]:
+        """Fence expired leases and terminally classify missed deadlines."""
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise WorkerJobError("stale recovery needs an aware time")
+        recovered = []
+        with self._lock:
+            for job_id, job in tuple(self._jobs.items()):
+                if job.completed_result is not None:
+                    continue
+                if job.deadline <= now:
+                    replacement = replace(
+                        job, completed_result={"status": "expired"},
+                        completed_at=now, lease_expires_at=None,
+                        status=WorkerJobStatus.EXPIRED,
+                    )
+                elif (
+                    job.status is WorkerJobStatus.RUNNING
+                    and job.lease_expires_at is not None
+                    and job.lease_expires_at <= now
+                ):
+                    replacement = replace(
+                        job, worker_id=None, lease_expires_at=None,
+                        status=WorkerJobStatus.QUEUED,
+                        last_error="lease_expired",
+                    )
+                else:
+                    continue
+                self._jobs[job_id] = replacement
+                recovered.append(replacement)
+        return tuple(sorted(recovered, key=lambda job: (job.deadline, job.id)))
 
 
 class DatastoreWorkerJobs:
@@ -548,6 +583,65 @@ class DatastoreWorkerJobs:
             )
         ), key=lambda job: (job.deadline, job.id)))
 
+    @tracer.start_as_current_span("twin.worker.recover_stale")
+    def recover_stale(self, *, now: datetime) -> tuple[WorkerJob, ...]:
+        """Recover each stale record under its strong Datastore key."""
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise WorkerJobError("stale recovery needs an aware time")
+        recovered = []
+        for candidate in self.stale(now=now):
+            key = self._key(candidate.id)
+            with self._client.transaction():
+                entity = self._client.get(key)
+                if entity is None:
+                    continue
+                job = self._from_entity(entity)
+                if job.completed_result is not None:
+                    continue
+                if job.deadline <= now:
+                    replacement = replace(
+                        job, completed_result={"status": "expired"},
+                        completed_at=now, lease_expires_at=None,
+                        status=WorkerJobStatus.EXPIRED,
+                    )
+                elif (
+                    job.status is WorkerJobStatus.RUNNING
+                    and job.lease_expires_at is not None
+                    and job.lease_expires_at <= now
+                ):
+                    replacement = replace(
+                        job, worker_id=None, lease_expires_at=None,
+                        status=WorkerJobStatus.QUEUED,
+                        last_error="lease_expired",
+                    )
+                else:
+                    continue
+                self._client.put(self._entity(replacement, key))
+            recovered.append(replacement)
+            stale_recoveries.add(1, {
+                "kind": replacement.kind.value,
+                "outcome": (
+                    "expired" if replacement.status is WorkerJobStatus.EXPIRED
+                    else "refenced"
+                ),
+            })
+        expired_count = sum(
+            item.status is WorkerJobStatus.EXPIRED for item in recovered
+        )
+        refenced_count = len(recovered) - expired_count
+        span = trace.get_current_span()
+        span.set_attributes({
+            "items.count": len(recovered),
+            "twin.worker.expired_count": expired_count,
+            "twin.worker.refenced_count": refenced_count,
+        })
+        if recovered:
+            logger.warning(
+                "Twin worker startup recovered stale jobs expired=%d refenced=%d",
+                expired_count, refenced_count,
+            )
+        return tuple(sorted(recovered, key=lambda job: (job.deadline, job.id)))
+
 
 def require_worker_request(token: str | None, *, expected_token: str) -> None:
     if not expected_token or token != expected_token:
@@ -560,10 +654,14 @@ class TwinWorker:
     def __init__(
         self, jobs: WorkerJobs, *, worker_id: str,
         reconcile_startup: Callable[[], bool], role: WorkerRole = WorkerRole.MAINTENANCE,
+        lease_seconds: int = 30,
     ) -> None:
         if WorkerRole(role) is not WorkerRole.MAINTENANCE:
             raise WorkerJobError("research must use the narrow TwinResearchWorker boundary")
+        if type(lease_seconds) is not int or lease_seconds <= 0:
+            raise WorkerJobError("maintenance lease must be a positive integer")
         self._jobs, self._worker_id, self._reconcile_startup = jobs, worker_id, reconcile_startup
+        self._lease_seconds = lease_seconds
         self.execution_ready = False
         self.accepting_work = False
 
@@ -575,6 +673,28 @@ class TwinWorker:
             self.accepting_work = False
             logger.error("Twin maintenance startup reconciliation failed (%s)", type(exc).__name__)
             worker_operations.add(1, {"role": "maintenance", "outcome": "startup_failed"})
+            return False
+        self.accepting_work = True
+        return self.execution_ready
+
+    def refresh_readiness(self) -> bool:
+        """Re-run a previously incomplete startup reconciliation.
+
+        A durable job can have an expired lease while a replacement revision is
+        starting.  The replacement may safely finish that fenced job, but the
+        startup result would otherwise leave application readiness false for
+        the lifetime of the process.  Re-checking only while unready lets the
+        process advertise readiness once durable reconciliation is complete.
+        """
+        if self.execution_ready:
+            return True
+        try:
+            self.execution_ready = bool(self._reconcile_startup())
+        except Exception as exc:
+            self.execution_ready = False
+            self.accepting_work = False
+            logger.error("Twin maintenance readiness reconciliation failed (%s)", type(exc).__name__)
+            worker_operations.add(1, {"role": "maintenance", "outcome": "readiness_failed"})
             return False
         self.accepting_work = True
         return self.execution_ready
@@ -598,7 +718,10 @@ class TwinWorker:
             return existing.completed_result
         if existing.kind is WorkerJobKind.RESEARCH:
             raise WorkerJobError("worker role cannot process this job kind")
-        job = self._jobs.claim(job_id, worker_id=self._worker_id, now=now)
+        job = self._jobs.claim(
+            job_id, worker_id=self._worker_id, now=now,
+            lease_seconds=self._lease_seconds,
+        )
         if job is None:
             current = self._jobs.get(job_id)
             if current.status is WorkerJobStatus.EXPIRED:
@@ -830,7 +953,15 @@ class MaintenanceResearchJobGateway:
         self, assignment: ResearchAssignment, result: ResearchCompletion, *, now: datetime,
     ) -> Mapping[str, Any]:
         if self._finalize_result is not None:
-            result = self._finalize_result(assignment, result)
+            try:
+                result = self._finalize_result(assignment, result)
+            except WorkerDegraded as exc:
+                # Validation failures are terminal, bounded research outcomes.
+                # Feed them through the same finalizer so budget uncertainty and
+                # the strategy continuation are durably recorded.
+                result = self._finalize_result(
+                    assignment, ResearchCompletion("degraded", reason=exc.reason),
+                )
         completed = self._jobs.complete(
             assignment.job_id, worker_id=assignment.worker_id, fence=assignment.fence,
             result=result.to_mapping(), now=now, degraded=result.status == "degraded",

@@ -131,6 +131,46 @@ class TwinWorkerTests(unittest.TestCase):
         worker = TwinWorker(jobs, worker_id="new", reconcile_startup=lambda: False)
         self.assertFalse(worker.start())
 
+    def test_stale_recovery_expires_deadlines_and_refences_lost_leases(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job("expired", deadline=NOW + timedelta(seconds=1)))
+        jobs.add(job("leased", deadline=NOW + timedelta(minutes=1)))
+        jobs.claim("leased", worker_id="lost-worker", now=NOW, lease_seconds=1)
+
+        recovered = jobs.recover_stale(now=NOW + timedelta(seconds=2))
+
+        self.assertEqual([item.id for item in recovered], ["expired", "leased"])
+        expired = jobs.get("expired")
+        self.assertEqual(expired.status, WorkerJobStatus.EXPIRED)
+        self.assertEqual(expired.completed_result, {"status": "expired"})
+        leased = jobs.get("leased")
+        self.assertEqual(leased.status, WorkerJobStatus.QUEUED)
+        self.assertIsNone(leased.worker_id)
+        self.assertIsNone(leased.lease_expires_at)
+        reclaimed = jobs.claim(
+            "leased", worker_id="replacement", now=NOW + timedelta(seconds=2),
+        )
+        self.assertEqual(reclaimed.fence, 2)
+
+    def test_maintenance_lease_can_cover_the_platform_request_deadline(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job(deadline=NOW + timedelta(minutes=5)))
+        observed = []
+        worker = TwinWorker(
+            jobs, worker_id="worker", reconcile_startup=lambda: True,
+            lease_seconds=125,
+        )
+        worker.start()
+
+        worker.handle(
+            "job-001", now=NOW,
+            maintain=lambda claimed: observed.append(claimed.lease_expires_at) or {
+                "status": "complete",
+            },
+        )
+
+        self.assertEqual(observed, [NOW + timedelta(seconds=125)])
+
     def test_startup_dependency_failure_keeps_health_process_alive_but_unready(self):
         jobs = InMemoryWorkerJobs()
         jobs.add(job())
@@ -149,6 +189,21 @@ class TwinWorkerTests(unittest.TestCase):
             worker.handle("job-001", now=NOW, maintain=lambda _: {"status": "unsafe"}),
             {"status": "draining"},
         )
+
+    def test_readiness_can_recover_after_durable_reconciliation_finishes(self):
+        jobs = InMemoryWorkerJobs()
+        reconciled = [False]
+        worker = TwinWorker(
+            jobs, worker_id="new", reconcile_startup=lambda: reconciled[0],
+        )
+
+        self.assertFalse(worker.start())
+        self.assertTrue(worker.accepting_work)
+        reconciled[0] = True
+
+        self.assertTrue(worker.refresh_readiness())
+        self.assertTrue(worker.execution_ready)
+        self.assertTrue(worker.accepting_work)
 
     def test_priority_and_payload_constraints_keep_maintenance_ahead_of_research(self):
         jobs = InMemoryWorkerJobs()
@@ -330,6 +385,42 @@ class TwinWorkerTests(unittest.TestCase):
         self.assertEqual(continuations, [("strategy-cycle-001", "completed")])
         self.assertEqual(result["research_result_id"], "result-derived")
         self.assertNotIn("result_payload", jobs.get("research").completed_result)
+
+    def test_research_validation_failure_is_persisted_as_degraded(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job("research", kind=WorkerJobKind.RESEARCH))
+        finalized = []
+
+        def finalize(_assignment, completion):
+            finalized.append((completion.status, completion.reason))
+            if completion.status == "completed":
+                raise WorkerDegraded("research_result_identity_mismatch")
+            return completion
+
+        worker = TwinResearchWorker(
+            MaintenanceResearchJobGateway(
+                jobs, authorize_assignment=lambda _: None,
+                finalize_result=finalize,
+            ),
+            worker_id="research-worker",
+        )
+        result = worker.handle(
+            "research", now=NOW,
+            research=lambda _: ResearchCompletion(
+                "completed", result_payload={"schema_version": 1},
+                actual_usd="0", actual_tokens=12,
+            ),
+        )
+
+        self.assertEqual(
+            finalized,
+            [("completed", None), ("degraded", "research_result_identity_mismatch")],
+        )
+        self.assertEqual(
+            result,
+            {"status": "degraded", "reason": "research_result_identity_mismatch"},
+        )
+        self.assertEqual(jobs.get("research").status, WorkerJobStatus.DEGRADED)
 
     def test_safe_reads_retry_only_within_the_configured_budget(self):
         attempts, sleeps = [], []
