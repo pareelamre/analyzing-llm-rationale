@@ -586,7 +586,11 @@ def _preview_polymarket(
         raise TradingValidationError("tick_size must be one of 0.1, 0.01, 0.001, 0.0001.")
     tick = Decimal(tick_size)
     if price % tick != 0:
-        raise TradingValidationError(f"price must align to the {tick_size} Polymarket tick size.")
+        quantized = price.quantize(tick, rounding=ROUND_HALF_UP)
+        if abs(price - quantized) <= Decimal("1e-6"):
+            price = quantized
+        else:
+            raise TradingValidationError(f"price must align to the {tick_size} Polymarket tick size.")
     min_size = _as_decimal("min_size", req.get("min_size"), required=False)
     if min_size is not None and min_size <= 0:
         raise TradingValidationError("min_size must be greater than 0 when supplied.")

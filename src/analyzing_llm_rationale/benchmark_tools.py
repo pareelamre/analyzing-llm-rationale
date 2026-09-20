@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -62,6 +63,7 @@ WEB_SEARCH_SOURCES = ("web", "gdelt", "google-news", "bing-news", "rss", "newsap
 WEB_SEARCH_TOP_K = 5
 DEFAULT_AGENT_ACCOUNT_VALUE = 10_000.0
 DEFAULT_CONCENTRATION_LIMIT = 0.15
+DEFAULT_CLUSTER_CONCENTRATION_LIMIT = 0.15
 # Deliberately larger than agent_trading_tick.py's order-notional cap (8% of
 # account value) so one cycle has room for more than a single max-sized
 # order -- a per-cycle cap stricter than the single-order cap would make the
@@ -135,6 +137,7 @@ class RiskGuardPolicy:
     duplicate_trade_cooldown_seconds: int
     max_bid_ask_spread: float = DEFAULT_MAX_BID_ASK_SPREAD
     max_spread_ratio: float = DEFAULT_MAX_SPREAD_RATIO
+    cluster_concentration_limit: float = DEFAULT_CLUSTER_CONCENTRATION_LIMIT
 
 
 @dataclass(frozen=True)
@@ -214,6 +217,10 @@ class AgentSpecializationProfile:
     max_trades_per_cycle: Optional[int] = None
     preferred_sizing_mode: Optional[str] = None
     horizon_preference: Optional[str] = None
+    min_lead_days: Optional[float] = None
+    max_lead_days: Optional[float] = None
+    max_order_notional_pct: Optional[float] = None
+    max_cluster_concentration_pct: Optional[float] = None
 
 
 AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
@@ -234,6 +241,10 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         max_trades_per_cycle=None,
         preferred_sizing_mode="convex_conviction",
         horizon_preference="underpriced_skew",
+        min_lead_days=None,
+        max_lead_days=None,
+        max_order_notional_pct=0.03,
+        max_cluster_concentration_pct=0.06,
     ),
     "qwen3-8-27b": AgentSpecializationProfile(
         model_id="qwen3-8-27b",
@@ -243,7 +254,8 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
             "is disciplined 14-30 day macro fundamentals, inflation/rates prints, economic data, and high-probability "
             "political milestones where you have verified +3.52pp skill. Your default action on all open positions is "
             "strictly HOLD until event resolution or convergence; do not churn or flip. Size new positions using "
-            "sizing_mode='convex_conviction' or 'quarter_kelly'. Focus on high-signal 14-30d horizons."
+            "sizing_mode='convex_conviction' or 'quarter_kelly'. You are strictly banned from short-term (<7d) fast-moving "
+            "news noise. Focus on high-signal 14-30d horizons."
         ),
         max_contract_price=None,
         min_profile_edge=None,
@@ -251,6 +263,10 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         max_trades_per_cycle=None,
         preferred_sizing_mode="convex_conviction",
         horizon_preference="14-30d",
+        min_lead_days=7.0,
+        max_lead_days=None,
+        max_order_notional_pct=0.03,
+        max_cluster_concentration_pct=0.06,
     ),
     "glm-5-3": AgentSpecializationProfile(
         model_id="glm-5-3",
@@ -258,9 +274,9 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         tactical_mandate=(
             "You have the lowest fee drag in the fleet ($2.34 total) and 100% historical accuracy on 14-30d horizon "
             "questions. Your strategy is ultra-patient deep reasoning: never chase speculative noise or intraday "
-            "price blips. Require at least 4.0pp of net edge before executing any new trade. Sizing: use "
-            "sizing_mode='scaled_edge' or 'edge_kelly'. If no candidate offers verified primary-source evidence and "
-            "a >=4pp edge, your optimal action is PASS."
+            "price blips. Require at least 4.0pp of net edge before executing any new trade. You are banned from short-term "
+            "(<7d) breaking news contracts. Sizing: use sizing_mode='scaled_edge' or 'edge_kelly'. If no candidate offers "
+            "verified primary-source evidence and a >=4pp edge, your optimal action is PASS."
         ),
         max_contract_price=None,
         min_profile_edge=0.04,
@@ -268,6 +284,10 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         max_trades_per_cycle=None,
         preferred_sizing_mode="scaled_edge",
         horizon_preference="14-30d",
+        min_lead_days=7.0,
+        max_lead_days=None,
+        max_order_notional_pct=0.03,
+        max_cluster_concentration_pct=0.06,
     ),
     "glm-5-3-flash": AgentSpecializationProfile(
         model_id="glm-5-3-flash",
@@ -284,6 +304,10 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         max_trades_per_cycle=None,
         preferred_sizing_mode="scaled_edge",
         horizon_preference="14-30d",
+        min_lead_days=7.0,
+        max_lead_days=None,
+        max_order_notional_pct=0.03,
+        max_cluster_concentration_pct=0.06,
     ),
     "gpt-oss-120b": AgentSpecializationProfile(
         model_id="gpt-oss-120b",
@@ -301,6 +325,10 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         max_trades_per_cycle=1,
         preferred_sizing_mode="edge_kelly",
         horizon_preference=None,
+        min_lead_days=None,
+        max_lead_days=None,
+        max_order_notional_pct=0.03,
+        max_cluster_concentration_pct=0.06,
     ),
     "llama-3.3-70b-instruct": AgentSpecializationProfile(
         model_id="llama-3.3-70b-instruct",
@@ -318,6 +346,10 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         max_trades_per_cycle=None,
         preferred_sizing_mode="convex_conviction",
         horizon_preference="14-30d",
+        min_lead_days=7.0,
+        max_lead_days=None,
+        max_order_notional_pct=0.03,
+        max_cluster_concentration_pct=0.06,
     ),
     "deepseek-v4-flash": AgentSpecializationProfile(
         model_id="deepseek-v4-flash",
@@ -335,6 +367,10 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         max_trades_per_cycle=None,
         preferred_sizing_mode="probe_kelly",
         horizon_preference=None,
+        min_lead_days=None,
+        max_lead_days=None,
+        max_order_notional_pct=0.02,
+        max_cluster_concentration_pct=0.04,
     ),
     "minimax-m3": AgentSpecializationProfile(
         model_id="minimax-m3",
@@ -352,6 +388,10 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         max_trades_per_cycle=None,
         preferred_sizing_mode="flat_probe",
         horizon_preference=None,
+        min_lead_days=None,
+        max_lead_days=None,
+        max_order_notional_pct=0.02,
+        max_cluster_concentration_pct=0.04,
     ),
 }
 
@@ -592,6 +632,11 @@ def _risk_guard_policy() -> RiskGuardPolicy:
     )
     if not 0 < daily_risk_limit_pct <= 1:
         raise ValueError("FORESEA_AGENT_DAILY_RISK_LIMIT_PCT must be between 0 and 1")
+    cluster_concentration_limit = _env_float(
+        "FORESEA_AGENT_CLUSTER_CONCENTRATION_LIMIT", concentration_limit,
+    )
+    if not 0 < cluster_concentration_limit <= 1:
+        raise ValueError("FORESEA_AGENT_CLUSTER_CONCENTRATION_LIMIT must be between 0 and 1")
     return RiskGuardPolicy(
         account_value=account_value,
         concentration_limit=concentration_limit,
@@ -614,6 +659,7 @@ def _risk_guard_policy() -> RiskGuardPolicy:
         max_spread_ratio=_env_float(
             "FORESEA_AGENT_MAX_SPREAD_RATIO", DEFAULT_MAX_SPREAD_RATIO,
         ),
+        cluster_concentration_limit=cluster_concentration_limit,
     )
 
 
@@ -753,6 +799,7 @@ def _sizing_plan(
     args: Mapping[str, Any], *, price: float, side: str, account_value: float,
     platform: str = "kalshi", category: Optional[str] = None,
     lead_days: Optional[float] = None,
+    agent_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Derive an executable stake from the agent's declared sizing choice.
 
@@ -833,6 +880,9 @@ def _sizing_plan(
 
     effective_min_edge = policy.min_edge
     effective_max_position_fraction = policy.max_position_fraction
+    prof = get_agent_profile(agent_id or args.get("agent_id") or args.get("model"))
+    if prof and prof.max_order_notional_pct is not None:
+        effective_max_position_fraction = min(effective_max_position_fraction, prof.max_order_notional_pct)
     is_tail_favorite = price >= 0.85
     is_tail_longshot = price <= 0.10
 
@@ -847,8 +897,10 @@ def _sizing_plan(
 
     if is_short_horizon:
         # Near-term (<7d) non-weather contracts suffer from breaking-news information lag
-        # and negative empirical skill (-0.3pp to -0.7pp). Enforce a 4pp minimum edge hurdle.
+        # and negative empirical skill (-0.3pp to -0.7pp). Enforce a 4pp minimum edge hurdle
+        # and clamp max position fraction to 2% (0.02) to prevent outsized paper drawdowns.
         effective_min_edge = max(effective_min_edge, 0.04)
+        effective_max_position_fraction = min(effective_max_position_fraction, 0.02)
 
     allow_fallback = bool(args.get("allow_sizing_fallback") or args.get("fallback_to_probe") or args.get("fallback"))
     fallback_from = None
@@ -862,6 +914,8 @@ def _sizing_plan(
             else:
                 policy = AGENT_SIZING_POLICIES["flat_probe"]
             effective_min_edge = max(policy.min_edge, 0.04) if is_short_horizon else policy.min_edge
+            if is_short_horizon:
+                effective_max_position_fraction = min(effective_max_position_fraction, 0.02)
         else:
             reason = "short_horizon_insufficient_edge" if is_short_horizon else "edge_below_threshold"
             return {
@@ -2121,6 +2175,55 @@ def _settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> List
             return []
 
 
+def _extract_market_cluster(ticker: str, *, platform: str = "kalshi") -> str:
+    r"""Extract a normalized cluster identifier for correlated contracts.
+
+    For Kalshi, strips strike suffix (-T\d+, -B\d+, etc.) so strike ladders for
+    the same event share the same cluster.
+    For Polymarket, strips trailing dates and calendar slices (e.g.
+    -through-september-25-2026 vs -through-september-30-2026) so adjacent
+    calendar expiry slices for the same underlying geopolitical or macro event
+    share the same cluster.
+    """
+    t = str(ticker or "").strip()
+    if not t:
+        return ""
+    p = str(platform or "").lower()
+    if "kalshi" in p:
+        cleaned = re.sub(r"-[TBY]\d+(\.\d+)?$", "", t, flags=re.IGNORECASE)
+        return cleaned.lower()
+    else:
+        cleaned = t.lower()
+        cleaned = re.sub(
+            r"-(?:through|by|before|in)-(?:january|february|march|april|may|june|july|august|september|october|november|december)(?:-\d{1,2})?(?:-\d{2,4})?.*$",
+            "",
+            cleaned,
+        )
+        cleaned = re.sub(
+            r"-(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)-\d{1,2}(?:-\d{2,4})?.*$",
+            "",
+            cleaned,
+        )
+        cleaned = re.sub(r"-\d{4}-\d{2}-\d{2}.*$", "", cleaned)
+        cleaned = re.sub(r"-\d{8}.*$", "", cleaned)
+        cleaned = re.sub(r"-\d{4}.*$", "", cleaned)
+        return cleaned or t.lower()
+
+
+def _cluster_cost_basis(account: Any, ticker: str, *, platform: str = "kalshi") -> float:
+    """Sum the cost basis of all open positions in the same correlated cluster."""
+    target_cluster = _extract_market_cluster(ticker, platform=platform)
+    if not target_cluster:
+        return _market_cost_basis(account, ticker, platform=platform)
+    total = 0.0
+    for pos in account.open_positions():
+        pos_plat = str(pos.platform).lower()
+        pos_cluster = _extract_market_cluster(str(pos.ident), platform=pos_plat)
+        if pos_cluster == target_cluster:
+            total += float(pos.cost_basis)
+    return total
+
+
 def _market_cost_basis(account: Any, ticker: str, *, platform: str = "kalshi") -> float:
     return sum(
         float(pos.cost_basis)
@@ -2491,7 +2594,13 @@ def _check_trade_guards(
         fee=fee,
     )
     market_cost_basis_after = _market_cost_basis(account, ticker, platform=platform)
+    cluster_cost_basis_after = _cluster_cost_basis(account, ticker, platform=platform)
+    profile = get_agent_profile(agent_id)
+    effective_cluster_limit = policy.cluster_concentration_limit
+    if profile and profile.max_cluster_concentration_pct is not None:
+        effective_cluster_limit = min(effective_cluster_limit, profile.max_cluster_concentration_pct)
     concentration_cap = policy.account_value * policy.concentration_limit
+    cluster_concentration_cap = policy.account_value * effective_cluster_limit
     cash_required = max(0.0, -float(fill.cash_delta))
     cycle_spend_before = float(usage["cycle_spend"])
     cycle_spend_after = cycle_spend_before + cash_required
@@ -2529,6 +2638,8 @@ def _check_trade_guards(
         reasons.append("edge_below_fee_floor")
     if market_cost_basis_after > concentration_cap + 1e-9:
         reasons.append("concentration_limit")
+    if not risk_reducing and cluster_cost_basis_after > cluster_concentration_cap + 1e-9:
+        reasons.append("cluster_concentration_limit")
     if cash_required > cash_before + 1e-9:
         reasons.append("solvency")
     # A pure close removes risk; it must remain available while a circuit
@@ -2537,7 +2648,6 @@ def _check_trade_guards(
     if not risk_reducing and cycle_spend_after > policy.per_cycle_spend_limit + 1e-9:
         reasons.append("per_cycle_spend")
 
-    profile = get_agent_profile(agent_id)
     effective_max_trades = policy.max_trades_per_cycle
     if profile and profile.max_trades_per_cycle is not None:
         effective_max_trades = min(effective_max_trades, profile.max_trades_per_cycle)
@@ -2554,16 +2664,30 @@ def _check_trade_guards(
         if drawdown_after > policy.max_drawdown_limit + 1e-9:
             reasons.append("drawdown_limit")
 
-        if profile is not None:
-            if profile.max_contract_price is not None and price > profile.max_contract_price + 1e-9:
-                reasons.append("profile_price_ceiling_exceeded")
-            if profile.forbidden_price_range is not None:
-                p_low, p_high = profile.forbidden_price_range
-                if (p_low - 1e-9) <= price <= (p_high + 1e-9):
-                    reasons.append("profile_price_band_forbidden")
-            if profile.min_profile_edge is not None:
-                if edge_check.get("checked") and edge_check.get("net_edge", 0.0) < profile.min_profile_edge - 1e-9:
-                    reasons.append("insufficient_profile_edge")
+    if profile is not None and not risk_reducing:
+        if profile.max_contract_price is not None and price > profile.max_contract_price + 1e-9:
+            reasons.append("profile_price_ceiling_exceeded")
+        if profile.forbidden_price_range is not None:
+            p_low, p_high = profile.forbidden_price_range
+            if (p_low - 1e-9) <= price <= (p_high + 1e-9):
+                reasons.append("profile_price_band_forbidden")
+        if profile.min_profile_edge is not None:
+            if edge_check.get("checked") and edge_check.get("net_edge", 0.0) < profile.min_profile_edge - 1e-9:
+                reasons.append("insufficient_profile_edge")
+        if profile.max_order_notional_pct is not None:
+            max_order_notional = policy.account_value * profile.max_order_notional_pct
+            if (price * quantity) > max_order_notional + max(0.50, price):
+                reasons.append("profile_order_notional_exceeded")
+        raw_lead = args.get("lead_days") or (market_check.get("lead_days") if isinstance(market_check, dict) else None)
+        if raw_lead is not None and cat != "weather":
+            try:
+                lead_val = float(raw_lead)
+                if profile.min_lead_days is not None and lead_val < profile.min_lead_days - 1e-6:
+                    reasons.append("profile_horizon_restricted")
+                if profile.max_lead_days is not None and lead_val > profile.max_lead_days + 1e-6:
+                    reasons.append("profile_horizon_restricted")
+            except (TypeError, ValueError):
+                pass
 
     spread_info = (market_check or {}).get("spread_check") if isinstance(market_check, dict) else None
     if strict_risk_management and not risk_reducing and spread_info and not spread_info.get("clears", True):
@@ -2579,6 +2703,9 @@ def _check_trade_guards(
         "concentration_limit": policy.concentration_limit,
         "concentration_cap": round(concentration_cap, 6),
         "market_cost_basis_after": round(market_cost_basis_after, 6),
+        "cluster_concentration_limit": effective_cluster_limit,
+        "cluster_concentration_cap": round(cluster_concentration_cap, 6),
+        "cluster_cost_basis_after": round(cluster_cost_basis_after, 6),
         "per_cycle_spend_limit": round(policy.per_cycle_spend_limit, 6),
         "cycle_id": policy.cycle_id,
         "cycle_spend_before": round(cycle_spend_before, 6),
@@ -2615,6 +2742,10 @@ def _check_trade_guards(
             "max_trades_per_cycle": profile.max_trades_per_cycle,
             "preferred_sizing_mode": profile.preferred_sizing_mode,
             "horizon_preference": profile.horizon_preference,
+            "min_lead_days": profile.min_lead_days,
+            "max_lead_days": profile.max_lead_days,
+            "max_order_notional_pct": profile.max_order_notional_pct,
+            "max_cluster_concentration_pct": profile.max_cluster_concentration_pct,
         } if profile else None,
     }
     outcome = "allowed" if detail["allowed"] else "rejected"
@@ -3143,6 +3274,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 platform=platform,
                 category=trade_category,
                 lead_days=trade_lead_days,
+                agent_id=agent_id,
             )
             if sizing.get("applied") and not sizing.get("eligible"):
                 sizing_actions.add(1, {"mode": str(sizing["mode"]), "outcome": "skipped"})
@@ -3426,6 +3558,35 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                         f"Trade rejected: insufficient_profile_edge. Stated net edge ({actual_edge:.1%}) does not meet "
                         f"your model's disciplined hurdle ({hurdle_val:.1%}). Overtrading thin edges causes destructive fee bleed. "
                         "Only trade high-conviction catalysts with substantial verified edge, or PASS."
+                    )
+                elif "cluster_concentration_limit" in guard["reasons"]:
+                    cluster_name = _extract_market_cluster(ticker, platform=platform)
+                    cluster_cap = float(guard.get("cluster_concentration_cap") or 0.0)
+                    basis_after = float(guard.get("cluster_cost_basis_after") or 0.0)
+                    rejection_message = (
+                        f"Trade rejected: cluster_concentration_limit. Total exposure across correlated cluster '{cluster_name}' "
+                        f"would reach ${basis_after:.2f}, exceeding the cluster concentration cap of ${cluster_cap:.2f} "
+                        f"({guard.get('cluster_concentration_limit', 0.06):.1%} of account). Stacking correlated bets across "
+                        "adjacent strikes or calendar dates for the same underlying event is prohibited."
+                    )
+                elif "profile_horizon_restricted" in guard["reasons"]:
+                    prof = get_agent_profile(agent_id)
+                    min_l = prof.min_lead_days if prof and prof.min_lead_days is not None else 7.0
+                    l_days_str = f"{trade_lead_days:.1f}d" if trade_lead_days is not None else "short"
+                    rejection_message = (
+                        f"Trade rejected: profile_horizon_restricted. Market resolution is {l_days_str} away, "
+                        f"which violates your profile's minimum horizon requirement ({min_l:.1f}d). Models have negative empirical "
+                        "skill trading fast-moving breaking news contracts under 7 days. Focus on 14-30d macro catalysts, or PASS."
+                    )
+                elif "profile_order_notional_exceeded" in guard["reasons"]:
+                    prof = get_agent_profile(agent_id)
+                    max_notional_pct = prof.max_order_notional_pct if prof and prof.max_order_notional_pct is not None else 0.03
+                    order_notional = guard.get("notional", 0.0)
+                    max_notional = policy.account_value * max_notional_pct
+                    rejection_message = (
+                        f"Trade rejected: profile_order_notional_exceeded. Order notional (${order_notional:.2f}) exceeds your model's "
+                        f"specialized single-order risk cap of ${max_notional:.2f} ({max_notional_pct:.1%} of account). "
+                        "Reduce trade quantity or use an entry sizing mode like 'quarter_kelly' or 'scaled_edge'."
                     )
                 elif guard["reasons"]:
                     rejection_message = f"Trade rejected by benchmark risk guards before execution ({', '.join(guard['reasons'])})."

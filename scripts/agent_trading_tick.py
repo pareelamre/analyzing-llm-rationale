@@ -1902,14 +1902,31 @@ def _discover_candidates(known_tickers: set, agent_id: Optional[str] = None) -> 
                 forbidden_penalty = 1
 
         horizon_penalty = 0
+        cat = str(q.get("category") or "").strip().lower()
+        if profile and profile.min_lead_days is not None and cat != "weather":
+            lead_d = None
+            days = q.get("lead_days")
+            if days is not None:
+                try:
+                    lead_d = float(days)
+                except (TypeError, ValueError):
+                    pass
+            if lead_d is None:
+                res_time = q.get("expected_expiration_time") or q.get("resolve_time") or q.get("close_time")
+                hours = _hours_until(res_time)
+                if hours is not None:
+                    lead_d = hours / 24.0
+            if lead_d is not None and lead_d < profile.min_lead_days:
+                horizon_penalty += 5
+
         if profile and profile.horizon_preference == "underpriced_skew":
             # Gemma favors cheap contracts (<= 0.40 on YES or NO)
             is_underpriced = price <= 0.40 or (1.0 - price) <= 0.40
-            horizon_penalty = 0 if is_underpriced else 1
+            horizon_penalty += (0 if is_underpriced else 1)
         elif profile and profile.horizon_preference == "14-30d":
-            horizon_penalty = 0 if _is_validated_horizon_data(q) else 1
+            horizon_penalty += (0 if _is_validated_horizon_data(q) else 1)
         else:
-            horizon_penalty = 0 if _is_validated_horizon_data(q) else 1
+            horizon_penalty += (0 if _is_validated_horizon_data(q) else 1)
 
         return (forbidden_penalty, horizon_penalty, _edge_hurdle_pp(q))
 
@@ -2485,6 +2502,12 @@ def _agent_tactical_profile_block(agent_id: Optional[str]) -> str:
         constraints.append(f"Recommended sizing mode: sizing_mode='{profile.preferred_sizing_mode}'")
     if profile.horizon_preference is not None:
         constraints.append(f"Preferred horizon: {profile.horizon_preference}")
+    if profile.min_lead_days is not None:
+        constraints.append(f"Minimum resolution horizon: >= {profile.min_lead_days:.0f} days (short-horizon fast-news ban)")
+    if profile.max_lead_days is not None:
+        constraints.append(f"Maximum resolution horizon: <= {profile.max_lead_days:.0f} days")
+    if profile.max_order_notional_pct is not None:
+        constraints.append(f"Max single-order size: {profile.max_order_notional_pct:.1%} of fund (anti-overconcentration guard)")
     if constraints:
         lines.append("Profile Rules & Guardrails:\n  - " + "\n  - ".join(constraints))
     return "\n".join(lines)
@@ -3579,9 +3602,10 @@ def _selected_strategy(thesis: str) -> str:
     return _STRATEGY_ALIASES.get(normalized, "unreported")
 
 
-def _configure_max_order_notional() -> float:
+def _configure_max_order_notional(agent_id: Optional[str] = None) -> float:
     """Override trading.py's flat-dollar FORESEA_MAX_ORDER_NOTIONAL for this
-    process only, as MAX_ORDER_NOTIONAL_PCT of the agent's account value
+    process only, as MAX_ORDER_NOTIONAL_PCT (or the agent profile's specialized
+    max_order_notional_pct) of the agent's account value
     (FORESEA_AGENT_ACCOUNT_VALUE -- by the time this runs in run_cycle(),
     already set to the current mark-to-market value, not the static
     starting baseline, so this scales with real performance). Scoped to
@@ -3591,7 +3615,12 @@ def _configure_max_order_notional() -> float:
     account_value = benchmark_tools._env_float(
         "FORESEA_AGENT_ACCOUNT_VALUE", benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE
     )
-    max_notional = round(account_value * MAX_ORDER_NOTIONAL_PCT, 2)
+    pct = MAX_ORDER_NOTIONAL_PCT
+    if agent_id:
+        profile = benchmark_tools.get_agent_profile(agent_id)
+        if profile and profile.max_order_notional_pct is not None:
+            pct = profile.max_order_notional_pct
+    max_notional = round(account_value * pct, 2)
     os.environ["FORESEA_MAX_ORDER_NOTIONAL"] = str(max_notional)
     return max_notional
 
@@ -3880,7 +3909,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     # in this cycle's tool loop could read a guard.
     with benchmark_tools._account_transaction() as conn:
         os.environ["FORESEA_AGENT_ACCOUNT_VALUE"] = str(_current_account_value(conn, agent_id, held_quotes))
-    _configure_max_order_notional()
+    _configure_max_order_notional(agent_id=agent_id)
 
     question = _build_question(
         portfolio_block, _build_candidates_block(held_quotes, new_quotes), agent_id,
