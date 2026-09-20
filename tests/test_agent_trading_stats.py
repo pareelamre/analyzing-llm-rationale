@@ -763,10 +763,20 @@ class RejectionContextTests(unittest.TestCase):
             {"reasons": ["concentration_limit"]},
         )
 
-    def test_unreadable_or_empty_metadata_adds_nothing(self):
-        for meta in (None, "", "not json", json.dumps([1, 2]), json.dumps({})):
+    def test_empty_metadata_adds_nothing(self):
+        for meta in (None, "", json.dumps({})):
             with self.subTest(meta=meta):
                 self.assertEqual(agent_trading_stats.rejection_context(meta), {})
+
+    def test_unreadable_metadata_says_so_rather_than_nothing(self):
+        """A row that had no reason and one whose reason cannot be read are
+        different claims; the feed used to publish both as a bare row."""
+        for meta in ("not json", json.dumps([1, 2])):
+            with self.subTest(meta=meta):
+                self.assertEqual(
+                    agent_trading_stats.rejection_context(meta),
+                    {"metadata_status": "unreadable"},
+                )
 
 
 class FillContextTests(unittest.TestCase):
@@ -801,10 +811,16 @@ class FillContextTests(unittest.TestCase):
             agent_trading_stats.fill_context(self._meta(target=100.0), 99.5), {},
         )
 
-    def test_missing_or_unreadable_metadata_adds_nothing(self):
-        for meta in (None, "", "not json", json.dumps({}), json.dumps({"audit": 5})):
+    def test_missing_or_auditless_metadata_adds_nothing(self):
+        for meta in (None, "", json.dumps({}), json.dumps({"audit": 5})):
             with self.subTest(meta=meta):
                 self.assertEqual(agent_trading_stats.fill_context(meta, 10.0), {})
+
+    def test_unreadable_metadata_says_so_rather_than_nothing(self):
+        self.assertEqual(
+            agent_trading_stats.fill_context("not json", 10.0),
+            {"metadata_status": "unreadable"},
+        )
 
     def test_a_non_numeric_quantity_still_yields_the_status(self):
         ctx = agent_trading_stats.fill_context(

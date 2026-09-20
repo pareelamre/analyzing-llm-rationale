@@ -2663,71 +2663,16 @@ def _verified_reduce_only_close(
     return requested_quantity <= closeable + 1e-9
 
 
-def _available_depth(
-    ticker: str, side: str, limit_price: float, *, platform: str = "kalshi"
-) -> Optional[float]:
-    """Contracts actually buyable at or better than ``limit_price``.
-
-    Returns None when depth cannot be established, which the caller treats as
-    "unknown" rather than "none" -- an outage must not silently zero a fill.
-
-    A shadow fill previously returned the full requested quantity whenever the
-    limit crossed the ask, with no reference to the book. That is fine for a
-    paper score and wrong for a simulation meant to stand in for real
-    execution: one live order was Kelly-sized to 6,056 contracts on a market
-    whose best level held 137, and the simulator would have booked all 6,056
-    at the top price. Every strategy is flattered by that, and the flattery is
-    largest exactly where the book is thinnest.
-
-    Kalshi's book lists resting BIDS on each side, and the two sides sum to
-    $1.00: buying YES is matched by a resting NO bid, so YES depth at limit p
-    is the NO quantity resting at 1 - p or better. Verified live:
-    ``1 - best_no_bid`` reproduced ``yes_ask`` exactly, and vice versa.
-    """
-    if platform != "kalshi":
-        return None
-    from analyzing_llm_rationale import market_data
-
-    try:
-        book = market_data.fetch_kalshi_orderbook(ticker) or {}
-    except market_data.MarketDataError:
-        # A venue outage is unknown depth, not zero depth. Anything else is a
-        # bug in this function and must surface rather than silently disable
-        # the check -- a bare `except Exception` here hid a NameError that
-        # made every lookup return "unknown", which reads exactly like a
-        # working fail-open.
-        return None
-    levels = (book.get("orderbook_fp") or book) if isinstance(book, dict) else {}
-    # To buy this side you cross the opposite side's resting bids.
-    key = "no_dollars" if side == "yes" else "yes_dollars"
-    rows = levels.get(key) if isinstance(levels, dict) else None
-    if not isinstance(rows, list) or not rows:
-        return None
-    threshold = 1.0 - limit_price
-    total = 0.0
-    seen = False
-    for row in rows:
-        try:
-            price, quantity = float(row[0]), float(row[1])
-        except (TypeError, ValueError, IndexError):
-            continue
-        seen = True
-        # A resting bid at or above the threshold is one this order can hit.
-        if price + 1e-9 >= threshold:
-            total += max(0.0, quantity)
-    return total if seen else None
-
-
 def _depth_fill(
     ticker: str, side: str, limit_price: float, requested: float,
     *, platform: str = "kalshi",
 ) -> tuple[Optional[float], Optional[float]]:
     """Fillable quantity and the average price actually paid for it.
 
-    ``_available_depth`` sums every level at or better than the limit, but the
-    fill was booked entirely at the best ask. An order whose limit sits above
-    the touch therefore took deep-book size at top-of-book price -- a fill no
-    real order gets, since a real one walks the book and pays the average.
+    The total returned is every level at or better than the limit, but a fill
+    booked entirely at the best ask would take deep-book size at top-of-book
+    price -- a fill no real order gets, since a real one walks the book and
+    pays the average, which is what the second return value reports.
     Returns ``(None, None)`` when depth cannot be established, which the caller
     still treats as unknown rather than empty.
     """
@@ -2853,14 +2798,24 @@ def _resolve_shadow_marketability(
     spread = (real_ask - real_bid) if (real_bid is not None and real_bid > 0 and real_ask is not None and real_ask > 0) else None
     spread_ratio = (spread / real_ask) if (spread is not None and real_ask is not None and real_ask > 0) else None
     spread_clears = True
+    spread_status = "checked"
     if spread is not None and spread_ratio is not None:
         if spread > max_spread + 1e-9 or spread_ratio > max_ratio + 1e-9:
             spread_clears = False
+    else:
+        # No resting bid above zero, so the spread cannot be measured. The
+        # order is still allowed through -- refusing it is a policy change,
+        # not a bug fix -- but "clears" must not be read as "the cap was
+        # applied": across the published audit it is the usual case, 236 of
+        # 263 trades, so a record that says nothing here says the guard ran
+        # on 27 of them. Callers and the audit read the status, not the flag.
+        spread_status = "unknown_no_bid"
     spread_check = {
         "real_bid": round(real_bid, 4) if real_bid is not None else None,
         "spread": round(spread, 4) if spread is not None else None,
         "spread_ratio": round(spread_ratio, 4) if spread_ratio is not None else None,
         "clears": spread_clears,
+        "status": spread_status,
         "max_spread": max_spread,
         "max_ratio": max_ratio,
     }
@@ -2950,6 +2905,8 @@ def _trade_audit_context(
             "observed_ask": market_check.get("real_ask"),
             "observed_bid": (market_check.get("spread_check") or {}).get("real_bid"),
             "spread": (market_check.get("spread_check") or {}).get("spread"),
+            # Whether the spread cap actually ran on this order.
+            "spread_status": (market_check.get("spread_check") or {}).get("status"),
             "lead_days": market_check.get("lead_days"),
         },
         "sizing": {key: sizing.get(key) for key in sizing_keys if key in sizing},
