@@ -638,12 +638,28 @@ def _same_thesis_content(left: str, right: str) -> bool:
     return len(shorter) >= 80 and shorter in longer
 
 
-def _metadata_dict(metadata_json: Any) -> Dict[str, Any]:
-    try:
-        metadata = json.loads(metadata_json) if metadata_json else {}
-    except (TypeError, ValueError):
+def _parse_metadata(metadata_json: Any) -> Optional[Dict[str, Any]]:
+    """Parsed row metadata, or None when the stored JSON cannot be read.
+
+    A row with no metadata and a row whose metadata is unreadable are
+    different claims, and the feed used to publish both as "nothing to say".
+    """
+    if not metadata_json:
         return {}
-    return metadata if isinstance(metadata, dict) else {}
+    try:
+        metadata = json.loads(metadata_json)
+    except (TypeError, ValueError):
+        return None
+    return metadata if isinstance(metadata, dict) else None
+
+
+def _metadata_dict(metadata_json: Any) -> Dict[str, Any]:
+    """Parsed metadata, with an unreadable row flattened to empty.
+
+    For callers that only read a field back out; anything that publishes the
+    row should use _parse_metadata and say when it could not be read.
+    """
+    return _parse_metadata(metadata_json) or {}
 
 
 # Statuses _extract_filled_quantity emits for a complete fill. Surfacing these
@@ -670,7 +686,12 @@ def fill_context(metadata_json: Any, filled_quantity: Any) -> Dict[str, Any]:
     small" from "this agent could not get filled", which are different claims
     about a model and currently indistinguishable on the board.
     """
-    audit = _metadata_dict(metadata_json).get("audit")
+    metadata = _parse_metadata(metadata_json)
+    if metadata is None:
+        # Same answer build_agent_trading_audit._audit_context gives: name the
+        # unreadable row rather than publish it as one that had nothing to say.
+        return {"metadata_status": "unreadable"}
+    audit = metadata.get("audit")
     if not isinstance(audit, dict):
         return {}
 
@@ -759,7 +780,9 @@ def rejection_context(metadata_json: Any) -> Dict[str, Any]:
     Handles both metadata shapes, matching build_agent_trading_audit:
     versioned rows carry audit.risk, older ones only risk_guard.
     """
-    metadata = _metadata_dict(metadata_json)
+    metadata = _parse_metadata(metadata_json)
+    if metadata is None:
+        return {"metadata_status": "unreadable"}
     if not metadata:
         return {}
 

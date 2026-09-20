@@ -1460,11 +1460,14 @@ class BenchmarkToolTests(unittest.TestCase):
             return_value=book,
         ):
             # Buying YES at 0.08 hits NO bids at 0.92 and better.
-            self.assertEqual(benchmark_tools._available_depth("KX", "yes", 0.08), 147.0)
+            total, vwap = benchmark_tools._depth_fill("KX", "yes", 0.08, 1_000)
+            self.assertEqual(total, 147.0)
+            # And pays for each level it takes: 137 at 0.08, 10 at 0.05.
+            self.assertAlmostEqual(vwap, (137 * 0.08 + 10 * 0.05) / 147)
             # At 0.05 nothing crosses: it would need a NO bid at 0.95+.
-            self.assertEqual(benchmark_tools._available_depth("KX", "yes", 0.05), 10.0)
+            self.assertEqual(benchmark_tools._depth_fill("KX", "yes", 0.05, 1_000)[0], 10.0)
             # Buying NO at 0.93 hits the YES bid at 0.07.
-            self.assertEqual(benchmark_tools._available_depth("KX", "no", 0.93), 24.0)
+            self.assertEqual(benchmark_tools._depth_fill("KX", "no", 0.93, 1_000)[0], 24.0)
 
     def test_a_pre_sizing_rejection_still_leaves_an_audit_row(self):
         # Guard rejections already wrote a rejected_trade row; the returns

@@ -74,8 +74,13 @@ def _open_store(model: str) -> sqlite3.Connection:
 
 def _load_model_notes(model: str) -> Dict[str, List[Dict[str, Any]]]:
     path = STORE_DIR / model / "notes.json"
+    if not path.exists():
+        # Passing None here fell back to _notes_path() -- whatever
+        # FORESEA_AGENT_NOTES_PATH or /tmp holds, which belongs to some other
+        # run. A model with no notes file has no notes.
+        return {}
     try:
-        return benchmark_tools._load_notes(path if path.exists() else None)
+        return benchmark_tools._load_notes(path)
     except benchmark_tools.NotesUnreadableError:
         # The board only displays notes and never saves them, so one model's
         # unreadable file costs a few activity labels, not the whole publish.

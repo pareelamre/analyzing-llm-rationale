@@ -277,9 +277,18 @@ def _read_existing_archive_periods(
             payload = json.loads(path.read_text(encoding="utf-8"))
             items = payload.get("items") if isinstance(payload, dict) else None
             if not isinstance(items, list):
-                continue
+                raise ValueError(f"{path} has no items list")
         except (OSError, ValueError):
-            logger.warning("skipping unreadable retired audit artifact: %s", path)
+            # For a retired model the archive is the only remaining record, so
+            # an unreadable month must still appear in the index. Dropping it
+            # published a history with a hole and nothing saying so.
+            logger.warning("unreadable retired audit artifact: %s", path)
+            periods.append({
+                "month": path.stem,
+                "path": _archive_manifest_path(path),
+                "records": 0,
+                "status": "unreadable",
+            })
             continue
         records.extend(item for item in items if isinstance(item, dict))
         periods.append({
