@@ -429,16 +429,49 @@ def _account_db_path() -> Path:
     return Path(os.environ.get("TMPDIR", "/tmp")) / "foresea_agent_accounts.sqlite"
 
 
+class NotesUnreadableError(RuntimeError):
+    """The notes file exists but could not be read on this call.
+
+    Raised rather than returning an empty notebook: manage_notes writes back
+    whatever it loaded, so reporting a failed read as "no notes" would save a
+    single-note file over every agent's notebook. Callers that only display
+    notes may treat this as "no notes this run"; anything that then saves must
+    not.
+    """
+
+
+def _quarantine_unreadable_notes(target: Path) -> Path:
+    """Move a corrupt notes file aside, so a rewrite never destroys it."""
+    aside = target.with_name(f"{target.name}.corrupt-{_now().replace(':', '').replace('.', '')}")
+    try:
+        target.replace(aside)
+    except OSError as exc:
+        # Could not preserve the bytes, so do not let the caller start empty
+        # and overwrite them.
+        raise NotesUnreadableError(f"{target} is unreadable and could not be set aside") from exc
+    logger.warning("agent notes file was unreadable; kept it at %s and started empty", aside)
+    return aside
+
+
 def _load_notes(path: Optional[Path] = None) -> Dict[str, List[Dict[str, Any]]]:
     target = path or _notes_path()
     if not target.exists():
         return {}
     try:
-        data = json.loads(target.read_text(encoding="utf-8"))
-    except Exception:
-        logger.warning("agent notes file could not be read; starting empty", exc_info=True)
+        raw = target.read_text(encoding="utf-8")
+    except OSError as exc:
+        # Transient: a lock, a half-finished sync, a permissions blip. The file
+        # is presumed intact, so fail this call instead of reporting no notes.
+        raise NotesUnreadableError(f"{target} could not be read") from exc
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        # Corrupt content, which a retry will not fix. Keep the bytes under a
+        # .corrupt- name for recovery and let this call start empty.
+        _quarantine_unreadable_notes(target)
         return {}
     if not isinstance(data, dict):
+        _quarantine_unreadable_notes(target)
         return {}
     out: Dict[str, List[Dict[str, Any]]] = {}
     for agent, notes in data.items():
