@@ -2873,6 +2873,85 @@
       "outcome": "open",
       "record_hash": "f12e16daaea8bf5762ed96edcb32defb45ea2f76a5dbda83f35d71e1bef73510",
       "recorded_at": "2026-09-20T16:36:19.311348+00:00"
+    },
+    {
+      "action_id": "6a7f066c-8a28-4c0b-9609-321a3996a0c2",
+      "agent_id": "glm-5-3-flash",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_assumed_full",
+          "filled_quantity": 21.25
+        },
+        "initiated_by": "pre_expiry_exit_rule",
+        "quote": {
+          "lead_days": 1.0221639520833334,
+          "marketable": true,
+          "observed_ask": 0.98,
+          "observed_bid": 0.96,
+          "source": "live_venue_quote",
+          "spread": 0.02,
+          "status": "shadow_price_from_live_quote"
+        },
+        "requested_order": {
+          "price": null,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "cash_before": 9741.695616,
+          "cash_required": 0.0,
+          "concentration_cap": 1500.0,
+          "cycle_id": "30m:994404",
+          "cycle_spend_after": 0.0,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 69.347784,
+          "daily_risk_before": 69.347784,
+          "daily_risk_limit": 3000.0,
+          "drawdown_after": 0.005305,
+          "fee": 0.029155,
+          "gross_notional_override": true,
+          "market_cost_basis_after": 0,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 20.825,
+          "open_markets_after": 3,
+          "per_cycle_spend_limit": 2000.0,
+          "reasons": [],
+          "risk_reducing": true
+        },
+        "sizing": {
+          "applied": false,
+          "mode": "close"
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994404",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": 0.39584500000000133,
+        "cash_required": 0.0,
+        "fee": 0.029155,
+        "netting_payout": 21.25,
+        "notional": 20.825,
+        "price": 0.98,
+        "quantity": 21.25,
+        "realized_pnl": -1.3041549999999986,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXHIGHNY-26SEP20-T71"
+      },
+      "mode": "shadow",
+      "outcome": "realized",
+      "record_hash": "7edf4b4a92532c51e8a6f2d4a159a0e4c60fa4df22d5f3f39ce0dec61f184181",
+      "recorded_at": "2026-09-20T18:28:05.339659+00:00"
     }
   ],
   "month": "2026-09",
