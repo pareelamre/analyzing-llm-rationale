@@ -74,7 +74,13 @@ def _open_store(model: str) -> sqlite3.Connection:
 
 def _load_model_notes(model: str) -> Dict[str, List[Dict[str, Any]]]:
     path = STORE_DIR / model / "notes.json"
-    return benchmark_tools._load_notes(path if path.exists() else None)
+    try:
+        return benchmark_tools._load_notes(path if path.exists() else None)
+    except benchmark_tools.NotesUnreadableError:
+        # The board only displays notes and never saves them, so one model's
+        # unreadable file costs a few activity labels, not the whole publish.
+        print(f"  notes unreadable for {model}; publishing without them")
+        return {}
 
 
 def _latest_thesis(conn: sqlite3.Connection, model: str) -> Dict[str, Any] | None:
