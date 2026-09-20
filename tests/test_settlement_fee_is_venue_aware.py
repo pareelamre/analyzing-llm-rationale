@@ -77,7 +77,11 @@ class SettlementFeeIsVenueAwareTests(unittest.TestCase):
 
 
 class BothSettlementPathsPassTheVenueTests(unittest.TestCase):
-    """Two settlement paths exist -- sqlite and Datastore -- and both charged."""
+    """Every settlement path passes the venue.
+
+    There were two, SQLite and Datastore, and both charged. The Datastore
+    account store has since been removed, so the scan now finds one.
+    """
 
     def _rate_calls(self):
         import ast
@@ -94,8 +98,9 @@ class BothSettlementPathsPassTheVenueTests(unittest.TestCase):
                 calls.append((node.lineno, len(supplied), literals))
         return calls
 
-    def test_the_scan_finds_both_paths(self):
-        self.assertGreaterEqual(len(self._rate_calls()), 2)
+    def test_the_scan_finds_the_settlement_path(self):
+        """Guards the two checks below against passing on an empty scan."""
+        self.assertGreaterEqual(len(self._rate_calls()), 1)
 
     def test_no_call_site_omits_the_venue(self):
         bare = [line for line, argc, _ in self._rate_calls() if argc == 0]
