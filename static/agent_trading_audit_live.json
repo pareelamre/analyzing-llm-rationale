@@ -24702,6 +24702,96 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "45c01a31-a563-47d6-a2b6-fef74e6f334d",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_quote_unavailable",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": null,
+            "marketable": false,
+            "observed_ask": null,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_quote_unavailable"
+          },
+          "requested_order": {
+            "price": 0.07,
+            "quantity": "100"
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 6799.017407,
+            "cash_required": 237.250072,
+            "concentration_cap": 1186.250361,
+            "cycle_id": "30m:994428",
+            "cycle_spend_after": 237.250072,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 852.550552,
+            "daily_risk_before": 615.30048,
+            "daily_risk_limit": 2372.500722,
+            "drawdown_after": 0.207038,
+            "fee": 14.500967,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 222.749105,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 222.749105,
+            "open_markets_after": 2,
+            "per_cycle_spend_limit": 1581.667148,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.88,
+            "eligible": true,
+            "horizon": "unknown",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": null,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 237.250072,
+            "target_quantity": 3182.1300770994003
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994428",
+        "event_type": "unfilled_order",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 0.07,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXROCHCHOWLSKYDEBUT-26NOV01"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "d7147cd28f1fe15cbc6687c1cdc5fe831ed9c0852944ca23d71a65cf7aa61ab6",
+        "recorded_at": "2026-09-21T06:14:30.822884+00:00"
+      },
+      {
         "action_id": "f1b85b9b-ff16-46cb-81eb-86b639b5b51f",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -36291,6 +36381,85 @@
     ],
     "qwen3-8-27b": [
       {
+        "action_id": "f0a77854-603b-4511-a01e-b0d5c6aae8c1",
+        "agent_id": "qwen3-8-27b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 2528.724908
+          },
+          "quote": {
+            "lead_days": 9.736071363043981,
+            "marketable": true,
+            "observed_ask": 0.83,
+            "observed_bid": 0.82,
+            "source": "live_venue_quote",
+            "spread": 0.01,
+            "spread_status": "checked",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.83,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 7219.883264,
+            "cash_required": 0.0,
+            "concentration_cap": 1434.408174,
+            "cycle_id": "30m:994428",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 1525.076421,
+            "daily_risk_before": 1525.076421,
+            "daily_risk_limit": 2868.816348,
+            "drawdown_after": 0.05231,
+            "fee": 14.27212,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 2098.841673,
+            "open_markets_after": 8,
+            "per_cycle_spend_limit": 1912.544232,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994428",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 415.61111432512234,
+          "cash_required": 0.0,
+          "fee": 14.27212,
+          "netting_payout": 2528.724907794837,
+          "notional": 2098.8416734697144,
+          "price": 0.83,
+          "quantity": 2528.724907794837,
+          "realized_pnl": -165.99561446769022,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "us-x-iran-ceasefire-continues-through-september-30-20260917"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "25468111a55af1212c9e31fbc3a297b6d04a41619cb39853b34194eb829226f5",
+        "recorded_at": "2026-09-21T06:19:03.503896+00:00"
+      },
+      {
         "action_id": "d30c1812-409b-4b3e-a0c0-8aa2de72c8e9",
         "agent_id": "qwen3-8-27b",
         "audit": {
@@ -41495,7 +41664,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-21T05:45:09.238793+00:00",
+  "generated_at": "2026-09-21T06:20:24.584131+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
