@@ -24702,6 +24702,98 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "f1b85b9b-ff16-46cb-81eb-86b639b5b51f",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": null,
+            "marketable": false,
+            "observed_ask": null,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_quote_unavailable"
+          },
+          "requested_order": {
+            "price": 0.42,
+            "quantity": "100"
+          },
+          "risk": {
+            "allowed": false,
+            "cash_before": 6799.017407,
+            "cash_required": 143.125628,
+            "concentration_cap": 1191.61803,
+            "cycle_id": "30m:994424",
+            "cycle_spend_after": 143.125628,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 758.426108,
+            "daily_risk_before": 615.30048,
+            "daily_risk_limit": 2383.23606,
+            "drawdown_after": 0.206146,
+            "fee": 5.584183,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 137.541445,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 137.541445,
+            "open_markets_after": 2,
+            "per_cycle_spend_limit": 1588.82404,
+            "reasons": [
+              "profile_price_ceiling_exceeded"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.16,
+            "eligible": true,
+            "horizon": "unknown",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": null,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 143.125628,
+            "target_quantity": 327.47963095044923
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994424",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 143.125628,
+          "fee": 5.584183,
+          "netting_payout": 0.0,
+          "notional": 137.541445,
+          "price": 0.42,
+          "quantity": 327.47963095044923,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXCLEMSONSWINNEY-26DEC01"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "fb4a90b94042bebf1e7c0626057f9520c7bd496ccfd14db85c294777100a7563",
+        "recorded_at": "2026-09-21T04:15:10.367501+00:00"
+      },
+      {
         "action_id": "9007241d-4a82-4628-a95e-2bebc0874239",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -41403,7 +41495,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-21T02:24:59.566675+00:00",
+  "generated_at": "2026-09-21T04:21:20.621333+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
