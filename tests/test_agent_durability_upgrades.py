@@ -128,6 +128,9 @@ class TestBidAskSpreadGuard(unittest.TestCase):
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": ledger_path,
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": db_path,
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+                # The opening trade is setup for the close under test, and its
+                # stated edge sits on the credible-edge ceiling.
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0",
             }
             # First open a position under tight spread
             with (

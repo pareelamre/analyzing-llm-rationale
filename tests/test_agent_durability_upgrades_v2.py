@@ -259,10 +259,20 @@ class ProfileHorizonAndOrderNotionalTests(unittest.TestCase):
                 self.assertTrue(result["ok"], f"Trade failed: {result}")
 
     def test_short_horizon_weather_is_exempt(self):
+        """The profile's short-horizon rule still exempts weather.
+
+        Weather is blocked as a category by default now, so this opts back in:
+        the exemption is what is under test, and it has to keep working for
+        anyone who re-enables the category.
+        """
         ctx = benchmark_tools.ToolContext(agent_id="qwen3-8-27b", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             with (
-                mock.patch.dict(os.environ, self._base_env(td), clear=False),
+                mock.patch.dict(
+                    os.environ,
+                    {**self._base_env(td), "FORESEA_AGENT_BLOCKED_CATEGORIES": ""},
+                    clear=False,
+                ),
                 mock.patch(
                     "analyzing_llm_rationale.market_data.fetch_kalshi",
                     return_value=_quote(

@@ -426,6 +426,8 @@ class CandidateSelectionTests(unittest.TestCase):
             return [weather] if kwargs.get("category") == "Weather" else [general]
 
         with (
+            # Weather is blocked by default; this covers the reserved lane itself.
+            mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": ""}, clear=False),
             mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
             mock.patch.object(market_data, "list_polymarket", return_value=[]),
             mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
@@ -451,6 +453,7 @@ class CandidateSelectionTests(unittest.TestCase):
             return []
 
         with (
+            mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": ""}, clear=False),
             mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
             mock.patch.object(market_data, "list_polymarket", return_value=[]),
         ):
@@ -1827,6 +1830,9 @@ class RunCycleTests(unittest.TestCase):
                 "FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json"),
                 "FORESEA_AGENT_CYCLE_ID": "declared-buy-cycle",
                 "FORESEA_AGENT_PLACE_TRADE_MODE": "shadow",
+                # The declared thesis states an edge above the credible-edge
+                # ceiling; this test is about executing a declared thesis.
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0",
             }
             with (
                 mock.patch.dict(os.environ, env, clear=False),
