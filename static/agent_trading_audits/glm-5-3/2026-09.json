@@ -1193,6 +1193,98 @@
       "outcome": "open",
       "record_hash": "f5650fd37ed83488a28532cac8f069573fc91e004e3f36d46695842d57eff2c9",
       "recorded_at": "2026-09-22T04:14:53.059877+00:00"
+    },
+    {
+      "action_id": "c0265c25-36cb-4c48-a4dd-893fb45a5582",
+      "agent_id": "glm-5-3",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 770.825662995544,
+          "marketable": true,
+          "observed_ask": 0.75,
+          "observed_bid": 0.74,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.75,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "cash_before": 9921.415262,
+          "cash_required": 106.397229,
+          "concentration_cap": 1496.206093,
+          "cycle_id": "30m:994500",
+          "cycle_spend_after": 106.397229,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 164.762941,
+          "daily_risk_before": 58.365713,
+          "daily_risk_limit": 2992.412187,
+          "drawdown_after": 0.002395,
+          "fee": 1.829928,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 104.567301,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 104.567301,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1994.941458,
+          "reasons": [
+            "insufficient_profile_edge"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.05,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.25,
+          "lead_days": 770.8,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.03,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 106.397229,
+          "target_quantity": 139.42306786005466
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994500",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 106.397229,
+        "fee": 1.829928,
+        "netting_payout": 0.0,
+        "notional": 104.567301,
+        "price": 0.75,
+        "quantity": 139.42306786005466,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXMLBDEBUT-FARIAS-26OCT01"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "210543fda3e26035b9279938587983ea5626019bc26f4d5c966a4a3342aeaa3e",
+      "recorded_at": "2026-09-22T18:11:02.742351+00:00"
     }
   ],
   "month": "2026-09",
