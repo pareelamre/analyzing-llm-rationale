@@ -4949,6 +4949,100 @@
       "outcome": "realized",
       "record_hash": "ed6febc6329900e0cfcb5e4d9352740b1e56440142f56021753b6d557e82a1a6",
       "recorded_at": "2026-09-23T06:04:58.776927+00:00"
+    },
+    {
+      "action_id": "9b17b71c-6aa9-4a05-adfa-456654249a49",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 99.61569238046296,
+          "marketable": true,
+          "observed_ask": 0.18,
+          "observed_bid": 0.17,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.18,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 7762.030802,
+          "cash_required": 259.006123,
+          "concentration_cap": 1295.002754,
+          "cycle_id": "30m:994540",
+          "cycle_spend_after": 259.006123,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 269.44102,
+          "daily_risk_before": 10.434897,
+          "daily_risk_limit": 2590.005508,
+          "drawdown_after": 0.053427,
+          "fee": 8.2256,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 250.780523,
+          "max_credible_edge": 0.2,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 250.780523,
+          "open_markets_after": 7,
+          "per_cycle_spend_limit": 1726.670339,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.66,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.3,
+          "lead_days": 99.6,
+          "market_shrinkage": 0.15,
+          "max_position_fraction": 0.03,
+          "mode": "convex_conviction",
+          "reason": null,
+          "target_notional": 259.000551,
+          "target_quantity": 1393.2251255945132
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994540",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 259.006123,
+        "fee": 8.2256,
+        "netting_payout": 0.0,
+        "notional": 250.780523,
+        "price": 0.18,
+        "quantity": 1393.2251255945132,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "will-hamas-agree-to-disarm-by-december-31"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "003c000f5484a0238f7fdc67be37eb27fc2a0ffe802a05d6435b348dc369cc53",
+      "recorded_at": "2026-09-23T14:12:24.264079+00:00"
     }
   ],
   "month": "2026-09",
