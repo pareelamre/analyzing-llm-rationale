@@ -128,13 +128,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.06715,
+      "max_drawdown": 0.072991,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -5.8542,
+      "return_pct": -6.1023,
       "settled_count": 4,
-      "sharpe": -0.2
+      "sharpe": -0.2012
     }
   },
   "equity_curves": {
@@ -332,7 +332,7 @@
         {
           "account_value": 9473.610492,
           "event_type": "mark_to_market",
-          "ts": "2026-09-23T22:25:36.064221+00:00"
+          "ts": "2026-09-23T22:29:11.760308+00:00"
         }
       ]
     },
@@ -740,7 +740,7 @@
         {
           "account_value": 8797.411363,
           "event_type": "mark_to_market",
-          "ts": "2026-09-23T22:25:36.064221+00:00"
+          "ts": "2026-09-23T22:29:11.760308+00:00"
         }
       ]
     },
@@ -863,7 +863,7 @@
         {
           "account_value": 9971.62437,
           "event_type": "mark_to_market",
-          "ts": "2026-09-23T22:25:36.064221+00:00"
+          "ts": "2026-09-23T22:29:11.760308+00:00"
         }
       ]
     },
@@ -1131,7 +1131,7 @@
         {
           "account_value": 9871.743069,
           "event_type": "mark_to_market",
-          "ts": "2026-09-23T22:25:36.064221+00:00"
+          "ts": "2026-09-23T22:29:11.760308+00:00"
         }
       ]
     },
@@ -2059,7 +2059,7 @@
         {
           "account_value": 7877.285753,
           "event_type": "mark_to_market",
-          "ts": "2026-09-23T22:25:36.064221+00:00"
+          "ts": "2026-09-23T22:29:11.760308+00:00"
         }
       ]
     },
@@ -2912,7 +2912,7 @@
         {
           "account_value": 7872.551276,
           "event_type": "mark_to_market",
-          "ts": "2026-09-23T22:25:36.064221+00:00"
+          "ts": "2026-09-23T22:29:11.760308+00:00"
         }
       ]
     },
@@ -3115,15 +3115,15 @@
         {
           "account_value": 8462.015381,
           "event_type": "mark_to_market",
-          "ts": "2026-09-23T22:25:36.064221+00:00"
+          "ts": "2026-09-23T22:29:11.760308+00:00"
         }
       ]
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "current_drawdown": 0.06715,
-      "max_drawdown": 0.06715,
-      "sharpe": -0.2,
+      "current_drawdown": 0.069608,
+      "max_drawdown": 0.072991,
+      "sharpe": -0.2012,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -3531,9 +3531,14 @@
           "ts": "2026-09-23T20:23:17.444820+00:00"
         },
         {
-          "account_value": 9414.576545,
+          "account_value": 9355.622941,
+          "event_type": "trade",
+          "ts": "2026-09-23T22:26:07.144859+00:00"
+        },
+        {
+          "account_value": 9389.767885,
           "event_type": "mark_to_market",
-          "ts": "2026-09-23T22:25:36.064221+00:00"
+          "ts": "2026-09-23T22:29:11.760308+00:00"
         }
       ]
     }
@@ -3948,7 +3953,7 @@
           "ticker": "KXHIGHNY-26SEP17-T80"
         }
       ],
-      "recorded_forecasts": 159,
+      "recorded_forecasts": 160,
       "resolved_forecasts": 17,
       "status": "learning",
       "weather_calibration": [
@@ -3963,7 +3968,7 @@
       ]
     }
   },
-  "generated_at": "2026-09-23T22:25:36.237532+00:00",
+  "generated_at": "2026-09-23T22:29:12.035637+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -4016,9 +4021,9 @@
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:994552",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: US strikes on Iran have ceased; market re-rated from 24% to 64% YES on ceasefire continuation. Fed hiked 25bps Sep 16 to 3.75-4.00%; consecutive hikes are historically rare.\n- **Belief update**: US-Iran P(NO) revised from 75% to ~28% (thesis invalidated). Fed Oct no-change P(YES)=45% vs market 36%.\n\n### 1. Decision & Execution\n- **Action**: CLOSE US-Iran NO + BUY Fed Oct no-change YES\n- **Market & Venue**: will-there-be-no-change-in-fed-interest-rates-after-the-october-2026-meeting on Polymarket\n- **Order Sizing**: Quarter Kelly 8% cap, 329.75 contracts @ $0.36, notional: $118.71. US-Iran NO closed 347.7 @ $0.64 (realized ~-$41).\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Fed market resolves on whether rate stays at 3.75-4.00% after Oct FOMC. No exclusions relevant.\n- **Observation Window**: Oct 2026 FOMC meeting (~Oct 27-28) \u2192 resolves post-meeting.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 45% YES vs **Market Price**: 36% (Edge: +9pp)\n- **Information Asymmetry**: Market overprices probability of a second consecutive hike or a sudden cut within one month. Post-hike pause is the modal outcome.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Oct 2026 FOMC meeting (~Oct 27-28); FDA Overton hearing Sep 24-25.\n- **Invalidation Trigger**: If Fed signals aggressive tightening or major economic shock before Oct meeting, reducing no-change probability below 36%.",
-      "ts": "2026-09-23T20:23:25.196352+00:00",
+      "cycle_id": "30m:994556",
+      "thesis": "### 0. Research Delta\n- **Strategy**: POSITION_RISK_REDUCTION\n- **New evidence**: Khamenei close finally executed after 3 failed cycles (venue tick-size bug resolved). Venezuela: Delcy Rodr\u00edguez addressing UN GA, making oil deals, erasing Maduro's image (NYT Jan 5, CounterPunch Sep 11, UPI Sep 1).\n- **Belief update**: Khamenei position eliminated. Venezuela P(YES) ~55-60% vs market 41% \u2014 market may underprice YES but insufficient confidence to trade.\n\n### 1. Decision & Execution\n- **Action**: CLOSE (executed) + PASS on new positions\n- **Market & Venue**: will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026 on Polymarket\n- **Order Sizing**: Close, 4864.44 contracts @ $0.85, notional: $4,134.78. Realized loss ~$73. No new order.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Khamenei market resolved to 'de facto holds and exercises powers of head of state' \u2014 my NO thesis was invalidated by Mojtaba's consolidation. Close was correct risk reduction.\n- **Observation Window**: N/A (position closed)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 55-60% YES vs **Market Price**: 41% YES (Edge: +14-19pp on YES) \u2014 but insufficient confidence given 'unelected/interim' ambiguity in resolution rules. PASS.\n- **Information Asymmetry / Rationale**: She's been in power 9 months, addressing UN, making international deals. But 'officially holds' requires formal appointment/swearing-in, and political instability (CounterPunch: 'gun pointed at her head') creates genuine uncertainty. Edge not actionable at 5pp quant signal.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Venezuela: potential formal swearing-in or election announcement before Dec 31. Fed Oct FOMC: Oct 27-28.\n- **Invalidation Trigger**: N/A (no new position opened)",
+      "ts": "2026-09-23T22:27:53.439128+00:00",
       "type": "thesis"
     }
   },
@@ -4271,15 +4276,15 @@
       "won_count": 3
     },
     {
-      "account_value": 9414.576545,
+      "account_value": 9389.767885,
       "agent_id": "qwen3-8-27b",
-      "cash": 7294.590042,
-      "fees_paid": 167.070039,
+      "cash": 7999.447784,
+      "fees_paid": 191.878699,
       "illiquid_positions": [],
       "mark_coverage": {
-        "open_positions": 10,
-        "priced_cost_basis": 2136.740826,
-        "priced_positions": 10,
+        "open_positions": 9,
+        "priced_cost_basis": 1358.429997,
+        "priced_positions": 9,
         "unpriced_cost_basis": 0.0,
         "unpriced_positions": 0
       },
@@ -4374,17 +4379,6 @@
           "valuation_status": "bid_liquidation"
         },
         {
-          "avg_entry_price": 0.16,
-          "cost_basis": 778.310829,
-          "current_price": 0.15,
-          "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-          "platform": "polymarket",
-          "quantity": 4864.44268,
-          "side": "NO",
-          "unrealized_pnl": -48.644427,
-          "valuation_status": "bid_liquidation"
-        },
-        {
           "avg_entry_price": 0.36,
           "cost_basis": 118.711117,
           "current_price": 0.34,
@@ -4397,18 +4391,18 @@
         }
       ],
       "partially_filled_count": 23,
-      "realized_count": 23,
-      "realized_pnl": -449.132707,
-      "return_pct": -5.8542,
+      "realized_count": 24,
+      "realized_pnl": -522.585794,
+      "return_pct": -6.1023,
       "rule_exit_count": 3,
       "settled_count": 4,
       "sized_trade_count": 32,
       "starting_cash": 10000.0,
-      "total_pnl": -585.423455,
-      "trade_count": 51,
-      "unrealized_pnl": -16.754323,
-      "updated_at": "2026-09-23T20:23:17.443971+00:00",
-      "win_rate": 0.3913,
+      "total_pnl": -610.232115,
+      "trade_count": 52,
+      "unrealized_pnl": 31.890104,
+      "updated_at": "2026-09-23T22:26:07.144247+00:00",
+      "win_rate": 0.375,
       "won_count": 9
     },
     {
@@ -4679,7 +4673,7 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 1160,
+      "cycle_age_seconds": 1375,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -4705,7 +4699,7 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 813,
+      "cycle_age_seconds": 1029,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -4731,7 +4725,7 @@
       "store_present": true
     },
     "glm-5-3": {
-      "cycle_age_seconds": 637,
+      "cycle_age_seconds": 853,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -4757,7 +4751,7 @@
       "store_present": true
     },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 439,
+      "cycle_age_seconds": 655,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -4783,7 +4777,7 @@
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 299,
+      "cycle_age_seconds": 515,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -4809,7 +4803,7 @@
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 219,
+      "cycle_age_seconds": 434,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -4835,7 +4829,7 @@
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 25,
+      "cycle_age_seconds": 241,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -4861,29 +4855,29 @@
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 7330,
+      "cycle_age_seconds": 78,
       "delayed_after_seconds": 5400,
-      "detail": "The most recent confirmed cycle is later than the expected cadence.",
+      "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-23T20:23:17.443971+00:00",
-      "last_action_at": "2026-09-23T20:23:17.444820+00:00",
-      "last_attempt_at": "2026-09-23T20:20:49.827350+00:00",
+      "last_account_updated_at": "2026-09-23T22:26:07.144247+00:00",
+      "last_action_at": "2026-09-23T22:26:07.144859+00:00",
+      "last_attempt_at": "2026-09-23T22:25:14.908792+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 20,
-      "last_cycle_at": "2026-09-23T20:23:25.196352+00:00",
-      "last_cycle_id": "30m:994552",
-      "last_duration_ms": 155372,
+      "last_cycle_at": "2026-09-23T22:27:53.439128+00:00",
+      "last_cycle_id": "30m:994556",
+      "last_duration_ms": 158535,
       "last_failure_detail": null,
       "last_failure_kind": null,
-      "last_forecast_records": 2,
+      "last_forecast_records": 1,
       "last_paper_execution_outcome": null,
       "last_provider_model": "Qwen/Qwen3.8-27B",
       "last_thesis_published": true,
-      "last_tool_steps": 6,
+      "last_tool_steps": 4,
       "last_weather_candidates_offered": 1,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "delayed",
+      "status": "active",
       "store_present": true
     }
   },
@@ -4903,12 +4897,39 @@
     "detail": "All latest model attempts completed without failure.",
     "last_attempt_failures": [],
     "models_total": 8,
-    "models_verified": 7,
-    "models_with_confirmed_cycle": 7,
+    "models_verified": 8,
+    "models_with_confirmed_cycle": 8,
     "provider_paused": [],
     "status": "healthy"
   },
   "recent_activity": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "cycle_id": "30m:994556",
+      "thesis": "### 0. Research Delta\n- **Strategy**: POSITION_RISK_REDUCTION\n- **New evidence**: Khamenei close finally executed after 3 failed cycles (venue tick-size bug resolved). Venezuela: Delcy Rodr\u00edguez addressing UN GA, making oil deals, erasing Maduro's image (NYT Jan 5, CounterPunch Sep 11, UPI Sep 1).\n- **Belief update**: Khamenei position eliminated. Venezuela P(YES) ~55-60% vs market 41% \u2014 market may underprice YES but insufficient confidence to trade.\n\n### 1. Decision & Execution\n- **Action**: CLOSE (executed) + PASS on new positions\n- **Market & Venue**: will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026 on Polymarket\n- **Order Sizing**: Close, 4864.44 contracts @ $0.85, notional: $4,134.78. Realized loss ~$73. No new order.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Khamenei market resolved to 'de facto holds and exercises powers of head of state' \u2014 my NO thesis was invalidated by Mojtaba's consolidation. Close was correct risk reduction.\n- **Observation Window**: N/A (position closed)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 55-60% YES vs **Market Price**: 41% YES (Edge: +14-19pp on YES) \u2014 but insufficient confidence given 'unelected/interim' ambiguity in resolution rules. PASS.\n- **Information Asymmetry / Rationale**: She's been in power 9 months, addressing UN, making international deals. But 'officially holds' requires formal appointment/swearing-in, and political instability (CounterPunch: 'gun pointed at her head') creates genuine uncertainty. Edge not actionable at 5pp quant signal.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Venezuela: potential formal swearing-in or election announcement before Dec 31. Fed Oct FOMC: Oct 27-28.\n- **Invalidation Trigger**: N/A (no new position opened)",
+      "ts": "2026-09-23T22:27:53.439128+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-8-27b",
+      "tags": [],
+      "text": "Khamenei close FINALLY SUCCEEDED (Sep 23, 4th cycle): BUY YES 4864.44 @ 0.85, realized loss ~$73 (4864.44 \u00d7 (1-0.16-0.85) - $24.81 fees). Position eliminated. Now at 9 positions, $7,999 cash. Venezuela Delcy Rodriguez: market 40-41% YES. She's been in power since Jan 2026 (US captured Maduro), addressing UN GA, making oil deals, erasing Maduro's image. Called 'unelected' and 'interim' but functioning as head of state. Resolution requires 'officially holds' = formally appointed/sworn in OR confirmed by official government info. I think market may be underpricing YES but not confident enough to trade. PASS. All other candidates PASS - no edge above threshold. [khamenei, closed, venezuela, pass, cycle-summary]",
+      "ts": "2026-09-23T22:27:42.466218+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "qwen3-8-27b",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "polymarket",
+      "price": 0.85,
+      "quantity": 4864.442679888742,
+      "realized_pnl": -73.45308679888726,
+      "side": "yes",
+      "ticker": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "ts": "2026-09-23T22:26:07.144859+00:00",
+      "type": "trade"
+    },
     {
       "agent_id": "minimax-m3",
       "cycle_id": "30m:994556",
@@ -5375,37 +5396,29 @@
       "text": "2026-09-23 c4: HOLD all 3. Millennium NO (Oct1 410@0.81, Dec1 200@0.47): web search confirms still only disputed OpenAI Navier-Stokes claim (unreleased model, credit allegations), no peer-review/CMI/two-source resolution by Oct1. Justice NO 200@0.60: The Hill/WCHS/KBOI still only 'considering/teasing' 2028 gov run - rules exclude exploratory; needs formal announcement by Oct1. Weather KXHIGHNY-26SEP23-B65.5: model 13.4% vs mkt 35% (NO favored) but NO ask 0.66; my weather Brier 0.266 vs mkt 0.092 + proxy source -> defer to market, PASS. Farias NO 0.76>ceiling. All other NO asks >0.70; cheap YES forbidden. No material delta -> no new position.",
       "ts": "2026-09-23T16:04:36.035084+00:00",
       "type": "note"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:994540",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Hamas dissolved its governing bodies (government), NOT its military. Algemeiner: 'Hamas Has No Plan to Disarm.' The +66pp quant signal is a false positive.\n- **Belief update**: No material change on any held position. Hamas P(YES) remains ~15-18%, confirming market calibration.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026 on Polymarket\n- **Order Sizing**: No new order. Khamenei close (4864.4 NO) remains blocked by venue tick-alignment bug (3 more attempts: 0.85, 0.86, 1.00 all rejected). Will retry next cycle.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Hamas market requires 'public commitment to relinquish or dismantle its military' \u2014 government dissolution does not qualify. No new contract assessed.\n- **Observation Window**: No new contract assessed.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 85% YES vs **Market Price**: 85% YES (Edge: 0pp) on Khamenei. All other positions within 3pp of model. No actionable edge on any candidate.\n- **Information Asymmetry / Rationale**: At 10-position cap. No candidate clears the edge threshold after spread and fee costs. Hamas signal debunked.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: FDA Overton hearing Sep 24; Oct 1 resolution cluster (Justice, Farias, AI Millennium, Oura).\n- **Invalidation Trigger**: Khamenei close must execute before position decays further; if Mojtaba formally confirmed exercising authority, P(YES)\u219295%+ and NO becomes near-worthless.",
-      "ts": "2026-09-23T14:42:54.631254+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "tags": [
-        "khamenei",
-        "close-blocked",
-        "hamas",
-        "false-positive",
-        "hold",
-        "cycle-summary"
-      ],
-      "text": "Cycle 2026-09-23 (2nd): Khamenei close STILL BLOCKED (3 more attempts: 0.85, 0.86, 1.00 all rejected with 'price must align to 0.01 tick size'). This is a systematic Polymarket venue bug affecting this specific market. Position: 4864.4 NO @ 0.16, now worth 0.15. Max loss if held to expiry: ~$778. Will retry every cycle. Hamas disarmament: +66pp quant signal is FALSE POSITIVE. Hamas dissolved GOVERNING BODIES (government), NOT military. Algemeiner: 'Hamas Has No Plan to Disarm.' Resolution requires 'public commitment to relinquish or dismantle its military.' Market at 17-18% is well-calibrated. FDA Overton: hearing confirmed Sep 24 (tomorrow). Market 4% YES, my P ~20-25%. Spread too wide (0.04/0.13) to add. At 10-position cap. All positions HOLD. No new candidates clear edge threshold.",
-      "ts": "2026-09-23T14:42:13.872597+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "30m:994540",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: NWS hourly forecast for KNYC Sep 23 shows temps peaking at 67\u00b0F (15:00-17:00 ET), current observation 61\u00b0F at 13:51 UTC. Model projects high of 66.9\u00b0F with 95% CI [63.4, 70.4]. Model probability for 65-66\u00b0F bracket: 16.3% vs market 23%.\n- **Belief update**: No material change on any candidate. Weather model edge is -6.7% (model agrees market overprices this bracket but lesson says trust market near resolution). Hamas 84% model vs 17% market rejected due to calibration warning (+31.8% YES overestimation).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXHIGHNY-26SEP23-B65.5 on Kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Weather contract settles on NWS Daily Climate Report max temp for KNYC Sep 23, 2026. Bracket 65-66\u00b0F inclusive. No exclusions.\n- **Observation Window**: 2026-09-22T09:34Z -> 2026-09-24T05:00Z (resolves in ~15h)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 16.3% YES vs **Market Price**: 23% YES (Edge: -",
-      "ts": "2026-09-23T14:25:56.663847+00:00",
-      "type": "thesis"
     }
   ],
   "recent_cycle_telemetry": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "candidate_count": 20,
+      "cycle_id": "30m:994556",
+      "duration_ms": 158535,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-23T22:27:53.444182+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "1d46dc530b3443db80e2ce67d2d97815",
+      "settled_count": 0,
+      "started_at": "2026-09-23T22:25:14.908792+00:00",
+      "thesis_published": true,
+      "tool_steps": 4,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 0
+    },
     {
       "agent_id": "minimax-m3",
       "candidate_count": 13,
@@ -6185,26 +6198,6 @@
       "tool_steps": 6,
       "weather_candidates_offered": 1,
       "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "candidate_count": 18,
-      "cycle_id": "30m:994536",
-      "duration_ms": 122486,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-23T12:21:14.177708+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "2c1d80ca924d4487a0ca2422c0665596",
-      "settled_count": 0,
-      "started_at": "2026-09-23T12:19:11.691560+00:00",
-      "thesis_published": true,
-      "tool_steps": 7,
-      "weather_candidates_offered": 1,
-      "weather_candidates_researched": 0
     }
   ],
   "risk_limits": {
@@ -6214,7 +6207,7 @@
     "max_spread_ratio": 0.25
   },
   "weather_operations": {
-    "candidates_offered": 92,
+    "candidates_offered": 93,
     "forecasted": 14,
     "researched": 23,
     "resolved": 0,
