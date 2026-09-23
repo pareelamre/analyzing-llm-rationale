@@ -12143,6 +12143,98 @@
       "outcome": "no",
       "record_hash": "e08d47c06ca935027b59cbddef3a3c7d1fb588ef7fd72dc808534621e9c9be4e",
       "recorded_at": "2026-09-22T12:17:00.849328+00:00"
+    },
+    {
+      "action_id": "b2df8e37-73c7-4af6-84e2-2461fc59c768",
+      "agent_id": "gpt-oss-120b",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 423.0319609772801,
+          "marketable": true,
+          "observed_ask": 0.26,
+          "observed_bid": 0.15,
+          "source": "live_venue_quote",
+          "spread": 0.11,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.26,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "cash_before": 7772.934832,
+          "cash_required": 236.521073,
+          "concentration_cap": 1182.605363,
+          "cycle_id": "30m:994520",
+          "cycle_spend_after": 236.521073,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 236.521073,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2365.210726,
+          "drawdown_after": 0.216219,
+          "fee": 11.648404,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 237.492668,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 1,
+          "notional": 224.872668,
+          "open_markets_after": 3,
+          "per_cycle_spend_limit": 1576.807151,
+          "reasons": [
+            "wide_bid_ask_spread"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.69,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.5,
+          "lead_days": 423.0,
+          "market_shrinkage": 0.25,
+          "max_position_fraction": 0.03,
+          "mode": "edge_kelly",
+          "reason": null,
+          "target_notional": 236.521073,
+          "target_quantity": 864.894878373338
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994520",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 236.521073,
+        "fee": 11.648404,
+        "netting_payout": 0.0,
+        "notional": 224.872668,
+        "price": 0.26,
+        "quantity": 864.894878373338,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXTHC3MG-FED-26NOV13"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "658aaa8d33ea78a2a34a1b606034bdce936eb36007a37215376fc04bd222d161",
+      "recorded_at": "2026-09-23T04:12:58.599468+00:00"
     }
   ],
   "month": "2026-09",
