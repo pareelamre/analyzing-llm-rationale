@@ -1827,6 +1827,9 @@ class RunCycleTests(unittest.TestCase):
                 "FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json"),
                 "FORESEA_AGENT_CYCLE_ID": "declared-buy-cycle",
                 "FORESEA_AGENT_PLACE_TRADE_MODE": "shadow",
+                # The declared thesis states an edge above the credible-edge
+                # ceiling; this test is about executing a declared thesis.
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0",
             }
             with (
                 mock.patch.dict(os.environ, env, clear=False),

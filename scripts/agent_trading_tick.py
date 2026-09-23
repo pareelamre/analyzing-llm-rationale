@@ -46,6 +46,7 @@ import os
 import re
 import sys
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -1603,6 +1604,10 @@ def _discover_weather_candidates(known_tickers: set, *, limit: int) -> List[Dict
     """Reserve a small, source-verified NWS lane without blocking ordinary discovery."""
     if limit <= 0:
         return []
+    if benchmark_tools.category_is_blocked("weather"):
+        # The guard would refuse every one of these, and the lane costs venue
+        # calls and an NWS lookup per candidate.
+        return []
     started = time.perf_counter()
     with tracer.start_as_current_span("agent_trading.weather_candidates.discover") as span:
         selected: List[Dict[str, Any]] = []
@@ -1821,7 +1826,29 @@ def _discover_mtm_edge_candidates(known_tickers: set, *, limit: int) -> List[Dic
             mtm_candidate_discovery_duration.record(time.perf_counter() - started)
 
 
+def _drop_blocked_candidates(quotes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Leave out markets the guard will not open, so no cycle researches them.
+
+    The guard is still the enforcement point -- this only keeps the candidate
+    list honest about what the agent can act on.
+    """
+    kept, dropped = [], Counter()
+    for quote in quotes:
+        reason = benchmark_tools.blocked_market_reason(quote)
+        if reason:
+            dropped[reason] += 1
+        else:
+            kept.append(quote)
+    if dropped:
+        logger.info("dropped blocked candidates: %s", dict(dropped))
+    return kept
+
+
 def _discover_candidates(known_tickers: set, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    return _drop_blocked_candidates(_discover_candidates_unfiltered(known_tickers, agent_id))
+
+
+def _discover_candidates_unfiltered(known_tickers: set, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
     new_quotes: List[Dict[str, Any]] = []
     new_quotes.extend(_discover_weather_candidates(known_tickers, limit=WEATHER_CANDIDATE_QUOTA))
     new_quotes.extend(_discover_mtm_edge_candidates(known_tickers, limit=MTM_CANDIDATE_QUOTA))

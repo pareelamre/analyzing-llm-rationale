@@ -110,6 +110,33 @@ DEFAULT_POLYMARKET_FEE_RATE = 0.04
 IMMEDIATE_TIME_IN_FORCE = "immediate_or_cancel"
 DEFAULT_MAX_BID_ASK_SPREAD = 0.12
 DEFAULT_MAX_SPREAD_RATIO = 0.25
+#: A stated edge at or above this is treated as the agent disagreeing with the
+#: market rather than as an opportunity, and no new exposure is opened on it.
+#: Both records say the same thing. The published track record, 4,800 resolved
+#: forecasts: skill against the market is roughly nil below 5pp of
+#: disagreement, -0.015 at 5-10pp, -0.028 at 10-20pp and -0.066 at 20pp+, so
+#: the further a forecast sits from the price, the more often the price was
+#: right. The agents' own book says it in money: the 20pp+ bucket returned
+#: -34% on $9.5k staked, the worst of any bucket, and because every sizing
+#: policy scales the stake with the stated edge, those are also the largest
+#: positions. Set FORESEA_AGENT_MAX_CREDIBLE_EDGE to 0 to disable the ceiling.
+DEFAULT_MAX_CREDIBLE_EDGE = 0.20
+#: Market categories no agent may open new exposure in, comma-separated.
+#: Crypto returned -86% across the agents' book and is, besides geopolitics,
+#: the one domain the published track record scores negative on its own: the
+#: price moves on flow these forecasts do not see. Exits are never blocked, so
+#: an existing position can always be closed. Any category name works, so
+#: weather -- 55 markets, -$2.5k, -52%, and the worst pocket after the
+#: 20pp+ edge bucket -- can be added with
+#: FORESEA_AGENT_BLOCKED_CATEGORIES="crypto,weather" without a code change.
+#: An empty string disables the gate.
+DEFAULT_BLOCKED_CATEGORIES = "crypto"
+#: Kalshi ticker prefixes for the blocked categories, for quotes that carry no
+#: usable category of their own.
+_BLOCKED_TICKER_PREFIXES = {
+    "weather": ("KXHIGH", "KXLOW", "KXRAIN", "KXSNOW", "KXTEMP", "KXWEATHER"),
+    "crypto": ("KXBTC", "KXETH", "KXSOL", "KXXRP", "KXDOGE"),
+}
 
 
 @dataclass(frozen=True)
@@ -2477,6 +2504,77 @@ def _min_net_edge() -> float:
     return max(0.0, value)
 
 
+def _max_credible_edge() -> float:
+    """Stated edge at or above which a new position is refused. 0 disables."""
+    return max(0.0, _env_float("FORESEA_AGENT_MAX_CREDIBLE_EDGE", DEFAULT_MAX_CREDIBLE_EDGE))
+
+
+def _blocked_categories() -> frozenset:
+    raw = os.environ.get("FORESEA_AGENT_BLOCKED_CATEGORIES")
+    if raw is None:
+        raw = DEFAULT_BLOCKED_CATEGORIES
+    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
+
+
+def _blocked_category(
+    *, category: Any = None, ticker: Any = None, question: Any = None, is_weather: bool = False,
+) -> Optional[str]:
+    """Which blocked category this market falls in, if any.
+
+    Reads the venue's own category where there is one, the weather classifier's
+    verdict (Kalshi files weather under several category names), and finally
+    the Kalshi ticker prefix, so a quote that carries no category is still
+    recognised.
+    """
+    blocked = _blocked_categories()
+    if not blocked:
+        return None
+    label = str(category or "").strip().lower()
+    if not label and question:
+        # A quote whose venue gave no category still has its question, which is
+        # what _market_category reads: a Polymarket bitcoin market arrives with
+        # category None and would otherwise pass as uncategorised.
+        from analyzing_llm_rationale import market_data
+
+        label = str(market_data._market_category(question, None) or "").strip().lower()
+    if "weather" in blocked and (is_weather or "weather" in label or "climate" in label):
+        return "weather"
+    for name in blocked:
+        if name and name in label:
+            return name
+    upper = str(ticker or "").strip().upper()
+    for name, prefixes in _BLOCKED_TICKER_PREFIXES.items():
+        if name in blocked and upper.startswith(prefixes):
+            return name
+    return None
+
+
+def category_is_blocked(name: str) -> bool:
+    """Whether a named category is blocked, for callers that know the label."""
+    return str(name or "").strip().lower() in _blocked_categories()
+
+
+def blocked_market_reason(quote: Mapping[str, Any]) -> Optional[str]:
+    """Which blocked category a discovered market falls in, if any.
+
+    For candidate discovery, so a cycle is not spent researching a market the
+    guard would refuse to open.
+    """
+    from analyzing_llm_rationale.weather_markets import classify_weather_market
+
+    try:
+        is_weather = bool(classify_weather_market(quote).is_weather)
+    except Exception:
+        logger.warning("weather classification failed during candidate filtering", exc_info=True)
+        is_weather = False
+    return _blocked_category(
+        category=quote.get("category"),
+        ticker=quote.get("ident") or quote.get("ticker"),
+        question=quote.get("question"),
+        is_weather=is_weather,
+    )
+
+
 def _edge_clears_fees(
     args: Mapping[str, Any],
     *,
@@ -2693,11 +2791,35 @@ def _check_trade_guards(
     if strict_risk_management and not risk_reducing and spread_info and not spread_info.get("clears", True):
         reasons.append("wide_bid_ask_spread")
 
+    blocked_category = None
+    max_credible_edge = _max_credible_edge()
+    stated_edge = _as_float(edge_check.get("gross_edge")) if edge_check.get("checked") else None
+    if strict_risk_management and not risk_reducing:
+        # Both gates are entry-only: an exit still clears, so nothing here can
+        # trap an agent in a position it wants out of.
+        blocked_category = _blocked_category(
+            category=cat,
+            ticker=ticker,
+            question=(market_check or {}).get("question") if isinstance(market_check, dict) else None,
+            is_weather=bool(
+                ((market_check or {}).get("weather_brief") or {}).get("is_weather")
+                if isinstance(market_check, dict) else False
+            ),
+        )
+        if blocked_category:
+            reasons.append(f"blocked_category_{blocked_category}")
+        if max_credible_edge > 0 and stated_edge is not None and stated_edge >= max_credible_edge - 1e-9:
+            reasons.append("edge_beyond_credible_range")
+
     detail = {
         "allowed": not reasons,
         "reasons": reasons,
         "edge_after_fees": edge_check,
         "spread_check": spread_info,
+        # Recorded whether or not they bit, so the audit shows the ceiling
+        # each order was held to, not just the ones it refused.
+        "max_credible_edge": max_credible_edge,
+        "blocked_category": blocked_category,
         "account_value": round(policy.account_value, 6),
         "cash_before": round(cash_before, 6),
         "concentration_limit": policy.concentration_limit,
@@ -2883,6 +3005,7 @@ def _resolve_shadow_marketability(
     """
     weather_brief: Optional[Dict[str, Any]] = None
     category: Optional[str] = None
+    question: Optional[str] = None
     lead_days: Optional[float] = None
     try:
         from analyzing_llm_rationale import market_data
@@ -2912,6 +3035,7 @@ def _resolve_shadow_marketability(
             explicit_bid = raw_quote.get("no_bid")
             real_bid = float(explicit_bid) if explicit_bid is not None else None
         category = raw_quote.get("category")
+        question = raw_quote.get("question")
         close_raw = (
             raw_quote.get("expected_expiration_time")
             or raw_quote.get("close_time")
@@ -2959,6 +3083,7 @@ def _resolve_shadow_marketability(
             "status": "shadow_quote_unavailable",
             "weather_brief": weather_brief,
             "category": category,
+            "question": question,
             "lead_days": lead_days,
             "spread_check": spread_check,
         }
@@ -2971,6 +3096,7 @@ def _resolve_shadow_marketability(
             "status": "shadow_price_from_live_quote",
             "weather_brief": weather_brief,
             "category": category,
+            "question": question,
             "lead_days": lead_days,
             "spread_check": spread_check,
         }
@@ -2983,6 +3109,7 @@ def _resolve_shadow_marketability(
         "status": "shadow_filled_at_market" if marketable else "shadow_unfilled_below_market",
         "weather_brief": weather_brief,
         "category": category,
+        "question": question,
         "lead_days": lead_days,
         "spread_check": spread_check,
     }
@@ -3022,6 +3149,7 @@ def _trade_audit_context(
         "max_trades_per_cycle", "cycle_trade_count_before", "cycle_trade_count_after",
         "max_open_markets", "open_markets_after", "drawdown_after",
         "max_drawdown_limit", "risk_reducing", "gross_notional_override",
+        "max_credible_edge", "blocked_category",
     )
     context: Dict[str, Any] = {
         "version": 1,

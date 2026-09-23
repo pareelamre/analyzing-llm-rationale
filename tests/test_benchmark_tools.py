@@ -374,6 +374,9 @@ class BenchmarkToolTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             env = {
+                # Exercises sizing/limit mechanics with a deliberately large
+                # stated edge; the credible-edge ceiling is not what is under test.
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0",
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "10000",
@@ -436,6 +439,9 @@ class BenchmarkToolTests(unittest.TestCase):
         ctx = benchmark_tools.ToolContext(agent_id="model-quarter", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             env = {
+                # Exercises sizing/limit mechanics with a deliberately large
+                # stated edge; the credible-edge ceiling is not what is under test.
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0",
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "10000",
@@ -1666,6 +1672,9 @@ class BenchmarkToolTests(unittest.TestCase):
         ctx = benchmark_tools.ToolContext(agent_id="model-daily-risk", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             env = {
+                # Exercises sizing/limit mechanics with a deliberately large
+                # stated edge; the credible-edge ceiling is not what is under test.
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0",
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
@@ -1702,6 +1711,9 @@ class BenchmarkToolTests(unittest.TestCase):
         ctx = benchmark_tools.ToolContext(agent_id="model-rate", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             env = {
+                # Exercises sizing/limit mechanics with a deliberately large
+                # stated edge; the credible-edge ceiling is not what is under test.
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0",
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
@@ -1744,6 +1756,9 @@ class BenchmarkToolTests(unittest.TestCase):
         ctx = benchmark_tools.ToolContext(agent_id="model-cycle-diff", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             base_env = {
+                # Exercises sizing/limit mechanics with a deliberately large
+                # stated edge; the credible-edge ceiling is not what is under test.
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0",
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
