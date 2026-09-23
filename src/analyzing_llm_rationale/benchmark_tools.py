@@ -122,12 +122,15 @@ DEFAULT_MAX_SPREAD_RATIO = 0.25
 #: positions. Set FORESEA_AGENT_MAX_CREDIBLE_EDGE to 0 to disable the ceiling.
 DEFAULT_MAX_CREDIBLE_EDGE = 0.20
 #: Market categories no agent may open new exposure in, comma-separated.
-#: Weather: 55 markets, -$2.5k, -52%; the NWS research path has not produced a
-#: tradable read. Crypto: -86% across the agents' book, and the only domain
-#: besides geopolitics where the track record is negative on its own. Exits
-#: are never blocked, so an existing position can always be closed. Set
-#: FORESEA_AGENT_BLOCKED_CATEGORIES to an empty string to disable.
-DEFAULT_BLOCKED_CATEGORIES = "weather,crypto"
+#: Crypto returned -86% across the agents' book and is, besides geopolitics,
+#: the one domain the published track record scores negative on its own: the
+#: price moves on flow these forecasts do not see. Exits are never blocked, so
+#: an existing position can always be closed. Any category name works, so
+#: weather -- 55 markets, -$2.5k, -52%, and the worst pocket after the
+#: 20pp+ edge bucket -- can be added with
+#: FORESEA_AGENT_BLOCKED_CATEGORIES="crypto,weather" without a code change.
+#: An empty string disables the gate.
+DEFAULT_BLOCKED_CATEGORIES = "crypto"
 #: Kalshi ticker prefixes for the blocked categories, for quotes that carry no
 #: usable category of their own.
 _BLOCKED_TICKER_PREFIXES = {

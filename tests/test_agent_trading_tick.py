@@ -426,8 +426,6 @@ class CandidateSelectionTests(unittest.TestCase):
             return [weather] if kwargs.get("category") == "Weather" else [general]
 
         with (
-            # Weather is blocked by default; this covers the reserved lane itself.
-            mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": ""}, clear=False),
             mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
             mock.patch.object(market_data, "list_polymarket", return_value=[]),
             mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
@@ -453,7 +451,6 @@ class CandidateSelectionTests(unittest.TestCase):
             return []
 
         with (
-            mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": ""}, clear=False),
             mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
             mock.patch.object(market_data, "list_polymarket", return_value=[]),
         ):

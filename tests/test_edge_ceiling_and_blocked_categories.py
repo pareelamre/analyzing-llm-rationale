@@ -9,9 +9,12 @@ spread evenly:
     The agents' book agrees in money: the 20pp+ bucket returned -34% on $9.5k
     staked. Sizing scales the stake with the stated edge, so the largest
     positions are the least credible ones. New exposure now stops at 20pp.
-  - Two categories carried most of the rest: weather (55 markets, -$2.5k,
-    -52%) and crypto (-86%, and the one domain besides geopolitics the track
-    record scores negative on its own). Neither may be opened.
+  - Crypto carried most of the rest: -86% across the agents' book, and the
+    one domain besides geopolitics the published track record scores
+    negative on its own. No new exposure is opened there. The gate takes
+    any category name, so weather -- 55 markets, -$2.5k, -52% -- can be
+    added by configuration; it stays tradable here because its research
+    path is a feature in its own right.
 
 Both gates are entry-only. An agent can always close what it holds, which is
 what keeps a blocked category from trapping a position.
@@ -120,8 +123,14 @@ class EdgeCeilingTests(_GateCase):
 
 
 class BlockedCategoryTests(_GateCase):
-    def test_a_weather_market_is_not_opened(self):
+    def test_weather_is_tradable_by_default(self):
+        """Blocked by configuration, never by default: the lane stays open."""
         result = self.trade("KXHIGHNY-26SEP22", model_probability=0.55)
+        self.assertTrue(result["ok"], result)
+
+    def test_weather_can_be_added_to_the_block_list(self):
+        with mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": "crypto,weather"}):
+            result = self.trade("KXHIGHNY-26SEP23", model_probability=0.55)
         self.assertFalse(result["ok"], result)
         self.assertIn("blocked_category_weather", self.reasons(result))
 
@@ -138,20 +147,19 @@ class BlockedCategoryTests(_GateCase):
 
     def test_a_held_blocked_position_can_still_be_closed(self):
         """The gate must never trap an agent in a market it is already in."""
+        btc = quote("KXBTCHELD", question="Will bitcoin close above $100k?")
         with mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": ""}):
-            opened = self.trade("KXHIGHNY-26SEP23", model_probability=0.55)
+            opened = self.trade("KXBTCHELD", model_probability=0.55, q=btc)
         self.assertTrue(opened["ok"], opened)
 
-        closed = self.trade(
-            "KXHIGHNY-26SEP23", side="no", sizing_mode="close",
-            q=quote("KXHIGHNY-26SEP23", bid=0.40, ask=0.42),
-        )
+        closed = self.trade("KXBTCHELD", side="no", sizing_mode="close", q=btc)
         self.assertTrue(closed["ok"], closed)
-        self.assertNotIn("blocked_category_weather", self.reasons(closed))
+        self.assertNotIn("blocked_category_crypto", self.reasons(closed))
 
     def test_the_block_list_can_be_emptied(self):
+        btc = quote("KXBTCOPEN", question="Will bitcoin close above $100k?")
         with mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": ""}):
-            result = self.trade("KXHIGHNY-26SEP24", model_probability=0.55)
+            result = self.trade("KXBTCOPEN", model_probability=0.55, q=btc)
         self.assertTrue(result["ok"], result)
 
     def test_the_block_list_takes_other_categories(self):
@@ -160,9 +168,12 @@ class BlockedCategoryTests(_GateCase):
                 "KXPRES", model_probability=0.55,
                 q=quote("KXPRES", question="Will the president sign the bill?"),
             )
-            weather_now_allowed = self.trade("KXHIGHNY-26SEP25", model_probability=0.55)
+            crypto_now_allowed = self.trade(
+                "KXBTCFREE", model_probability=0.55,
+                q=quote("KXBTCFREE", question="Will bitcoin close above $100k?"),
+            )
         self.assertIn("blocked_category_politics", self.reasons(blocked))
-        self.assertTrue(weather_now_allowed["ok"], weather_now_allowed)
+        self.assertTrue(crypto_now_allowed["ok"], crypto_now_allowed)
 
 
 class CandidateDiscoveryTests(unittest.TestCase):
@@ -172,28 +183,29 @@ class CandidateDiscoveryTests(unittest.TestCase):
         import agent_trading_tick
 
         quotes = [
-            quote("KXHIGHNY-26SEP22"),
             quote("KXBTC", question="Will bitcoin close above $100k?"),
+            quote("KXHIGHNY-26SEP22"),
             quote("KXWS", question="Will the Yankees win the World Series?"),
         ]
         kept = agent_trading_tick._drop_blocked_candidates(quotes)
-        self.assertEqual([q["ident"] for q in kept], ["KXWS"])
+        self.assertEqual([q["ident"] for q in kept], ["KXHIGHNY-26SEP22", "KXWS"])
 
-    def test_the_weather_lane_is_skipped_entirely_when_weather_is_blocked(self):
+    def test_the_weather_lane_runs_while_weather_is_tradable(self):
         import agent_trading_tick
 
-        with mock.patch.object(market_data, "list_kalshi", side_effect=AssertionError("must not call the venue")):
-            self.assertEqual(agent_trading_tick._discover_weather_candidates(set(), limit=3), [])
+        with mock.patch.object(market_data, "list_kalshi", return_value=[]) as listed:
+            agent_trading_tick._discover_weather_candidates(set(), limit=3)
+        self.assertTrue(listed.called)
 
-    def test_the_lane_still_runs_when_weather_is_allowed(self):
+    def test_the_weather_lane_is_skipped_once_weather_is_blocked(self):
+        """Blocking a category must not leave its lane spending venue and NWS calls."""
         import agent_trading_tick
 
         with (
-            mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": "crypto"}),
-            mock.patch.object(market_data, "list_kalshi", return_value=[]) as listed,
+            mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": "crypto,weather"}),
+            mock.patch.object(market_data, "list_kalshi", side_effect=AssertionError("must not call the venue")),
         ):
-            agent_trading_tick._discover_weather_candidates(set(), limit=3)
-        self.assertTrue(listed.called)
+            self.assertEqual(agent_trading_tick._discover_weather_candidates(set(), limit=3), [])
 
 
 if __name__ == "__main__":
