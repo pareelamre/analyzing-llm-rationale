@@ -3772,6 +3772,192 @@
       "outcome": "rejected",
       "record_hash": "d47c9d01ba8bec077b15280e3a01ea53cbb772cdd3a3cd2a1827da9e85461d73",
       "recorded_at": "2026-09-23T10:15:19.296590+00:00"
+    },
+    {
+      "action_id": "a3972c34-288e-4b78-806f-9d38d2f7261b",
+      "agent_id": "glm-5-3-flash",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 99.36296134990741,
+          "marketable": true,
+          "observed_ask": 0.41,
+          "observed_bid": 0.4,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.41,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 9157.643243,
+          "cash_required": 296.337609,
+          "concentration_cap": 1481.702189,
+          "cycle_id": "30m:994552",
+          "cycle_spend_after": 296.337609,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 296.337609,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2963.404378,
+          "drawdown_after": 0.007034,
+          "fee": 6.83232,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 289.505289,
+          "max_credible_edge": 0.2,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 289.505289,
+          "open_markets_after": 9,
+          "per_cycle_spend_limit": 1975.602918,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.27,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.0,
+          "lead_days": 99.4,
+          "market_shrinkage": 0.05,
+          "max_position_fraction": 0.03,
+          "mode": "scaled_edge",
+          "reason": null,
+          "target_notional": 296.340438,
+          "target_quantity": 706.1104598103317
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994552",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 296.337609,
+        "fee": 6.83232,
+        "netting_payout": 0.0,
+        "notional": 289.505289,
+        "price": 0.41,
+        "quantity": 706.1104598103317,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "eceb034f7e5be9ceb80b3458d42f714169cd90e4a2b5a5127b875f9dd2370a9e",
+      "recorded_at": "2026-09-23T20:16:20.230092+00:00"
+    },
+    {
+      "action_id": "32cbedd8-0ea1-403c-b3a2-26bcbe7d62ee",
+      "agent_id": "glm-5-3-flash",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_assumed_full",
+          "filled_quantity": 706.11046
+        },
+        "quote": {
+          "lead_days": 99.36264881481482,
+          "marketable": true,
+          "observed_ask": 0.41,
+          "observed_bid": 0.4,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.41,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 9157.643243,
+          "cash_required": 296.337609,
+          "concentration_cap": 1481.702189,
+          "cycle_id": "30m:994552",
+          "cycle_spend_after": 296.337609,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 296.337609,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2963.404378,
+          "drawdown_after": 0.007034,
+          "fee": 6.83232,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 289.505289,
+          "max_credible_edge": 0.2,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 289.505289,
+          "open_markets_after": 9,
+          "per_cycle_spend_limit": 1975.602918,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.19,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.0,
+          "lead_days": 99.4,
+          "market_shrinkage": 0.05,
+          "max_position_fraction": 0.03,
+          "mode": "scaled_edge",
+          "reason": null,
+          "target_notional": 296.340438,
+          "target_quantity": 706.1104598103317
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994552",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": -296.33760852223594,
+        "cash_required": 296.33760852223594,
+        "fee": 6.83232,
+        "netting_payout": 0.0,
+        "notional": 289.50528852223596,
+        "price": 0.41,
+        "quantity": 706.1104598103317,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "110d962e99642ae46d86f98dc91dc00072a0d5eef591f3ff1255810aede68227",
+      "recorded_at": "2026-09-23T20:16:47.201326+00:00"
     }
   ],
   "month": "2026-09",
