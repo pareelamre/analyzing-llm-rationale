@@ -214,8 +214,6 @@ class IndicativePricingSnapshotTests(unittest.TestCase):
 
         # Quote has 0 bid, 0 ask, but known probability of 0.35
         raw_quote = accounting.MarketQuote(
-            platform="kalshi",
-            ticker="KXTEST",
             yes_bid=0.0,
             yes_ask=0.0,
             yes_probability=0.35,
@@ -232,10 +230,8 @@ class IndicativePricingSnapshotTests(unittest.TestCase):
         acct.buy(platform="kalshi", ident="KXTEST", side="no", quantity=100.0, price=0.60)
 
         raw_quote = accounting.MarketQuote(
-            platform="kalshi",
-            ticker="KXTEST",
             yes_bid=0.0,
-            yes_ask=0.0,
+            no_bid=0.0,
             yes_probability=0.30,
         )
         snap = acct.snapshot({("kalshi", "KXTEST"): raw_quote})
