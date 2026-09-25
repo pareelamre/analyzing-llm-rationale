@@ -117,6 +117,27 @@ class ReasoningEffortPayloadTests(unittest.TestCase):
                 )
                 self.assertEqual(payload["reasoning"], {"effort": "high"})
 
+    def test_openai_compatible_extra_body_is_added_to_request(self):
+        from unittest.mock import MagicMock
+
+        provider = OpenAICompatibleProvider(model_name="model", api_key="sk-test", base_url="https://llm.scads.ai/v1")
+        response = MagicMock()
+        response.status_code = 200
+        response.text = "ok"
+        response.json.return_value = {"choices": [{"message": {"content": "answer"}}]}
+        provider._session = MagicMock()
+        provider._session.post.return_value = response
+
+        result = provider.chat_completion_with_extra_body(
+            [{"role": "user", "content": "hi"}],
+            0.0,
+            64,
+            extra_body={"thinking": {"type": "disabled"}},
+        )
+
+        self.assertEqual(result, "answer")
+        self.assertEqual(provider._session.post.call_args.kwargs["json"]["thinking"], {"type": "disabled"})
+
 
 class ProviderEmptyContentFallbackTests(unittest.TestCase):
     def test_structured_completion_returns_only_consistent_usage(self):

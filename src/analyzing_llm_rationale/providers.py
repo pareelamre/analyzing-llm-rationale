@@ -275,9 +275,13 @@ class OpenAICompatibleProvider(ChatProvider):
         temperature: float,
         max_tokens: int,
         reasoning_effort: Optional[str] = None,
+        *,
+        extra_body: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Return content with an optional validated provider token receipt."""
         payload = self._payload(messages, temperature, max_tokens, reasoning_effort=reasoning_effort)
+        if extra_body:
+            payload.update(extra_body)
         response = _post(
             self._session,
             self.base_url,
@@ -342,6 +346,22 @@ class OpenAICompatibleProvider(ChatProvider):
                     "total_tokens": total_tokens,
                 }
         return result
+
+    def chat_completion_with_extra_body(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        *,
+        extra_body: Dict[str, Any],
+    ) -> str:
+        """Call an OpenAI-compatible endpoint with documented vendor options."""
+        return self.chat_completion_with_usage(
+            messages,
+            temperature,
+            max_tokens,
+            extra_body=extra_body,
+        )["response"]
 
     def stream_chat_completion(
         self,
