@@ -15875,6 +15875,98 @@
     ],
     "gpt-oss-120b": [
       {
+        "action_id": "6886f95c-abe8-435b-9286-e2470bd0696b",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 1.0
+          },
+          "quote": {
+            "lead_days": 768.2285096368056,
+            "marketable": true,
+            "observed_ask": 0.27,
+            "observed_bid": 0.26,
+            "source": "live_venue_quote",
+            "spread": 0.01,
+            "spread_status": "checked",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.27,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 7535.838653,
+            "cash_required": 236.147946,
+            "concentration_cap": 1180.739732,
+            "cycle_id": "30m:994625",
+            "cycle_spend_after": 236.147946,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 472.292465,
+            "daily_risk_before": 236.144519,
+            "daily_risk_limit": 2361.479463,
+            "drawdown_after": 0.21656,
+            "fee": 11.480506,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 224.66744,
+            "max_credible_edge": 0.2,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 1,
+            "notional": 224.66744,
+            "open_markets_after": 6,
+            "per_cycle_spend_limit": 1574.319642,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.18,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.5,
+            "lead_days": 768.2,
+            "market_shrinkage": 0.25,
+            "max_position_fraction": 0.03,
+            "mode": "edge_kelly",
+            "reason": null,
+            "target_notional": 236.147946,
+            "target_quantity": 832.1016301899596
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994625",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -0.283797,
+          "cash_required": 0.283797,
+          "fee": 0.013797,
+          "netting_payout": 0.0,
+          "notional": 0.27,
+          "price": 0.27,
+          "quantity": 1.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXMLBDEBUT-FARIAS-26OCT01"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "8ad9dfc486595abf1f9beaa630aca00bbb641ad2bb2ce2334ef8df48dafaf21f",
+        "recorded_at": "2026-09-25T08:30:56.892193+00:00"
+      },
+      {
         "action_id": "442997d1-f0a3-4d7d-8eae-9546a6f68b9c",
         "agent_id": "gpt-oss-120b",
         "audit": {
@@ -51962,7 +52054,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-25T06:40:36.794065+00:00",
+  "generated_at": "2026-09-25T08:38:28.939539+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
