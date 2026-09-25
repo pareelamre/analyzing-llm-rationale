@@ -375,6 +375,10 @@ class PredictionMarketAccount:
             else:
                 unpriced_position_count += 1
                 unpriced_cost_basis += p.cost_basis
+            indicative_price = None
+            if not mark_available and quote.yes_probability is not None:
+                side_p = quote.yes_probability if _side(p.side) == YES else (1.0 - quote.yes_probability)
+                indicative_price = round(float(side_p), 6)
             positions.append({
                 "platform": p.platform,
                 "ident": p.ident,
@@ -383,6 +387,7 @@ class PredictionMarketAccount:
                 "cost_basis": round(p.cost_basis, 6),
                 "avg_entry_price": round(p.avg_entry_price, 6),
                 "current_price": round(float(bid), 6) if mark_available else None,
+                "indicative_price": indicative_price,
                 "unrealized_pnl": round(float(mark_value) - p.cost_basis, 6) if mark_value is not None else None,
                 "valuation_status": "bid_liquidation" if mark_available else "unpriced_no_executable_bid",
             })

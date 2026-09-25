@@ -46,7 +46,7 @@ import os
 import re
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -596,16 +596,19 @@ def _pre_expiry_exit_enabled() -> bool:
     return raw not in {"0", "off", "false", "no", "disabled"}
 
 
-def _backtested_exit_price(quote: Dict[str, Any], side: str) -> Optional[float]:
-    """The held side's exit price exactly as the pre-expiry backtest priced it.
+def _backtested_exit_price(quote: Dict[str, Any], side: str, platform: str = "kalshi") -> Optional[float]:
+    """The held side's exit price.
 
-    YES: yes_bid. NO: 1 - yes_ask. Deliberately not MarketQuote.bid(), which
-    prefers a venue no_bid for NO holders -- see _pre_expiry_exit_candidates.
+    Kalshi: exactly as the pre-expiry backtest priced it (YES: yes_bid; NO: 1 - yes_ask).
+    Polymarket: executable bid from MarketQuote.bid(side).
     """
     q = MarketQuote.from_mapping(quote)
-    if str(side).strip().lower() == "yes":
-        return q.yes_bid
-    return None if q.yes_ask is None else 1.0 - q.yes_ask
+    s = str(side).strip().lower()
+    if str(platform).strip().lower() == "kalshi":
+        if s == "yes":
+            return q.yes_bid
+        return None if q.yes_ask is None else 1.0 - q.yes_ask
+    return q.bid(s)
 
 
 def _pre_expiry_exit_candidates(
@@ -643,30 +646,24 @@ def _pre_expiry_exit_candidates(
     price by a quantity leaves float noise -- 100 x 0.28 is 28.000000000000004
     -- that moves a position sitting exactly on the line to the other side.
 
-    Two scope limits follow from what the backtest could and could not see:
-
-    Kalshi only. Polymarket's public price history has no historical bid,
-    so every Polymarket point in the backtest was a mark or last trade. The
-    live quote is an order-book bestBid, which sits at or below the last
-    trade whenever there is a spread and so would fire earlier and more often
-    than anything tested. Polymarket is left alone until it can be tested on
-    the price the rule would actually use.
-
-    The backtested price series, not MarketQuote.bid(). For a YES holder that
-    is yes_bid; for a NO holder the backtest used 1 - yes_ask on every point.
-    MarketQuote.bid("NO") prefers the venue's own no_bid when it is quoted,
-    which diverges from 1 - yes_ask exactly when books thin near expiry --
-    the only window this rule acts in. _backtested_exit_price keeps the rule
-    on the series its evidence came from.
+    Supports both Kalshi and Polymarket (governed by FORESEA_AGENT_POLYMARKET_PRE_EXPIRY_EXIT).
     """
     quotes_by_key = {
         (str(q.get("platform") or "kalshi").lower(), q["ident"]): q
         for q in held_quotes if q.get("ident")
     }
+    allow_polymarket = (
+        str(os.environ.get("FORESEA_AGENT_POLYMARKET_PRE_EXPIRY_EXIT", "on")).strip().lower()
+        not in {"0", "off", "false", "no", "disabled"}
+    )
     chosen: List[Dict[str, Any]] = []
     for position in positions:
         platform = str(position.get("platform") or "kalshi").lower()
-        if platform != "kalshi":
+        if platform == "kalshi":
+            pass
+        elif platform == "polymarket" and allow_polymarket:
+            pass
+        else:
             continue
         quote = quotes_by_key.get((platform, position["ticker"]))
         if quote is None:
@@ -675,7 +672,7 @@ def _pre_expiry_exit_candidates(
         if hours is None or hours <= 0 or hours > PRE_EXPIRY_EXIT_HOURS:
             continue
         side = str(position["side"])
-        bid = _backtested_exit_price(quote, side)
+        bid = _backtested_exit_price(quote, side, platform=platform)
         avg_entry = float(position["avg_entry_price"])
         if bid is None or bid <= 0 or avg_entry <= 0:
             continue
@@ -683,7 +680,7 @@ def _pre_expiry_exit_candidates(
             continue
         change = bid / avg_entry - 1.0
         chosen.append({
-            "platform": str(position.get("platform") or "kalshi").lower(),
+            "platform": platform,
             "ticker": position["ticker"],
             "side": side.lower(),
             "quantity": float(position["quantity"]),
@@ -816,10 +813,18 @@ def _early_profit_harvest_candidates(
     min_bid_threshold = float(
         os.environ.get("FORESEA_AGENT_EARLY_HARVEST_MIN_BID", DEFAULT_EARLY_HARVEST_MIN_BID)
     )
+    allow_polymarket_harvest = (
+        str(os.environ.get("FORESEA_AGENT_POLYMARKET_EARLY_HARVEST", "on")).strip().lower()
+        not in {"0", "off", "false", "no", "disabled"}
+    )
 
     for position in positions:
         platform = str(position.get("platform") or "kalshi").lower()
-        if platform != "kalshi":
+        if platform == "kalshi":
+            pass
+        elif platform == "polymarket" and allow_polymarket_harvest:
+            pass
+        else:
             continue
         quote = quotes_by_key.get((platform, position["ticker"]))
         if quote is None:
@@ -829,7 +834,7 @@ def _early_profit_harvest_candidates(
         if hours is not None and hours <= 0:
             continue
         side = str(position["side"])
-        bid = _backtested_exit_price(quote, side)
+        bid = _backtested_exit_price(quote, side, platform=platform)
         avg_entry = float(position["avg_entry_price"])
         if bid is None or bid <= 0 or avg_entry <= 0 or avg_entry >= 1.0:
             continue
@@ -932,6 +937,148 @@ def _fmt_early_harvest_exits(outcomes: List[Dict[str, Any]]) -> Optional[str]:
     return "\n".join(lines)
 
 
+#: Close positions experiencing catastrophic adverse drift / broken thesis...
+DEFAULT_BROKEN_THESIS_LOSS_FRACTION = 0.60
+DEFAULT_BROKEN_THESIS_MAX_BID = 0.25
+BROKEN_THESIS_EXIT_RULE = "broken_thesis_exit_rule"
+
+
+def _broken_thesis_exit_enabled() -> bool:
+    raw = str(os.environ.get("FORESEA_AGENT_BROKEN_THESIS_EXIT", "on")).strip().lower()
+    return raw not in {"0", "off", "false", "no", "disabled"}
+
+
+def _broken_thesis_exit_candidates(
+    positions: List[Dict[str, Any]],
+    held_quotes: List[Dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> List[Dict[str, Any]]:
+    """Held positions that have suffered severe adverse price drift.
+
+    When real-world events decisively invalidate a thesis (e.g. Sotheby's auction record
+    breaking a threshold), riding an open position down to 0c guarantees a 100% loss.
+    This rule liquidates open positions down >= 60% from entry where current executable bid
+    is <= 25c, salvaging remaining principal before total wipeout.
+    """
+    if not _broken_thesis_exit_enabled():
+        return []
+    quotes_by_key = {
+        (str(q.get("platform") or "kalshi").lower(), q["ident"]): q
+        for q in held_quotes if q.get("ident")
+    }
+    loss_fraction = float(os.environ.get("FORESEA_AGENT_BROKEN_THESIS_LOSS", DEFAULT_BROKEN_THESIS_LOSS_FRACTION))
+    max_bid = float(os.environ.get("FORESEA_AGENT_BROKEN_THESIS_MAX_BID", DEFAULT_BROKEN_THESIS_MAX_BID))
+    chosen: List[Dict[str, Any]] = []
+
+    for position in positions:
+        platform = str(position.get("platform") or "kalshi").lower()
+        if platform not in ("kalshi", "polymarket"):
+            continue
+        quote = quotes_by_key.get((platform, position["ticker"]))
+        if quote is None:
+            continue
+        # Market must still be open
+        hours = _hours_until(quote.get("close_time"), now=now)
+        if hours is not None and hours <= 0:
+            continue
+        side = str(position["side"])
+        bid = _backtested_exit_price(quote, side, platform=platform)
+        avg_entry = float(position["avg_entry_price"])
+        if bid is None or bid <= 0 or avg_entry <= 0:
+            continue
+        # Trigger condition: position is down >= loss_fraction from entry AND bid <= max_bid
+        if bid <= (1.0 - loss_fraction) * avg_entry and bid <= max_bid:
+            change = bid / avg_entry - 1.0
+            chosen.append({
+                "platform": platform,
+                "ticker": position["ticker"],
+                "side": side.lower(),
+                "quantity": float(position["quantity"]),
+                "bid": bid,
+                "avg_entry": avg_entry,
+                "change": change,
+                "hours_left": hours,
+            })
+    return chosen
+
+
+def _run_broken_thesis_exits(
+    agent_id: str,
+    held_quotes: List[Dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> List[Dict[str, Any]]:
+    """Close broken thesis positions and report what actually happened to each."""
+    if not _broken_thesis_exit_enabled():
+        return []
+    try:
+        with benchmark_tools._account_transaction() as conn:
+            summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
+        targets = _broken_thesis_exit_candidates(summary["open_positions"], held_quotes, now=now)
+    except Exception:
+        logger.warning("broken thesis exit selection failed agent=%s; no exits this cycle", agent_id, exc_info=True)
+        return []
+    ctx = benchmark_tools.ToolContext(
+        agent_id=agent_id, require_kelly_sizing=True, initiated_by=BROKEN_THESIS_EXIT_RULE,
+    )
+    outcomes: List[Dict[str, Any]] = []
+    for target in targets:
+        order = {
+            "platform": target["platform"],
+            "ticker": target["ticker"],
+            "side": "no" if target["side"] == "yes" else "yes",
+            "sizing_mode": "close",
+        }
+        try:
+            result = benchmark_tools.place_trade(order, ctx)
+        except Exception as exc:
+            logger.warning("broken thesis exit raised agent=%s ticker=%s", agent_id, target["ticker"], exc_info=True)
+            result = {"ok": False, "error": str(exc)}
+        execution = result.get("execution") or {}
+        filled = float(execution.get("filled_quantity") or 0.0)
+        if not result.get("ok"):
+            status = "failed"
+        elif filled <= benchmark_tools.MIN_POSITION_QUANTITY:
+            status = "unfilled"
+        elif filled + benchmark_tools.MIN_POSITION_QUANTITY < target["quantity"]:
+            status = "partial"
+        else:
+            status = "closed"
+        detail = execution.get("fill_status") or result.get("error")
+        outcomes.append({
+            "target": target,
+            "status": status,
+            "filled_quantity": filled,
+            "detail": str(detail) if detail is not None else None,
+        })
+    return outcomes
+
+
+def _fmt_broken_thesis_exits(outcomes: List[Dict[str, Any]]) -> Optional[str]:
+    """Render broken thesis exits for the agent's cycle prompt."""
+    if not outcomes:
+        return None
+    lines = [
+        "=== Automatic broken-thesis exits this cycle ===",
+        f"Rule: a position down >= {DEFAULT_BROKEN_THESIS_LOSS_FRACTION:.0%} from entry with live bid <= ${DEFAULT_BROKEN_THESIS_MAX_BID:.2f} "
+        "is closed to salvage remaining principal before total wipeout.",
+    ]
+    for o in outcomes:
+        t = o["target"]
+        where = (
+            f"  - {t['platform'].upper()} {t['ticker']} ({t['quantity']:.1f} {t['side'].upper()} "
+            f"entry ${t['avg_entry']:.3f} now bid ${t['bid']:.3f}, {t['change']:+.1%})"
+        )
+        if o["status"] == "closed":
+            lines.append(where + " -> closed & principal salvaged.")
+        elif o["status"] == "partial":
+            lines.append(where + f" -> only {o['filled_quantity']:.1f} filled; remainder open.")
+        else:
+            lines.append(where + f" -> NOT closed ({o['status']}: {o['detail'] or 'no detail'}).")
+    return "\n".join(lines)
+
+
 def _build_portfolio_block(
     conn,
     agent_id: str,
@@ -1008,6 +1155,12 @@ def _learning_lesson(action_type: str, realized_pnl: float, initiated_by: Option
         return (
             "The early profit harvest rule closed this position: it captured >= 85% of maximum potential "
             "profit. The position was de-risked early to lock in realized gains and eliminate settlement tail risk."
+        )
+    if initiated_by == BROKEN_THESIS_EXIT_RULE:
+        return (
+            "The broken thesis exit rule closed this position, not you: the market moved catastrophically "
+            f">={DEFAULT_BROKEN_THESIS_LOSS_FRACTION:.0%} against your entry with bid <= ${DEFAULT_BROKEN_THESIS_MAX_BID:.2f}. "
+            "The position was liquidated to salvage remaining principal before total wipeout."
         )
     event = "settlement" if action_type == "settlement" else "position close"
     if realized_pnl > 0.005:
@@ -1844,8 +1997,75 @@ def _drop_blocked_candidates(quotes: List[Dict[str, Any]]) -> List[Dict[str, Any
     return kept
 
 
+def _drop_capacity_exhausted_candidates(
+    quotes: List[Dict[str, Any]],
+    agent_id: Optional[str],
+) -> List[Dict[str, Any]]:
+    """Omit candidates where the agent is already at or above its cluster or market concentration cap.
+
+    This prevents wasted LLM reasoning tokens and repetitive guard rejections on
+    maxed-out correlated clusters (e.g. Llama re-attempting Khamenei 45 times).
+    """
+    if not agent_id:
+        return quotes
+    try:
+        policy = benchmark_tools._risk_guard_policy()
+        profile = benchmark_tools.get_agent_profile(agent_id)
+        effective_cluster_limit = policy.cluster_concentration_limit
+        if profile and profile.max_cluster_concentration_pct is not None:
+            effective_cluster_limit = min(effective_cluster_limit, profile.max_cluster_concentration_pct)
+        concentration_cap = policy.account_value * policy.concentration_limit
+        cluster_cap = policy.account_value * effective_cluster_limit
+
+        with benchmark_tools._account_transaction() as conn:
+            summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
+        open_positions = summary.get("open_positions") or []
+        if not open_positions:
+            return quotes
+
+        market_costs: Dict[Tuple[str, str], float] = defaultdict(float)
+        cluster_costs: Dict[str, float] = defaultdict(float)
+        for pos in open_positions:
+            pos_plat = str(pos.get("platform") or "kalshi").lower()
+            pos_ticker = str(pos.get("ticker") or "")
+            basis = float(pos.get("cost_basis") or 0.0)
+            market_costs[(pos_plat, pos_ticker)] += basis
+            pos_cluster = benchmark_tools._extract_market_cluster(pos_ticker, platform=pos_plat)
+            if pos_cluster:
+                cluster_costs[pos_cluster] += basis
+
+        kept: List[Dict[str, Any]] = []
+        dropped_clusters = Counter()
+        for q in quotes:
+            ticker = str(q.get("ident") or q.get("ticker") or "")
+            platform = str(q.get("platform") or "kalshi").lower()
+            if not ticker:
+                kept.append(q)
+                continue
+            mkt_cost = market_costs.get((platform, ticker), 0.0)
+            cluster_name = benchmark_tools._extract_market_cluster(ticker, platform=platform)
+            cluster_cost = cluster_costs.get(cluster_name, 0.0) if cluster_name else 0.0
+
+            # If already at or above 95% of cap, the agent cannot trade this candidate
+            if mkt_cost >= concentration_cap * 0.95:
+                dropped_clusters[f"market:{ticker}"] += 1
+                continue
+            if cluster_name and cluster_cost >= cluster_cap * 0.95:
+                dropped_clusters[f"cluster:{cluster_name}"] += 1
+                continue
+            kept.append(q)
+
+        if dropped_clusters:
+            logger.info("dropped capacity-exhausted candidates for agent=%s: %s", agent_id, dict(dropped_clusters))
+        return kept
+    except Exception:
+        logger.warning("capacity candidate filtering failed for agent=%s", agent_id, exc_info=True)
+        return quotes
+
+
 def _discover_candidates(known_tickers: set, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    return _drop_blocked_candidates(_discover_candidates_unfiltered(known_tickers, agent_id))
+    candidates = _drop_blocked_candidates(_discover_candidates_unfiltered(known_tickers, agent_id))
+    return _drop_capacity_exhausted_candidates(candidates, agent_id)
 
 
 def _discover_candidates_unfiltered(known_tickers: set, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -3879,10 +4099,11 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     # portfolio block from those quotes so each held position can state its
     # current value and time left.
     held_quotes = _requote_held(held_positions)
-    # Close positions the pre-expiry and early profit harvest rules select before
+    # Close positions the pre-expiry, early profit harvest, and broken-thesis rules select before
     # the agent decides, so the portfolio it reads is the one it actually holds.
     pre_expiry_exits = _run_pre_expiry_exits(agent_id, held_quotes)
     early_harvest_exits = _run_early_profit_harvest_exits(agent_id, held_quotes)
+    broken_thesis_exits = _run_broken_thesis_exits(agent_id, held_quotes)
     with benchmark_tools._account_transaction() as conn:
         still_held = {
             (str(row["platform"] or "kalshi").lower(), row["ticker"])
@@ -3897,7 +4118,8 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         ]
         pre_expiry_note = _fmt_pre_expiry_exits(pre_expiry_exits)
         early_harvest_note = _fmt_early_harvest_exits(early_harvest_exits)
-        combined_exit_notes = "\n\n".join([n for n in (pre_expiry_note, early_harvest_note) if n]) or None
+        broken_thesis_note = _fmt_broken_thesis_exits(broken_thesis_exits)
+        combined_exit_notes = "\n\n".join([n for n in (pre_expiry_note, early_harvest_note, broken_thesis_note) if n]) or None
         portfolio_block = _build_portfolio_block(
             conn, agent_id, last_thesis, learning_block, last_transcript,
             held_quotes=held_quotes,

@@ -58,7 +58,16 @@ class KalshiOnlyTests(unittest.TestCase):
             "platform": "Polymarket", "ident": "will-it-happen", "question": "Q?",
             "yes_bid": 0.05, "yes_ask": 0.07, "close_time": iso(5),
         }
-        self.assertEqual(pick(position, quote), [])
+        with mock.patch.dict(os.environ, {"FORESEA_AGENT_POLYMARKET_PRE_EXPIRY_EXIT": "off"}):
+            self.assertEqual(pick(position, quote), [])
+
+    def test_a_deep_polymarket_loss_is_closed_when_parity_enabled(self):
+        position = held(platform="polymarket", ticker="will-it-happen")
+        quote = {
+            "platform": "Polymarket", "ident": "will-it-happen", "question": "Q?",
+            "yes_bid": 0.05, "yes_ask": 0.07, "close_time": iso(5),
+        }
+        self.assertEqual(len(pick(position, quote)), 1)
 
     def test_the_same_loss_on_kalshi_is_closed(self):
         self.assertEqual(len(pick(held(), _quote("KXHELD", bid=0.05, ask=0.07, close=iso(5)))), 1)

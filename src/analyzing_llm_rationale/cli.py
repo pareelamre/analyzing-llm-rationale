@@ -328,6 +328,70 @@ def build_parser() -> argparse.ArgumentParser:
     autoresearch_parser.add_argument("--device", default=os.environ.get("MODEL_DEVICE", "cuda"))
     autoresearch_parser.add_argument("--request-timeout-s", type=float, default=float(os.environ.get("REQUEST_TIMEOUT_S", "120")))
 
+    metaculus_parser = subparsers.add_parser(
+        "forecast-metaculus",
+        help="Preview or guarded-submit a bounded Metaculus tournament forecast batch.",
+    )
+    metaculus_parser.add_argument("--tournament", default="fall-futureeval-2026")
+    metaculus_parser.add_argument("--max-questions", type=int, default=3)
+    metaculus_parser.add_argument("--submit", action="store_true", help="Enable publication after the confirmation phrase is supplied.")
+    metaculus_parser.add_argument("--confirm-submit", default="", help='Required exact phrase: SUBMIT METACULUS FORECASTS')
+    metaculus_parser.add_argument("--include-forecasted", action="store_true")
+    metaculus_parser.add_argument("--model", default="minimax-m3")
+    metaculus_parser.add_argument(
+        "--fallback-forecaster-model",
+        default="gpt-oss-120b",
+        help="Backup forecaster used only after a provider-level failure from the primary model.",
+    )
+    metaculus_parser.add_argument(
+        "--expected-bot-username",
+        default=os.environ.get("METACULUS_EXPECTED_USERNAME", "pareelforeal"),
+        help="Authenticated Metaculus bot account required before any forecast run.",
+    )
+    metaculus_parser.add_argument("--parser-model", default="llama-3.3-70b-instruct")
+    metaculus_parser.add_argument(
+        "--fallback-parser-model",
+        default="gpt-oss-120b",
+        help="Backup JSON-only parser used only when the primary parser cannot produce a valid payload.",
+    )
+    metaculus_parser.add_argument("--news-top-k", type=int, default=5)
+    metaculus_parser.add_argument(
+        "--audit-log-path",
+        type=Path,
+        default=repo_root() / "results" / "metaculus_forecast_audit.jsonl",
+        help="Credential-free JSONL record of previewed and verified submissions.",
+    )
+    metaculus_parser.add_argument("--models-config", type=Path, default=repo_root() / "configs" / "models.yaml")
+    metaculus_parser.add_argument("--provider")
+    metaculus_parser.add_argument("--local-model-name")
+    metaculus_parser.add_argument("--router-model-name")
+    metaculus_parser.add_argument("--api-base-url")
+    metaculus_parser.add_argument("--api-key-env-var")
+    metaculus_parser.add_argument("--api-key-file")
+    metaculus_parser.add_argument("--model-label")
+    metaculus_parser.add_argument("--temperature", type=float, default=0.0)
+    metaculus_parser.add_argument("--max-tokens", type=int, default=2048)
+    metaculus_parser.add_argument(
+        "--max-model-calls",
+        type=int,
+        default=6,
+        help="Hard per-question cap across MiniMax and JSON-parser requests.",
+    )
+    metaculus_parser.add_argument(
+        "--max-model-time-s",
+        type=float,
+        default=90.0,
+        help="Hard per-question wall-clock budget checked before each model request.",
+    )
+    metaculus_parser.add_argument(
+        "--fallback-forecaster-reserve-s",
+        type=float,
+        default=30.0,
+        help="Per-question time reserved for the fallback forecaster after a primary-provider failure.",
+    )
+    metaculus_parser.add_argument("--device", default=os.environ.get("MODEL_DEVICE", "cuda"))
+    metaculus_parser.add_argument("--request-timeout-s", type=float, default=float(os.environ.get("REQUEST_TIMEOUT_S", "120")))
+
     return parser
 
 
@@ -360,6 +424,10 @@ def resolve_api_key(args: argparse.Namespace) -> str:
 
     if args.api_key_env_var:
         value = os.environ.get(args.api_key_env_var)
+        if not value and args.api_key_env_var == "SCADS_AI_API_KEY":
+            # Preserve the repository's historical SCADS_API_KEY name while
+            # using the provider config's canonical variable.
+            value = os.environ.get("SCADS_API_KEY")
         if value:
             return value
         # Fallback: fetch from GCP Secret Manager when running on GCP
@@ -763,6 +831,118 @@ def autoresearch_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def forecast_metaculus_command(args: argparse.Namespace) -> int:
+    """Run the bot command with a deliberately separate publication gate."""
+    from analyzing_llm_rationale.metaculus_bot import (
+        ForecastCycleConfig,
+        MetaculusClient,
+        MetaculusError,
+        is_platform_metric_question,
+        run_forecast_cycle,
+    )
+    from analyzing_llm_rationale.news_pipeline import NewsPipeline
+    from analyzing_llm_rationale.observability import init_observability
+
+    if args.max_questions < 1 or args.max_questions > 100:
+        raise ValueError("--max-questions must be between 1 and 100.")
+    if args.news_top_k < 1 or args.news_top_k > 12:
+        raise ValueError("--news-top-k must be between 1 and 12.")
+    if args.max_model_calls < 1 or args.max_model_calls > 12:
+        raise ValueError("--max-model-calls must be between 1 and 12.")
+    if args.max_model_time_s <= 0 or args.max_model_time_s > 900:
+        raise ValueError("--max-model-time-s must be greater than 0 and at most 900.")
+    if args.fallback_forecaster_reserve_s < 0 or args.fallback_forecaster_reserve_s > args.max_model_time_s:
+        raise ValueError("--fallback-forecaster-reserve-s must be between 0 and --max-model-time-s.")
+    if args.submit and args.confirm_submit != "SUBMIT METACULUS FORECASTS":
+        print("Refusing to publish: pass --confirm-submit 'SUBMIT METACULUS FORECASTS'.", file=sys.stderr)
+        return 2
+    init_observability()
+    try:
+        client = MetaculusClient.from_environment()
+        bot_identity = client.current_user()
+        if bot_identity.username != args.expected_bot_username:
+            raise MetaculusError(
+                "Metaculus token belongs to "
+                f"{bot_identity.username!r}, not the expected bot {args.expected_bot_username!r}."
+            )
+        provider = build_provider(resolve_model_args(args))
+        fallback_forecaster_provider = None
+        if args.fallback_forecaster_model and args.fallback_forecaster_model != args.model:
+            fallback_forecaster_args = argparse.Namespace(**vars(args))
+            fallback_forecaster_args.model = args.fallback_forecaster_model
+            fallback_forecaster_args.temperature = args.temperature
+            fallback_forecaster_provider = build_provider(resolve_model_args(fallback_forecaster_args))
+        parser_args = argparse.Namespace(**vars(args))
+        parser_args.model = args.parser_model
+        parser_args.temperature = 0.0
+        parser_provider = build_provider(resolve_model_args(parser_args))
+        fallback_parser_provider = None
+        if args.fallback_parser_model and args.fallback_parser_model != args.parser_model:
+            fallback_parser_args = argparse.Namespace(**vars(args))
+            fallback_parser_args.model = args.fallback_parser_model
+            fallback_parser_args.temperature = 0.0
+            fallback_parser_provider = build_provider(resolve_model_args(fallback_parser_args))
+        news_pipeline = NewsPipeline(
+            api_key=resolve_api_key(args) or None,
+            base_url="https://llm.scads.ai/v1",
+            model="openai/gpt-oss-120b",
+            newsapi_key=os.environ.get("NEWSAPI_KEY"),
+            summarize_articles=True,
+        )
+
+        def research_provider(post: dict) -> list[dict]:
+            question = post.get("question") or {}
+            if is_platform_metric_question(post, question):
+                # Platform-state questions are best grounded in the live API
+                # metadata already injected into the forecast prompt.
+                return []
+            query = "\n".join(
+                str(value)
+                for value in (
+                    post.get("title"),
+                    post.get("description"),
+                    question.get("resolution_criteria"),
+                    question.get("fine_print"),
+                )
+                if value
+            )
+            return news_pipeline.fetch_summarize_rank(query, top_k=args.news_top_k)
+
+        summary = run_forecast_cycle(
+            client,
+            provider,
+            ForecastCycleConfig(
+                tournament=args.tournament,
+                max_questions=args.max_questions,
+                temperature=args.temperature,
+                max_tokens=args.max_tokens,
+                submit=args.submit,
+                include_forecasted=args.include_forecasted,
+                audit_log_path=args.audit_log_path,
+                max_model_calls=args.max_model_calls,
+                max_model_time_s=args.max_model_time_s,
+                fallback_forecaster_reserve_s=args.fallback_forecaster_reserve_s,
+            ),
+            parser_provider=parser_provider,
+            fallback_parser_provider=fallback_parser_provider,
+            fallback_forecaster_provider=fallback_forecaster_provider,
+            research_provider=research_provider,
+            expected_author_id=bot_identity.id,
+            bot_username=bot_identity.username,
+        )
+    except (MetaculusError, ImportError, ValueError) as exc:
+        print(f"Metaculus forecast cycle failed: {exc}", file=sys.stderr)
+        return 1
+    print(
+        "Metaculus forecast cycle "
+        f"{'submitted' if args.submit else 'previewed'}: examined={summary.examined} "
+        f"forecasted={summary.forecasted} submitted={summary.submitted} "
+        f"skipped={summary.skipped} failed={summary.failed} bot={bot_identity.username}"
+    )
+    # A scheduler must not record a cycle with unforecasted failures as healthy.
+    return 1 if summary.failed else 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     if sys.version_info < (3, 10):
         print("analyzing-llm-rationale requires Python 3.10 or newer.", file=sys.stderr)
@@ -789,5 +969,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return mcp_server_command(args)
     if args.command == "autoresearch":
         return autoresearch_command(args)
+    if args.command == "forecast-metaculus":
+        return forecast_metaculus_command(args)
     parser.error(f"Unknown command: {args.command}")
     return 2

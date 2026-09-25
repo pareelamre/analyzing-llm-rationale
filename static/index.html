@@ -2009,6 +2009,28 @@
       padding: 20px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto;
       scrollbar-width: thin; scrollbar-color: var(--border-2) transparent;
     }
+    .mcp-tab {
+      flex: 1; padding: 6px 10px; font-size: 12px; font-weight: 500;
+      color: var(--text-dim); background: transparent; border: 0; border-radius: 6px;
+      cursor: pointer; transition: all var(--dur-fast); white-space: nowrap; text-align: center;
+    }
+    .mcp-tab:hover { color: var(--ink); background: rgba(0, 0, 0, 0.04); }
+    .mcp-tab.active { color: var(--ink); background: #ffffff; font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+    .mcp-code-block {
+      background: #18181b; color: #f4f4f5; padding: 12px 14px; border-radius: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px; line-height: 1.5; overflow-x: auto; border: 1px solid rgba(255, 255, 255, 0.1); margin: 0;
+    }
+    .btn-copy-mcp {
+      font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px;
+      background: var(--panel); border: 1px solid var(--border-2); color: var(--ink);
+      cursor: pointer; transition: all var(--dur-fast);
+    }
+    .btn-copy-mcp:hover { background: var(--border); }
+    .tool-tag {
+      display: inline-block; font-size: 11px; font-family: ui-monospace, SFMono-Regular, monospace;
+      padding: 2px 7px; border-radius: 5px; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    }
     .settings-nav::-webkit-scrollbar { width: 5px; }
     .settings-nav::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 5px; }
     .settings-nav-title { font-size: 12px; font-weight: 700; color: var(--ink); padding: 4px 10px 10px; }
@@ -2362,6 +2384,7 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
       <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
+      <button type="button" class="topbar-link" onclick="openMcpModal()" style="font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981"></span>Connect MCP</button>
       <a href="/agents" target="_blank" class="topbar-link nav-collapse">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
       <a href="mailto:pareel.amre@gmail.com?subject=Foresea%20source%20code" class="topbar-link nav-collapse">Contact</a>
@@ -2697,6 +2720,7 @@
     <nav class="hidden md:flex items-center gap-4 flex-shrink-0" aria-label="App navigation">
       <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <button type="button" class="topbar-link" onclick="openTradeModal()" style="font-weight:600;color:var(--ink)">Trade</button>
+      <button type="button" class="topbar-link" onclick="openMcpModal()" style="font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981"></span>MCP</button>
       <a href="/agents" target="_blank" class="topbar-link">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="mailto:pareel.amre@gmail.com?subject=Foresea%20source%20code" class="topbar-link">Contact</a>
@@ -2793,6 +2817,110 @@
       <input id="feedbackEmail" type="email" placeholder="Email (optional — for a reply)" style="width:100%;box-sizing:border-box;background:var(--surface-alt,#1a1a1f);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-size:14px;margin-top:8px;font-family:inherit" />
       <button type="button" class="hero-action primary" style="width:100%;margin-top:12px;justify-content:center" onclick="submitFeedback()">Send</button>
       <p id="feedbackStatus" style="text-align:center;font-size:13px;margin-top:8px;min-height:18px"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── MCP / AI Agent Connect modal ── -->
+<div id="mcpOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="mcpTitle" aria-hidden="true" onclick="if(event.target===this)closeMcpModal()">
+  <div class="auth-card glass" style="position:relative;max-width:580px;width:100%;max-height:90vh;overflow-y:auto">
+    <button type="button" class="auth-close" onclick="closeMcpModal()" aria-label="Close"><svg class="ui-icon" aria-hidden="true"><use href="#ui-x"></use></svg></button>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <span class="logo-dot" style="background:#10b981"></span>
+      <span class="brand text-lg" id="mcpTitle">Connect to AI Agents (MCP)</span>
+      <span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:#ecfdf5;color:#0f766e;border:1px solid #a7f3d0">19 Live Tools</span>
+      <a href="https://smithery.ai/servers?q=foresea" target="_blank" rel="noopener" style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;text-decoration:none">Smithery Listed</a>
+    </div>
+    <p class="auth-sub" style="margin-top:4px;margin-bottom:16px">
+      Give <strong>Claude Desktop</strong>, <strong>Cursor</strong>, <strong>Windsurf</strong>, or any autonomous ReAct agent real-time access to prediction markets, orderbooks, and edge radars.
+    </p>
+    <div style="display:flex;gap:6px;background:var(--panel);padding:4px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px">
+      <button type="button" id="mcpTabClaude" class="mcp-tab active" onclick="selectMcpTab('claude')">Claude Desktop</button>
+      <button type="button" id="mcpTabCursor" class="mcp-tab" onclick="selectMcpTab('cursor')">Cursor / Windsurf</button>
+      <button type="button" id="mcpTabPython" class="mcp-tab" onclick="selectMcpTab('python')">Python SDK</button>
+      <button type="button" id="mcpTabCurl" class="mcp-tab" onclick="selectMcpTab('curl')">Streamable HTTP</button>
+    </div>
+    <div id="mcpContentClaude" class="mcp-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--text-dim)">Add to <code>claude_desktop_config.json</code>:</span>
+        <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeClaude', this)">Copy JSON</button>
+      </div>
+      <pre id="mcpCodeClaude" class="mcp-code-block"><code>{
+  "mcpServers": {
+    "foresea": {
+      "url": "https://foresea.ink/mcp/"
+    }
+  }
+}</code></pre>
+      <p style="font-size:11px;color:var(--text-mute);margin-top:6px">
+        Config path: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) or <code>%APPDATA%\Claude\claude_desktop_config.json</code> (Windows).
+      </p>
+    </div>
+    <div id="mcpContentCursor" class="mcp-content" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--text-dim)">Add to <code>.cursor/mcp.json</code>:</span>
+        <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeCursor', this)">Copy JSON</button>
+      </div>
+      <pre id="mcpCodeCursor" class="mcp-code-block"><code>{
+  "mcpServers": {
+    "foresea": {
+      "url": "https://foresea.ink/mcp/"
+    }
+  }
+}</code></pre>
+      <p style="font-size:11px;color:var(--text-mute);margin-top:6px">
+        Save file and restart Cursor / Windsurf to activate all 19 prediction tools.
+      </p>
+    </div>
+    <div id="mcpContentPython" class="mcp-content" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--text-dim)">Python ReAct Loop (FastAPI / LangChain / AutoGen):</span>
+        <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodePython', this)">Copy Python</button>
+      </div>
+      <pre id="mcpCodePython" class="mcp-code-block"><code>import requests
+
+# 1. Fetch top prediction market edge signals
+res = requests.get("https://foresea.ink/edge-board").json()
+print("Top mispriced markets:", res[:3])
+
+# 2. Run AI forecast with live web evidence
+forecast = requests.post("https://foresea.ink/predict", json={
+    "question": "Will SpaceX complete Starship test by Dec 2026?",
+    "model_key": "gpt-oss-120b"
+}).json()
+print(f"Probability: {forecast.get('probability', 0):.1%}")</code></pre>
+    </div>
+    <div id="mcpContentCurl" class="mcp-content" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--text-dim)">Streamable HTTP Protocol Endpoint:</span>
+        <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeCurl', this)">Copy URL</button>
+      </div>
+      <pre id="mcpCodeCurl" class="mcp-code-block"><code>https://foresea.ink/mcp/</code></pre>
+      <p style="font-size:11px;color:var(--text-mute);margin-top:6px">
+        Fully implements Model Context Protocol (MCP) Streamable HTTP transport with JSON-RPC 2.0 tool execution.
+      </p>
+    </div>
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
+      <span style="font-size:12px;font-weight:600;color:var(--ink)">Available MCP Tools (19 live):</span>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
+        <span class="tool-tag">forecast</span>
+        <span class="tool-tag">get_market</span>
+        <span class="tool-tag">scan_markets</span>
+        <span class="tool-tag">batch_quotes</span>
+        <span class="tool-tag">edge_board</span>
+        <span class="tool-tag">orderbook</span>
+        <span class="tool-tag">price_history</span>
+        <span class="tool-tag">market_leaderboard</span>
+        <span class="tool-tag">recent_trades</span>
+        <span class="tool-tag">search_evidence</span>
+        <span class="tool-tag">place_trade</span>
+        <span class="tool-tag">track_record</span>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;font-size:12px">
+      <a href="/docs" target="_blank" style="color:var(--info);text-decoration:none;font-weight:500">Interactive API Docs</a>
+      <a href="/openapi.json" target="_blank" style="color:var(--text-dim);text-decoration:none">openapi.json</a>
+      <a href="/.well-known/agent.json" target="_blank" style="color:var(--text-dim);text-decoration:none">agent.json</a>
     </div>
   </div>
 </div>
@@ -10315,6 +10443,50 @@ function tradeRunHandoff(data) {
     sourceConversationId: boundedTradeHandoffText(data?.source_conversation_id, 100),
     sources,
   };
+}
+
+function openMcpModal() {
+  const ov = document.getElementById('mcpOverlay');
+  if (!ov) return;
+  ov.classList.add('show');
+  ov.setAttribute('aria-hidden', 'false');
+  selectMcpTab('claude');
+}
+
+function closeMcpModal() {
+  const ov = document.getElementById('mcpOverlay');
+  if (!ov) return;
+  ov.classList.remove('show');
+  ov.setAttribute('aria-hidden', 'true');
+}
+
+function selectMcpTab(tabName) {
+  const tabs = ['claude', 'cursor', 'python', 'curl'];
+  tabs.forEach(t => {
+    const tabBtn = document.getElementById('mcpTab' + t.charAt(0).toUpperCase() + t.slice(1));
+    const content = document.getElementById('mcpContent' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (tabBtn) tabBtn.classList.toggle('active', t === tabName);
+    if (content) content.style.display = (t === tabName) ? 'block' : 'none';
+  });
+}
+
+function copyMcpCode(elementId, btn) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const text = el.innerText || el.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.innerText;
+    btn.innerText = 'Copied!';
+    btn.style.background = '#ecfdf5';
+    btn.style.color = '#0f766e';
+    setTimeout(() => {
+      btn.innerText = orig;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 2000);
+  }).catch(() => {
+    btn.innerText = 'Press Ctrl+C';
+  });
 }
 
 function openTradeRunFromBubble(button) {
