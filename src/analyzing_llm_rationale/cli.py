@@ -340,7 +340,7 @@ def build_parser() -> argparse.ArgumentParser:
     metaculus_parser.add_argument("--model", default="minimax-m3")
     metaculus_parser.add_argument(
         "--fallback-forecaster-model",
-        default="gpt-oss-120b",
+        default="gemma-4-26b-a4b-it",
         help="Backup forecaster used only after a provider-level failure from the primary model.",
     )
     metaculus_parser.add_argument(
@@ -351,8 +351,8 @@ def build_parser() -> argparse.ArgumentParser:
     metaculus_parser.add_argument("--parser-model", default="llama-3.3-70b-instruct")
     metaculus_parser.add_argument(
         "--fallback-parser-model",
-        default="gpt-oss-120b",
-        help="Backup JSON-only parser used only when the primary parser cannot produce a valid payload.",
+        default="gemma-4-26b-a4b-it",
+        help="Backup parser used only after the primary parser fails to produce a valid forecast.",
     )
     metaculus_parser.add_argument("--news-top-k", type=int, default=5)
     metaculus_parser.add_argument(
@@ -374,13 +374,13 @@ def build_parser() -> argparse.ArgumentParser:
     metaculus_parser.add_argument(
         "--max-model-calls",
         type=int,
-        default=6,
+        default=8,
         help="Hard per-question cap across MiniMax and JSON-parser requests.",
     )
     metaculus_parser.add_argument(
         "--max-model-time-s",
         type=float,
-        default=90.0,
+        default=180.0,
         help="Hard per-question wall-clock budget checked before each model request.",
     )
     metaculus_parser.add_argument(
@@ -416,6 +416,20 @@ def resolve_model_args(args: argparse.Namespace) -> argparse.Namespace:
     if getattr(args, "api_key_file", None) is None:
         args.api_key_file = model.api_key_file
     return args
+
+
+def resolve_auxiliary_model_args(
+    args: argparse.Namespace,
+    model_name: str,
+    *,
+    temperature: float,
+) -> argparse.Namespace:
+    """Resolve an auxiliary model from pristine CLI arguments."""
+    auxiliary = argparse.Namespace(**vars(args))
+    auxiliary.model = model_name
+    auxiliary.temperature = temperature
+    auxiliary._resolved_model_config = None
+    return resolve_model_args(auxiliary)
 
 
 def resolve_api_key(args: argparse.Namespace) -> str:
@@ -865,23 +879,24 @@ def forecast_metaculus_command(args: argparse.Namespace) -> int:
                 "Metaculus token belongs to "
                 f"{bot_identity.username!r}, not the expected bot {args.expected_bot_username!r}."
             )
+        pristine_model_args = argparse.Namespace(**vars(args))
         provider = build_provider(resolve_model_args(args))
         fallback_forecaster_provider = None
         if args.fallback_forecaster_model and args.fallback_forecaster_model != args.model:
-            fallback_forecaster_args = argparse.Namespace(**vars(args))
-            fallback_forecaster_args.model = args.fallback_forecaster_model
-            fallback_forecaster_args.temperature = args.temperature
-            fallback_forecaster_provider = build_provider(resolve_model_args(fallback_forecaster_args))
-        parser_args = argparse.Namespace(**vars(args))
-        parser_args.model = args.parser_model
-        parser_args.temperature = 0.0
-        parser_provider = build_provider(resolve_model_args(parser_args))
+            fallback_forecaster_args = resolve_auxiliary_model_args(
+                pristine_model_args,
+                args.fallback_forecaster_model,
+                temperature=pristine_model_args.temperature,
+            )
+            fallback_forecaster_provider = build_provider(fallback_forecaster_args)
+        parser_args = resolve_auxiliary_model_args(pristine_model_args, args.parser_model, temperature=0.0)
+        parser_provider = build_provider(parser_args)
         fallback_parser_provider = None
         if args.fallback_parser_model and args.fallback_parser_model != args.parser_model:
-            fallback_parser_args = argparse.Namespace(**vars(args))
-            fallback_parser_args.model = args.fallback_parser_model
-            fallback_parser_args.temperature = 0.0
-            fallback_parser_provider = build_provider(resolve_model_args(fallback_parser_args))
+            fallback_parser_args = resolve_auxiliary_model_args(
+                pristine_model_args, args.fallback_parser_model, temperature=0.0
+            )
+            fallback_parser_provider = build_provider(fallback_parser_args)
         news_pipeline = NewsPipeline(
             api_key=resolve_api_key(args) or None,
             base_url="https://llm.scads.ai/v1",
