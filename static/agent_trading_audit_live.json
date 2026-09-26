@@ -2,6 +2,88 @@
   "audits": {
     "deepseek-v4-flash": [
       {
+        "action_id": "cabbbf88-b615-4547-a0ba-a82b718c201a",
+        "agent_id": "deepseek-v4-flash",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 5.0
+          },
+          "initiated_by": "broken_thesis_exit_rule",
+          "quote": {
+            "lead_days": 467.70564063594907,
+            "marketable": true,
+            "observed_ask": 0.96,
+            "observed_bid": 0.03,
+            "source": "live_venue_quote",
+            "spread": 0.93,
+            "spread_status": "checked",
+            "status": "shadow_price_from_live_quote"
+          },
+          "requested_order": {
+            "price": null,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 8791.132199,
+            "cash_required": 0.0,
+            "concentration_cap": 1500.0,
+            "cycle_id": "30m:994700",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3000.0,
+            "drawdown_after": 0.065806,
+            "fee": 0.183456,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_credible_edge": 0.2,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 65.519941,
+            "open_markets_after": 3,
+            "per_cycle_spend_limit": 2000.0,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994700",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 0.18656000000000006,
+          "cash_required": 0.0,
+          "fee": 0.01344,
+          "netting_payout": 5.0,
+          "notional": 4.8,
+          "price": 0.96,
+          "quantity": 5.0,
+          "realized_pnl": -3.1634400000000005,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXAIMILLENNIUM-28-26NOV01"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "ee7b0e7f975f184b42d9ecba7f14b69fdc340a4d279e50cabf61508a68509c51",
+        "recorded_at": "2026-09-26T22:03:52.897592+00:00"
+      },
+      {
         "action_id": "61e661fa-baf3-4a2c-b1ec-1e766d804a29",
         "agent_id": "deepseek-v4-flash",
         "audit": {
@@ -56397,7 +56479,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-26T20:28:45.448697+00:00",
+  "generated_at": "2026-09-26T22:32:55.280922+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
