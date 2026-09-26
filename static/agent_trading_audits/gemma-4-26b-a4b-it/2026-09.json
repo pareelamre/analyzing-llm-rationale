@@ -6602,6 +6602,180 @@
       "outcome": "realized",
       "record_hash": "feee9c5817b1aa4c80633baf3f1de6152be7df8c79ef63dc79982b526c3277d9",
       "recorded_at": "2026-09-26T08:05:16.961729+00:00"
+    },
+    {
+      "action_id": "c31b266b-fc3b-41ca-b334-69423b58ed0c",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_filled_partial",
+          "filled_quantity": 5.0
+        },
+        "initiated_by": "broken_thesis_exit_rule",
+        "quote": {
+          "lead_days": 430.70476500221065,
+          "marketable": true,
+          "observed_ask": 0.99,
+          "observed_bid": 0.98,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_price_from_live_quote"
+        },
+        "requested_order": {
+          "price": null,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 8082.249038,
+          "cash_required": 0.0,
+          "concentration_cap": 1500.0,
+          "cycle_id": "30m:994680",
+          "cycle_spend_after": 0.0,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 0.0,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 3000.0,
+          "drawdown_after": 0.071645,
+          "fee": 1.952874,
+          "gross_notional_override": true,
+          "market_cost_basis_after": 0,
+          "max_credible_edge": 0.2,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 2789.82,
+          "open_markets_after": 4,
+          "per_cycle_spend_limit": 2000.0,
+          "reasons": [],
+          "risk_reducing": true
+        },
+        "sizing": {
+          "applied": false,
+          "mode": "close"
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994680",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": 0.04653499999999955,
+        "cash_required": 0.0,
+        "fee": 0.003465,
+        "netting_payout": 5.0,
+        "notional": 4.95,
+        "price": 0.99,
+        "quantity": 5.0,
+        "realized_pnl": -0.6034650000000006,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXRELOCATEPSKY-01DEC27-01OCT26"
+      },
+      "mode": "shadow",
+      "outcome": "realized",
+      "record_hash": "331bc09482177c0f0f623e843071b7e6873e080acd8de228534adb28dbf4159a",
+      "recorded_at": "2026-09-26T12:05:08.539127+00:00"
+    },
+    {
+      "action_id": "42885ce8-593a-45b9-8c37-ee61ef28138e",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_assumed_full",
+          "filled_quantity": 860.677357
+        },
+        "quote": {
+          "lead_days": 4.657721121076389,
+          "marketable": true,
+          "observed_ask": 0.19,
+          "observed_bid": 0.18,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.19,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 8082.295573,
+          "cash_required": 168.827028,
+          "concentration_cap": 1266.228528,
+          "cycle_id": "30m:994680",
+          "cycle_spend_after": 168.827028,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 168.827028,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2532.457056,
+          "drawdown_after": 0.039877,
+          "fee": 5.29833,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 163.528698,
+          "max_credible_edge": 0.2,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 163.528698,
+          "open_markets_after": 6,
+          "per_cycle_spend_limit": 1688.304704,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.09,
+          "eligible": true,
+          "horizon": "3-7d",
+          "horizon_validated": false,
+          "kelly_fraction": 0.3,
+          "lead_days": 4.7,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.02,
+          "mode": "convex_conviction",
+          "reason": null,
+          "target_notional": 168.83047,
+          "target_quantity": 860.6773571456974
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994680",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": -168.8270278576825,
+        "cash_required": 168.8270278576825,
+        "fee": 5.29833,
+        "netting_payout": 0.0,
+        "notional": 163.52869785768252,
+        "price": 0.19,
+        "quantity": 860.6773571456974,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "trump-renames-ai-by-september-30"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "c0a4f2b1c981ece04a86ffa11232c10c3624e53dd86d87cd8f5feda009be093a",
+      "recorded_at": "2026-09-26T12:11:52.961049+00:00"
     }
   ],
   "month": "2026-09",
