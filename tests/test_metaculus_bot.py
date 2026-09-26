@@ -21,6 +21,7 @@ from analyzing_llm_rationale.metaculus_bot import (
     SubmissionOutcomeUnknownError,
     SubmissionUnverifiedError,
     _cdf_from_quantiles,
+    _condition_cdf_on_hard_lower_bounds,
     _ModelCallBudget,
     _parse_forecast_output,
     _parse_json_object,
@@ -242,15 +243,17 @@ class MetaculusBotTests(unittest.TestCase):
         constraints = derive_forecast_constraints(post, question)
         self.assertEqual(constraints[0].kind, "current_forecaster_rate")
         self.assertGreater(constraints[0].lower_bound, 7.0)
-        with self.assertRaises(MetaculusError):
-            validate_forecast_payload(
-                question,
-                {"continuous_cdf": [0.0, 0.5, 1.0]},
-                constraints=constraints,
-            )
+        projected = validate_forecast_payload(
+            question,
+            {"continuous_cdf": [0.0, 0.5, 1.0]},
+            constraints=constraints,
+        )["continuous_cdf"]
+        self.assertAlmostEqual(projected[1], 0.01 / 2 + 1e-12)
+        self.assertEqual(projected[-1], 1.0)
         prompt = _question_prompt(post, question, constraints=constraints)
         self.assertIn('"nr_forecasters": 161', prompt)
         self.assertIn("Deterministic constraints are hard evidence.", prompt)
+        self.assertIn("current-forecaster-rate lower bound", prompt)
 
     def test_forecast_retries_once_after_model_output_shape_error(self) -> None:
         provider = SequencedProvider(["not json", '{"probability_yes": 0.42}'])
@@ -638,8 +641,132 @@ class MetaculusBotTests(unittest.TestCase):
             [0, 0, 0, 50, 100, 120, 160, 180, 200],
             constraints=constraints,
         )
-        with self.assertRaisesRegex(MetaculusError, "violates the current-forecaster-rate lower bound"):
+        with self.assertRaisesRegex(MetaculusError, "cannot represent the current-forecaster-rate lower bound"):
             validate_forecast_payload(question, payload, constraints=constraints)
+
+    def test_native_cdf_is_projected_onto_live_forecaster_rate_floor(self) -> None:
+        grid = [0.95 + 0.1 * index for index in range(92)]
+        question = {
+            "type": "discrete",
+            "inbound_outcome_count": 91,
+            "scaling": {
+                "continuous_range": grid,
+                "open_lower_bound": True,
+                "open_upper_bound": True,
+            },
+        }
+        constraints = (ForecastConstraint(kind="current_forecaster_rate", lower_bound=9.3139),)
+        raw_cdf = [index / 91 for index in range(92)]
+
+        payload = validate_forecast_payload(question, {"continuous_cdf": raw_cdf}, constraints=constraints)
+
+        projected = payload["continuous_cdf"]
+        unavoidable_floor = 0.001 + 83 * (0.01 / 91 + 1e-12)
+        self.assertAlmostEqual(
+            max(probability for value, probability in zip(grid, projected) if value < 9.3139),
+            unavoidable_floor,
+        )
+        self.assertEqual(projected[0], 0.001)
+        self.assertEqual(projected[-1], 0.999)
+        self.assertTrue(all(right >= left for left, right in zip(projected, projected[1:])))
+
+    def test_native_cdf_is_conditioned_and_renormalized_above_hard_floor(self) -> None:
+        question = {"type": "discrete", "inbound_outcome_count": 3, "scaling": {"continuous_range": [0, 1, 2, 3]}}
+        constraints = (ForecastConstraint(kind="current_forecaster_rate", lower_bound=1.5),)
+
+        conditioned = _condition_cdf_on_hard_lower_bounds(
+            question,
+            [0.0, 0.8, 0.9, 1.0],
+            constraints,
+        )
+
+        self.assertEqual(conditioned, [0.0, 0.0, 0.5, 1.0])
+
+    def test_hard_floor_rejects_malformed_or_unrepresentable_grids(self) -> None:
+        constraints = (ForecastConstraint(kind="current_forecaster_rate", lower_bound=1.5),)
+        for grid, message in (
+            ([0.0, float("nan"), 2.0], "non-finite"),
+            ([0.0, float("inf"), 2.0], "non-finite"),
+            ([0.0, 2.0, 1.0], "unordered"),
+            ([0.0, 1.0, 1.0], "unordered"),
+        ):
+            with self.subTest(grid=grid):
+                question = {"type": "discrete", "inbound_outcome_count": 2, "scaling": {"continuous_range": grid}}
+                with self.assertRaisesRegex(MetaculusError, message):
+                    validate_forecast_payload(question, {"continuous_cdf": [0.0, 0.5, 1.0]}, constraints=constraints)
+
+        question = {"type": "discrete", "inbound_outcome_count": 2, "scaling": {"continuous_range": [0.0, 1.0, 2.0]}}
+        with self.assertRaisesRegex(MetaculusError, "above the question's outcome range"):
+            validate_forecast_payload(
+                question,
+                {"continuous_cdf": [0.0, 0.5, 1.0]},
+                constraints=(ForecastConstraint(kind="current_forecaster_rate", lower_bound=3.0),),
+            )
+
+    def test_unconstrained_cdf_does_not_require_grid_metadata(self) -> None:
+        question = {"type": "discrete", "inbound_outcome_count": 2}
+        payload = validate_forecast_payload(question, {"continuous_cdf": [0.0, 0.5, 1.0]})
+        self.assertEqual(len(payload["continuous_cdf"]), 3)
+
+    def test_maximum_step_geometry_sets_unavoidable_mass_below_hard_floor(self) -> None:
+        outcome_count = 399
+        grid = list(range(outcome_count + 1))
+        question = {"type": "discrete", "inbound_outcome_count": outcome_count, "scaling": {"continuous_range": grid}}
+        constraints = (ForecastConstraint(kind="current_forecaster_rate", lower_bound=float(outcome_count)),)
+
+        with self.assertRaisesRegex(MetaculusError, "cannot represent the current-forecaster-rate lower bound"):
+            validate_forecast_payload(
+                question,
+                {"continuous_cdf": [index / outcome_count for index in range(outcome_count + 1)]},
+                constraints=constraints,
+            )
+
+    def test_quantile_tail_projection_never_redistributes_into_forbidden_buckets(self) -> None:
+        grid = [0.95 + 0.1 * index for index in range(92)]
+        question = {
+            "type": "discrete",
+            "inbound_outcome_count": 91,
+            "scaling": {
+                "continuous_range": grid,
+                "open_lower_bound": True,
+                "open_upper_bound": True,
+            },
+        }
+        lower_bound = 9.359387922598566
+        constraints = (ForecastConstraint(kind="current_forecaster_rate", lower_bound=lower_bound),)
+        quantiles = [
+            1.131920886640045,
+            1.7650471733093656,
+            2.699300664408408,
+            3.0810649313563188,
+            3.3775838951291,
+            5.0735051233571005,
+            5.128117241228811,
+            5.454342514391518,
+            8.507743590060043,
+        ]
+
+        raw = _cdf_from_quantiles(question, quantiles, constraints=constraints)
+        projected = validate_forecast_payload(question, raw, constraints=constraints)["continuous_cdf"]
+
+        minimum_below_bound_mass = 0.001 + 84 * (0.01 / 91 + 1e-12)
+        self.assertAlmostEqual(max(p for x, p in zip(grid, projected) if x < lower_bound), minimum_below_bound_mass)
+        self.assertTrue(all(right >= left for left, right in zip(projected, projected[1:])))
+
+    def test_cdf_projection_keeps_rounding_below_api_max_step(self) -> None:
+        inbound_outcome_count = 91
+        question = {
+            "type": "discrete",
+            "inbound_outcome_count": inbound_outcome_count,
+            "scaling": {"open_lower_bound": True, "open_upper_bound": True},
+        }
+        raw_cdf = [0.0] * 13 + [1.0] * (inbound_outcome_count - 12)
+
+        cdf = validate_forecast_payload(question, {"continuous_cdf": raw_cdf})["continuous_cdf"]
+
+        api_max_step = 0.2 * 200 / inbound_outcome_count
+        self.assertLessEqual(max(right - left for left, right in zip(cdf, cdf[1:])), api_max_step - 1e-8 + 1e-12)
+        self.assertGreaterEqual(min(right - left for left, right in zip(cdf, cdf[1:])), 0.01 / inbound_outcome_count + 1e-12 - 1e-13)
 
     def test_quantile_interpolation_preserves_probability_jump_at_duplicate_anchor(self) -> None:
         payload = _cdf_from_quantiles(

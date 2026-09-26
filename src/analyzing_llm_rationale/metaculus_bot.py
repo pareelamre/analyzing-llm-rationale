@@ -32,6 +32,8 @@ SUPPORTED_QUESTION_TYPES = frozenset({"binary", "multiple_choice", "numeric", "d
 _DEFAULT_CDF_BUCKET_COUNT = 200
 _MIN_CDF_MASS = 0.01
 _MAX_CDF_STEP_AT_DEFAULT_BUCKET_COUNT = 0.2
+_CDF_MIN_STEP_MARGIN = 1e-12
+_CDF_MAX_STEP_MARGIN = 1e-8
 _AUDIT_LOCK_RETRIES = 40
 _AUDIT_LOCK_SLEEP_S = 0.05
 
@@ -1075,16 +1077,6 @@ def _cdf_from_quantiles(
         raise MetaculusError("Exactly nine quantiles are required.")
     if any(right < left for left, right in zip(quantiles, quantiles[1:])):
         raise MetaculusError("Quantile parser returned decreasing quantiles.")
-    lower_bound = max(
-        (
-            constraint.lower_bound
-            for constraint in constraints
-            if constraint.kind == "current_forecaster_rate" and constraint.lower_bound is not None
-        ),
-        default=None,
-    )
-    if lower_bound is not None:
-        quantiles = [max(value, lower_bound) for value in quantiles]
     if quantiles[0] < values[0] or quantiles[-1] > values[-1]:
         raise MetaculusError("Quantile parser returned values outside the Metaculus CDF grid.")
     anchor_probabilities: dict[float, list[float]] = {}
@@ -1130,10 +1122,6 @@ def _cdf_from_quantiles(
                 break
         else:
             cdf.append(1.0)
-    if lower_bound is not None:
-        # Projection reserves a small nonzero mass for every bucket. Zero the
-        # raw lower tail so that reserved mass stays within the 1% hard bound.
-        cdf = [0.0 if value < lower_bound else probability for value, probability in zip(values, cdf)]
     return {"continuous_cdf": cdf}
 
 
@@ -1164,13 +1152,97 @@ def validate_forecast_payload(
     normalized_cdf = [_probability(value, "continuous_cdf") for value in cdf]
     if any(right < left for left, right in zip(normalized_cdf, normalized_cdf[1:])):
         raise MetaculusError("continuous_cdf must be non-decreasing.")
-    projected_cdf = _project_metaculus_cdf(question, normalized_cdf)
+    minimum_allowed_bucket_index = _minimum_allowed_cdf_bucket_index(question, len(normalized_cdf), constraints)
+    normalized_cdf = _condition_cdf_on_hard_lower_bounds(question, normalized_cdf, constraints)
+    projected_cdf = _project_metaculus_cdf(
+        question,
+        normalized_cdf,
+        minimum_allowed_bucket_index=minimum_allowed_bucket_index,
+    )
     _validate_forecast_constraints(question, projected_cdf, constraints)
     return {
         "probability_yes": None,
         "probability_yes_per_category": None,
         "continuous_cdf": projected_cdf,
     }
+
+
+def _condition_cdf_on_hard_lower_bounds(
+    question: Mapping[str, Any],
+    cdf: Sequence[float],
+    constraints: Sequence[ForecastConstraint],
+) -> list[float]:
+    """Condition a model CDF on outcomes allowed by deterministic lower bounds."""
+    lower_bound = _current_forecaster_rate_lower_bound(constraints)
+    if lower_bound is None:
+        return list(cdf)
+    grid = _constraint_cdf_grid(question, len(cdf))
+    if not math.isfinite(lower_bound):
+        raise MetaculusError("Cannot enforce a non-finite current-forecaster-rate lower bound.")
+    legal_indices = [index for index, value in enumerate(grid) if value >= lower_bound]
+    if not legal_indices:
+        raise MetaculusError("The current-forecaster-rate lower bound is above the question's outcome range.")
+    last_below_index = legal_indices[0] - 1
+    removed_mass = float(cdf[last_below_index]) if last_below_index >= 0 else 0.0
+    remaining_mass = float(cdf[-1]) - removed_mass
+    if remaining_mass <= 1e-12:
+        raise MetaculusError("The model assigns no probability to outcomes allowed by the current-forecaster-rate lower bound.")
+    logger.info(
+        "Conditioned Metaculus forecast on current-forecaster-rate lower bound",
+        extra={"lower_bound": lower_bound, "removed_probability_mass": removed_mass},
+    )
+    conditioned = [0.0] * len(cdf)
+    for index in legal_indices:
+        conditioned[index] = (float(cdf[index]) - removed_mass) / remaining_mass
+    return conditioned
+
+
+def _current_forecaster_rate_lower_bound(
+    constraints: Sequence[ForecastConstraint],
+) -> float | None:
+    return max(
+        (
+            constraint.lower_bound
+            for constraint in constraints
+            if constraint.kind == "current_forecaster_rate" and constraint.lower_bound is not None
+        ),
+        default=None,
+    )
+
+
+def _minimum_allowed_cdf_bucket_index(
+    question: Mapping[str, Any],
+    cdf_length: int,
+    constraints: Sequence[ForecastConstraint],
+) -> int:
+    """Return the first CDF step whose outcome is not ruled out by the hard bound."""
+    lower_bound = _current_forecaster_rate_lower_bound(constraints)
+    if lower_bound is None:
+        return 0
+    if not math.isfinite(lower_bound):
+        raise MetaculusError("Cannot enforce a non-finite current-forecaster-rate lower bound.")
+    grid = _constraint_cdf_grid(question, cdf_length)
+    first_legal_outcome = next((index for index, value in enumerate(grid) if value >= lower_bound), None)
+    if first_legal_outcome is None:
+        raise MetaculusError("The current-forecaster-rate lower bound is above the question's outcome range.")
+    return max(0, first_legal_outcome - 1)
+
+
+def _constraint_cdf_grid(question: Mapping[str, Any], expected: int) -> list[float]:
+    """Return a finite, strictly increasing platform outcome grid for hard bounds."""
+    scaling = question.get("scaling")
+    raw_grid = scaling.get("continuous_range") if isinstance(scaling, Mapping) else None
+    if not isinstance(raw_grid, list) or len(raw_grid) != expected:
+        raise MetaculusError("Cannot enforce the current-forecaster-rate lower bound without a valid CDF grid.")
+    try:
+        grid = [float(value) for value in raw_grid]
+    except (TypeError, ValueError) as exc:
+        raise MetaculusError("Cannot enforce the current-forecaster-rate lower bound on a non-numeric grid.") from exc
+    if any(not math.isfinite(value) for value in grid):
+        raise MetaculusError("Cannot enforce the current-forecaster-rate lower bound on a non-finite grid.")
+    if any(right <= left for left, right in zip(grid, grid[1:])):
+        raise MetaculusError("Cannot enforce the current-forecaster-rate lower bound on an unordered grid.")
+    return grid
 
 
 def derive_forecast_constraints(
@@ -1219,27 +1291,59 @@ def _validate_forecast_constraints(
     cdf: Sequence[float],
     constraints: Sequence[ForecastConstraint],
 ) -> None:
-    if not constraints or str(question.get("type", "")) not in {"numeric", "discrete"}:
+    applicable_constraints = [
+        constraint
+        for constraint in constraints
+        if constraint.kind == "current_forecaster_rate" and constraint.lower_bound is not None
+    ]
+    if not applicable_constraints or str(question.get("type", "")) not in {"numeric", "discrete"}:
         return
     scaling = question.get("scaling")
-    grid = scaling.get("continuous_range") if isinstance(scaling, Mapping) else None
-    if not isinstance(grid, list) or len(grid) != len(cdf):
-        return
-    for constraint in constraints:
-        if constraint.kind != "current_forecaster_rate":
-            continue
-        try:
-            probability_below_bound = max(
-                (float(probability) for value, probability in zip(grid, cdf) if float(value) < constraint.lower_bound),
-                default=0.0,
-            )
-        except (TypeError, ValueError):
-            # A malformed platform grid cannot safely support a deterministic
-            # constraint.  Normal Metaculus payload validation still applies.
-            continue
-        if probability_below_bound > 0.01:
+    grid = _constraint_cdf_grid(question, len(cdf))
+    if not isinstance(scaling, Mapping):
+        raise MetaculusError("Cannot validate the current-forecaster-rate lower bound without scaling metadata.")
+    for constraint in applicable_constraints:
+        if not math.isfinite(constraint.lower_bound):
+            raise MetaculusError("Cannot validate a non-finite current-forecaster-rate lower bound.")
+        below_bound_indices = [index for index, value in enumerate(grid) if value < constraint.lower_bound]
+        probability_below_bound = max(
+            (float(probability) for value, probability in zip(grid, cdf) if value < constraint.lower_bound),
+            default=0.0,
+        )
+        # Every bucket has a platform minimum and maximum. Permit only the
+        # below-bound mass those representational constraints force.
+        open_lower_mass = 0.001 if scaling.get("open_lower_bound") else 0.0
+        inbound_outcome_count = len(cdf) - 1
+        minimum_step = _MIN_CDF_MASS / inbound_outcome_count + _CDF_MIN_STEP_MARGIN
+        maximum_step = min(
+            1.0,
+            _MAX_CDF_STEP_AT_DEFAULT_BUCKET_COUNT * _DEFAULT_CDF_BUCKET_COUNT / inbound_outcome_count,
+        )
+        if maximum_step < 1.0:
+            maximum_step -= _CDF_MAX_STEP_MARGIN
+        last_below_index = max(below_bound_indices, default=-1)
+        if last_below_index >= 0:
+            minimum_mass_floor = open_lower_mass + last_below_index * minimum_step
+            remaining_steps = inbound_outcome_count - last_below_index
+            upper_mass = 0.999 if scaling.get("open_upper_bound") else 1.0
+            maximum_mass_floor = upper_mass - remaining_steps * maximum_step
+            if maximum_mass_floor > minimum_mass_floor + 1e-9:
+                raise MetaculusError(
+                    "The question's outcome grid cannot represent the current-forecaster-rate lower bound "
+                    "within the permitted below-bound mass."
+                )
+            unavoidable_floor = max(minimum_mass_floor, maximum_mass_floor)
+        else:
+            unavoidable_floor = 0.0
+        upper_mass = 0.999 if scaling.get("open_upper_bound") else 1.0
+        if unavoidable_floor > upper_mass + 1e-9:
+            raise MetaculusError("The question's outcome grid cannot represent the current-forecaster-rate lower bound.")
+        allowed_probability_below_bound = unavoidable_floor + 1e-9
+        if probability_below_bound > allowed_probability_below_bound:
             raise MetaculusError(
-                "Forecast violates the current-forecaster-rate lower bound."
+                "Forecast violates the current-forecaster-rate lower bound "
+                f"(below_bound_mass={probability_below_bound:.12g}, "
+                f"unavoidable_mass={unavoidable_floor:.12g})."
             )
 
 
@@ -1273,7 +1377,12 @@ def _post_close_sort_key(post: Mapping[str, Any]) -> tuple[bool, float, int]:
     return (closes is None, closes.timestamp() if closes is not None else math.inf, post_id or 0)
 
 
-def _project_metaculus_cdf(question: Mapping[str, Any], cdf: list[float]) -> list[float]:
+def _project_metaculus_cdf(
+    question: Mapping[str, Any],
+    cdf: list[float],
+    *,
+    minimum_allowed_bucket_index: int = 0,
+) -> list[float]:
     """Standardize a CDF to Metaculus's documented bucket constraints.
 
     The API evaluates the implied probability mass function, not merely a
@@ -1287,16 +1396,28 @@ def _project_metaculus_cdf(question: Mapping[str, Any], cdf: list[float]) -> lis
     if not isinstance(scaling, Mapping):
         scaling = {}
     inbound_outcome_count = expected - 1
-    minimum_step = _MIN_CDF_MASS / inbound_outcome_count
-    maximum_step = min(
+    minimum_step = _MIN_CDF_MASS / inbound_outcome_count + _CDF_MIN_STEP_MARGIN
+    api_maximum_step = min(
         1.0,
         _MAX_CDF_STEP_AT_DEFAULT_BUCKET_COUNT * _DEFAULT_CDF_BUCKET_COUNT / inbound_outcome_count,
     )
+    # Leave room for cumulative floating-point rounding: the server compares
+    # adjacent CDF values against its cap without a tolerance.
+    maximum_step = api_maximum_step - _CDF_MAX_STEP_MARGIN if api_maximum_step < 1.0 else api_maximum_step
     lower = 0.001 if scaling.get("open_lower_bound") else 0.0
     upper = 0.999 if scaling.get("open_upper_bound") else 1.0
     target_mass = upper - lower
     if not minimum_step <= maximum_step or target_mass < minimum_step * inbound_outcome_count:
         raise MetaculusError("Metaculus CDF constraints cannot be satisfied for this question.")
+    if minimum_allowed_bucket_index > 0:
+        minimum_mass_floor = lower + minimum_allowed_bucket_index * minimum_step
+        remaining_legal_steps = inbound_outcome_count - minimum_allowed_bucket_index
+        maximum_mass_floor = upper - remaining_legal_steps * maximum_step
+        if maximum_mass_floor > minimum_mass_floor + 1e-9:
+            raise MetaculusError(
+                "The question's outcome grid cannot represent the current-forecaster-rate lower bound "
+                "within the permitted below-bound mass."
+            )
     raw_weights = [max(0.0, right - left) for left, right in zip(cdf, cdf[1:])]
     if not any(raw_weights):
         raw_weights = [1.0] * inbound_outcome_count
@@ -1305,6 +1426,7 @@ def _project_metaculus_cdf(question: Mapping[str, Any], cdf: list[float]) -> lis
         total=target_mass,
         minimum=minimum_step,
         maximum=maximum_step,
+        minimum_weight_index=minimum_allowed_bucket_index,
     )
     projected = [lower]
     for step in steps:
@@ -1314,7 +1436,12 @@ def _project_metaculus_cdf(question: Mapping[str, Any], cdf: list[float]) -> lis
 
 
 def _bounded_probability_mass(
-    weights: Sequence[float], *, total: float, minimum: float, maximum: float
+    weights: Sequence[float],
+    *,
+    total: float,
+    minimum: float,
+    maximum: float,
+    minimum_weight_index: int = 0,
 ) -> list[float]:
     """Allocate mass proportionally, subject to a finite lower/upper bound."""
     count = len(weights)
@@ -1326,15 +1453,18 @@ def _bounded_probability_mass(
     active = {index for index, capacity in enumerate(capacities) if capacity > 1e-15}
     normalized_weights = [max(0.0, float(weight)) for weight in weights]
     while remaining > 1e-12 and active:
-        denominator = sum(normalized_weights[index] for index in active)
+        eligible_active = {index for index in active if index >= minimum_weight_index}
+        if not eligible_active:
+            raise MetaculusError("Unable to standardize Metaculus CDF mass without violating the hard lower bound.")
+        denominator = sum(normalized_weights[index] for index in eligible_active)
         if denominator <= 1e-15:
-            denominator = float(len(active))
-            proportions = {index: 1.0 / denominator for index in active}
+            denominator = float(len(eligible_active))
+            proportions = {index: 1.0 / denominator for index in eligible_active}
         else:
-            proportions = {index: normalized_weights[index] / denominator for index in active}
+            proportions = {index: normalized_weights[index] / denominator for index in eligible_active}
         allocated = 0.0
         for index in tuple(active):
-            addition = min(capacities[index], remaining * proportions[index])
+            addition = min(capacities[index], remaining * proportions.get(index, 0.0))
             masses[index] += addition
             capacities[index] -= addition
             allocated += addition
@@ -1591,8 +1721,10 @@ def _question_prompt(
     )
     if constraints:
         prompt += (
-            "\n\nDeterministic constraints are hard evidence. Do not place more than 1% "
-            "of probability below each stated lower bound."
+            "\n\nDeterministic constraints are hard evidence. For each current-forecaster-rate "
+            "lower bound, assign no model probability below that bound. The client conditions the distribution on those "
+            "bounds; the final CDF may still include probability forced below a bound by "
+            "Metaculus's minimum/maximum bucket-step requirements."
         )
     if evidence:
         sanitized_evidence: list[dict[str, Any]] = []
