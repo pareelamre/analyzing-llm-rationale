@@ -2832,11 +2832,12 @@
       <a href="https://smithery.ai/servers?q=foresea" target="_blank" rel="noopener" style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;text-decoration:none">Smithery Listed</a>
     </div>
     <p class="auth-sub" style="margin-top:4px;margin-bottom:14px">
-      Search for <strong>foresea</strong> in your coding agent (Cursor, Windsurf, Claude Code, Cline) or connect instantly below.
+      Search for <strong>foresea</strong> in your coding agent (Cursor, Windsurf, Claude Code, Antigravity, Codex, Cline) or connect instantly below.
     </p>
     <div style="display:flex;gap:4px;background:var(--panel);padding:4px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;overflow-x:auto">
       <button type="button" id="mcpTabCli" class="mcp-tab active" onclick="selectMcpTab('cli')">1-Click CLI &amp; Search</button>
       <button type="button" id="mcpTabCursor" class="mcp-tab" onclick="selectMcpTab('cursor')">Cursor / Windsurf</button>
+      <button type="button" id="mcpTabAgy" class="mcp-tab" onclick="selectMcpTab('agy')">Antigravity / Codex</button>
       <button type="button" id="mcpTabClaude" class="mcp-tab" onclick="selectMcpTab('claude')">Claude Desktop</button>
       <button type="button" id="mcpTabCline" class="mcp-tab" onclick="selectMcpTab('cline')">Cline / Roo</button>
       <button type="button" id="mcpTabPython" class="mcp-tab" onclick="selectMcpTab('python')">Python SDK</button>
@@ -2846,7 +2847,7 @@
       <div style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.4">
         <span style="font-weight:600;color:var(--ink)">Search in your coding agent:</span>
         <div style="color:var(--text-dim);margin-top:2px">
-          Open your agent's MCP extension or registry (Cursor, Windsurf, Cline, Roo Code) and search for <code>foresea</code>, or run one of these 1-line commands in your terminal:
+          Open your agent's MCP extension or registry (Cursor, Windsurf, Cline, Roo Code, Antigravity, Codex) and search for <code>foresea</code>, or run one of these 1-line commands in your terminal:
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
@@ -2856,6 +2857,20 @@
             <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeClaudeCli', this)">Copy</button>
           </div>
           <pre id="mcpCodeClaudeCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>claude mcp add --transport sse foresea https://foresea.ink/mcp/</code></pre>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:600;color:var(--ink)">Google Antigravity (AGY CLI):</span>
+            <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeAgyCli', this)">Copy</button>
+          </div>
+          <pre id="mcpCodeAgyCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>agy mcp add foresea https://foresea.ink/mcp/</code></pre>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:600;color:var(--ink)">OpenAI Codex / Codex CLI:</span>
+            <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeCodexCli', this)">Copy</button>
+          </div>
+          <pre id="mcpCodeCodexCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>codex mcp add foresea https://foresea.ink/mcp/</code></pre>
         </div>
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -2880,7 +2895,7 @@
         </div>
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-size:11px;font-weight:600;color:var(--ink)">Local Stdio (uvx):</span>
+            <span style="font-size:11px;font-weight:600;color:var(--ink)">Local Stdio (uvx / Codex / Antigravity):</span>
             <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeUvxCli', this)">Copy</button>
           </div>
           <pre id="mcpCodeUvxCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>uvx --from git+https://github.com/pareelamre/analyzing-llm-rationale.git foresea-mcp</code></pre>
@@ -2901,6 +2916,22 @@
 }</code></pre>
       <p style="font-size:11px;color:var(--text-mute);margin-top:6px">
         Or in Cursor Settings: Features &gt; MCP &gt; Add New MCP Server &gt; Type: <code>SSE</code>, URL: <code>https://foresea.ink/mcp/</code>.
+      </p>
+    </div>
+    <div id="mcpContentAgy" class="mcp-content" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--text-dim)">Add to Antigravity (<code>agy.json</code>) or Codex (<code>codex.json</code>):</span>
+        <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeAgy', this)">Copy JSON</button>
+      </div>
+      <pre id="mcpCodeAgy" class="mcp-code-block"><code>{
+  "mcpServers": {
+    "foresea": {
+      "url": "https://foresea.ink/mcp/"
+    }
+  }
+}</code></pre>
+      <p style="font-size:11px;color:var(--text-mute);margin-top:6px">
+        In Antigravity CLI: <code>agy mcp add foresea https://foresea.ink/mcp/</code> or configure local stdio tool: <code>foresea-mcp</code>.
       </p>
     </div>
     <div id="mcpContentClaude" class="mcp-content" style="display:none">
@@ -10526,7 +10557,7 @@ function closeMcpModal() {
 }
 
 function selectMcpTab(tabName) {
-  const tabs = ['cli', 'cursor', 'claude', 'cline', 'python', 'curl'];
+  const tabs = ['cli', 'cursor', 'agy', 'claude', 'cline', 'python', 'curl'];
   tabs.forEach(t => {
     const tabBtn = document.getElementById('mcpTab' + t.charAt(0).toUpperCase() + t.slice(1));
     const content = document.getElementById('mcpContent' + t.charAt(0).toUpperCase() + t.slice(1));

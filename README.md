@@ -739,17 +739,23 @@ in `data/pr_manual_targets.json`. Current manual/GitHub target: mcp.so issue
 #### Add Foresea to your coding agent (10 seconds)
 
 ##### Search in your Coding Agent / Extension
-Open your coding agent or IDE (Cursor, Windsurf, Cline, Roo Code) and search for **`foresea`** in the MCP registry or settings, or connect instantly using the 1-line commands below:
+Open your coding agent or IDE (Cursor, Windsurf, Cline, Roo Code, Antigravity, Codex) and search for **`foresea`** in the MCP registry or settings, or connect instantly using the 1-line commands below:
 
 ##### 1-Line CLI Commands
 ```bash
 # Claude Code (Anthropic CLI)
 claude mcp add --transport sse foresea https://foresea.ink/mcp/
 
-# Cursor
+# Google Antigravity (AGY CLI)
+agy mcp add foresea https://foresea.ink/mcp/
+
+# OpenAI Codex / Codex CLI
+codex mcp add foresea https://foresea.ink/mcp/
+
+# Cursor IDE
 npx -y @smithery/cli install foresea --client cursor
 
-# Windsurf
+# Windsurf IDE
 npx -y @smithery/cli install foresea --client windsurf
 
 # Cline / Roo Code (VS Code)
@@ -758,13 +764,13 @@ npx -y @smithery/cli install foresea --client cline
 # Claude Desktop
 npx -y @smithery/cli install foresea --client claude
 
-# Local stdio via uvx
+# Local stdio via uvx (Codex / Claude / Antigravity)
 uvx --from git+https://github.com/pareelamre/analyzing-llm-rationale.git foresea-mcp
 ```
 
 ##### Direct Configuration (mcp.json)
 ```jsonc
-// Cursor (.cursor/mcp.json), Windsurf, Cline, or Claude Desktop
+// Cursor (.cursor/mcp.json), Antigravity, Codex, Windsurf, Cline, or Claude Desktop
 {
   "mcpServers": {
     "foresea": {
