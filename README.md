@@ -736,27 +736,42 @@ Additional listing work that is not suitable for the scheduled HTTP sender lives
 in `data/pr_manual_targets.json`. Current manual/GitHub target: mcp.so issue
 `https://github.com/daodao97/chatmcp/issues/213`.
 
-#### Add Foresea to your agent (10 seconds)
+#### Add Foresea to your coding agent (10 seconds)
 
-##### Option A: Zero-Install Remote Streamable-HTTP (Claude Code / Cursor / Windsurf)
-```bash
-# Claude Code (Remote HTTP)
-claude mcp add --transport http foresea https://foresea.ink/mcp/
-```
+##### Search in your Coding Agent / Extension
+Open your coding agent or IDE (Cursor, Windsurf, Cline, Roo Code) and search for **`foresea`** in the MCP registry or settings, or connect instantly using the 1-line commands below:
 
-##### Option B: Zero-Install Local Stdio via `uvx` (Claude Desktop / Antigravity / Codex)
+##### 1-Line CLI Commands
 ```bash
+# Claude Code (Anthropic CLI)
+claude mcp add --transport sse foresea https://foresea.ink/mcp/
+
+# Cursor
+npx -y @smithery/cli install foresea --client cursor
+
+# Windsurf
+npx -y @smithery/cli install foresea --client windsurf
+
+# Cline / Roo Code (VS Code)
+npx -y @smithery/cli install foresea --client cline
+
+# Claude Desktop
+npx -y @smithery/cli install foresea --client claude
+
+# Local stdio via uvx
 uvx --from git+https://github.com/pareelamre/analyzing-llm-rationale.git foresea-mcp
 ```
 
-##### Option C: 1-Click Smithery.ai CLI
-```bash
-npx -y @smithery/cli install foresea --client claude
-```
-
+##### Direct Configuration (mcp.json)
 ```jsonc
-// Cursor / Cline / Claude Desktop (mcp.json)
-{ "mcpServers": { "foresea": { "url": "https://foresea.ink/mcp/" } } }
+// Cursor (.cursor/mcp.json), Windsurf, Cline, or Claude Desktop
+{
+  "mcpServers": {
+    "foresea": {
+      "url": "https://foresea.ink/mcp/"
+    }
+  }
+}
 ```
 
 ```jsonc

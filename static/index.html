@@ -2823,24 +2823,87 @@
 
 <!-- ── MCP / AI Agent Connect modal ── -->
 <div id="mcpOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="mcpTitle" aria-hidden="true" onclick="if(event.target===this)closeMcpModal()">
-  <div class="auth-card glass" style="position:relative;max-width:580px;width:100%;max-height:90vh;overflow-y:auto">
+  <div class="auth-card glass" style="position:relative;max-width:620px;width:100%;max-height:90vh;overflow-y:auto">
     <button type="button" class="auth-close" onclick="closeMcpModal()" aria-label="Close"><svg class="ui-icon" aria-hidden="true"><use href="#ui-x"></use></svg></button>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
       <span class="logo-dot" style="background:#10b981"></span>
       <span class="brand text-lg" id="mcpTitle">Connect to AI Agents (MCP)</span>
       <span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:#ecfdf5;color:#0f766e;border:1px solid #a7f3d0">19 Live Tools</span>
       <a href="https://smithery.ai/servers?q=foresea" target="_blank" rel="noopener" style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;text-decoration:none">Smithery Listed</a>
     </div>
-    <p class="auth-sub" style="margin-top:4px;margin-bottom:16px">
-      Give <strong>Claude Desktop</strong>, <strong>Cursor</strong>, <strong>Windsurf</strong>, or any autonomous ReAct agent real-time access to prediction markets, orderbooks, and edge radars.
+    <p class="auth-sub" style="margin-top:4px;margin-bottom:14px">
+      Search for <strong>foresea</strong> in your coding agent (Cursor, Windsurf, Claude Code, Cline) or connect instantly below.
     </p>
-    <div style="display:flex;gap:6px;background:var(--panel);padding:4px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px">
-      <button type="button" id="mcpTabClaude" class="mcp-tab active" onclick="selectMcpTab('claude')">Claude Desktop</button>
+    <div style="display:flex;gap:4px;background:var(--panel);padding:4px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;overflow-x:auto">
+      <button type="button" id="mcpTabCli" class="mcp-tab active" onclick="selectMcpTab('cli')">1-Click CLI &amp; Search</button>
       <button type="button" id="mcpTabCursor" class="mcp-tab" onclick="selectMcpTab('cursor')">Cursor / Windsurf</button>
+      <button type="button" id="mcpTabClaude" class="mcp-tab" onclick="selectMcpTab('claude')">Claude Desktop</button>
+      <button type="button" id="mcpTabCline" class="mcp-tab" onclick="selectMcpTab('cline')">Cline / Roo</button>
       <button type="button" id="mcpTabPython" class="mcp-tab" onclick="selectMcpTab('python')">Python SDK</button>
       <button type="button" id="mcpTabCurl" class="mcp-tab" onclick="selectMcpTab('curl')">Streamable HTTP</button>
     </div>
-    <div id="mcpContentClaude" class="mcp-content">
+    <div id="mcpContentCli" class="mcp-content">
+      <div style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.4">
+        <span style="font-weight:600;color:var(--ink)">Search in your coding agent:</span>
+        <div style="color:var(--text-dim);margin-top:2px">
+          Open your agent's MCP extension or registry (Cursor, Windsurf, Cline, Roo Code) and search for <code>foresea</code>, or run one of these 1-line commands in your terminal:
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:600;color:var(--ink)">Claude Code CLI:</span>
+            <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeClaudeCli', this)">Copy</button>
+          </div>
+          <pre id="mcpCodeClaudeCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>claude mcp add --transport sse foresea https://foresea.ink/mcp/</code></pre>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:600;color:var(--ink)">Cursor IDE (via Smithery):</span>
+            <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeCursorCli', this)">Copy</button>
+          </div>
+          <pre id="mcpCodeCursorCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>npx -y @smithery/cli install foresea --client cursor</code></pre>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:600;color:var(--ink)">Windsurf IDE (via Smithery):</span>
+            <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeWindsurfCli', this)">Copy</button>
+          </div>
+          <pre id="mcpCodeWindsurfCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>npx -y @smithery/cli install foresea --client windsurf</code></pre>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:600;color:var(--ink)">Cline / Roo Code (VS Code):</span>
+            <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeClineCli', this)">Copy</button>
+          </div>
+          <pre id="mcpCodeClineCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>npx -y @smithery/cli install foresea --client cline</code></pre>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:600;color:var(--ink)">Local Stdio (uvx):</span>
+            <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeUvxCli', this)">Copy</button>
+          </div>
+          <pre id="mcpCodeUvxCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>uvx --from git+https://github.com/pareelamre/analyzing-llm-rationale.git foresea-mcp</code></pre>
+        </div>
+      </div>
+    </div>
+    <div id="mcpContentCursor" class="mcp-content" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--text-dim)">Add to <code>.cursor/mcp.json</code> or <code>~/.codeium/windsurf/mcp_config.json</code>:</span>
+        <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeCursor', this)">Copy JSON</button>
+      </div>
+      <pre id="mcpCodeCursor" class="mcp-code-block"><code>{
+  "mcpServers": {
+    "foresea": {
+      "url": "https://foresea.ink/mcp/"
+    }
+  }
+}</code></pre>
+      <p style="font-size:11px;color:var(--text-mute);margin-top:6px">
+        Or in Cursor Settings: Features &gt; MCP &gt; Add New MCP Server &gt; Type: <code>SSE</code>, URL: <code>https://foresea.ink/mcp/</code>.
+      </p>
+    </div>
+    <div id="mcpContentClaude" class="mcp-content" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-size:12px;color:var(--text-dim)">Add to <code>claude_desktop_config.json</code>:</span>
         <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeClaude', this)">Copy JSON</button>
@@ -2856,20 +2919,22 @@
         Config path: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) or <code>%APPDATA%\Claude\claude_desktop_config.json</code> (Windows).
       </p>
     </div>
-    <div id="mcpContentCursor" class="mcp-content" style="display:none">
+    <div id="mcpContentCline" class="mcp-content" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:12px;color:var(--text-dim)">Add to <code>.cursor/mcp.json</code>:</span>
-        <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeCursor', this)">Copy JSON</button>
+        <span style="font-size:12px;color:var(--text-dim)">Add to <code>cline_mcp_settings.json</code> / Roo Code:</span>
+        <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeCline', this)">Copy JSON</button>
       </div>
-      <pre id="mcpCodeCursor" class="mcp-code-block"><code>{
+      <pre id="mcpCodeCline" class="mcp-code-block"><code>{
   "mcpServers": {
     "foresea": {
-      "url": "https://foresea.ink/mcp/"
+      "url": "https://foresea.ink/mcp/",
+      "disabled": false,
+      "autoApprove": []
     }
   }
 }</code></pre>
       <p style="font-size:11px;color:var(--text-mute);margin-top:6px">
-        Save file and restart Cursor / Windsurf to activate all 19 prediction tools.
+        In Cline / Roo Code Settings: MCP Servers &gt; Add Server &gt; Transport: <code>SSE</code>.
       </p>
     </div>
     <div id="mcpContentPython" class="mcp-content" style="display:none">
@@ -10450,7 +10515,7 @@ function openMcpModal() {
   if (!ov) return;
   ov.classList.add('show');
   ov.setAttribute('aria-hidden', 'false');
-  selectMcpTab('claude');
+  selectMcpTab('cli');
 }
 
 function closeMcpModal() {
@@ -10461,7 +10526,7 @@ function closeMcpModal() {
 }
 
 function selectMcpTab(tabName) {
-  const tabs = ['claude', 'cursor', 'python', 'curl'];
+  const tabs = ['cli', 'cursor', 'claude', 'cline', 'python', 'curl'];
   tabs.forEach(t => {
     const tabBtn = document.getElementById('mcpTab' + t.charAt(0).toUpperCase() + t.slice(1));
     const content = document.getElementById('mcpContent' + t.charAt(0).toUpperCase() + t.slice(1));
