@@ -345,8 +345,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     metaculus_parser.add_argument(
         "--expected-bot-username",
-        default=os.environ.get("METACULUS_EXPECTED_USERNAME", "pareelforeal"),
-        help="Authenticated Metaculus bot account required before any forecast run.",
+        default=(os.environ.get("METACULUS_EXPECTED_USERNAME") or "").strip() or "pareel.amre",
+        help="Expected authenticated Metaculus account before any forecast run.",
     )
     metaculus_parser.add_argument("--parser-model", default="llama-3.3-70b-instruct")
     metaculus_parser.add_argument(

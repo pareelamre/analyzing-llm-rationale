@@ -125,8 +125,27 @@ def binary_question() -> dict[str, Any]:
 
 class MetaculusBotTests(unittest.TestCase):
     def test_cli_uses_a_path_for_models_config(self) -> None:
-        args = build_parser().parse_args(["forecast-metaculus"])
+        with patch.dict(os.environ, {}, clear=True):
+            args = build_parser().parse_args(["forecast-metaculus"])
         self.assertIsInstance(args.models_config, Path)
+        self.assertEqual(args.expected_bot_username, "pareel.amre")
+
+    def test_cli_uses_nonempty_expected_username_environment_override(self) -> None:
+        with patch.dict(os.environ, {"METACULUS_EXPECTED_USERNAME": "alternate.account"}, clear=True):
+            args = build_parser().parse_args(["forecast-metaculus"])
+        self.assertEqual(args.expected_bot_username, "alternate.account")
+
+    def test_cli_treats_blank_expected_username_environment_value_as_unset(self) -> None:
+        with patch.dict(os.environ, {"METACULUS_EXPECTED_USERNAME": "   "}, clear=True):
+            args = build_parser().parse_args(["forecast-metaculus"])
+        self.assertEqual(args.expected_bot_username, "pareel.amre")
+
+    def test_cli_expected_username_flag_overrides_environment(self) -> None:
+        with patch.dict(os.environ, {"METACULUS_EXPECTED_USERNAME": "alternate.account"}, clear=True):
+            args = build_parser().parse_args(
+                ["forecast-metaculus", "--expected-bot-username", "command.line.account"]
+            )
+        self.assertEqual(args.expected_bot_username, "command.line.account")
 
     def test_binary_payload_is_normalized(self) -> None:
         payload = validate_forecast_payload({"type": "binary"}, {"probability_yes": "0.42"})
