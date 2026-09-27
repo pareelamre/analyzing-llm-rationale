@@ -2,6 +2,180 @@
   "audits": {
     "deepseek-v4-flash": [
       {
+        "action_id": "e9f60de7-7195-4c74-884d-ea34eb1c54e7",
+        "agent_id": "deepseek-v4-flash",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 73.239966
+          },
+          "quote": {
+            "lead_days": 826.7027216095717,
+            "marketable": true,
+            "observed_ask": 0.43,
+            "observed_bid": 0.39,
+            "source": "live_venue_quote",
+            "spread": 0.04,
+            "spread_status": "checked",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.43,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 8795.007797,
+            "cash_required": 32.749764,
+            "concentration_cap": 1402.121459,
+            "cycle_id": "30m:994748",
+            "cycle_spend_after": 32.749764,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 32.749764,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2804.242917,
+            "drawdown_after": 0.06554,
+            "fee": 1.256578,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 31.493185,
+            "max_credible_edge": 0.2,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 31.493185,
+            "open_markets_after": 5,
+            "per_cycle_spend_limit": 1869.495278,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.05,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": 826.7,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.02,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 32.749764,
+            "target_quantity": 73.23996625556566
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994748",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -32.74976348989323,
+          "cash_required": 32.74976348989323,
+          "fee": 1.256578,
+          "netting_payout": 0.0,
+          "notional": 31.493185489893236,
+          "price": 0.43,
+          "quantity": 73.23996625556566,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXCABLEAVE-26MAY22-26NOV"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "1dbe48f4673a1b82d92a0bcf2598473b0acf413a28bfba94164d8e24dcb3ef4f",
+        "recorded_at": "2026-09-27T22:08:04.937950+00:00"
+      },
+      {
+        "action_id": "4ae7737c-7cab-494a-9dfa-6d482c668b00",
+        "agent_id": "deepseek-v4-flash",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 4.79
+          },
+          "initiated_by": "broken_thesis_exit_rule",
+          "quote": {
+            "lead_days": 466.7057041845254,
+            "marketable": true,
+            "observed_ask": 0.91,
+            "observed_bid": 0.02,
+            "source": "live_venue_quote",
+            "spread": 0.89,
+            "spread_status": "checked",
+            "status": "shadow_price_from_live_quote"
+          },
+          "requested_order": {
+            "price": null,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 8794.604158,
+            "cash_required": 0.0,
+            "concentration_cap": 1500.0,
+            "cycle_id": "30m:994748",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3000.0,
+            "drawdown_after": 0.065641,
+            "fee": 0.04959,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_credible_edge": 0.2,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 7.871444,
+            "open_markets_after": 3,
+            "per_cycle_spend_limit": 2000.0,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994748",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 0.4036390000000001,
+          "cash_required": 0.0,
+          "fee": 0.027461,
+          "netting_payout": 4.79,
+          "notional": 4.3589,
+          "price": 0.91,
+          "quantity": 4.79,
+          "realized_pnl": -2.805661,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXAIMILLENNIUM-28-26NOV01"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "b7ff1c19a565403a7cd6abe41e4ee665b51f21d66931c90b304269e409e30fc2",
+        "recorded_at": "2026-09-27T22:03:47.387649+00:00"
+      },
+      {
         "action_id": "f84702f6-7df8-442c-a084-a143af821468",
         "agent_id": "deepseek-v4-flash",
         "audit": {
@@ -12706,6 +12880,101 @@
       }
     ],
     "glm-5-3": [
+      {
+        "action_id": "d61036c1-c411-4661-bfa9-8b7762b97296",
+        "agent_id": "glm-5-3",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 467.69618980166666,
+            "marketable": true,
+            "observed_ask": 0.25,
+            "observed_bid": 0.03,
+            "source": "live_venue_quote",
+            "spread": 0.22,
+            "spread_status": "checked",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.25,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 9266.258713,
+            "cash_required": 0.0,
+            "concentration_cap": 1483.863775,
+            "cycle_id": "30m:994748",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2967.72755,
+            "drawdown_after": 0.004339,
+            "fee": 1.97207,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 465.682913,
+            "max_credible_edge": 0.2,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 37.56323,
+            "open_markets_after": 4,
+            "per_cycle_spend_limit": 1978.485033,
+            "reasons": [
+              "insufficient_profile_edge",
+              "wide_bid_ask_spread"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.05,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": 467.7,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 39.5353,
+            "target_quantity": 150.25291981781936
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994748",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 1.97207,
+          "netting_payout": 150.25292,
+          "notional": 37.56323,
+          "price": 0.25,
+          "quantity": 150.25291981781936,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXKENNEDYREOPEN-28-26OCT08"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "d17e5d0170fe29c93601b417221c1dabb7f1ac3a2a6e1b49a100756b68970575",
+        "recorded_at": "2026-09-27T22:17:29.226118+00:00"
+      },
       {
         "action_id": "aaaf7200-8c43-4cf8-b6d2-3fcd40f1f02b",
         "agent_id": "glm-5-3",
@@ -59593,7 +59862,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-27T20:42:07.897576+00:00",
+  "generated_at": "2026-09-27T22:31:18.914801+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
