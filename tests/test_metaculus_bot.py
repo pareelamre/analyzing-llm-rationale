@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import unittest
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import perf_counter
@@ -12,13 +13,17 @@ from unittest.mock import patch
 from analyzing_llm_rationale.cli import (
     build_parser,
     build_provider,
+    forecast_metaculus_command,
     resolve_auxiliary_model_args,
+    resolve_metaculus_profile,
 )
 from analyzing_llm_rationale.metaculus_bot import (
     ForecastConstraint,
     ForecastCycleConfig,
+    ForecastCycleSummary,
     MetaculusClient,
     MetaculusError,
+    MetaculusUser,
     SubmissionOutcomeUnknownError,
     SubmissionUnverifiedError,
     _cdf_from_quantiles,
@@ -133,37 +138,174 @@ def binary_question() -> dict[str, Any]:
 
 class MetaculusBotTests(unittest.TestCase):
     def test_cli_uses_a_path_for_models_config(self) -> None:
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(
+            os.environ,
+            {"METACULUS_QWEN_TOKEN": "qwen-test-token", "METACULUS_QWEN_USERNAME": "qwen-bot"},
+            clear=True,
+        ):
             args = build_parser().parse_args(["forecast-metaculus"])
+            token = resolve_metaculus_profile(args)
         self.assertIsInstance(args.models_config, Path)
-        self.assertEqual(args.expected_bot_username, "pareel.amre")
+        self.assertEqual(args.bot_profile, "qwen-primary")
+        self.assertEqual(args.model, "qwen3-8-27b")
+        self.assertEqual(args.expected_bot_username, "qwen-bot")
+        self.assertEqual(token, "qwen-test-token")
         self.assertEqual(args.max_model_calls, 8)
         self.assertEqual(args.max_model_time_s, 180.0)
         self.assertEqual(ForecastCycleConfig().compact_parser_reserve_s, 30.0)
-        self.assertEqual(args.fallback_forecaster_model, "qwen3-8-27b")
+        self.assertEqual(args.fallback_forecaster_model, "gemma-4-26b-a4b-it")
         self.assertEqual(args.fallback_parser_model, "gemma-4-26b-a4b-it")
         fallback_args = resolve_auxiliary_model_args(
             args, args.fallback_forecaster_model, temperature=args.temperature
         )
-        self.assertEqual(fallback_args.router_model_name, "Qwen/Qwen3.8-27B")
+        self.assertEqual(fallback_args.router_model_name, "google/gemma-4-26B-A4B-it")
         self.assertEqual(ForecastCycleConfig().max_model_calls, 8)
         self.assertEqual(ForecastCycleConfig().max_model_time_s, 180.0)
 
-    def test_cli_uses_nonempty_expected_username_environment_override(self) -> None:
-        with patch.dict(os.environ, {"METACULUS_EXPECTED_USERNAME": "alternate.account"}, clear=True):
+    def test_secondary_profiles_select_distinct_models_accounts_and_logs(self) -> None:
+        cases = (
+            ("gemma-secondary", "gemma-4-26b-a4b-it", "GEMMA"),
+            ("glm-secondary", "glm-5-3-flash", "GLM"),
+            ("deepseek-secondary", "deepseek-v4-flash", "DEEPSEEK"),
+        )
+        audit_paths: set[Path] = set()
+        for profile, model, prefix in cases:
+            with self.subTest(profile=profile):
+                with patch.dict(
+                    os.environ,
+                    {
+                        f"METACULUS_{prefix}_TOKEN": f"{prefix.lower()}-test-token",
+                        f"METACULUS_{prefix}_USERNAME": f"{prefix.lower()}-bot",
+                    },
+                    clear=True,
+                ):
+                    args = build_parser().parse_args(["forecast-metaculus", "--bot-profile", profile])
+                    token = resolve_metaculus_profile(args)
+                self.assertEqual(args.model, model)
+                self.assertEqual(args.fallback_forecaster_model, "")
+                self.assertEqual(args.expected_bot_username, f"{prefix.lower()}-bot")
+                self.assertEqual(token, f"{prefix.lower()}-test-token")
+                resolved = resolve_auxiliary_model_args(args, args.model, temperature=args.temperature)
+                self.assertEqual(resolved.model, model)
+                self.assertEqual(resolved.provider, "openai-compatible")
+                audit_paths.add(args.audit_log_path)
+        self.assertEqual(len(audit_paths), 3)
+
+    def test_named_profile_requires_its_own_token_and_username(self) -> None:
+        args = build_parser().parse_args(["forecast-metaculus", "--bot-profile", "gemma-secondary"])
+        with patch.dict(os.environ, {"METACULUS_TOKEN": "other-token"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "METACULUS_GEMMA_TOKEN"):
+                resolve_metaculus_profile(args)
+        with patch.dict(os.environ, {"METACULUS_GEMMA_TOKEN": "gemma-test-token"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "METACULUS_GEMMA_USERNAME"):
+                resolve_metaculus_profile(args)
+            explicit_args = build_parser().parse_args(
+                ["forecast-metaculus", "--bot-profile", "gemma-secondary", "--expected-bot-username", "other-bot"]
+            )
+            with self.assertRaisesRegex(ValueError, "METACULUS_GEMMA_USERNAME"):
+                resolve_metaculus_profile(explicit_args)
+
+    def test_named_profile_rejects_different_model_or_username(self) -> None:
+        env = {"METACULUS_GLM_TOKEN": "glm-test-token", "METACULUS_GLM_USERNAME": "glm-bot"}
+        with patch.dict(os.environ, env, clear=True):
+            model_args = build_parser().parse_args(
+                ["forecast-metaculus", "--bot-profile", "glm-secondary", "--model", "minimax-m3"]
+            )
+            with self.assertRaisesRegex(ValueError, "--model"):
+                resolve_metaculus_profile(model_args)
+            username_args = build_parser().parse_args(
+                ["forecast-metaculus", "--bot-profile", "glm-secondary", "--expected-bot-username", "other-bot"]
+            )
+            with self.assertRaisesRegex(ValueError, "--expected-bot-username"):
+                resolve_metaculus_profile(username_args)
+            fallback_args = build_parser().parse_args(
+                ["forecast-metaculus", "--bot-profile", "glm-secondary", "--fallback-forecaster-model", "qwen3-8-27b"]
+            )
+            with self.assertRaisesRegex(ValueError, "--fallback-forecaster-model"):
+                resolve_metaculus_profile(fallback_args)
+
+    def test_named_profiles_reject_shared_account_or_token(self) -> None:
+        base = {"METACULUS_QWEN_TOKEN": "qwen-test-token", "METACULUS_QWEN_USERNAME": "qwen-bot"}
+        for duplicate in (
+            {"METACULUS_GEMMA_TOKEN": "qwen-test-token"},
+            {"METACULUS_GEMMA_USERNAME": "qwen-bot"},
+        ):
+            with self.subTest(duplicate=tuple(duplicate)):
+                with patch.dict(os.environ, {**base, **duplicate}, clear=True):
+                    args = build_parser().parse_args(["forecast-metaculus"])
+                    with self.assertRaisesRegex(ValueError, "distinct Metaculus bot accounts"):
+                        resolve_metaculus_profile(args)
+
+    def test_secondary_command_passes_no_forecaster_backup_to_cycle(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"METACULUS_GEMMA_TOKEN": "gemma-test-token", "METACULUS_GEMMA_USERNAME": "gemma-bot"},
+            clear=True,
+        ):
+            args = build_parser().parse_args(["forecast-metaculus", "--bot-profile", "gemma-secondary"])
+            with patch.object(MetaculusClient, "current_user", return_value=MetaculusUser(id=9, username="gemma-bot")):
+                with patch("analyzing_llm_rationale.observability.init_observability"):
+                    with patch("analyzing_llm_rationale.cli.build_provider") as provider:
+                        with patch("analyzing_llm_rationale.news_pipeline.NewsPipeline"):
+                            with patch(
+                                "analyzing_llm_rationale.metaculus_bot.run_forecast_cycle",
+                                return_value=ForecastCycleSummary(0, 0, 0, 0, 0),
+                            ) as cycle:
+                                result = forecast_metaculus_command(args)
+        self.assertEqual(result, 0)
+        self.assertEqual(provider.call_count, 3)
+        self.assertIsNone(cycle.call_args.kwargs["fallback_forecaster_provider"])
+
+    def test_named_profile_uses_scoped_token_and_stops_on_wrong_identity(self) -> None:
+        seen_authorization: list[str] = []
+
+        def wrong_user(client: MetaculusClient) -> MetaculusUser:
+            seen_authorization.append(client._headers["Authorization"])
+            return MetaculusUser(id=9, username="human-account")
+
+        with patch.dict(
+            os.environ,
+            {
+                "METACULUS_QWEN_TOKEN": "qwen-test-token",
+                "METACULUS_QWEN_USERNAME": "qwen-bot",
+                "METACULUS_TOKEN": "human-test-token",
+            },
+            clear=True,
+        ):
             args = build_parser().parse_args(["forecast-metaculus"])
+            with patch.object(MetaculusClient, "current_user", wrong_user):
+                with patch("analyzing_llm_rationale.observability.init_observability"):
+                    with patch("analyzing_llm_rationale.cli.build_provider") as provider:
+                        with patch("sys.stderr", new_callable=StringIO) as error_output:
+                            result = forecast_metaculus_command(args)
+        self.assertEqual(result, 1)
+        self.assertEqual(seen_authorization, ["Token qwen-test-token"])
+        self.assertIn("not the expected bot", error_output.getvalue())
+        provider.assert_not_called()
+
+    def test_custom_profile_keeps_explicit_model_and_generic_identity(self) -> None:
+        with patch.dict(os.environ, {"METACULUS_EXPECTED_USERNAME": "alternate.account"}, clear=True):
+            args = build_parser().parse_args(
+                ["forecast-metaculus", "--bot-profile", "custom", "--model", "minimax-m3"]
+            )
+            token = resolve_metaculus_profile(args)
+        self.assertIsNone(token)
+        self.assertEqual(args.model, "minimax-m3")
+        self.assertEqual(args.fallback_forecaster_model, "")
         self.assertEqual(args.expected_bot_username, "alternate.account")
 
-    def test_cli_treats_blank_expected_username_environment_value_as_unset(self) -> None:
+    def test_custom_profile_requires_a_named_expected_account(self) -> None:
         with patch.dict(os.environ, {"METACULUS_EXPECTED_USERNAME": "   "}, clear=True):
-            args = build_parser().parse_args(["forecast-metaculus"])
-        self.assertEqual(args.expected_bot_username, "pareel.amre")
+            args = build_parser().parse_args(["forecast-metaculus", "--bot-profile", "custom"])
+            with self.assertRaisesRegex(ValueError, "METACULUS_EXPECTED_USERNAME"):
+                resolve_metaculus_profile(args)
 
     def test_cli_expected_username_flag_overrides_environment(self) -> None:
         with patch.dict(os.environ, {"METACULUS_EXPECTED_USERNAME": "alternate.account"}, clear=True):
             args = build_parser().parse_args(
-                ["forecast-metaculus", "--expected-bot-username", "command.line.account"]
+                ["forecast-metaculus", "--bot-profile", "custom", "--expected-bot-username", "command.line.account"]
             )
+            resolve_metaculus_profile(args)
         self.assertEqual(args.expected_bot_username, "command.line.account")
 
     def test_auxiliary_model_uses_its_own_registered_model_name(self) -> None:
@@ -297,7 +439,17 @@ class MetaculusBotTests(unittest.TestCase):
                 raise RetryableProviderError("MiniMax temporarily unavailable")
 
         primary = FailingForecaster()
-        args = build_parser().parse_args(["forecast-metaculus"])
+        args = build_parser().parse_args(
+            [
+                "forecast-metaculus",
+                "--bot-profile",
+                "custom",
+                "--model",
+                "minimax-m3",
+                "--fallback-forecaster-model",
+                "qwen3-8-27b",
+            ]
+        )
         fallback_args = resolve_auxiliary_model_args(
             args, args.fallback_forecaster_model, temperature=args.temperature
         )
