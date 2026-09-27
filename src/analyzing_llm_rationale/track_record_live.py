@@ -1888,7 +1888,8 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
     dedup_staked = float(len(dedup_resolved))
 
     for r in dedup_resolved:
-        market_p = float(r.get("market_probability") or 0.5)
+        raw_mkt = r.get("market_probability")
+        market_p = float(raw_mkt if raw_mkt is not None else 0.5)
         if market_p == 0.5:
             continue
         side_yes = market_p > 0.5
@@ -2145,7 +2146,8 @@ def _attach_walk_forward_calibration(rows: List[Dict[str, Any]], *, min_history:
     ordered = sorted(rows, key=lambda x: x.get("resolved_ts") or _now())
     history: List[Dict[str, Any]] = []
     for r in ordered:
-        raw_model_p = float(r.get("model_probability") or 0.5)
+        raw_mp = r.get("model_probability")
+        raw_model_p = float(raw_mp if raw_mp is not None else 0.5)
         if len(history) >= min_history:
             pairs = [(float(x["model_probability"]), int(x["outcome"])) for x in history]
             bp = _fit_isotonic(pairs)
@@ -2250,7 +2252,8 @@ def build_validated_kelly_accounts(
             if row.get("resolved") and row.get("outcome") is not None:
                 continue
             live_row = dict(row)
-            raw_p = float(live_row.get("model_probability") or 0.5)
+            raw_mp = live_row.get("model_probability")
+            raw_p = float(raw_mp if raw_mp is not None else 0.5)
             live_row["calibrated_model_probability"] = round(
                 _apply_isotonic(calibration, raw_p) if calibration else raw_p,
                 4,
@@ -2368,7 +2371,12 @@ def _edge_kelly_ewma_filtered_rows(
         has_trend = False
         ordered_rows = sorted(market_rows, key=lambda r: str(r.get("snapshot_ts") or r.get("ts") or ""))
         for row in ordered_rows:
-            model_p = _probability_value(row.get("model_probability"))
+            raw_model_val = (
+                row.get("calibrated_model_probability")
+                if row.get("calibrated_model_probability") is not None
+                else row.get("model_probability")
+            )
+            model_p = _probability_value(raw_model_val)
             market_p = _probability_value(row.get("market_probability"))
             if market_p is not None and previous_market_p is not None:
                 delta = market_p - previous_market_p
@@ -2427,10 +2435,35 @@ def build_growth_accounts(
         if label == "crowd-follow":
             continue
         model_rows = [dict(row) for row in (by_model.get(label) or [])]
-        for row in model_rows:
-            row["calibrated_model_probability"] = float(row.get("model_probability") or 0.5)
-            row["_edge_validated"] = True
-        executable_rows = _edge_kelly_ewma_filtered_rows(model_rows, min_edge=0.10)
+        resolved_rows = [r for r in model_rows if r.get("resolved") and r.get("outcome") is not None]
+        if resolved_rows:
+            calibrated_rows = _attach_walk_forward_calibration([dict(r) for r in resolved_rows])
+            history_pairs = [
+                (float(r["model_probability"]), int(r["outcome"]))
+                for r in calibrated_rows
+            ]
+            calibration = _fit_isotonic(history_pairs) if len(history_pairs) >= 30 else None
+            for row in model_rows:
+                if row.get("resolved") and row.get("outcome") is not None:
+                    continue
+                live_row = dict(row)
+                raw_mp = live_row.get("model_probability")
+                raw_p = float(raw_mp if raw_mp is not None else 0.5)
+                live_row["calibrated_model_probability"] = round(
+                    _apply_isotonic(calibration, raw_p) if calibration else raw_p,
+                    4,
+                )
+                live_row["_edge_validated"] = True
+                calibrated_rows.append(live_row)
+        else:
+            calibrated_rows = []
+            for row in model_rows:
+                r = dict(row)
+                raw_mp = r.get("model_probability")
+                r["calibrated_model_probability"] = float(raw_mp if raw_mp is not None else 0.5)
+                r["_edge_validated"] = True
+                calibrated_rows.append(r)
+        executable_rows = _edge_kelly_ewma_filtered_rows(calibrated_rows, min_edge=0.10)
         for strategy_key, config in strategies.items():
             values = accounts[strategy_key]
             account = simulate_validated_kelly_account(
@@ -2487,8 +2520,10 @@ def _attach_fade_calibration(
     ordered = sorted(rows, key=lambda x: x.get("resolved_ts") or _now())
     fade_outcomes: List[bool] = []
     for r in ordered:
-        model_p = float(r.get("model_probability") or 0.5)
-        market_p = float(r.get("market_probability") or 0.5)
+        raw_mp = r.get("model_probability")
+        model_p = float(raw_mp if raw_mp is not None else 0.5)
+        raw_mkt = r.get("market_probability")
+        market_p = float(raw_mkt if raw_mkt is not None else 0.5)
         in_bucket = _edge_label(abs(model_p - market_p)) == fade_bucket
         # Matches accounting._row_edge_side's own direction convention exactly
         # (model_p vs market_p, not model_p vs 0.5) so the "fade" side here is
@@ -3329,7 +3364,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             break
     resolved_log = []
     for _r in _log_rows:
-        _prob = float(_r.get("model_probability") or 0.5)
+        raw_mp = _r.get("model_probability")
+        _prob = float(raw_mp if raw_mp is not None else 0.5)
         _outcome = _r.get("outcome")
         _correct = _r.get("model_correct")
         if _correct is None and _outcome is not None:
