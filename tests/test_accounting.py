@@ -470,6 +470,31 @@ class ValidatedKellyAccountTests(unittest.TestCase):
         account = simulate_validated_kelly_account(rows, starting_cash=10_000.0)
         self.assertEqual(account["n_settlements"], 1)
 
+    def test_zero_model_probability_is_not_coerced_to_half(self):
+        base = datetime(2026, 7, 1, tzinfo=timezone.utc)
+        rows = [
+            self._row(
+                ident="zero-prob-m1",
+                model_p=0.0,
+                market_p=0.40,
+                calibrated_p=0.0,
+                outcome=0,
+                ts=base,
+            )
+        ]
+        account = simulate_validated_kelly_account(
+            rows,
+            starting_cash=10_000.0,
+            kelly_fraction=0.50,
+            market_shrinkage=0.25,
+            follow_model_call=False,
+            min_edge=0.10,
+            min_price=0.20,
+            max_price=0.80,
+        )
+        self.assertEqual(account["n_trades"], 1)
+        self.assertGreater(account["account_value"], 10_000.0)
+
 
 if __name__ == "__main__":
     unittest.main()

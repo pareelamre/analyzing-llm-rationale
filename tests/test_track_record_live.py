@@ -2002,6 +2002,24 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(adverse["n_trades"], 0)
         self.assertEqual(favorable["n_trades"], 1)
 
+    def test_growth_accounts_does_not_coerce_zero_model_probability(self):
+        rows = [
+            self._resolved_row(
+                ident="m0",
+                model_p=0.0,
+                market_p=0.40,
+                outcome=0,
+                day=1,
+            )
+        ]
+        accounts = trl.build_growth_accounts(
+            rows, {}, default_model="m", tracked_models=["m"],
+        )
+        one_percent = {entry["model"]: entry for entry in accounts["growth_1pct"]}
+        account = one_percent["m"]["account"]
+        self.assertEqual(account["n_trades"], 1)
+        self.assertGreater(account["account_value"], 10_000)
+
     def test_validated_kelly_skips_crowd_follow(self):
         rows = [self._resolved_row(ident="m1", model_p=0.7, market_p=0.5, outcome=1,
                                     day=1, model="crowd-follow")]

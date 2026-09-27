@@ -834,12 +834,15 @@ def simulate_validated_kelly_account(
                 liq_value, _illiquid = account.liquidation_value(current_quotes)
                 account_value = account.cash + liq_value
                 peak_account_value = max(peak_account_value, account_value)
+                raw_cal = row.get("calibrated_model_probability")
+                raw_orig = row.get("model_probability")
                 model_p = float(
-                    row.get("calibrated_model_probability")
-                    if row.get("calibrated_model_probability") is not None
-                    else (row.get("model_probability") or 0.5)
+                    raw_cal
+                    if raw_cal is not None
+                    else (raw_orig if raw_orig is not None else 0.5)
                 )
-                market_p = float(row.get("market_probability") or 0.5)
+                raw_mkt = row.get("market_probability")
+                market_p = float(raw_mkt if raw_mkt is not None else 0.5)
                 p_side_mkt = market_p if side == YES else (1.0 - market_p)
                 p_side_model = model_p if side == YES else (1.0 - model_p)
                 shrinkage = max(0.0, min(float(market_shrinkage), 1.0))
