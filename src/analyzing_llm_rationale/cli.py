@@ -340,8 +340,11 @@ def build_parser() -> argparse.ArgumentParser:
     metaculus_parser.add_argument("--model", default="minimax-m3")
     metaculus_parser.add_argument(
         "--fallback-forecaster-model",
-        default="gemma-4-26b-a4b-it",
-        help="Backup forecaster used only after a provider-level failure from the primary model.",
+        default="qwen3-8-27b",
+        help=(
+            "Qwen backup attempted after a retryable MiniMax model error. Both use SCADS, "
+            "so this does not cover SCADS-wide outages."
+        ),
     )
     metaculus_parser.add_argument(
         "--expected-bot-username",

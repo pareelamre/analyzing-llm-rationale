@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from analyzing_llm_rationale.cli import (
     build_parser,
+    build_provider,
     resolve_auxiliary_model_args,
 )
 from analyzing_llm_rationale.metaculus_bot import (
@@ -139,8 +140,12 @@ class MetaculusBotTests(unittest.TestCase):
         self.assertEqual(args.max_model_calls, 8)
         self.assertEqual(args.max_model_time_s, 180.0)
         self.assertEqual(ForecastCycleConfig().compact_parser_reserve_s, 30.0)
-        self.assertEqual(args.fallback_forecaster_model, "gemma-4-26b-a4b-it")
+        self.assertEqual(args.fallback_forecaster_model, "qwen3-8-27b")
         self.assertEqual(args.fallback_parser_model, "gemma-4-26b-a4b-it")
+        fallback_args = resolve_auxiliary_model_args(
+            args, args.fallback_forecaster_model, temperature=args.temperature
+        )
+        self.assertEqual(fallback_args.router_model_name, "Qwen/Qwen3.8-27B")
         self.assertEqual(ForecastCycleConfig().max_model_calls, 8)
         self.assertEqual(ForecastCycleConfig().max_model_time_s, 180.0)
 
@@ -292,21 +297,31 @@ class MetaculusBotTests(unittest.TestCase):
                 raise RetryableProviderError("MiniMax temporarily unavailable")
 
         primary = FailingForecaster()
-        fallback = FakeProvider('{"probability_yes": 0.42}')
-        audit_metadata: dict[str, Any] = {}
-        payload = forecast_question(
-            primary,
-            binary_question(),
-            ForecastCycleConfig(
-                max_model_calls=2,
-                max_model_time_s=0.5,
-                fallback_forecaster_reserve_s=0.4,
-            ),
-            fallback_forecaster_provider=fallback,
-            audit_metadata=audit_metadata,
+        args = build_parser().parse_args(["forecast-metaculus"])
+        fallback_args = resolve_auxiliary_model_args(
+            args, args.fallback_forecaster_model, temperature=args.temperature
         )
+        with patch.dict(os.environ, {"SCADS_API_KEY": "test-key"}, clear=True):
+            fallback = build_provider(fallback_args)
+        self.assertEqual(fallback.model_name, "Qwen/Qwen3.8-27B")
+        primary_args = resolve_auxiliary_model_args(args, args.model, temperature=args.temperature)
+        self.assertEqual(fallback.base_url, primary_args.api_base_url)
+        self.assertEqual(fallback_args.api_key_env_var, primary_args.api_key_env_var)
+        with patch.object(fallback, "chat_completion", return_value='{"probability_yes": 0.42}') as fallback_call:
+            audit_metadata: dict[str, Any] = {}
+            payload = forecast_question(
+                primary,
+                binary_question(),
+                ForecastCycleConfig(
+                    max_model_calls=2,
+                    max_model_time_s=0.5,
+                    fallback_forecaster_reserve_s=0.4,
+                ),
+                fallback_forecaster_provider=fallback,
+                audit_metadata=audit_metadata,
+            )
         self.assertEqual(payload["probability_yes"], 0.42)
-        self.assertEqual(fallback.calls, 1)
+        fallback_call.assert_called_once()
         self.assertTrue(audit_metadata["forecaster_fallback_used"])
         self.assertLessEqual(primary.seen_timeout, 0.25)
         self.assertEqual(primary.request_timeout_s, 120.0)
