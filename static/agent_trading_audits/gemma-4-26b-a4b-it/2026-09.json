@@ -7127,6 +7127,130 @@
       "outcome": "realized",
       "record_hash": "388eb344a8d60fc719a937221f6a7a516337c10ef088e94c1593e4f43abc50bb",
       "recorded_at": "2026-09-27T02:07:00.808229+00:00"
+    },
+    {
+      "action_id": "7a91bb0f-8c52-495f-a45b-160cf9721ce2",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "status": "legacy_record"
+      },
+      "cycle_id": "30m:994720",
+      "event_type": "settlement",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": null,
+        "quantity": 9867.933659312836,
+        "realized_pnl": -1290.627695097598,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "us-x-iran-ceasefire-continues-through-september-25-20260917"
+      },
+      "mode": "shadow",
+      "outcome": "yes",
+      "record_hash": "ccc3f4df578a268ffce324a9a83c98197d259976f3c36e00308b8185ca65682f",
+      "recorded_at": "2026-09-27T08:05:00.961747+00:00"
+    },
+    {
+      "action_id": "44a0dd7e-34bc-48ba-9e02-a6f5f893867d",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 1.4541504892708332,
+          "marketable": true,
+          "observed_ask": 0.39,
+          "observed_bid": 0.38,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.39,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 8071.745448,
+          "cash_required": 168.090561,
+          "concentration_cap": 1260.679205,
+          "cycle_id": "30m:994720",
+          "cycle_spend_after": 168.090561,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 336.917589,
+          "daily_risk_before": 168.827028,
+          "daily_risk_limit": 2521.35841,
+          "drawdown_after": 0.163771,
+          "fee": 6.88354,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 161.207021,
+          "max_credible_edge": 0.2,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 161.207021,
+          "open_markets_after": 5,
+          "per_cycle_spend_limit": 1680.905607,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.408,
+          "eligible": true,
+          "horizon": "1-3d",
+          "horizon_validated": false,
+          "kelly_fraction": 0.3,
+          "lead_days": 1.5,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.02,
+          "mode": "convex_conviction",
+          "reason": null,
+          "target_notional": 168.090561,
+          "target_quantity": 413.3513356439519
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994720",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 168.090561,
+        "fee": 6.88354,
+        "netting_payout": 0.0,
+        "notional": 161.207021,
+        "price": 0.39,
+        "quantity": 413.3513356439519,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXHIGHNY-26SEP27-T65"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "14a2c78999ce082ec00a631ed412b34ac22202b998fbfb3e814473f061904782",
+      "recorded_at": "2026-09-27T08:06:01.422710+00:00"
     }
   ],
   "month": "2026-09",
