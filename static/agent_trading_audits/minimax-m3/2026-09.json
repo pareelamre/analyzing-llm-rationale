@@ -1679,6 +1679,101 @@
       "outcome": "realized",
       "record_hash": "5bf4d8b174928ad1f28fc077c83a239935c7fd3869d6c6fb1d3153cd73e7d1cf",
       "recorded_at": "2026-09-26T00:25:12.209794+00:00"
+    },
+    {
+      "action_id": "0048c017-9712-449f-9a06-0cda3c9be724",
+      "agent_id": "minimax-m3",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 2.9861025022222223,
+          "marketable": false,
+          "observed_ask": 0.77,
+          "observed_bid": null,
+          "source": "live_venue_quote",
+          "spread": null,
+          "spread_status": "unknown_no_bid",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.73,
+          "quantity": 34.0
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 8144.251432,
+          "cash_required": 23.738995,
+          "concentration_cap": 1226.320775,
+          "cycle_id": "30m:994760",
+          "cycle_spend_after": 23.738995,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 23.738995,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2452.64155,
+          "drawdown_after": 0.182771,
+          "fee": 0.25364,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 23.485355,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 23.485355,
+          "open_markets_after": 3,
+          "per_cycle_spend_limit": 1635.094366,
+          "reasons": [
+            "profile_price_band_forbidden",
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.08,
+          "eligible": true,
+          "horizon": "1-3d",
+          "horizon_validated": false,
+          "kelly_fraction": 0.0,
+          "lead_days": 3.0,
+          "market_shrinkage": 0.0,
+          "max_position_fraction": 0.005,
+          "mode": "flat_probe",
+          "reason": null,
+          "target_notional": 25.0,
+          "target_quantity": 32.1717197714521
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994760",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 23.738995,
+        "fee": 0.25364,
+        "netting_payout": 0.0,
+        "notional": 23.485355,
+        "price": 0.73,
+        "quantity": 32.1717197714521,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "no",
+        "ticker": "trump-renames-ai-by-september-30"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "9c76794ad0232ffee746188a8732559fd8a8640d984ea59744a00785b7b7ae35",
+      "recorded_at": "2026-09-28T04:19:00.819992+00:00"
     }
   ],
   "month": "2026-09",
