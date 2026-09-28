@@ -12,6 +12,13 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from analyzing_llm_rationale.market_data import MarketDataError, MarketDataInputError
+from analyzing_llm_rationale.trading import (
+    TradingDisabledError,
+    TradingError,
+    TradingExecutionError,
+    TradingNotConfiguredError,
+    TradingValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +55,20 @@ def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]
         payload = args[0] if args else {}
         q = str(payload.get("question", ""))
         return {"question": q[:140] + ("…" if len(q) > 140 else "")}
+    if fn_name in ("abatch_forecast", "batch_forecast"):
+        payload = args[0] if args and isinstance(args[0], dict) else kwargs
+        items = payload.get("items") or payload.get("questions") or []
+        return {"item_count": len(items)}
+    if fn_name in ("acrypto_edge", "crypto_edge"):
+        return {"min_edge": kwargs.get("min_edge", 0.0)}
+    if fn_name in ("awebhook_subscribe", "webhook_subscribe"):
+        payload = args[0] if args and isinstance(args[0], dict) else kwargs
+        return {"url": payload.get("url")}
+    if fn_name in ("apreview_order", "preview_order", "aplace_order", "place_order"):
+        payload = args[0] if args and isinstance(args[0], dict) else kwargs
+        return {k: payload[k] for k in ("platform", "action", "outcome", "ticker", "slug", "price", "quantity") if k in payload}
+    if fn_name in ("acancel_order", "cancel_order"):
+        return {"order_id": kwargs.get("order_id") or (args[0] if args else None)}
     if fn_name in ("aanalyze", "aanalyze_resilient"):
         payload = args[0] if args else {}
         return {k: payload[k] for k in ("platform", "slug", "ticker", "market_id", "question") if k in payload}
@@ -68,6 +89,13 @@ def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]
 # tool method (aforecast/...) -> public tool name, for usage logging.
 _TOOL_NAMES = {
     "forecast": "foresea_forecast", "aforecast": "foresea_forecast",
+    "batch_forecast": "foresea_batch_forecast", "abatch_forecast": "foresea_batch_forecast",
+    "crypto_edge": "foresea_crypto_edge", "acrypto_edge": "foresea_crypto_edge",
+    "webhook_subscribe": "foresea_webhook_subscribe", "awebhook_subscribe": "foresea_webhook_subscribe",
+    "trade_account_status": "foresea_trade_account_status", "atrade_account_status": "foresea_trade_account_status",
+    "preview_order": "foresea_preview_order", "apreview_order": "foresea_preview_order",
+    "place_order": "foresea_place_order", "aplace_order": "foresea_place_order",
+    "cancel_order": "foresea_cancel_order", "acancel_order": "foresea_cancel_order",
     "analyze": "foresea_analyze_market", "aanalyze": "foresea_analyze_market",
     "aanalyze_resilient": "foresea_analyze_market",
     "scan_markets": "foresea_scan_markets", "ascan_markets": "foresea_scan_markets",
@@ -165,6 +193,56 @@ def build_predict_payload(
         "market_outcome": market_outcome,
         "market_probability": market_probability,
     })
+
+
+def build_batch_predict_payload(
+    *,
+    questions: Optional[List[str]] = None,
+    items: Optional[List[Dict[str, Any]]] = None,
+    concurrency_limit: int = 5,
+    variant: str = "variant0_neutral_baseline",
+    attach_evidence: bool = True,
+    evidence_top_k: int = 3,
+) -> Dict[str, Any]:
+    """Build the JSON body accepted by Foresea's `/predict/batch` endpoint."""
+    batch_items: List[Dict[str, Any]] = []
+    if items:
+        for item in items:
+            if isinstance(item, dict):
+                batch_items.append(
+                    build_predict_payload(
+                        question=item.get("question", ""),
+                        description=item.get("description", ""),
+                        resolution_criteria=item.get("resolution_criteria", ""),
+                        question_type=item.get("question_type"),
+                        options=item.get("options"),
+                        categories=item.get("categories"),
+                        variant=item.get("variant", variant),
+                        attach_evidence=item.get("attach_evidence", attach_evidence),
+                        evidence_top_k=item.get("evidence_top_k", evidence_top_k),
+                        market_platform=item.get("market_platform"),
+                        market_url=item.get("market_url"),
+                        market_outcome=item.get("market_outcome"),
+                        market_probability=item.get("market_probability"),
+                    )
+                )
+    elif questions:
+        for q in questions:
+            if isinstance(q, str) and q.strip():
+                batch_items.append(
+                    build_predict_payload(
+                        question=q.strip(),
+                        variant=variant,
+                        attach_evidence=attach_evidence,
+                        evidence_top_k=evidence_top_k,
+                    )
+                )
+    if not batch_items:
+        raise ValueError("Either 'questions' or 'items' must contain at least one forecasting request.")
+    return {
+        "items": batch_items[:25],
+        "concurrency_limit": max(1, min(10, int(concurrency_limit))),
+    }
 
 
 def build_agent_analyze_payload(
@@ -737,6 +815,87 @@ class ForeseaClient:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.weather_forecast(station_or_query, target_date))
 
+    def batch_forecast(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._request("POST", "/predict/batch", json_body=payload)
+
+    async def abatch_forecast(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._arequest("POST", "/predict/batch", json_body=payload)
+
+    def crypto_edge(self, min_edge: float = 0.0, limit: int = 20) -> Dict[str, Any]:
+        try:
+            return self._request("GET", "/crypto-5m/kalshi-edge")
+        except Exception:
+            from analyzing_llm_rationale import crypto_kalshi
+            return crypto_kalshi.kalshi_btc_equity()
+
+    async def acrypto_edge(self, min_edge: float = 0.0, limit: int = 20) -> Dict[str, Any]:
+        try:
+            return await self._arequest("GET", "/crypto-5m/kalshi-edge")
+        except Exception:
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, lambda: self.crypto_edge(min_edge, limit))
+
+    def webhook_subscribe(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            return self._request("POST", "/webhooks/subscribe", json_body=payload)
+        except Exception:
+            from analyzing_llm_rationale import webhooks
+            mgr = webhooks.get_webhook_manager()
+            sub = mgr.register(
+                url=payload["url"],
+                events=payload.get("events"),
+                min_edge=float(payload.get("min_edge", 0.05)),
+            )
+            return {
+                "id": sub.id,
+                "url": sub.url,
+                "events": sub.events,
+                "secret": sub.secret,
+                "min_edge": sub.min_edge,
+                "created_at": sub.created_at,
+                "active": sub.active,
+                "status": "registered",
+            }
+
+    async def awebhook_subscribe(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            return await self._arequest("POST", "/webhooks/subscribe", json_body=payload)
+        except Exception:
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, lambda: self.webhook_subscribe(payload))
+
+    def trade_account_status(self) -> Dict[str, Any]:
+        from analyzing_llm_rationale import trading
+        return trading.account_status()
+
+    async def atrade_account_status(self) -> Dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.trade_account_status)
+
+    def preview_order(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from analyzing_llm_rationale import trading
+        return trading.preview_order(payload)
+
+    async def apreview_order(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.preview_order(payload))
+
+    def place_order(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        from analyzing_llm_rationale import trading
+        return trading.place_order(payload, user_id="mcp-agent")
+
+    async def aplace_order(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.place_order(payload))
+
+    def cancel_order(self, order_id: str, platform: str = "kalshi", ticker: Optional[str] = None) -> Dict[str, Any]:
+        from analyzing_llm_rationale import trading
+        return trading.cancel_order(platform=platform, venue_order_id=order_id, creds=None)
+
+    async def acancel_order(self, order_id: str, platform: str = "kalshi", ticker: Optional[str] = None) -> Dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.cancel_order(order_id, platform, ticker))
+
 
 def _response_detail(response: Any) -> str:
     try:
@@ -809,6 +968,8 @@ def create_mcp_server(
             raise ToolError(f"Foresea API error ({exc.status_code}): {exc.detail}") from exc
         except (MarketDataError, MarketDataInputError) as exc:
             raise ToolError(str(exc)) from exc
+        except (TradingError, TradingValidationError, TradingDisabledError, TradingNotConfiguredError, TradingExecutionError) as exc:
+            raise ToolError(f"Trading error: {exc}") from exc
 
     async def _call_tool_async(fn, *args, _kind: str = "tool", **kwargs) -> Dict[str, Any]:
         fn_name = getattr(fn, "__name__", "")
@@ -821,6 +982,8 @@ def create_mcp_server(
             raise ToolError(f"Foresea API error ({exc.status_code}): {exc.detail}") from exc
         except (MarketDataError, MarketDataInputError) as exc:
             raise ToolError(str(exc)) from exc
+        except (TradingError, TradingValidationError, TradingDisabledError, TradingNotConfiguredError, TradingExecutionError) as exc:
+            raise ToolError(f"Trading error: {exc}") from exc
 
     @mcp.tool()
     async def foresea_forecast(
@@ -1145,6 +1308,145 @@ def create_mcp_server(
 
         return await _call_tool_async(client.aweather_forecast, station_or_query, target_date)
 
+    @mcp.tool()
+    async def foresea_batch_forecast(
+        questions: Optional[List[str]] = None,
+        items: Optional[List[Dict[str, Any]]] = None,
+        concurrency_limit: int = 5,
+        variant: str = "variant0_neutral_baseline",
+        attach_evidence: bool = True,
+        evidence_top_k: int = 3,
+    ) -> Dict[str, Any]:
+        """Submit up to 25 forecasting questions concurrently and receive structured predictions
+        with confidence probabilities, bull/bear factor decomposition, key catalysts, and evidence
+        citations for each question."""
+
+        payload = build_batch_predict_payload(
+            questions=questions,
+            items=items,
+            concurrency_limit=concurrency_limit,
+            variant=variant,
+            attach_evidence=attach_evidence,
+            evidence_top_k=evidence_top_k,
+        )
+        return await _call_tool_async(client.abatch_forecast, payload)
+
+    @mcp.tool()
+    async def foresea_crypto_edge(
+        min_edge: float = 0.0,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """Scan real-time Kalshi cryptocurrency prediction markets (KXBTCD threshold contracts)
+        scored against Black-Scholes zero-drift diffusion models and spot volatility. Returns tradeable
+        market mispricings, implied odds, calibration reliability, and realized paper equity curves."""
+
+        return await _call_tool_async(client.acrypto_edge, min_edge=min_edge, limit=limit)
+
+    @mcp.tool()
+    async def foresea_webhook_subscribe(
+        url: str,
+        events: Optional[List[str]] = None,
+        min_edge: float = 0.05,
+    ) -> Dict[str, Any]:
+        """Subscribe an external agent HTTP callback webhook to receive real-time dispatches
+        for new forecasts and market edge opportunities. The response contains an HMAC secret
+        (X-Foresea-Signature) for validating incoming payloads."""
+
+        payload = {
+            "url": url,
+            "events": events or ["forecast.completed", "market.edge_detected"],
+            "min_edge": min_edge,
+        }
+        return await _call_tool_async(client.awebhook_subscribe, payload)
+
+    @mcp.tool()
+    async def foresea_trade_account_status() -> Dict[str, Any]:
+        """Check real prediction-market trading readiness, max order notional limits,
+        and venue configuration statuses for Kalshi and Polymarket."""
+
+        return await _call_tool_async(client.atrade_account_status)
+
+    @mcp.tool()
+    async def foresea_preview_order(
+        platform: str,
+        action: str,
+        outcome: str,
+        price: float,
+        quantity: float,
+        order_type: str = "limit",
+        ticker: Optional[str] = None,
+        slug: Optional[str] = None,
+        token_id: Optional[str] = None,
+        time_in_force: Optional[str] = None,
+        post_only: bool = False,
+    ) -> Dict[str, Any]:
+        """Validate, normalize, and simulate guardrail checks for a real Kalshi or
+        Polymarket order without submitting it to the exchange."""
+
+        payload = _strip_empty({
+            "platform": platform,
+            "action": action,
+            "outcome": outcome,
+            "price": price,
+            "quantity": quantity,
+            "order_type": order_type,
+            "ticker": ticker,
+            "slug": slug,
+            "token_id": token_id,
+            "time_in_force": time_in_force,
+            "post_only": post_only,
+        })
+        return await _call_tool_async(client.apreview_order, payload)
+
+    @mcp.tool()
+    async def foresea_place_order(
+        platform: str,
+        action: str,
+        outcome: str,
+        price: float,
+        quantity: float,
+        confirmation: str,
+        execute: bool = True,
+        order_type: str = "limit",
+        ticker: Optional[str] = None,
+        slug: Optional[str] = None,
+        token_id: Optional[str] = None,
+        time_in_force: Optional[str] = None,
+        post_only: bool = False,
+        client_order_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Submit a guarded real order to Kalshi or Polymarket. Live execution requires
+        confirmation='PLACE REAL ORDER' and execute=True, and is protected by server
+        notional ceilings and exchange guardrails."""
+
+        payload = _strip_empty({
+            "platform": platform,
+            "action": action,
+            "outcome": outcome,
+            "price": price,
+            "quantity": quantity,
+            "confirmation": confirmation,
+            "execute": execute,
+            "order_type": order_type,
+            "ticker": ticker,
+            "slug": slug,
+            "token_id": token_id,
+            "time_in_force": time_in_force,
+            "post_only": post_only,
+            "client_order_id": client_order_id,
+        })
+        return await _call_tool_async(client.aplace_order, payload)
+
+    @mcp.tool()
+    async def foresea_cancel_order(
+        order_id: str,
+        platform: str = "kalshi",
+        ticker: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Cancel an active open order on Kalshi or Polymarket using its venue order ID."""
+
+        return await _call_tool_async(client.acancel_order, order_id=order_id, platform=platform, ticker=ticker)
+
     @mcp.resource(
         "foresea://weather/radar",
         name="Foresea live weather radar",
@@ -1220,6 +1522,16 @@ def create_mcp_server(
 
         return json.dumps(await _call_tool_async(client.aedge_board, _kind="resource"), sort_keys=True)
 
+    @mcp.resource(
+        "foresea://crypto/edge",
+        name="Foresea live crypto edge and calibration",
+        mime_type="application/json",
+    )
+    async def crypto_edge_resource() -> str:
+        """Live Kalshi crypto prediction market mispricings and calibration data."""
+
+        return json.dumps(await _call_tool_async(client.acrypto_edge, _kind="resource"), sort_keys=True)
+
     @mcp.prompt()
     def foresea_forecast_prompt(question: str) -> str:
         """Create a compact prompt that asks an agent to use Foresea for a forecast."""
@@ -1228,6 +1540,26 @@ def create_mcp_server(
             "Use the foresea_forecast tool to forecast this resolvable question. "
             "Report the predicted answer, probability or range, rationale, evidence, "
             f"and any model-vs-market edge.\n\nQuestion: {question}"
+        )
+
+    @mcp.prompt()
+    def foresea_batch_forecast_prompt(questions_csv: str) -> str:
+        """Create a prompt asking an agent to batch-forecast multiple questions using foresea_batch_forecast."""
+
+        return (
+            "Use the foresea_batch_forecast tool to forecast this list of questions concurrently. "
+            "Report the predicted answer, probability, bull/bear factors, catalysts, and key evidence for each.\n\n"
+            f"Questions:\n{questions_csv}"
+        )
+
+    @mcp.prompt()
+    def foresea_crypto_edge_prompt() -> str:
+        """Scan real-time cryptocurrency prediction market arbitrage and mispricings."""
+
+        return (
+            "1. Use foresea_crypto_edge to scan live Kalshi BTC threshold markets vs spot diffusion models.\n"
+            "2. Identify tradeable markets where net edge exceeds the fee and spread barrier.\n"
+            "3. If real trading is enabled and confirmed, use foresea_preview_order to simulate order execution."
         )
 
     @mcp.prompt()
@@ -1258,15 +1590,15 @@ def create_mcp_server(
         Paste this into your configuration to make the agent proactively use Foresea tools."""
 
         return (
-            "You have access to Foresea (foresea.ink), a calibrated AI forecasting "
-            "engine. Use foresea_forecast whenever the user asks about probability, "
-            "likelihood, chances, or whether something will happen. Use "
-            "foresea_analyze_market when the user mentions a specific Polymarket or "
-            "Kalshi market. Use foresea_scan_markets when the user wants to find "
-            "trading opportunities. Use foresea_edge_board for the current ranked "
-            "edge list. Use foresea_track_record to verify Foresea's accuracy before "
-            "acting on a forecast. Always call the tool rather than guessing — "
-            "Foresea has live evidence and a calibrated track record."
+            "You have access to Foresea (foresea.ink), a calibrated AI forecasting and "
+            "prediction market execution engine. Use foresea_forecast or foresea_batch_forecast "
+            "whenever the user asks about probability, likelihood, chances, or whether something will "
+            "happen. Use foresea_analyze_market when the user mentions a specific Polymarket or "
+            "Kalshi market. Use foresea_scan_markets or foresea_crypto_edge when the user wants to "
+            "find trading opportunities or crypto arbitrage. Use foresea_edge_board for the current "
+            "ranked edge list. Use foresea_track_record to verify Foresea's accuracy. If real trading "
+            "is requested, check foresea_trade_account_status, validate with foresea_preview_order, "
+            "and submit live orders with foresea_place_order only upon explicit confirmation."
         )
 
     return mcp
