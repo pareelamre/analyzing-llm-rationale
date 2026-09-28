@@ -1137,6 +1137,39 @@ class MetaculusBotTests(unittest.TestCase):
         self.assertEqual(client.submitted_question_ids, [112])
         self.assertEqual(client.details_requested, [12])
 
+    def test_reforecast_passes_prior_start_time_to_readback(self) -> None:
+        class ReforecastClient:
+            def __init__(self) -> None:
+                self.verification_kwargs: dict[str, Any] = {}
+
+            def list_open_posts(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+                return [{"id": 12}]
+
+            def get_post(self, post_id: int) -> dict[str, Any]:
+                return {"id": post_id, "question": {"id": 44, "type": "binary", "my_forecasts": {
+                    "latest": {"author_id": 99, "probability_yes": 0.7, "start_time": 100.0}
+                }}}
+
+            def submit_forecast(self, question_id: int, payload: dict[str, Any]) -> None:
+                self.assert_submitted = (question_id, payload)
+
+            def verify_submission(self, *args: Any, **kwargs: Any) -> None:
+                self.verification_kwargs = kwargs
+
+        client = ReforecastClient()
+        with TemporaryDirectory() as directory:
+            summary = run_forecast_cycle(
+                client,  # type: ignore[arg-type]
+                FakeProvider('{"probability_yes": 0.7}'),
+                ForecastCycleConfig(
+                    max_questions=1, submit=True, include_forecasted=True,
+                    audit_log_path=Path(directory) / "audit.jsonl",
+                ),
+                expected_author_id=99,
+            )
+        self.assertEqual(summary.submitted, 1)
+        self.assertEqual(client.verification_kwargs["previous_forecast_start_time"], 100.0)
+
     def test_unknown_submission_halts_and_audits(self) -> None:
         import requests
 
@@ -1365,6 +1398,109 @@ class MetaculusBotTests(unittest.TestCase):
             44,
             {"probability_yes_per_category": {"A": 0.4, "B": 0.6}},
             expected_author_id=99,
+        )
+
+    def test_submission_readback_checks_multiple_choice_ordered_values(self) -> None:
+        payload = {"probability_yes_per_category": {"Democrats": 0.55, "Other": 0.03, "Republicans": 0.42}}
+        post = {
+            "id": 12,
+            "question": {
+                "id": 44,
+                "type": "multiple_choice",
+                "options": ["Democrats", "Republicans", "Other"],
+                "my_forecasts": {"latest": {"author_id": 99, "forecast_values": [0.55, 0.42, 0.03]}},
+            },
+        }
+        session = FakeSession()
+        session.posts = [post]
+        MetaculusClient("not-a-real-token", session=session, verification_delay_s=0).verify_submission(
+            12, 44, payload, expected_author_id=99, expected_options=["Democrats", "Republicans", "Other"]
+        )
+
+        for values in ([0.55, 0.03, 0.42], [0.55, 0.42], [0.55, 0.42, 0.03, 0.0], [0.55, None, 0.03]):
+            with self.subTest(values=values):
+                session = FakeSession()
+                session.posts = [
+                    {**post, "question": {**post["question"], "my_forecasts": {
+                        "latest": {"author_id": 99, "forecast_values": values}
+                    }}}
+                ]
+                with self.assertRaises(SubmissionUnverifiedError):
+                    MetaculusClient(
+                        "not-a-real-token", session=session, verification_attempts=1, verification_delay_s=0
+                    ).verify_submission(
+                        12, 44, payload, expected_author_id=99,
+                        expected_options=["Democrats", "Republicans", "Other"],
+                    )
+
+        for changed_question, changed_latest in (
+            ({"options": ["Republicans", "Democrats", "Other"]}, {}),
+            ({"options": ["Democrats", "Republicans", "Independent"]}, {}),
+            ({}, {"author_id": 100}),
+        ):
+            session = FakeSession()
+            session.posts = [{**post, "question": {**post["question"], **changed_question,
+                "my_forecasts": {"latest": {**post["question"]["my_forecasts"]["latest"], **changed_latest}}}}]
+            with self.assertRaises(SubmissionUnverifiedError):
+                MetaculusClient(
+                    "not-a-real-token", session=session, verification_attempts=1, verification_delay_s=0
+                ).verify_submission(
+                    12, 44, payload, expected_author_id=99,
+                    expected_options=["Democrats", "Republicans", "Other"],
+                )
+
+        session = FakeSession()
+        session.posts = [{**post, "question": {**post["question"], "my_forecasts": {
+            "latest": {"author_id": 99, "probability_yes_per_category": [0.55, 0.42, 0.03]}
+        }}}]
+        MetaculusClient(
+            "not-a-real-token", session=session, verification_attempts=1, verification_delay_s=0
+        ).verify_submission(
+            12, 44, payload, expected_author_id=99,
+            expected_options=["Democrats", "Republicans", "Other"],
+        )
+
+        session = FakeSession()
+        session.posts = [{**post, "question": {**post["question"], "my_forecasts": {
+            "latest": {"author_id": 99, "probability_yes_per_category": 7,
+                       "forecast_values": [0.55, 0.42, 0.03]}
+        }}}]
+        with self.assertRaises(SubmissionUnverifiedError):
+            MetaculusClient(
+                "not-a-real-token", session=session, verification_attempts=1, verification_delay_s=0
+            ).verify_submission(
+                12, 44, payload, expected_author_id=99,
+                expected_options=["Democrats", "Republicans", "Other"],
+            )
+
+    def test_submission_readback_requires_newer_forecast_when_replacing_one(self) -> None:
+        post = {
+            "id": 12,
+            "question": {
+                "id": 44,
+                "type": "binary",
+                "my_forecasts": {"latest": {"author_id": 99, "probability_yes": 0.7, "start_time": 100.0}},
+            },
+        }
+        session = FakeSession()
+        session.posts = [post]
+        with self.assertRaises(SubmissionUnverifiedError):
+            MetaculusClient(
+                "not-a-real-token", session=session, verification_attempts=1, verification_delay_s=0
+            ).verify_submission(
+                12, 44, {"probability_yes": 0.7}, expected_author_id=99,
+                previous_forecast_start_time=100.0,
+            )
+
+        session = FakeSession()
+        session.posts = [{**post, "question": {**post["question"], "my_forecasts": {
+            "latest": {"author_id": 99, "probability_yes": 0.7, "start_time": 101.0}
+        }}}]
+        MetaculusClient(
+            "not-a-real-token", session=session, verification_attempts=1, verification_delay_s=0
+        ).verify_submission(
+            12, 44, {"probability_yes": 0.7}, expected_author_id=99,
+            previous_forecast_start_time=100.0,
         )
 
     def test_submission_readback_rejects_binary_payload_mismatch(self) -> None:

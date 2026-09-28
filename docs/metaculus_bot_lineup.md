@@ -47,3 +47,27 @@ For an experimental run outside the named lineup, use `--bot-profile custom`,
 MiniMax remains available this way for comparison.
 Pass `--fallback-forecaster-model qwen3-8-27b` explicitly if a custom MiniMax
 comparison should retain its old Qwen backup.
+
+## Calibration gate
+
+No post-hoc probability adjustment is enabled for these four profiles. A
+successful unscored practice submission verifies the API path, not predictive
+calibration. The current local Metaculus history has answers but no matched
+forecasts from these four exact model/pipeline versions; its collected news can
+postdate question resolution. Fitting a correction on it would leak future
+information or transfer a different model's bias.
+
+Before changing live probabilities, collect frozen forecasts with only
+information available at forecast time, then score each model and question type
+on resolved, chronologically held-out questions. Compare the unadjusted
+baseline with candidate calibration using the tournament's log-based score,
+plus Brier score and reliability diagnostics. Keep a correction only if the
+held-out gain is stable across questions and the raw and adjusted forecasts are
+both retained for audit. Do not fit on open practice predictions or on current
+tournament outcomes and then report that fit as held-out performance.
+
+The current forecast path is `forecast_question` followed by
+`validate_forecast_payload` in `src/analyzing_llm_rationale/metaculus_bot.py`.
+The CLI writes per-profile submission evidence to
+`results/metaculus_<profile>_audit.jsonl`; these records are not a resolved,
+leakage-safe calibration dataset.

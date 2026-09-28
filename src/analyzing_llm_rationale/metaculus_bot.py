@@ -255,6 +255,8 @@ class MetaculusClient:
         payload: Mapping[str, Any],
         *,
         expected_author_id: int,
+        expected_options: Sequence[str] | None = None,
+        previous_forecast_start_time: float | None = None,
     ) -> None:
         """Read back an accepted submission until it is authoritatively visible.
 
@@ -279,6 +281,11 @@ class MetaculusClient:
                         author_id = _positive_int(latest.get("author_id"), "forecast author id")
                         if author_id != expected_author_id:
                             raise MetaculusError("Metaculus readback forecast belongs to a different account.")
+                        if expected_options is not None and _option_labels(question) != list(expected_options):
+                            raise MetaculusError("Metaculus readback option order changed after submission.")
+                        if previous_forecast_start_time is not None:
+                            if _forecast_start_time(latest) <= previous_forecast_start_time:
+                                raise MetaculusError("Metaculus readback did not show a newer forecast.")
                         if not _submission_payload_matches(question, payload, latest):
                             raise MetaculusError("Metaculus readback forecast did not match the submitted payload.")
                     except Exception as exc:
@@ -472,6 +479,12 @@ def run_forecast_cycle(
                             raise SubmissionOutcomeUnknownError(
                                 "Metaculus has an unresolved prior submission for this question; check it before submitting again."
                             )
+                        previous_forecast_start_time = None
+                        if config.submit and config.include_forecasted and _latest_forecast_exists(question):
+                            latest_before = question["my_forecasts"]["latest"]
+                            if not isinstance(latest_before, Mapping):
+                                raise MetaculusError("Metaculus prior forecast had an invalid shape.")
+                            previous_forecast_start_time = _forecast_start_time(latest_before)
                         evidence: Sequence[Mapping[str, Any]] = ()
                         if research_provider is not None:
                             evidence_started = perf_counter()
@@ -543,6 +556,10 @@ def run_forecast_cycle(
                                     question_id,
                                     payload,
                                     expected_author_id=expected_author_id,
+                                    expected_options=(
+                                        _option_labels(question) if question.get("type") == "multiple_choice" else None
+                                    ),
+                                    previous_forecast_start_time=previous_forecast_start_time,
                                 )
                             except SubmissionUnverifiedError:
                                 try:
@@ -1546,6 +1563,13 @@ def _same_probability_sequence(expected: Any, actual: Any) -> bool:
         return False
 
 
+def _forecast_start_time(forecast: Mapping[str, Any]) -> float:
+    value = forecast.get("start_time")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise MetaculusError("Metaculus forecast start time was missing or invalid.")
+    return float(value)
+
+
 def _same_probability(expected: Any, actual: Any) -> bool:
     try:
         return math.isclose(float(expected), float(actual), abs_tol=1e-6)
@@ -1571,12 +1595,25 @@ def _submission_payload_matches(
         return _same_probability(payload.get("probability_yes"), actual_probability)
     if question_type == "multiple_choice":
         expected = payload.get("probability_yes_per_category")
+        if not isinstance(expected, Mapping):
+            return False
         actual = latest.get("probability_yes_per_category")
         if actual is None and isinstance(forecast_values, Mapping):
             actual = forecast_values
-        if not isinstance(expected, Mapping) or not isinstance(actual, Mapping) or set(expected) != set(actual):
-            return False
-        return all(_same_probability(expected[label], actual[label]) for label in expected)
+        if isinstance(actual, Mapping):
+            return set(expected) == set(actual) and all(
+                _same_probability(expected[label], actual[label]) for label in expected
+            )
+        ordered_values = actual if actual is not None else forecast_values
+        if isinstance(ordered_values, Sequence) and not isinstance(ordered_values, (str, bytes)):
+            try:
+                labels = _option_labels(question)
+            except MetaculusError:
+                return False
+            if len(labels) != len(expected) or set(labels) != set(expected):
+                return False
+            return _same_probability_sequence([expected[label] for label in labels], ordered_values)
+        return False
     return False
 
 
