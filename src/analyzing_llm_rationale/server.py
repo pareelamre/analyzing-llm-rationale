@@ -62,9 +62,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from analyzing_llm_rationale import (
     agent_capabilities,
+    analytics_export,
     benchmark_tools,
     crypto_5m,
     crypto_kalshi,
+    ensemble,
     etag_helper,
     pr_agent,
     rag,
@@ -3501,6 +3503,7 @@ def _agent_manifest() -> Dict[str, Any]:
         "homepage_url": _CANONICAL,
         "agent_integration_url": f"{_CANONICAL}/agents",
         "llms_txt_url": f"{_CANONICAL}/llms.txt",
+        "llms_full_txt_url": f"{_CANONICAL}/llms-full.txt",
         "openapi_url": f"{_CANONICAL}/openapi.json",
         "mcp": {
             "endpoint": _MCP_ENDPOINT,
@@ -3529,6 +3532,7 @@ def _agent_manifest() -> Dict[str, Any]:
                 "events": ["meta", "delta", "done", "error"],
             },
             "structured_forecast": {"method": "POST", "path": "/predict"},
+            "ensemble_forecast": {"method": "POST", "path": "/predict/ensemble"},
             "market_analysis": {"method": "POST", "path": "/agent/analyze"},
             "streaming_market_analysis": {
                 "method": "POST",
@@ -3537,6 +3541,17 @@ def _agent_manifest() -> Dict[str, Any]:
                 "events": ["meta", "delta", "done", "error"],
             },
             "market_scan": {"method": "GET", "path": "/agent/scan"},
+            "radar_stream": {
+                "method": "GET",
+                "path": "/radar/stream",
+                "content_type": "text/event-stream",
+            },
+            "feed_stream": {
+                "method": "GET",
+                "path": "/feed/stream",
+                "content_type": "text/event-stream",
+            },
+            "analytics_export_parquet": {"method": "GET", "path": "/analytics/export.parquet"},
             "track_record": {"method": "GET", "path": "/track-record"},
             "pr_agent": {"method": "GET", "path": "/pr-agent"},
         },
@@ -3726,6 +3741,85 @@ async def track_record_digest():
     aggregate = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
     return PlainTextResponse(trl.format_digest(aggregate),
                              headers={"Cache-Control": "public, max-age=600"})
+
+
+@app.get("/llms-full.txt", include_in_schema=False)
+async def llms_full_txt():
+    """llms-full.txt: exhaustive developer and agent documentation for all Foresea APIs and tools."""
+    body = f"""# Foresea Full Agent & Developer Reference
+
+> Foresea turns prediction-market questions into calibrated probability forecasts
+> with supporting evidence, a written rationale, model-vs-market edge, and paper execution.
+
+## Core Architecture
+- **Canonical URL**: {_CANONICAL}
+- **Remote FastMCP Server**: {_MCP_ENDPOINT}
+- **OpenAPI Schema**: {_CANONICAL}/openapi.json
+- **Agent Discovery**: {_CANONICAL}/.well-known/agent.json, {_CANONICAL}/.well-known/mcp/server.json
+
+## HTTP API Endpoints
+
+### 1. Probability Forecasting & Ensemble
+- `POST /predict`: Generate a structured probability forecast for binary, multiple-choice, numeric, or date questions.
+- `POST /predict/stream`: Server-Sent Events (SSE) stream for progressive real-time rationale rendering and structured JSON outcome.
+- `POST /predict/ensemble`: Multi-model forecast weighted inversely by historical empirical Brier score per domain.
+
+### 2. Market Radar & Real-Time SSE Streams
+- `GET /radar`: Live model-vs-market opportunities and edge board with HTTP ETag caching.
+- `GET /radar/delta?since=<iso_timestamp>`: Incremental delta sync returning only newly modified markets since last poll.
+- `GET /radar/stream`: Persistent Server-Sent Events stream for instant radar deltas and keep-alive heartbeats.
+- `GET /feed/latest`: Unified alpha and autonomous trading feed with ETag support.
+- `GET /feed/stream`: Real-time SSE stream of live trades, theses, and edge signals.
+
+### 3. Columnar Analytics & Data Export
+- `GET /analytics/export.parquet?dataset=edge_board`: Export live edge opportunities in compressed ZSTD Parquet format.
+- `GET /analytics/export.parquet?dataset=models_comparison`: Export historical model calibration and Brier benchmarks as Parquet.
+- `GET /track-record`: Complete audit trail of resolved forecasts and empirical calibration curves.
+
+### 4. FastMCP Tools (Streamable HTTP at /mcp/)
+- `foresea_forecast(question, question_type, market_probability, market_platform)`: Structured probability forecast.
+- `foresea_edge_board(limit, min_edge, fields, cursor)`: Filtered market opportunities with token-efficient field projections.
+- `foresea_track_record(fields)`: Verified historical accuracy and Brier score metrics.
+- `foresea_scan_markets(platform, limit)`: Live market scanner for Polymarket and Kalshi.
+- `foresea_analyze_market(url_or_question)`: End-to-end price fetching, evidence retrieval, and forecast thesis.
+- `foresea_orderbook(platform, ident)`: Live bids and asks orderbook depth.
+- `foresea_pr_agent(audience)`: Machine-readable outreach packet.
+"""
+    return PlainTextResponse(body, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/analytics/export.parquet", tags=["Analytics"], summary="Export Foresea datasets as compressed Parquet")
+async def analytics_export_parquet(
+    request: Request,
+    dataset: str = Query("edge_board", description="Dataset to export: 'edge_board' or 'models_comparison'"),
+    compression: str = Query("ZSTD", description="Parquet compression codec: 'ZSTD', 'SNAPPY', 'GZIP'"),
+) -> Response:
+    """Export Foresea live edge opportunities or track record datasets as high-performance columnar Parquet files."""
+    loop = asyncio.get_running_loop()
+    if dataset == "edge_board":
+        mtm_data = await loop.run_in_executor(None, _read_edge_board_record)
+        parquet_bytes = await loop.run_in_executor(
+            None,
+            analytics_export.build_edge_board_parquet,
+            mtm_data if isinstance(mtm_data, dict) else {},
+        )
+    elif dataset == "models_comparison":
+        tr_data = await loop.run_in_executor(None, _read_live_track_record)
+        parquet_bytes = await loop.run_in_executor(
+            None,
+            analytics_export.build_models_comparison_parquet,
+            tr_data if isinstance(tr_data, dict) else {},
+        )
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown dataset '{dataset}'. Choose 'edge_board' or 'models_comparison'.")
+
+    return etag_helper.bytes_or_304(
+        request,
+        content=parquet_bytes,
+        media_type="application/vnd.apache.parquet",
+        headers={"Content-Disposition": f'attachment; filename="foresea_{dataset}.parquet"'},
+    )
+
 
 
 class BenchmarkForecast(BaseModel):
@@ -4182,6 +4276,63 @@ async def feed_latest_route(
         "leaderboard_summary": agent_data.get("leaderboard", [])[:5],
     }
     return etag_helper.json_or_304(request, payload)
+
+
+@app.get("/feed/stream", tags=["Feed"], summary="Live Server-Sent Events stream of Foresea Alpha & Agent Feed")
+async def feed_stream(
+    request: Request,
+    limit: int = Query(10, ge=1, le=50),
+    min_edge: float = Query(0.05, ge=0.0, le=1.0),
+    heartbeat_interval: float = Query(15.0, ge=5.0, le=60.0),
+) -> StreamingResponse:
+    """Server-Sent Events (SSE) stream providing real-time feed updates and heartbeats."""
+    async def feed_event_generator():
+        last_etag = None
+        loop = asyncio.get_running_loop()
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                edge_live, agent_live = await asyncio.gather(
+                    loop.run_in_executor(None, _read_edge_board_record),
+                    loop.run_in_executor(None, _read_agent_trading_board),
+                    return_exceptions=True,
+                )
+                edge_data = edge_live if isinstance(edge_live, dict) else {}
+                agent_data = agent_live if isinstance(agent_live, dict) else {}
+                raw_board = edge_data.get("edge_board", [])
+                filtered_opps = [
+                    item for item in raw_board
+                    if isinstance(item, dict) and abs(float(item.get("edge") or 0.0)) >= min_edge
+                ][:limit]
+                recent_trades = agent_data.get("recent_trades", [])[:limit]
+                payload = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "market_edge_signals": filtered_opps,
+                    "agent_trades": recent_trades,
+                }
+                current_etag = etag_helper.make_etag(payload)
+                if current_etag != last_etag:
+                    event_type = "snapshot" if last_etag is None else "feed"
+                    last_etag = current_etag
+                    yield f"event: {event_type}\ndata: {json.dumps(payload)}\n\n"
+                else:
+                    yield f": heartbeat {datetime.now(timezone.utc).isoformat()}\n\n"
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                yield ": ping\n\n"
+            await asyncio.sleep(heartbeat_interval)
+
+    return StreamingResponse(
+        feed_event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 class ExplainShiftRequest(BaseModel):
@@ -9440,6 +9591,63 @@ async def radar_delta(
     return etag_helper.json_or_304(request, body)
 
 
+@app.get("/radar/stream", tags=["Markets"], summary="Live Server-Sent Events stream for Foresea market radar")
+async def radar_stream(
+    request: Request,
+    limit: int = Query(12, ge=1, le=30),
+    include_track_record: bool = Query(False, description="Include track record blocks in snapshot"),
+    heartbeat_interval: float = Query(15.0, ge=5.0, le=60.0),
+) -> StreamingResponse:
+    """Server-Sent Events (SSE) stream providing real-time radar snapshots, delta updates, and heartbeats."""
+    async def event_generator():
+        last_generated = None
+        loop = asyncio.get_running_loop()
+        try:
+            initial_payload = await loop.run_in_executor(None, _radar_from_track_record, limit)
+            body = initial_payload.model_dump(mode="json")
+            if not include_track_record:
+                for key in _RADAR_TRACK_RECORD_BLOCKS:
+                    body[key] = [] if isinstance(body.get(key), list) else None
+            last_generated = str(initial_payload.generated_at or "")
+            yield f"event: snapshot\ndata: {json.dumps(body)}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+        while True:
+            if await request.is_disconnected():
+                break
+            await asyncio.sleep(heartbeat_interval)
+            if await request.is_disconnected():
+                break
+            try:
+                latest = await loop.run_in_executor(None, _radar_from_track_record, limit)
+                current_gen = str(latest.generated_at or "")
+                if current_gen and current_gen != last_generated:
+                    last_generated = current_gen
+                    delta_body = {
+                        "timestamp": current_gen,
+                        "markets": [m.model_dump(mode="json") for m in (latest.markets or [])],
+                        "total": len(latest.markets or []),
+                    }
+                    yield f"event: delta\ndata: {json.dumps(delta_body)}\n\n"
+                else:
+                    yield f": heartbeat {datetime.now(timezone.utc).isoformat()}\n\n"
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                yield ": ping\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.get("/market/exchange-status", tags=["Markets"], summary="Operational status and schedule of exchanges")
 async def market_exchange_status() -> Dict[str, Any]:
     """Get Kalshi and prediction exchange operational status and schedule."""
@@ -14003,6 +14211,122 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+class EnsemblePredictRequest(BaseModel):
+    question: str = Field(..., min_length=3, max_length=2000, description="Forecasting question")
+    models: Optional[List[str]] = Field(None, description="Models to include in ensemble (defaults to top council models)")
+    category: Optional[str] = Field(None, description="Optional domain category for calibration weights")
+    market_probability: Optional[float] = Field(None, ge=0.0, le=1.0, description="Reference market price if known")
+    market_platform: Optional[str] = Field(None, description="Reference market platform")
+    member_forecasts: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Optional pre-computed member forecasts [{'model': '...', 'probability': 0.7, 'rationale': '...'}]",
+    )
+
+
+class EnsemblePredictResponse(BaseModel):
+    question: str
+    ensemble_probability: float
+    confidence_interval: List[float]
+    dispersion_std: float
+    consensus_level: str
+    edge: Optional[float] = None
+    market_probability: Optional[float] = None
+    member_contributions: List[Dict[str, Any]]
+    rationale_summary: str
+
+
+@app.post(
+    "/predict/ensemble",
+    tags=["Inference"],
+    summary="Calibrated Brier-weighted ensemble forecast across multiple models",
+    response_model=EnsemblePredictResponse,
+)
+async def predict_ensemble(req: EnsemblePredictRequest, request: Request) -> EnsemblePredictResponse:
+    """Produce an empirically calibrated ensemble forecast combining multiple LLM models weighted by their verified historical Brier score."""
+    _check_rate_limit(request)
+    _check_predict_rate_limit(request)
+
+    member_forecasts = list(req.member_forecasts or [])
+    track_record_data = _read_live_track_record() if _read_live_track_record else {}
+
+    if not member_forecasts:
+        selected_models = req.models or list(_DEFAULT_COUNCIL_MODELS)
+        selected_models = [m for m in selected_models if m in _SCADS_MODEL_ALLOWLIST] or list(_DEFAULT_COUNCIL_MODELS)
+
+        base_req = PredictRequest(
+            question=req.question,
+            market_probability=req.market_probability,
+            market_platform=req.market_platform,
+            model=selected_models[0],
+        )
+        messages, evidence_articles, evidence_error = await _prepare_predict_messages(base_req)
+
+        async def _run_member(m_label: str) -> Optional[Dict[str, Any]]:
+            try:
+                prov = _council_provider(m_label)
+                if prov is None:
+                    return None
+                content = await _provider_chat(
+                    prov,
+                    messages,
+                    0.0,
+                    1024,
+                    timeout_s=_COUNCIL_MEMBER_TIMEOUT_S,
+                    max_retries=1,
+                    call_site=f"ensemble_{m_label}",
+                )
+                parsed = parse_model_response(
+                    content,
+                    ("type", "predicted_answer", "confidence", "rationale", "p10", "p50", "p90"),
+                )
+                prob = None
+                if parsed.get("confidence") is not None:
+                    prob = float(parsed["confidence"])
+                elif parsed.get("predicted_answer") in ("Yes", "yes", "true", "True"):
+                    prob = 0.75
+                elif parsed.get("predicted_answer") in ("No", "no", "false", "False"):
+                    prob = 0.25
+                return {
+                    "model": m_label,
+                    "probability": prob if prob is not None else 0.5,
+                    "rationale": parsed.get("rationale") or content[:200],
+                }
+            except Exception as e:
+                logger.warning(f"Ensemble member {m_label} failed: {e}")
+                return None
+
+        tasks = [_run_member(m) for m in selected_models]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for res in results:
+            if isinstance(res, dict) and res.get("probability") is not None:
+                member_forecasts.append(res)
+
+    models_list = [f["model"] for f in member_forecasts if isinstance(f, dict) and "model" in f]
+    weights = ensemble.compute_brier_weights(
+        models_list,
+        category=req.category,
+        track_record_data=track_record_data if isinstance(track_record_data, dict) else None,
+    )
+
+    agg = ensemble.aggregate_ensemble_predictions(
+        member_forecasts,
+        weights=weights,
+        market_price=req.market_probability,
+    )
+
+    return EnsemblePredictResponse(
+        question=req.question,
+        ensemble_probability=agg["ensemble_probability"],
+        confidence_interval=agg["confidence_interval"],
+        dispersion_std=agg["dispersion_std"],
+        consensus_level=agg["consensus_level"],
+        edge=agg["edge"],
+        market_probability=req.market_probability,
+        member_contributions=agg["member_contributions"],
+        rationale_summary=agg["rationale_summary"],
     )
 
 

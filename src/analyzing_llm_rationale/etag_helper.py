@@ -68,3 +68,24 @@ def json_or_304(
         return Response(status_code=304, headers={"ETag": etag, "Cache-Control": cache_control})
 
     return JSONResponse(payload, headers={"ETag": etag, "Cache-Control": cache_control})
+
+
+def bytes_or_304(
+    request: Request,
+    content: bytes,
+    media_type: str = "application/octet-stream",
+    etag: Optional[str] = None,
+    headers: Optional[dict] = None,
+    cache_control: str = "no-cache, max-age=0, must-revalidate",
+) -> Response:
+    """Return Response(status_code=304) if If-None-Match matches, otherwise binary Response with ETag."""
+    if etag is None:
+        etag = make_etag(content)
+    inm = request.headers.get("if-none-match")
+    resp_headers = dict(headers or {})
+    resp_headers["ETag"] = etag
+    resp_headers["Cache-Control"] = cache_control
+    if check_if_none_match(inm, etag):
+        return Response(status_code=304, headers=resp_headers)
+    return Response(content=content, media_type=media_type, headers=resp_headers)
+
