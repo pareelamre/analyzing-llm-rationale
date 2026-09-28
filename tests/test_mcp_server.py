@@ -791,3 +791,87 @@ class PolymarketMetaSizeTests(unittest.TestCase):
         self.assertLess(
             size(mcp._summarise_sports(sports)), size(sports) // 2
         )
+
+
+class NewMcpCapabilitiesTests(unittest.IsolatedAsyncioTestCase):
+    def test_build_batch_predict_payload_from_questions(self):
+        payload = mcp.build_batch_predict_payload(
+            questions=["Will X happen?", "Will Y happen?"],
+            concurrency_limit=4,
+        )
+        self.assertEqual(payload["concurrency_limit"], 4)
+        self.assertEqual(len(payload["items"]), 2)
+        self.assertEqual(payload["items"][0]["question"], "Will X happen?")
+        self.assertEqual(payload["items"][1]["question"], "Will Y happen?")
+
+    def test_build_batch_predict_payload_from_items(self):
+        payload = mcp.build_batch_predict_payload(
+            items=[{"question": "Will Z happen?", "market_probability": 0.35}],
+            concurrency_limit=2,
+        )
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(payload["items"][0]["question"], "Will Z happen?")
+        self.assertEqual(payload["items"][0]["market_probability"], 0.35)
+
+    def test_build_batch_predict_payload_requires_input(self):
+        with self.assertRaises(ValueError):
+            mcp.build_batch_predict_payload(questions=[], items=[])
+
+    def test_batch_forecast_posts_batch_endpoint(self):
+        session = FakeSession(FakeResponse(payload={"results": [], "total": 0, "successful": 0, "failed": 0, "elapsed_ms": 1.0}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", session=session)
+        res = client.batch_forecast({"items": [{"question": "Q1"}]})
+        self.assertEqual(res["total"], 0)
+        self.assertEqual(session.calls[0]["method"], "POST")
+        self.assertEqual(session.calls[0]["url"], "https://foresea.test/predict/batch")
+
+    def test_trade_account_status_reads_venues(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        status = client.trade_account_status()
+        self.assertIn("trading_enabled", status)
+        self.assertIn("venues", status)
+        self.assertIn("kalshi", status["venues"])
+        self.assertIn("polymarket", status["venues"])
+
+    def test_preview_order_validates_and_normalizes(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        preview = client.preview_order({
+            "platform": "kalshi",
+            "action": "buy",
+            "outcome": "yes",
+            "ticker": "KXFED-25JUN-H",
+            "price": 0.45,
+            "quantity": 10,
+        })
+        self.assertTrue(preview["ok"])
+        self.assertEqual(preview["platform"], "kalshi")
+        self.assertEqual(preview["normalized_order"]["ticker"], "KXFED-25JUN-H")
+        self.assertEqual(preview["normalized_order"]["exchange_order"]["side"], "bid")
+
+    def test_place_order_requires_explicit_confirmation(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        with self.assertRaises(mcp.TradingValidationError):
+            client.place_order({
+                "platform": "kalshi",
+                "action": "buy",
+                "outcome": "yes",
+                "ticker": "KXFED-25JUN-H",
+                "price": 0.45,
+                "quantity": 10,
+                "execute": True,
+                "confirmation": "WRONG PHRASE",
+            })
+
+    def test_cancel_order_validates_order_id(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        with self.assertRaises(mcp.TradingValidationError):
+            client.cancel_order(order_id="", platform="kalshi")
+
+    def test_webhook_subscribe_registers_endpoint(self):
+        session = FakeSession(FakeResponse(payload={"id": "wh_123", "url": "https://example.com/hook", "secret": "sec_123"}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", session=session)
+        sub = client.webhook_subscribe({"url": "https://example.com/hook", "events": ["forecast.completed"]})
+        self.assertEqual(sub["id"], "wh_123")
+        self.assertEqual(session.calls[0]["method"], "POST")
+        self.assertEqual(session.calls[0]["url"], "https://foresea.test/webhooks/subscribe")
+
