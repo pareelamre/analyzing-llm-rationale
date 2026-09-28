@@ -410,13 +410,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-model-calls",
         type=int,
         default=8,
-        help="Hard per-question cap across forecaster and JSON-parser requests.",
+        help="Cap across forecast and JSON-parser requests; submitting adds one bounded rationale request.",
     )
     metaculus_parser.add_argument(
         "--max-model-time-s",
         type=float,
         default=180.0,
-        help="Hard per-question wall-clock budget checked before each model request.",
+        help="Forecast-model wall-clock budget; rationale has an additional ceiling of min(this, 45 seconds).",
     )
     metaculus_parser.add_argument(
         "--fallback-forecaster-reserve-s",
@@ -993,7 +993,7 @@ def forecast_metaculus_command(args: argparse.Namespace) -> int:
                 str(value)
                 for value in (
                     post.get("title"),
-                    post.get("description"),
+                    question.get("description") or post.get("description"),
                     question.get("resolution_criteria"),
                     question.get("fine_print"),
                 )
@@ -1020,6 +1020,7 @@ def forecast_metaculus_command(args: argparse.Namespace) -> int:
             fallback_parser_provider=fallback_parser_provider,
             fallback_forecaster_provider=fallback_forecaster_provider,
             research_provider=research_provider,
+            staff_comment_provider=client.get_staff_comments,
             expected_author_id=bot_identity.id,
             bot_username=bot_identity.username,
         )
