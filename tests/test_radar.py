@@ -81,6 +81,34 @@ class RadarTests(unittest.TestCase):
         self.assertIn("tracked live", item["tags"])
         self.assertEqual(item["evidence_links"][0]["url"], "https://kalshi.com/markets/KXTEST")
 
+    def test_radar_delta_and_etag_matching(self):
+        from starlette.testclient import TestClient
+
+        from analyzing_llm_rationale.server import app
+
+        client = TestClient(app)
+        res = client.get("/radar")
+        self.assertEqual(res.status_code, 200)
+        etag = res.headers.get("etag")
+        self.assertIsNotNone(etag)
+
+        # Polling with If-None-Match should return 304 Not Modified
+        res_304 = client.get("/radar", headers={"If-None-Match": etag})
+        self.assertEqual(res_304.status_code, 304)
+
+        # Polling /radar/delta
+        res_delta = client.get("/radar/delta")
+        self.assertEqual(res_delta.status_code, 200)
+        data = res_delta.json()
+        self.assertTrue(data.get("modified"))
+
+        # When since is after or equal to generated_at
+        gen = data.get("generated_at")
+        if gen:
+            res_since = client.get(f"/radar/delta?since={gen}")
+            self.assertEqual(res_since.status_code, 200)
+            self.assertFalse(res_since.json().get("modified"))
+
 
 if __name__ == "__main__":
     unittest.main()
