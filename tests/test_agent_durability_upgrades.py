@@ -96,6 +96,8 @@ class TestBidAskSpreadGuard(unittest.TestCase):
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+                # Setup uses a 10-20pp edge; a 25pp ceiling keeps the gate running but non-binding.
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0.25",
             }
             with (
                 mock.patch.dict(os.environ, env, clear=False),
@@ -130,7 +132,7 @@ class TestBidAskSpreadGuard(unittest.TestCase):
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
                 # The opening trade is setup for the close under test, and its
                 # stated edge sits on the credible-edge ceiling.
-                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0",
+                "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0.25",
             }
             # First open a position under tight spread
             with (

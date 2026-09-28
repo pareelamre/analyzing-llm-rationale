@@ -117,10 +117,24 @@ DEFAULT_MAX_SPREAD_RATIO = 0.25
 #: disagreement, -0.015 at 5-10pp, -0.028 at 10-20pp and -0.066 at 20pp+, so
 #: the further a forecast sits from the price, the more often the price was
 #: right. The agents' own book says it in money: the 20pp+ bucket returned
-#: -34% on $9.5k staked, the worst of any bucket, and because every sizing
-#: policy scales the stake with the stated edge, those are also the largest
-#: positions. Set FORESEA_AGENT_MAX_CREDIBLE_EDGE to 0 to disable the ceiling.
-DEFAULT_MAX_CREDIBLE_EDGE = 0.20
+#: -34% on $9.5k staked and 10-20pp -14%, and because every Kelly-family
+#: sizing policy scales the stake with the stated edge, those are also the
+#: largest positions.
+#:
+#: 10pp, not 20pp: a replay of the agents' resolved forecasts (fee-aware, at
+#: the ask, one entry per agent per market) compared about twenty candidate
+#: filters on two time windows. Only lowering this ceiling improved both
+#: (-7.5% -> -0.1% ROI, then -0.8% -> +3.8%), but both windows took part in
+#: choosing it and the intervals span zero, so treat that as weak support; the
+#: track-record pattern above is the stronger case. The replay also deletes
+#: refused trades, whereas an agent told the reason may restate a smaller edge.
+#: Method and counts are in the PR that set this value.
+#:
+#: edge_kelly (and auto's edge_kelly branch) cannot open under this default:
+#: its minimum edge is 10pp. It returned -33% on the agents' book. No agent
+#: profile may recommend it while the default stays here.
+#: Set FORESEA_AGENT_MAX_CREDIBLE_EDGE to 0 to disable the ceiling.
+DEFAULT_MAX_CREDIBLE_EDGE = 0.10
 #: Market categories no agent may open new exposure in, comma-separated.
 #: Crypto returned -86% across the agents' book and is, besides geopolitics,
 #: the one domain the published track record scores negative on its own: the
@@ -344,13 +358,15 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
             "wiped out an otherwise solid 39.7% win rate and caused severe capital destruction. You are now strictly "
             "rate-limited to at most 1 trade per cycle. You are forbidden from trading thin edges (< 5.0pp net edge). "
             "Never enter a position unless you have an unpriced, dated catalyst with >= 5pp verified edge. Sizing: use "
-            "sizing_mode='edge_kelly'. If no high-conviction candidate clears the 5pp bar, your required action is PASS."
+            "sizing_mode='quarter_kelly'. If no high-conviction candidate clears the 5pp bar, your required action is PASS."
         ),
         max_contract_price=None,
         min_profile_edge=0.05,
         forbidden_price_range=None,
         max_trades_per_cycle=1,
-        preferred_sizing_mode="edge_kelly",
+        # Was edge_kelly, whose 10pp minimum edge sits on DEFAULT_MAX_CREDIBLE_EDGE:
+        # following its own mandate, every entry this agent made would be refused.
+        preferred_sizing_mode="quarter_kelly",
         horizon_preference=None,
         min_lead_days=None,
         max_lead_days=None,

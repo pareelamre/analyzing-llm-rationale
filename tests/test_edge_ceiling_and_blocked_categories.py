@@ -95,13 +95,13 @@ class EdgeCeilingTests(_GateCase):
         self.assertIn("edge_beyond_credible_range", self.reasons(result))
 
     def test_an_entry_inside_the_ceiling_still_trades(self):
-        result = self.trade("KXEDGEOK", model_probability=0.55)  # 13pp
+        result = self.trade("KXEDGEOK", model_probability=0.49)  # 7pp
         self.assertTrue(result["ok"], result)
         self.assertNotIn("edge_beyond_credible_range", self.reasons(result))
 
     def test_the_ceiling_is_exactly_where_the_record_turns(self):
-        just_under = self.trade("KXEDGEUNDER", model_probability=0.619)  # 19.9pp
-        just_over = self.trade("KXEDGEOVER", model_probability=0.621)    # 20.1pp
+        just_under = self.trade("KXEDGEUNDER", model_probability=0.519)  # 9.9pp
+        just_over = self.trade("KXEDGEOVER", model_probability=0.521)    # 10.1pp
         self.assertTrue(just_under["ok"], just_under)
         self.assertFalse(just_over["ok"], just_over)
 
@@ -111,37 +111,86 @@ class EdgeCeilingTests(_GateCase):
         self.assertTrue(result["ok"], result)
 
     def test_the_audit_records_the_ceiling_each_order_was_held_to(self):
-        self.trade("KXEDGEAUDIT", model_probability=0.55)
+        self.trade("KXEDGEAUDIT", model_probability=0.49)
         with benchmark_tools._account_transaction() as conn:
             row = conn.execute(
                 "SELECT metadata_json FROM agent_actions WHERE agent_id = ? AND ticker = ?",
                 (AGENT, "KXEDGEAUDIT"),
             ).fetchone()
         risk = json.loads(row["metadata_json"])["audit"]["risk"]
-        self.assertEqual(risk["max_credible_edge"], 0.20)
+        self.assertEqual(risk["max_credible_edge"], 0.10)
         self.assertIsNone(risk["blocked_category"])
+
+    def test_exactly_10pp_is_refused(self):
+        """R1 is inclusive: a claim of exactly the ceiling is beyond it."""
+        result = self.trade("KXEDGEEXACT", model_probability=0.52)  # 0.52 - 0.42
+        self.assertFalse(result["ok"], result)
+        self.assertIn("edge_beyond_credible_range", self.reasons(result))
+
+    def test_an_exact_10pp_claim_that_rounds_below_is_still_refused(self):
+        """0.61 - 0.51 is 0.09999999999999998 in floating point.
+
+        This is what the guard's 1e-9 tolerance is for: without it, an exact
+        10pp claim at these prices would slip under the ceiling.
+        """
+        q = quote("KXEDGEFLOAT", bid=0.49, ask=0.51)
+        result = self.trade("KXEDGEFLOAT", model_probability=0.61, price=0.51, q=q)
+        self.assertFalse(result["ok"], result)
+        self.assertIn("edge_beyond_credible_range", self.reasons(result))
+
+    def test_edge_kelly_cannot_open_under_the_default_ceiling(self):
+        """edge_kelly needs 10pp of edge, which the default ceiling refuses."""
+        result = self.trade("KXEDGEKELLY", model_probability=0.54, sizing_mode="edge_kelly")  # 12pp
+        self.assertFalse(result["ok"], result)
+        self.assertIn("edge_beyond_credible_range", self.reasons(result))
+
+    def test_a_close_is_never_refused_by_the_ceiling(self):
+        """R3: an exit clears whatever edge it states."""
+        opened = self.trade("KXEDGECLOSE", model_probability=0.49)
+        self.assertTrue(opened["ok"], opened)
+        closed = self.trade("KXEDGECLOSE", side="no", sizing_mode="close", model_probability=0.10)  # NO at 90%
+        self.assertTrue(closed["ok"], closed)
+        self.assertNotIn("edge_beyond_credible_range", self.reasons(closed))
+
+    def test_every_profiles_recommended_sizing_mode_can_open_under_the_default_ceiling(self):
+        """A profile must never recommend a mode the default ceiling refuses outright.
+
+        gpt-oss-120b was told to size with edge_kelly, whose 10pp minimum edge
+        sits exactly on the ceiling: following its own mandate, every entry it
+        made would be refused.
+        """
+        ceiling = benchmark_tools.DEFAULT_MAX_CREDIBLE_EDGE
+        for model, profile in benchmark_tools.AGENT_PROFILES.items():
+            mode = profile.preferred_sizing_mode
+            if mode is None:
+                continue
+            with self.subTest(model=model, mode=mode):
+                policy = benchmark_tools.AGENT_SIZING_POLICIES[mode]
+                self.assertLess(policy.min_edge, ceiling)
+                self.assertNotIn(f"sizing_mode='{benchmark_tools.AGENT_SIZING_POLICIES['edge_kelly'].key}'",
+                                 profile.tactical_mandate or "")
 
 
 class BlockedCategoryTests(_GateCase):
     def test_weather_is_tradable_by_default(self):
         """Blocked by configuration, never by default: the lane stays open."""
-        result = self.trade("KXHIGHNY-26SEP22", model_probability=0.55)
+        result = self.trade("KXHIGHNY-26SEP22", model_probability=0.49)
         self.assertTrue(result["ok"], result)
 
     def test_weather_can_be_added_to_the_block_list(self):
         with mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": "crypto,weather"}):
-            result = self.trade("KXHIGHNY-26SEP23", model_probability=0.55)
+            result = self.trade("KXHIGHNY-26SEP23", model_probability=0.49)
         self.assertFalse(result["ok"], result)
         self.assertIn("blocked_category_weather", self.reasons(result))
 
     def test_a_crypto_market_is_not_opened(self):
         q = quote("KXBTCPRICE", question="Will bitcoin close above $100k this year?")
-        result = self.trade("KXBTCPRICE", model_probability=0.55, q=q)
+        result = self.trade("KXBTCPRICE", model_probability=0.49, q=q)
         self.assertFalse(result["ok"], result)
         self.assertIn("blocked_category_crypto", self.reasons(result))
 
     def test_an_ordinary_market_is_untouched(self):
-        result = self.trade("KXSPORTS", model_probability=0.55)
+        result = self.trade("KXSPORTS", model_probability=0.49)
         self.assertTrue(result["ok"], result)
         self.assertEqual(self.reasons(result), [])
 
@@ -149,7 +198,7 @@ class BlockedCategoryTests(_GateCase):
         """The gate must never trap an agent in a market it is already in."""
         btc = quote("KXBTCHELD", question="Will bitcoin close above $100k?")
         with mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": ""}):
-            opened = self.trade("KXBTCHELD", model_probability=0.55, q=btc)
+            opened = self.trade("KXBTCHELD", model_probability=0.49, q=btc)
         self.assertTrue(opened["ok"], opened)
 
         closed = self.trade("KXBTCHELD", side="no", sizing_mode="close", q=btc)
@@ -159,17 +208,17 @@ class BlockedCategoryTests(_GateCase):
     def test_the_block_list_can_be_emptied(self):
         btc = quote("KXBTCOPEN", question="Will bitcoin close above $100k?")
         with mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": ""}):
-            result = self.trade("KXBTCOPEN", model_probability=0.55, q=btc)
+            result = self.trade("KXBTCOPEN", model_probability=0.49, q=btc)
         self.assertTrue(result["ok"], result)
 
     def test_the_block_list_takes_other_categories(self):
         with mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": "politics"}):
             blocked = self.trade(
-                "KXPRES", model_probability=0.55,
+                "KXPRES", model_probability=0.49,
                 q=quote("KXPRES", question="Will the president sign the bill?"),
             )
             crypto_now_allowed = self.trade(
-                "KXBTCFREE", model_probability=0.55,
+                "KXBTCFREE", model_probability=0.49,
                 q=quote("KXBTCFREE", question="Will bitcoin close above $100k?"),
             )
         self.assertIn("blocked_category_politics", self.reasons(blocked))
