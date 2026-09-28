@@ -88,7 +88,7 @@ class EveryResourceIsTaggedTests(unittest.TestCase):
 
     def test_every_resource_dispatches_as_a_resource(self):
         bodies = self._resource_bodies()
-        self.assertEqual(len(bodies), 5, "expected five MCP resources")
+        self.assertEqual(len(bodies), 7, "expected seven MCP resources")
         untagged = [
             body.splitlines()[0]
             for body in bodies
