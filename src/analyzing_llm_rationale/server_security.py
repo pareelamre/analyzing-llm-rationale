@@ -105,6 +105,24 @@ class RateLimiter:
         log.append(now)
         return True
 
+    def get_rate_limit_headers(self, key: str) -> dict[str, str]:
+        """Return standard IETF RateLimit-* headers."""
+        now = time.monotonic()
+        window = now - self._period
+        log = self._log.get(key, [])
+        valid_calls = sum(1 for ts in log if ts >= window)
+        remaining = max(0, self._calls - valid_calls)
+        reset_seconds = self._period
+        if log:
+            reset_seconds = max(1, int(self._period - (now - log[0])))
+
+        return {
+            "RateLimit-Limit": str(self._calls),
+            "RateLimit-Remaining": str(remaining),
+            "RateLimit-Reset": str(reset_seconds),
+        }
+
+
 
 def decode_session(token: str, session_secret: str) -> dict:
     """Verify a session JWT and return its claims."""

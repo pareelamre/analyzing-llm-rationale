@@ -68,10 +68,12 @@ from analyzing_llm_rationale import (
     crypto_kalshi,
     ensemble,
     etag_helper,
+    forecast_factors,
     pr_agent,
     rag,
     server_security,
     venue_mcp,
+    webhooks,
 )
 from analyzing_llm_rationale import (
     live_track_record as live_track_record_support,
@@ -5985,6 +5987,10 @@ class PredictResponse(BaseModel):
         None,
         description="Model's own self-reported difficulty for this question: `low` or `high`.",
     )
+    bull_factors: Optional[List[Dict[str, Any]]] = Field(default=None, description="Decomposed factors favoring the YES / upside outcome.")
+    bear_factors: Optional[List[Dict[str, Any]]] = Field(default=None, description="Decomposed counter-factors favoring the NO / downside outcome.")
+    key_catalysts: Optional[List[Dict[str, Any]]] = Field(default=None, description="Key upcoming events/dates that could trigger thesis revision.")
+
 
 
 class VertexPredictRequest(BaseModel):
@@ -6718,6 +6724,11 @@ def _build_typed_response(
     qtype = (req.question_type or (parsed.get("type") if parsed else None) or "binary").lower()
     rationale = parsed.get("rationale") if parsed else None
     model_key = _model_key_for_request(req)
+    factors = forecast_factors.extract_factors_and_catalysts(
+        rationale or "",
+        probability=float(parsed.get("confidence")) if (parsed and parsed.get("confidence") is not None) else None,
+        question=req.question,
+    )
     base = dict(
         variant=req.variant,
         model_key=model_key,
@@ -6725,6 +6736,9 @@ def _build_typed_response(
         evidence_sources=_evidence_sources(evidence_articles),
         evidence_articles=_news_articles(evidence_articles),
         evidence_error=evidence_error,
+        bull_factors=factors.get("bull_factors"),
+        bear_factors=factors.get("bear_factors"),
+        key_catalysts=factors.get("key_catalysts"),
     )
 
     if qtype == "multiple_choice" and parsed:
@@ -14328,6 +14342,143 @@ async def predict_ensemble(req: EnsemblePredictRequest, request: Request) -> Ens
         member_contributions=agg["member_contributions"],
         rationale_summary=agg["rationale_summary"],
     )
+
+
+class BatchPredictRequest(BaseModel):
+    items: List[PredictRequest] = Field(..., min_length=1, max_length=25, description="List of forecasting requests (max 25)")
+    concurrency_limit: int = Field(5, ge=1, le=10, description="Max concurrent model calls")
+
+
+class BatchPredictResponse(BaseModel):
+    results: List[Optional[PredictResponse]]
+    total: int
+    successful: int
+    failed: int
+    elapsed_ms: float
+
+
+@app.post(
+    "/predict/batch",
+    tags=["Inference"],
+    summary="Batch forecast multiple prediction market questions concurrently",
+    response_model=BatchPredictResponse,
+)
+async def predict_batch(req: BatchPredictRequest, request: Request) -> BatchPredictResponse:
+    """Submit up to 25 forecasting questions and receive concurrent structured predictions."""
+    _check_rate_limit(request)
+    _check_predict_rate_limit(request)
+    started = time.monotonic()
+    semaphore = asyncio.Semaphore(req.concurrency_limit)
+
+    async def _process_item(item: PredictRequest) -> Optional[PredictResponse]:
+        async with semaphore:
+            try:
+                return await predict(item, request=request)
+            except Exception as e:
+                logger.warning(f"Batch predict item failed: {e}")
+                return None
+
+    tasks = [_process_item(item) for item in req.items]
+    results = await asyncio.gather(*tasks, return_exceptions=False)
+    successful = sum(1 for r in results if r is not None)
+    failed = len(req.items) - successful
+    elapsed_ms = round((time.monotonic() - started) * 1000, 2)
+
+    return BatchPredictResponse(
+        results=results,
+        total=len(req.items),
+        successful=successful,
+        failed=failed,
+        elapsed_ms=elapsed_ms,
+    )
+
+
+class WebhookSubscribeRequest(BaseModel):
+    url: str = Field(..., max_length=500, description="Destination webhook callback URL (https/http)")
+    events: Optional[List[str]] = Field(None, description="Events to subscribe to: 'edge_alert', 'market_resolution', 'new_market', 'all'")
+    min_edge: float = Field(0.08, ge=0.0, le=1.0, description="Minimum edge threshold for edge_alert events")
+
+
+class WebhookSubscribeResponse(BaseModel):
+    id: str
+    url: str
+    events: List[str]
+    secret: str
+    min_edge: float
+    created_at: str
+    active: bool
+    status: str = "registered"
+
+
+@app.post(
+    "/webhooks/subscribe",
+    tags=["Webhooks"],
+    summary="Subscribe an external agent callback webhook for real-time market events",
+    response_model=WebhookSubscribeResponse,
+)
+async def webhook_subscribe(
+    req: WebhookSubscribeRequest,
+    request: Request,
+) -> WebhookSubscribeResponse:
+    """Register an automated webhook callback. The response contains an HMAC secret (X-Foresea-Signature) for validating payloads."""
+    _check_rate_limit(request)
+    claims = _optional_predict_claims(request)
+    user_id = claims.get("sub") if claims else None
+    mgr = webhooks.get_webhook_manager()
+    try:
+        sub = mgr.register(
+            url=req.url,
+            events=req.events,
+            min_edge=req.min_edge,
+            user_id=user_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    return WebhookSubscribeResponse(
+        id=sub.id,
+        url=sub.url,
+        events=sub.events,
+        secret=sub.secret,
+        min_edge=sub.min_edge,
+        created_at=sub.created_at,
+        active=sub.active,
+    )
+
+
+@app.get(
+    "/webhooks/subscriptions",
+    tags=["Webhooks"],
+    summary="List active webhook subscriptions",
+)
+async def webhook_list_subscriptions(request: Request) -> Dict[str, Any]:
+    """List all registered webhook subscriptions."""
+    _check_rate_limit(request)
+    claims = _optional_predict_claims(request)
+    user_id = claims.get("sub") if claims else None
+    mgr = webhooks.get_webhook_manager()
+    subs = mgr.list_subscriptions(user_id=user_id)
+    return {
+        "subscriptions": [s.model_dump() for s in subs],
+        "total": len(subs),
+    }
+
+
+@app.delete(
+    "/webhooks/subscriptions/{sub_id}",
+    tags=["Webhooks"],
+    summary="Unsubscribe an external agent webhook",
+)
+async def webhook_delete_subscription(sub_id: str, request: Request) -> Dict[str, Any]:
+    """Delete a registered webhook subscription."""
+    _check_rate_limit(request)
+    claims = _optional_predict_claims(request)
+    user_id = claims.get("sub") if claims else None
+    mgr = webhooks.get_webhook_manager()
+    deleted = mgr.delete_subscription(sub_id, user_id=user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Webhook subscription '{sub_id}' not found.")
+    return {"deleted": True, "id": sub_id}
 
 
 @app.post(
