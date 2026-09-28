@@ -73,5 +73,33 @@ class TestServerNewCapabilities(unittest.TestCase):
         self.assertIn("analytics_export_parquet", http_endpoints)
 
 
+    def test_webhooks_api_lifecycle(self):
+        # 1. Subscribe
+        payload = {
+            "url": "https://agent.example.com/foresea-webhook",
+            "events": ["edge_alert"],
+            "min_edge": 0.08,
+        }
+        resp = self.client.post("/webhooks/subscribe", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("id", data)
+        self.assertIn("secret", data)
+        self.assertTrue(data["secret"].startswith("whsec_"))
+        sub_id = data["id"]
+
+        # 2. List
+        list_resp = self.client.get("/webhooks/subscriptions")
+        self.assertEqual(list_resp.status_code, 200)
+        list_data = list_resp.json()
+        self.assertGreaterEqual(list_data["total"], 1)
+
+        # 3. Delete
+        del_resp = self.client.delete(f"/webhooks/subscriptions/{sub_id}")
+        self.assertEqual(del_resp.status_code, 200)
+        self.assertEqual(del_resp.json()["deleted"], True)
+
+
 if __name__ == "__main__":
     unittest.main()
+

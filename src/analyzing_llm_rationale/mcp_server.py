@@ -1200,6 +1200,26 @@ def create_mcp_server(
 
         return json.dumps(await _call_tool_async(client.aopenapi, _kind="resource"), sort_keys=True)
 
+    @mcp.resource(
+        "foresea://leaderboard",
+        name="Foresea agent trading leaderboard",
+        mime_type="application/json",
+    )
+    async def leaderboard_resource() -> str:
+        """Live agent shadow trading leaderboard and model returns."""
+
+        return json.dumps(await _call_tool_async(client.amarket_leaderboard, _kind="resource"), sort_keys=True)
+
+    @mcp.resource(
+        "foresea://radar",
+        name="Foresea live market radar",
+        mime_type="application/json",
+    )
+    async def radar_resource() -> str:
+        """Live prediction market radar and mispriced opportunities."""
+
+        return json.dumps(await _call_tool_async(client.aedge_board, _kind="resource"), sort_keys=True)
+
     @mcp.prompt()
     def foresea_forecast_prompt(question: str) -> str:
         """Create a compact prompt that asks an agent to use Foresea for a forecast."""
