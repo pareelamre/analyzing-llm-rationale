@@ -65,6 +65,7 @@ from analyzing_llm_rationale import (
     benchmark_tools,
     crypto_5m,
     crypto_kalshi,
+    etag_helper,
     pr_agent,
     rag,
     server_security,
@@ -3771,7 +3772,7 @@ async def benchmark_score(req: BenchmarkRequest, request: Request = None) -> Dic
 
 
 @app.get("/track-record", tags=["System"], summary="Public forecasting track record")
-async def track_record():
+async def track_record(request: Request):
     """Return Foresea's resolved-forecast track record.
 
     Once the live, point-in-time record has resolved forecasts, this returns it
@@ -3784,7 +3785,7 @@ async def track_record():
     if live and live.get("n_snapshots_resolved"):
         payload = dict(live)
         payload["freshness"] = _track_record_freshness(payload)
-        return JSONResponse(payload, headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"})
+        return etag_helper.json_or_304(request, payload)
     path = _STATIC_DIR / "track_record.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Track record not generated yet.")
@@ -3796,7 +3797,7 @@ async def track_record():
 
 
 @app.get("/edge-board", tags=["System"], summary="Live model-vs-market edge board")
-async def edge_board():
+async def edge_board(request: Request):
     """Where Foresea's evidence-based fair probability most disagrees with the
     market price right now — and whether that kind of disagreement has paid.
 
@@ -3820,36 +3821,34 @@ async def edge_board():
         audited_board = audit_edge_board(raw_board)
     except Exception:
         audited_board = raw_board
-    return JSONResponse(
-        {
-            "generated_at": live.get("generated_at"),
-            "freshness": freshness,
-            "model": live.get("model"),
-            "edge_board": audited_board,
-            "by_edge": live.get("by_edge", []),
-            "by_horizon": live.get("by_horizon", []),
-            "lead_lag": live.get("lead_lag"),
-            "paper_pnl": _compact_paper_pnl(live.get("paper_pnl")),
-            "primary_paper_pnl": _compact_paper_pnl(live.get("primary_paper_pnl")),
-            "mark_to_market_account": _compact_mark_to_market_account(live.get("mark_to_market_account")),
-            "mark_to_market_by_model": _compact_mark_to_market_by_model(live.get("mark_to_market_by_model", [])),
-            "quarter_kelly_by_model": _compact_mark_to_market_by_model(live.get("quarter_kelly_by_model", [])),
-            "growth_1pct_by_model": _compact_mark_to_market_by_model(live.get("growth_1pct_by_model", [])),
-            "growth_2pct_by_model": _compact_mark_to_market_by_model(live.get("growth_2pct_by_model", [])),
-            "mark_to_market_cycle_minutes": live.get("mark_to_market_cycle_minutes"),
-            "models_comparison": _compact_models_comparison(live.get("models_comparison", [])),
-            "resolved_log": live.get("resolved_log", []),
-            "n_markets_open": live.get("n_markets_open", 0),
-            "n_markets_resolved": live.get("n_markets_resolved", 0),
-            "primary_model": live.get("primary_model") or live.get("model"),
-            "primary_n_snapshots_resolved": live.get("primary_n_snapshots_resolved", 0),
-            "primary_n_markets_resolved": live.get("primary_n_markets_resolved", 0),
-            "n_markets_tracked": live.get("n_markets_tracked", 0),
-            "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
-            "arbitrage_signals": live.get("arbitrage_signals", []),
-        },
-        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
-    )
+    payload = {
+        "generated_at": live.get("generated_at"),
+        "freshness": freshness,
+        "model": live.get("model"),
+        "edge_board": audited_board,
+        "by_edge": live.get("by_edge", []),
+        "by_horizon": live.get("by_horizon", []),
+        "lead_lag": live.get("lead_lag"),
+        "paper_pnl": _compact_paper_pnl(live.get("paper_pnl")),
+        "primary_paper_pnl": _compact_paper_pnl(live.get("primary_paper_pnl")),
+        "mark_to_market_account": _compact_mark_to_market_account(live.get("mark_to_market_account")),
+        "mark_to_market_by_model": _compact_mark_to_market_by_model(live.get("mark_to_market_by_model", [])),
+        "quarter_kelly_by_model": _compact_mark_to_market_by_model(live.get("quarter_kelly_by_model", [])),
+        "growth_1pct_by_model": _compact_mark_to_market_by_model(live.get("growth_1pct_by_model", [])),
+        "growth_2pct_by_model": _compact_mark_to_market_by_model(live.get("growth_2pct_by_model", [])),
+        "mark_to_market_cycle_minutes": live.get("mark_to_market_cycle_minutes"),
+        "models_comparison": _compact_models_comparison(live.get("models_comparison", [])),
+        "resolved_log": live.get("resolved_log", []),
+        "n_markets_open": live.get("n_markets_open", 0),
+        "n_markets_resolved": live.get("n_markets_resolved", 0),
+        "primary_model": live.get("primary_model") or live.get("model"),
+        "primary_n_snapshots_resolved": live.get("primary_n_snapshots_resolved", 0),
+        "primary_n_markets_resolved": live.get("primary_n_markets_resolved", 0),
+        "n_markets_tracked": live.get("n_markets_tracked", 0),
+        "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
+        "arbitrage_signals": live.get("arbitrage_signals", []),
+    }
+    return etag_helper.json_or_304(request, payload)
 
 
 @app.get(
@@ -3857,7 +3856,7 @@ async def edge_board():
     tags=["System"],
     summary="Agentic shadow-trading board (paper only)",
 )
-async def agent_trading_board():
+async def agent_trading_board(request: Request):
     """SCADS-hosted models given real tool-use trading agency -- unlike the
     ``/edge-board`` Kelly-sizing ledgers (a probability sized by a fixed
     formula after the fact), each model here decides for itself whether and
@@ -3907,35 +3906,33 @@ async def agent_trading_board():
         for item in health.values():
             status = str(item.get("status") or "unverified")
             _agent_trading_board_health.add(1, {"status": status})
-    return JSONResponse(
-        {
-            "generated_at": live.get("generated_at"),
-            "freshness": freshness,
-            "mode": "shadow",
-            "note": live.get("note") or "Paper trading only -- no real money is ever at risk.",
-            "models": compact["models"],
-            "leaderboard": compact["leaderboard"],
-            "equity_curves": compact["equity_curves"],
-            "recent_activity": compact["recent_activity"],
-            # A selected model may not appear in the shared recent-activity
-            # window. Keep its most recent thesis available so the Agentic
-            # tab can render a useful per-model feed without another request.
-            "latest_theses": compact["latest_theses"],
-            "eligibility": compact["eligibility"],
-            "forecast_learning": compact["forecast_learning"],
-            "weather_operations": compact["weather_operations"],
-            "model_health": compact["model_health"],
-            "operational_health": compact["operational_health"],
-            # The thresholds the trade guard rejects against. Published so a
-            # rejection reason on the activity feed can be read against the
-            # limit it refers to, rather than taken on faith.
-            "risk_limits": live.get("risk_limits") or {},
-            # Historical records remain inspectable but do not participate in
-            # live ranking, balances, health, or trading decisions.
-            "retired_artifacts": retired_artifacts,
-        },
-        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
-    )
+    payload = {
+        "generated_at": live.get("generated_at"),
+        "freshness": freshness,
+        "mode": "shadow",
+        "note": live.get("note") or "Paper trading only -- no real money is ever at risk.",
+        "models": compact["models"],
+        "leaderboard": compact["leaderboard"],
+        "equity_curves": compact["equity_curves"],
+        "recent_activity": compact["recent_activity"],
+        # A selected model may not appear in the shared recent-activity
+        # window. Keep its most recent thesis available so the Agentic
+        # tab can render a useful per-model feed without another request.
+        "latest_theses": compact["latest_theses"],
+        "eligibility": compact["eligibility"],
+        "forecast_learning": compact["forecast_learning"],
+        "weather_operations": compact["weather_operations"],
+        "model_health": compact["model_health"],
+        "operational_health": compact["operational_health"],
+        # The thresholds the trade guard rejects against. Published so a
+        # rejection reason on the activity feed can be read against the
+        # limit it refers to, rather than taken on faith.
+        "risk_limits": live.get("risk_limits") or {},
+        # Historical records remain inspectable but do not participate in
+        # live ranking, balances, health, or trading decisions.
+        "retired_artifacts": retired_artifacts,
+    }
+    return etag_helper.json_or_304(request, payload)
 
 
 _AGENT_TRADING_AUDIT_ARCHIVE_PATH_RE = re.compile(
@@ -4112,10 +4109,11 @@ async def agent_trading_audits(
     summary="Unified Foresea Alpha & Autonomous Agent Feed",
 )
 async def feed_latest_route(
+    request: Request,
     limit: int = Query(10, ge=1, le=50, description="Maximum feed items to return"),
     min_edge: float = Query(0.05, ge=0.0, le=1.0, description="Minimum model-vs-market edge threshold"),
     min_credibility: float = Query(0.60, ge=0.0, le=1.0, description="Minimum credibility grade threshold"),
-) -> Dict[str, Any]:
+) -> Response:
     """Retrieve the latest unified Foresea feed combining calibrated prediction market
     edge alerts, autonomous agent trades & theses, and leaderboard standings."""
     loop = asyncio.get_running_loop()
@@ -4165,7 +4163,7 @@ async def feed_latest_route(
     if not recent_trades and recent_activity:
         recent_trades = recent_activity[:limit]
 
-    return {
+    payload = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "channels": {
             "discord": {
@@ -4183,6 +4181,7 @@ async def feed_latest_route(
         "agent_trades": recent_trades,
         "leaderboard_summary": agent_data.get("leaderboard", [])[:5],
     }
+    return etag_helper.json_or_304(request, payload)
 
 
 class ExplainShiftRequest(BaseModel):
@@ -9374,6 +9373,7 @@ _RADAR_TRACK_RECORD_BLOCKS = (
 
 @app.get("/radar", tags=["Markets"], summary="Live Foresea market radar", response_model=RadarResponse)
 async def radar(
+    request: Request,
     limit: int = Query(12, ge=1, le=30),
     include_track_record: bool = Query(
         True,
@@ -9384,7 +9384,7 @@ async def radar(
             "unaffected."
         ),
     ),
-) -> JSONResponse:
+) -> Response:
     """Return a cached list of live markets with notable model-vs-market gaps."""
     payload = await asyncio.get_running_loop().run_in_executor(None, _radar_from_track_record, limit)
     if payload.markets:
@@ -9395,10 +9395,49 @@ async def radar(
             # Empty rather than absent: the response model declares these, so a
             # client that reads them keeps getting the type it expects.
             body[key] = [] if isinstance(body.get(key), list) else None
-    return JSONResponse(
-        body,
-        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
-    )
+    return etag_helper.json_or_304(request, body)
+
+
+@app.get("/radar/delta", tags=["Markets"], summary="Lightweight delta updates for Foresea market radar")
+async def radar_delta(
+    request: Request,
+    since: Optional[str] = Query(None, description="ISO timestamp of client's last poll update"),
+    limit: int = Query(12, ge=1, le=30),
+) -> Response:
+    """Return only modified markets and new activity since the client's last poll timestamp."""
+    loop = asyncio.get_running_loop()
+    radar_payload = await loop.run_in_executor(None, _radar_from_track_record, limit)
+    current_gen = str(radar_payload.generated_at or "")
+
+    is_fresh = False
+    if since and current_gen:
+        try:
+            clean_since = since.replace(" ", "+").replace("Z", "+00:00")
+            clean_gen = current_gen.replace(" ", "+").replace("Z", "+00:00")
+            dt_since = datetime.fromisoformat(clean_since)
+            if dt_since.tzinfo is None:
+                dt_since = dt_since.replace(tzinfo=timezone.utc)
+            dt_gen = datetime.fromisoformat(clean_gen)
+            if dt_gen.tzinfo is None:
+                dt_gen = dt_gen.replace(tzinfo=timezone.utc)
+            is_fresh = dt_since >= dt_gen
+        except Exception:
+            is_fresh = since >= current_gen
+
+    if is_fresh:
+        # Client already has the latest state
+        return etag_helper.json_or_304(
+            request,
+            {"modified": False, "generated_at": current_gen, "markets": [], "edge_count": len(radar_payload.edge_board)},
+        )
+
+    body = {
+        "modified": True,
+        "generated_at": current_gen,
+        "markets": [m.model_dump() for m in radar_payload.markets],
+        "edge_count": len(radar_payload.edge_board),
+    }
+    return etag_helper.json_or_304(request, body)
 
 
 @app.get("/market/exchange-status", tags=["Markets"], summary="Operational status and schedule of exchanges")

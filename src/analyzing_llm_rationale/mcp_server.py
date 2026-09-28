@@ -968,28 +968,55 @@ def create_mcp_server(
         return await _call_tool_async(client.acheck_run, client_run_key)
 
     @mcp.tool()
-    async def foresea_track_record() -> Dict[str, Any]:
+    async def foresea_track_record(fields: Optional[List[str]] = None) -> Dict[str, Any]:
         """Call this when the user asks how reliable or accurate Foresea is, or wants
         to know whether to trust a forecast. Good triggers: "How good is Foresea?",
         "What's the track record?", "Has it been right before?", "Is it calibrated?",
         "What's the Brier score?". Returns accuracy, Brier score, calibration (ECE),
-        and skill-vs-market broken down by time horizon."""
+        and skill-vs-market broken down by time horizon. Pass optional fields list
+        (e.g. ['brier_score', 'accuracy', 'n_snapshots_resolved']) to reduce token usage."""
 
-        return _summarise_track_record(await _call_tool_async(client.atrack_record))
+        raw = await _call_tool_async(client.atrack_record)
+        summarised = _summarise_track_record(raw, source="/track-record")
+        if fields and isinstance(summarised, dict):
+            field_set = set(fields)
+            return {k: v for k, v in summarised.items() if k in field_set or k in ("generated_at", "freshness")}
+        return summarised
 
     @mcp.tool()
-    async def foresea_edge_board() -> Dict[str, Any]:
+    async def foresea_edge_board(
+        limit: int = 20,
+        min_edge: float = 0.0,
+        fields: Optional[List[str]] = None,
+        cursor: int = 0,
+    ) -> Dict[str, Any]:
         """Call this when the user wants the current top trading opportunities with
         explicit trade directions and historical backing. Good triggers: "What are
         the best bets right now?", "Show me the edge board", "Which model is winning
         the paper-trading competition?", "What's the strongest edge today?",
         "Are these edges statistically significant?". Returns open markets ranked by
         model-vs-market disagreement, each with Buy YES/NO direction, implied odds,
-        whether the edge is historically significant, and a multi-model comparison."""
+        whether the edge is historically significant, and a multi-model comparison.
+        Supports cursor pagination, limit, min_edge threshold, and field masking."""
 
-        return _summarise_track_record(
-            await _call_tool_async(client.aedge_board), source="/edge-board"
-        )
+        raw = await _call_tool_async(client.aedge_board)
+        summarised = _summarise_track_record(raw, source="/edge-board")
+        if not isinstance(summarised, dict):
+            return summarised
+        rows = summarised.get("edge_board")
+        if isinstance(rows, list):
+            if min_edge > 0.0:
+                rows = [r for r in rows if float(r.get("edge") or 0.0) >= min_edge]
+            total = len(rows)
+            sliced = rows[cursor : cursor + limit]
+            if fields:
+                field_set = set(fields)
+                sliced = [{k: v for k, v in r.items() if k in field_set} for r in sliced]
+            summarised["edge_board"] = sliced
+            summarised["cursor"] = cursor
+            summarised["next_cursor"] = cursor + len(sliced) if cursor + limit < total else None
+            summarised["total_matching_edges"] = total
+        return summarised
 
     @mcp.tool()
     async def foresea_venue_data(platform: str = "", operation: str = "",
