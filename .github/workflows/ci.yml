@@ -92,7 +92,7 @@ jobs:
         # naming the symptom rather than the prompt that caused it.
         run: gcloud components install beta cloud-datastore-emulator --quiet
       - name: Install dependencies
-        run: pip install -e ".[dev,serve]" httpx
+        run: pip install -e ".[dev,serve,analysis]" httpx
       - name: Run the durable-store checks against the emulator
         env:
           DATASTORE_DATASET: foresea-twin-test
