@@ -197,6 +197,9 @@ class PlaceTradeTests(unittest.TestCase):
             "FORESEA_AGENT_ACCOUNT_VALUE": "10000",
             "FORESEA_AGENT_PLACE_TRADE_MODE": "shadow",
             "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            # The claim sits in the 10-20pp bucket on purpose, to exercise the
+            # reliability weight; 25pp keeps the ceiling running without refusing it.
+            "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0.25",
         }
         ctx = benchmark_tools.ToolContext(agent_id="model-reliability", require_kelly_sizing=True)
         with (

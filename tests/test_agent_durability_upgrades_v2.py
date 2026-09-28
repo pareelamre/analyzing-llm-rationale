@@ -235,7 +235,11 @@ class ProfileHorizonAndOrderNotionalTests(unittest.TestCase):
         ctx = benchmark_tools.ToolContext(agent_id="qwen3-8-27b", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             with (
-                mock.patch.dict(os.environ, self._base_env(td), clear=False),
+                mock.patch.dict(
+                    os.environ,
+                    {**self._base_env(td), "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0.25"},  # Setup uses a 10-20pp edge; a 25pp ceiling keeps the gate running but non-binding.
+                    clear=False,
+                ),
                 mock.patch(
                     "analyzing_llm_rationale.market_data.fetch_kalshi",
                     return_value=_quote("KXMACRO", bid=0.20, ask=0.22, prob=0.21, lead_days=18.0),
@@ -262,7 +266,11 @@ class ProfileHorizonAndOrderNotionalTests(unittest.TestCase):
         ctx = benchmark_tools.ToolContext(agent_id="qwen3-8-27b", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             with (
-                mock.patch.dict(os.environ, self._base_env(td), clear=False),
+                mock.patch.dict(
+                    os.environ,
+                    {**self._base_env(td), "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0.25"},  # Setup uses a 10-20pp edge; a 25pp ceiling keeps the gate running but non-binding.
+                    clear=False,
+                ),
                 mock.patch(
                     "analyzing_llm_rationale.market_data.fetch_kalshi",
                     return_value=_quote(

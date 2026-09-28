@@ -98,7 +98,7 @@ class AgentRecalibrationProfilesTests(unittest.TestCase):
         gpt = benchmark_tools.get_agent_profile("gpt-oss-120b")
         self.assertEqual(gpt.max_trades_per_cycle, 1)
         self.assertEqual(gpt.min_profile_edge, 0.05)
-        self.assertEqual(gpt.preferred_sizing_mode, "edge_kelly")
+        self.assertEqual(gpt.preferred_sizing_mode, "quarter_kelly")
 
         llama = benchmark_tools.get_agent_profile("llama-3.3-70b-instruct")
         self.assertEqual(llama.max_contract_price, 0.40)
@@ -151,7 +151,11 @@ class AgentSpecializationRiskGuardsTests(unittest.TestCase):
         ctx = benchmark_tools.ToolContext(agent_id="gemma-4-26b-a4b-it", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             with (
-                mock.patch.dict(os.environ, self._base_env(td), clear=False),
+                mock.patch.dict(
+                    os.environ,
+                    {**self._base_env(td), "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0.25"},  # Setup uses a 10-20pp edge; a 25pp ceiling keeps the gate running but non-binding.
+                    clear=False,
+                ),
                 mock.patch(
                     "analyzing_llm_rationale.market_data.fetch_kalshi",
                     return_value=_quote("KXCHEAP", bid=0.20, ask=0.22, prob=0.21),
@@ -260,7 +264,11 @@ class AgentSpecializationRiskGuardsTests(unittest.TestCase):
         ctx = benchmark_tools.ToolContext(agent_id="gpt-oss-120b", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             with (
-                mock.patch.dict(os.environ, self._base_env(td), clear=False),
+                mock.patch.dict(
+                    os.environ,
+                    {**self._base_env(td), "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0.25"},  # Setup uses a 10-20pp edge; a 25pp ceiling keeps the gate running but non-binding.
+                    clear=False,
+                ),
                 mock.patch(
                     "analyzing_llm_rationale.market_data.fetch_kalshi",
                     side_effect=lambda t: _quote(t, bid=0.20, ask=0.22, prob=0.21),
