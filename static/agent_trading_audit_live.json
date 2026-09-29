@@ -4762,6 +4762,100 @@
     ],
     "gemma-4-26b-a4b-it": [
       {
+        "action_id": "de4f57f1-5ece-4bb8-8d07-d198960896fa",
+        "agent_id": "gemma-4-26b-a4b-it",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 275.1602336537037,
+            "marketable": false,
+            "observed_ask": 0.25,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_unfilled_below_market"
+          },
+          "requested_order": {
+            "price": 0.24,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 8072.071193,
+            "cash_required": 241.057572,
+            "concentration_cap": 1255.020787,
+            "cycle_id": "30m:994800",
+            "cycle_spend_after": 241.057572,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 241.057572,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2510.041574,
+            "drawdown_after": 0.164195,
+            "fee": 7.11195,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 233.945622,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 233.945622,
+            "open_markets_after": 5,
+            "per_cycle_spend_limit": 1673.361049,
+            "reasons": [
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.57,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.0,
+            "lead_days": 275.2,
+            "market_shrinkage": 0.05,
+            "max_position_fraction": 0.03,
+            "mode": "scaled_edge",
+            "reason": null,
+            "target_notional": 251.004157,
+            "target_quantity": 974.7734268432231
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994800",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 241.057572,
+          "fee": 7.11195,
+          "netting_payout": 0.0,
+          "notional": 233.945622,
+          "price": 0.24,
+          "quantity": 974.7734268432231,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-magdalena-andersson-be-the-next-prime-minister-of-sweden"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "83b24778437a1a3b9a9cdb3f41c0450e1a7bf5eccfb7042a0593a0e198b278c6",
+        "recorded_at": "2026-09-29T00:08:15.888783+00:00"
+      },
+      {
         "action_id": "6a73783c-ccae-4a3c-9226-1b30971b62b2",
         "agent_id": "gemma-4-26b-a4b-it",
         "audit": {
@@ -22059,6 +22153,88 @@
     ],
     "gpt-oss-120b": [
       {
+        "action_id": "53166728-63e5-4487-9ff9-82ef7375edf9",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 5.0
+          },
+          "initiated_by": "early_profit_harvest_rule",
+          "quote": {
+            "lead_days": 487.6151839721065,
+            "marketable": true,
+            "observed_ask": 0.06,
+            "observed_bid": 0.03,
+            "source": "live_venue_quote",
+            "spread": 0.03,
+            "spread_status": "checked",
+            "status": "shadow_price_from_live_quote"
+          },
+          "requested_order": {
+            "price": null,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 7285.524262,
+            "cash_required": 0.0,
+            "concentration_cap": 1500.0,
+            "cycle_id": "30m:994800",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3000.0,
+            "drawdown_after": 0.217154,
+            "fee": 0.01974,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 1,
+            "notional": 0.3,
+            "open_markets_after": 4,
+            "per_cycle_spend_limit": 2000.0,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994800",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 4.68026,
+          "cash_required": 0.0,
+          "fee": 0.01974,
+          "netting_payout": 5.0,
+          "notional": 0.3,
+          "price": 0.06,
+          "quantity": 5.0,
+          "realized_pnl": 1.7302600000000001,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXJUSTICEGOV-28-26OCT01"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "4ca7eccc23aaed2c766ddb717e0e2c9347f67920226c314093ceae4288e2c9f3",
+        "recorded_at": "2026-09-29T00:14:08.345154+00:00"
+      },
+      {
         "action_id": "601322b3-3946-489b-a77d-2852ae7c9e7f",
         "agent_id": "gpt-oss-120b",
         "audit": {
@@ -37743,6 +37919,196 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "cac30517-411c-46ea-ab5a-1b0bf96b8600",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 92.9880639297338,
+            "marketable": true,
+            "observed_ask": 0.12,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.12,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 6799.017407,
+            "cash_required": 229.528017,
+            "concentration_cap": 1147.603141,
+            "cycle_id": "30m:994800",
+            "cycle_spend_after": 229.528017,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 229.528017,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2295.206283,
+            "drawdown_after": 0.206368,
+            "fee": 7.80466,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 1366.826151,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 221.723357,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1530.137522,
+            "reasons": [
+              "concentration_limit",
+              "cluster_concentration_limit",
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.73,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": 93.0,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 229.520628,
+            "target_quantity": 1847.6946409542747
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994800",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 229.528017,
+          "fee": 7.80466,
+          "netting_payout": 0.0,
+          "notional": 221.723357,
+          "price": 0.12,
+          "quantity": 1847.6946409542747,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "9dce9255d2432df8a117fc819b63fe838814b6dc8c9912dc401b224d44585f52",
+        "recorded_at": "2026-09-29T00:17:11.335404+00:00"
+      },
+      {
+        "action_id": "a959ed6a-b58a-485e-bff4-77e845201d65",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 275.154455469537,
+            "marketable": false,
+            "observed_ask": 0.25,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_unfilled_below_market"
+          },
+          "requested_order": {
+            "price": 0.24,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 6799.017407,
+            "cash_required": 220.425369,
+            "concentration_cap": 1147.603141,
+            "cycle_id": "30m:994800",
+            "cycle_spend_after": 220.425369,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 220.425369,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2295.206283,
+            "drawdown_after": 0.206238,
+            "fee": 6.50323,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 213.922139,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 213.922139,
+            "open_markets_after": 2,
+            "per_cycle_spend_limit": 1530.137522,
+            "reasons": [
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.57,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": 275.2,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 229.520628,
+            "target_quantity": 891.3422458226795
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994800",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 220.425369,
+          "fee": 6.50323,
+          "netting_payout": 0.0,
+          "notional": 213.922139,
+          "price": 0.24,
+          "quantity": 891.3422458226795,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-magdalena-andersson-be-the-next-prime-minister-of-sweden"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "e0e25675af0a77b07eb5990828c26c4894416050ecac434c6a7d56854734a53b",
+        "recorded_at": "2026-09-29T00:16:35.119629+00:00"
+      },
+      {
         "action_id": "a8ac0a50-47a3-4ccb-ba54-321fa1bb8d6a",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -52289,6 +52655,100 @@
     ],
     "minimax-m3": [
       {
+        "action_id": "4d481c04-19f2-48d3-8a18-7d0b5c891a27",
+        "agent_id": "minimax-m3",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 275.15199588202546,
+            "marketable": false,
+            "observed_ask": 0.25,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_unfilled_below_market"
+          },
+          "requested_order": {
+            "price": 0.24,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 8071.480531,
+            "cash_required": 117.893653,
+            "concentration_cap": 1227.58214,
+            "cycle_id": "30m:994800",
+            "cycle_spend_after": 117.893653,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 190.664554,
+            "daily_risk_before": 72.770901,
+            "daily_risk_limit": 2455.164279,
+            "drawdown_after": 0.183223,
+            "fee": 3.47823,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 114.415423,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 114.415423,
+            "open_markets_after": 5,
+            "per_cycle_spend_limit": 1636.776186,
+            "reasons": [
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.4,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.15,
+            "lead_days": 275.2,
+            "market_shrinkage": 0.1,
+            "max_position_fraction": 0.015,
+            "mode": "probe_kelly",
+            "reason": null,
+            "target_notional": 122.758214,
+            "target_quantity": 476.7309280194175
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994800",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 117.893653,
+          "fee": 3.47823,
+          "netting_payout": 0.0,
+          "notional": 114.415423,
+          "price": 0.24,
+          "quantity": 476.7309280194175,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-magdalena-andersson-be-the-next-prime-minister-of-sweden"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "0357396ce79387d496c2cf803c440344779c4016b160fd2872a6e54283303e7d",
+        "recorded_at": "2026-09-29T00:20:07.635217+00:00"
+      },
+      {
         "action_id": "10d846f9-f859-42a4-b9a0-bd789973f2f7",
         "agent_id": "minimax-m3",
         "audit": {
@@ -55358,6 +55818,88 @@
       }
     ],
     "qwen3-8-27b": [
+      {
+        "action_id": "4110bc0c-0a7e-41ff-9c4c-cea919772f86",
+        "agent_id": "qwen3-8-27b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 4.0
+          },
+          "initiated_by": "early_profit_harvest_rule",
+          "quote": {
+            "lead_days": 465.61091873679396,
+            "marketable": true,
+            "observed_ask": 0.03,
+            "observed_bid": 0.02,
+            "source": "live_venue_quote",
+            "spread": 0.01,
+            "spread_status": "checked",
+            "status": "shadow_price_from_live_quote"
+          },
+          "requested_order": {
+            "price": null,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 7506.146661,
+            "cash_required": 0.0,
+            "concentration_cap": 1500.0,
+            "cycle_id": "30m:994800",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3000.0,
+            "drawdown_after": 0.095928,
+            "fee": 0.166219,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 2.448,
+            "open_markets_after": 9,
+            "per_cycle_spend_limit": 2000.0,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:994800",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 3.871852,
+          "cash_required": 0.0,
+          "fee": 0.008148,
+          "netting_payout": 4.0,
+          "notional": 0.12,
+          "price": 0.03,
+          "quantity": 4.0,
+          "realized_pnl": 0.6901984566929141,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXAIMILLENNIUM-28-26OCT01"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "31509826451853f0726819d63610396a6d1414bceba0bb594501ebe0bee1c1e0",
+        "recorded_at": "2026-09-29T00:20:16.901723+00:00"
+      },
       {
         "action_id": "035501f5-dc05-4c39-87cf-fd7c3e4d0f99",
         "agent_id": "qwen3-8-27b",
@@ -62903,7 +63445,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-28T22:50:10.268072+00:00",
+  "generated_at": "2026-09-29T00:22:29.492511+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
