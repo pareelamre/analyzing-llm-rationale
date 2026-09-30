@@ -869,6 +869,7 @@ class NewsPipeline:
             "ceid": "US:en",
         })
         feed_url = f"https://news.google.com/rss/search?{params}"
+        raw_content = None
 
         try:
             import requests
@@ -879,12 +880,15 @@ class NewsPipeline:
                 timeout=15,
             )
             resp.raise_for_status()
-            root = ElementTree.fromstring(resp.content)
+            raw_content = resp.content
+            root = ElementTree.fromstring(raw_content)
         except Exception:
             try:
+                if raw_content is None:
+                    raise
                 import feedparser
 
-                feed = feedparser.parse(feed_url)
+                feed = feedparser.parse(raw_content)
                 entries = feed.entries[:limit]
                 return [
                     {
@@ -1153,6 +1157,7 @@ class NewsPipeline:
     def _fetch_rss(self, limit: int = 20) -> List[dict]:
         try:
             import feedparser
+            import requests
         except ImportError:
             return []
 
@@ -1161,7 +1166,9 @@ class NewsPipeline:
             if len(articles) >= limit:
                 break
             try:
-                feed = feedparser.parse(feed_url)
+                resp = requests.get(feed_url, timeout=10)
+                resp.raise_for_status()
+                feed = feedparser.parse(resp.content)
                 for entry in feed.entries:
                     if len(articles) >= limit:
                         break

@@ -102,6 +102,40 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertIn("news.google.com/rss/search", calls[0][0])
         self.assertIn("Federal+Reserve+rate+cut", calls[0][0])
 
+    def test_google_news_transport_failure_does_not_start_unbounded_feedparser_fetch(self):
+        def fail_get(*args, **kwargs):
+            raise RuntimeError("network down")
+
+        parse = mock.Mock()
+        with mock.patch.dict(sys.modules, {
+            "requests": SimpleNamespace(get=fail_get),
+            "feedparser": SimpleNamespace(parse=parse),
+        }):
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            self.assertEqual(pipeline._fetch_google_news("election", limit=5), [])
+        parse.assert_not_called()
+
+    def test_rss_fetch_uses_bounded_requests_before_parsing(self):
+        calls = []
+
+        def fake_get(url, timeout):
+            calls.append((url, timeout))
+            return SimpleNamespace(content=b"<rss/>", raise_for_status=lambda: None)
+
+        parse = mock.Mock(return_value=SimpleNamespace(
+            entries=[{"title": "Election poll", "link": "https://example.com/poll"}],
+            feed={"title": "Example feed"},
+        ))
+        with mock.patch.dict(sys.modules, {
+            "requests": SimpleNamespace(get=fake_get),
+            "feedparser": SimpleNamespace(parse=parse),
+        }):
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            articles = pipeline._fetch_rss(limit=1)
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(calls[0][1], 10)
+        parse.assert_called_once_with(b"<rss/>")
+
     def test_fetch_stooq_maps_static_rss_feeds(self):
         calls = []
 
@@ -857,6 +891,36 @@ class RelevanceFilterTests(unittest.TestCase):
     def _pipeline(self, min_relevance):
         return NewsPipeline(use_query_planner=False, summarize_articles=False,
                             use_embeddings=False, min_relevance=min_relevance)
+
+    def test_tournament_native_snippets_skip_auxiliary_models_and_missing_newsapi(self):
+        with mock.patch.dict("os.environ", {"NEWSAPI_KEY": ""}):
+            pipeline = NewsPipeline(
+                use_query_planner=False,
+                summarize_articles=False,
+                use_embeddings=False,
+                fetch_sources=("newsapi", "google-news", "rss", "stooq", "open-meteo"),
+            )
+        self.assertIsNone(pipeline._llm)
+        article = {
+            "title": "New Zealand election margin poll",
+            "summary": "A poll estimates the New Zealand election margin.",
+            "url": "https://example.com/poll",
+            "source_channel": "google-news",
+        }
+        with mock.patch.object(pipeline, "_fetch_newsapi") as newsapi, \
+             mock.patch.object(pipeline, "_fetch_google_news", return_value=[article]), \
+             mock.patch.object(pipeline, "_fetch_rss", return_value=[]), \
+             mock.patch.object(pipeline, "_fetch_stooq") as stooq, \
+             mock.patch.object(pipeline, "_fetch_open_meteo") as meteo, \
+             mock.patch.object(pipeline, "summarize") as summarize:
+            found = pipeline.fetch_summarize_rank("New Zealand election margin", top_k=5)
+        self.assertEqual([item["url"] for item in found], ["https://example.com/poll"])
+        self.assertEqual(found[0]["summary"], article["summary"])
+        newsapi.assert_not_called()
+        stooq.assert_not_called()
+        meteo.assert_not_called()
+        summarize.assert_not_called()
+        self.assertIsNone(pipeline._embeddings)
 
     def test_floor_drops_irrelevant_sources(self):
         ranked = [

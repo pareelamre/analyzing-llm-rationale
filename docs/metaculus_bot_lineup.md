@@ -55,7 +55,12 @@ links in that text), resolution criteria, fine print, options and numeric
 scaling, open/close/resolve times, current UTC time, available platform counts,
 and a community aggregate only when a parsed reveal time confirms it is visible. It also
 includes up to eight recent root-level staff clarifications from the comments
-API and up to twelve ranked news summaries from Foresea's research pipeline.
+API and up to twelve ranked source-provided news snippets from Foresea's research pipeline.
+The tournament command uses Google News and RSS plus optional
+NewsAPI and topic-specific finance/weather adapters; it skips auxiliary LLM
+query planning, per-article summarization, and local embedding startup. The
+forecast model still receives the ranked evidence and source URLs. Missing or
+irrelevant news must not be treated as proof that an event will not occur.
 Question, staff, and news text are reference data, not instructions. The outbound
 rationale gate rejects URLs, markup, and common instruction-leakage patterns;
 this is not a guarantee of factual grounding, so review private comments during

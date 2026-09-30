@@ -15,9 +15,11 @@ import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from time import perf_counter, sleep
 from typing import Any, Callable, Mapping, Protocol, Sequence
+from zipfile import is_zipfile
 
 import requests
 from opentelemetry import metrics, trace
@@ -37,6 +39,7 @@ _CDF_MIN_STEP_MARGIN = 1e-12
 _CDF_MAX_STEP_MARGIN = 1e-8
 _AUDIT_LOCK_RETRIES = 40
 _AUDIT_LOCK_SLEEP_S = 0.05
+_MAX_DIRECT_EXPORT_BYTES = 64 * 1024 * 1024
 
 _tracer = trace.get_tracer(__name__)
 _meter = metrics.get_meter(__name__)
@@ -55,6 +58,8 @@ _audit_counter = _meter.create_counter("metaculus.forecast.audit_events", unit="
 _comment_counter = _meter.create_counter("metaculus.forecast.private_comments", unit="1")
 _comment_generation_counter = _meter.create_counter("metaculus.forecast.comment_generations", unit="1")
 _comment_generation_duration = _meter.create_histogram("metaculus.forecast.comment_generation.duration", unit="s")
+_api_utility_counter = _meter.create_counter("metaculus.api.utilities", unit="1")
+_api_utility_duration = _meter.create_histogram("metaculus.api.utility.duration", unit="s")
 
 
 class MetaculusError(RuntimeError):
@@ -142,6 +147,23 @@ class MetaculusUser:
     username: str
 
 
+@dataclass(frozen=True)
+class MetaculusDataExport:
+    """Selectors and optional filters shared by the documented data endpoints."""
+
+    post_id: int | None = None
+    question_id: int | None = None
+    project_id: int | None = None
+    sub_question: int | None = None
+    aggregation_methods: tuple[str, ...] = ()
+    minimize: bool | None = None
+    include_bots: bool | None = None
+    user_ids: tuple[int, ...] = ()
+    include_comments: bool | None = None
+    include_scores: bool | None = None
+    include_key_factors: bool | None = None
+
+
 @dataclass
 class _ModelCallBudget:
     """Bound model retries so one bad question cannot consume a whole cycle."""
@@ -207,7 +229,7 @@ class MetaculusClient:
                 "forecast_type": "binary,multiple_choice,numeric,discrete",
                 "tournaments": [tournament],
                 "statuses": "open",
-                "include_description": "true",
+                "include_descriptions": "true",
             },
             timeout=self._timeout_s,
         )
@@ -258,6 +280,36 @@ class MetaculusClient:
             and isinstance(item.get("text"), str)
             and item["text"].strip()
         ][:8]
+
+    def get_comment(self, comment_id: int, *, expected_author_id: int) -> Mapping[str, Any]:
+        """Read one of this bot's archived comments; not part of submission."""
+        comment_id = _positive_int(comment_id, "comment id")
+        expected_author_id = _positive_int(expected_author_id, "expected author id")
+        started = perf_counter()
+        with _tracer.start_as_current_span("metaculus.comment.read") as span:
+            span.set_attribute("metaculus.comment.id", comment_id)
+            try:
+                response = self._session.get(
+                    f"{API_BASE_URL}/comments/{comment_id}/",
+                    headers=self._headers,
+                    timeout=self._timeout_s,
+                )
+                comment = _response_json(response, "retrieve archived comment")
+                author = comment.get("author") if isinstance(comment, Mapping) else None
+                if (
+                    not isinstance(comment, Mapping) or comment.get("id") != comment_id
+                    or not isinstance(author, Mapping) or author.get("id") != expected_author_id
+                ):
+                    raise MetaculusError("Metaculus returned a mismatched archived comment.")
+            except Exception as exc:  # aqg: top-level boundary for archived comment readback
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+                _api_utility_counter.add(1, {"operation": "comment_read", "outcome": "failure"})
+                _api_utility_duration.record(perf_counter() - started, {"operation": "comment_read", "outcome": "failure"})
+                raise
+            _api_utility_counter.add(1, {"operation": "comment_read", "outcome": "success"})
+            _api_utility_duration.record(perf_counter() - started, {"operation": "comment_read", "outcome": "success"})
+            return comment
 
     def submit_private_comment(self, post_id: int, text: str, *, expected_author_id: int) -> None:
         """Publish one private note and verify it; never retry an ambiguous write."""
@@ -363,6 +415,155 @@ class MetaculusClient:
             raise MetaculusError(
                 f"Metaculus API request failed while attempting to submit forecast (HTTP {response.status_code})."
             )
+
+    def withdraw_forecast(self, post_id: int, question_id: int, *, confirm: bool = False) -> None:
+        """Explicitly withdraw one forecast; never called by the tournament cycle."""
+        if confirm is not True:
+            raise MetaculusError("Forecast withdrawal requires explicit confirmation.")
+        post_id = _positive_int(post_id, "post id")
+        question_id = _positive_int(question_id, "question id")
+        started = perf_counter()
+        with _tracer.start_as_current_span("metaculus.forecast.withdraw") as span:
+            span.set_attribute("metaculus.post.id", post_id)
+            span.set_attribute("metaculus.question.id", question_id)
+            try:
+                try:
+                    response = self._session.post(
+                        f"{API_BASE_URL}/questions/withdraw/",
+                        headers=self._headers,
+                        json=[{"question": question_id}],
+                        timeout=self._timeout_s,
+                    )
+                except requests.exceptions.RequestException as exc:
+                    raise SubmissionOutcomeUnknownError(
+                        "Withdrawal transport failed; inspect the question before trying again."
+                    ) from exc
+                if not response.ok:
+                    if response.status_code >= 500:
+                        raise SubmissionOutcomeUnknownError(
+                            "Withdrawal received a server error; inspect the question before trying again."
+                        )
+                    raise MetaculusError(f"Metaculus rejected withdrawal (HTTP {response.status_code}).")
+                for attempt in range(self._verification_attempts):
+                    try:
+                        post = self.get_post(post_id)
+                        question = _question_from_post(post)
+                        if _positive_int(question.get("id"), "question id") != question_id:
+                            raise MetaculusError("Withdrawal readback returned a different question.")
+                        forecasts = question.get("my_forecasts")
+                        if not isinstance(forecasts, Mapping) or forecasts.get("latest") is not None:
+                            raise MetaculusError("Withdrawal is not yet visible in Metaculus readback.")
+                    except (MetaculusError, requests.exceptions.RequestException) as exc:
+                        if attempt < self._verification_attempts - 1:
+                            sleep(self._verification_delay_s * (attempt + 1))
+                            continue
+                        raise SubmissionUnverifiedError(
+                            "Withdrawal was acknowledged but not verified; inspect the question before trying again."
+                        ) from exc
+                    break
+            except Exception as exc:  # aqg: top-level boundary for authenticated withdrawal
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+                _api_utility_counter.add(1, {"operation": "withdraw", "outcome": "failure"})
+                _api_utility_duration.record(perf_counter() - started, {"operation": "withdraw", "outcome": "failure"})
+                raise
+            _api_utility_counter.add(1, {"operation": "withdraw", "outcome": "success"})
+            _api_utility_duration.record(perf_counter() - started, {"operation": "withdraw", "outcome": "success"})
+            logger.info("Metaculus forecast withdrawal acknowledged for question %s", question_id)
+
+    def download_data(self, options: MetaculusDataExport, *, confirm: bool = False) -> bytes:
+        """Return the restricted Metaculus CSV ZIP without writing it to disk."""
+        if confirm is not True:
+            raise MetaculusError("Data download requires explicit confirmation.")
+        payload = _data_export_payload(options, allow_all=True)
+        params = {
+            **payload,
+            **({"aggregation_methods": ",".join(options.aggregation_methods)} if options.aggregation_methods else {}),
+        }
+        started = perf_counter()
+        with _tracer.start_as_current_span("metaculus.data.download") as span:
+            span.set_attribute("metaculus.export.scope", _data_export_scope(options))
+            try:
+                response = None
+                try:
+                    response = self._session.get(
+                        f"{API_BASE_URL}/data/download/", headers=self._headers,
+                        params=params, timeout=self._timeout_s, stream=True,
+                    )
+                    if not response.ok:
+                        raise MetaculusError(f"Metaculus data download failed (HTTP {response.status_code}).")
+                    chunks: list[bytes] = []
+                    size = 0
+                    for chunk in response.iter_content(chunk_size=65536):
+                        if not isinstance(chunk, bytes):
+                            raise MetaculusError("Metaculus data download returned an invalid byte stream.")
+                        size += len(chunk)
+                        if size > _MAX_DIRECT_EXPORT_BYTES:
+                            raise MetaculusError("Metaculus data download is too large; use the email export endpoint.")
+                        chunks.append(chunk)
+                    content = b"".join(chunks)
+                except requests.exceptions.RequestException as exc:
+                    raise MetaculusError("Metaculus data download transport failed.") from exc
+                finally:
+                    if response is not None:
+                        response.close()
+                if not is_zipfile(BytesIO(content)):
+                    raise MetaculusError("Metaculus data download did not return a ZIP archive.")
+                span.set_attribute("payload.bytes", len(content))
+            except Exception as exc:  # aqg: top-level boundary for restricted data download
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+                _api_utility_counter.add(1, {"operation": "download", "outcome": "failure"})
+                _api_utility_duration.record(perf_counter() - started, {"operation": "download", "outcome": "failure"})
+                raise
+            _api_utility_counter.add(1, {"operation": "download", "outcome": "success"})
+            _api_utility_duration.record(perf_counter() - started, {"operation": "download", "outcome": "success"})
+            return content
+
+    def schedule_data_email(self, options: MetaculusDataExport, *, confirm: bool = False) -> Mapping[str, Any]:
+        """Explicitly schedule a restricted export email to the authenticated user."""
+        if confirm is not True:
+            raise MetaculusError("Data export email requires explicit confirmation.")
+        payload = _data_export_payload(options)
+        started = perf_counter()
+        with _tracer.start_as_current_span("metaculus.data.email") as span:
+            span.set_attribute("metaculus.export.scope", _data_export_scope(options))
+            try:
+                try:
+                    response = self._session.post(
+                        f"{API_BASE_URL}/data/email/", headers=self._headers,
+                        json=payload, timeout=self._timeout_s,
+                    )
+                except requests.exceptions.RequestException as exc:
+                    raise SubmissionOutcomeUnknownError(
+                        "Data export email transport failed; check your inbox before trying again."
+                    ) from exc
+                if not response.ok and response.status_code >= 500:
+                    raise SubmissionOutcomeUnknownError(
+                        "Data export email received a server error; check your inbox before trying again."
+                    )
+                try:
+                    receipt = _response_json(response, "schedule data export email")
+                except MetaculusError as exc:
+                    if response.ok:
+                        raise SubmissionOutcomeUnknownError(
+                            "Data export email receipt was unclear; check your inbox before trying again."
+                        ) from exc
+                    raise
+                if not isinstance(receipt, Mapping) or not isinstance(receipt.get("message"), str) or not receipt["message"].strip():
+                    raise SubmissionOutcomeUnknownError(
+                        "Data export email receipt was unclear; check your inbox before trying again."
+                    )
+            except Exception as exc:  # aqg: top-level boundary for authenticated export email
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+                _api_utility_counter.add(1, {"operation": "email", "outcome": "failure"})
+                _api_utility_duration.record(perf_counter() - started, {"operation": "email", "outcome": "failure"})
+                raise
+            _api_utility_counter.add(1, {"operation": "email", "outcome": "success"})
+            _api_utility_duration.record(perf_counter() - started, {"operation": "email", "outcome": "success"})
+            logger.info("Metaculus data export email acknowledged")
+            return receipt
 
     def verify_submission(
         self,
@@ -1794,6 +1995,47 @@ def _positive_int(value: Any, name: str) -> int:
     return result
 
 
+def _data_export_scope(options: MetaculusDataExport) -> str:
+    if options.post_id is not None:
+        return "post"
+    if options.question_id is not None:
+        return "question"
+    return "project"
+
+
+def _data_export_payload(options: MetaculusDataExport, *, allow_all: bool = False) -> dict[str, Any]:
+    if not isinstance(options, MetaculusDataExport):
+        raise MetaculusError("Data export options must be a MetaculusDataExport value.")
+    payload: dict[str, Any] = {}
+    for name in ("post_id", "question_id", "project_id", "sub_question"):
+        value = getattr(options, name)
+        if value is not None:
+            payload[name] = _positive_int(value, name)
+    if not any(name in payload for name in ("post_id", "question_id", "project_id")):
+        raise MetaculusError("Data export requires post_id, question_id, or project_id.")
+    methods = options.aggregation_methods
+    allowed = {"recency_weighted", "unweighted", "metaculus_prediction", "single_aggregation"}
+    if allow_all:
+        allowed.add("all")
+    if isinstance(methods, str) or any(not isinstance(value, str) or value not in allowed for value in methods):
+        raise MetaculusError("Invalid data export aggregation_methods.")
+    if "all" in methods and len(methods) != 1:
+        raise MetaculusError("Data export aggregation_methods 'all' cannot be combined with other methods.")
+    if methods:
+        payload["aggregation_methods"] = list(methods)
+    if options.user_ids:
+        payload["user_ids"] = [_positive_int(value, "user id") for value in options.user_ids]
+    for name in ("minimize", "include_bots", "include_comments", "include_scores", "include_key_factors"):
+        value = getattr(options, name)
+        if value is not None:
+            if not isinstance(value, bool):
+                raise MetaculusError(f"Invalid data export {name}.")
+            payload[name] = value
+    if not methods and (options.minimize is False or options.include_bots is not None or options.user_ids):
+        raise MetaculusError("Data export aggregation_methods are required for aggregation filters.")
+    return payload
+
+
 def _probability(value: Any, name: str) -> float:
     if isinstance(value, bool):
         raise MetaculusError(f"{name} must be a finite number between 0 and 1.")
@@ -2060,6 +2302,11 @@ def _question_prompt(
             "<foresea_untrusted_evidence>\n"
             + _untrusted_json(sanitized_evidence)
             + "\n</foresea_untrusted_evidence>"
+        )
+    else:
+        prompt += (
+            "\n\nNo relevant news was retrieved. Missing or irrelevant news is not evidence that the event "
+            "will not occur; use the question context, base rates, and uncertainty instead."
         )
     return prompt
 

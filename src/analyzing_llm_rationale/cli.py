@@ -980,7 +980,10 @@ def forecast_metaculus_command(args: argparse.Namespace) -> int:
             base_url="https://llm.scads.ai/v1",
             model="openai/gpt-oss-120b",
             newsapi_key=os.environ.get("NEWSAPI_KEY"),
-            summarize_articles=True,
+            use_query_planner=False,
+            summarize_articles=False,
+            use_embeddings=False,
+            fetch_sources=("newsapi", "google-news", "rss", "stooq", "open-meteo"),
         )
 
         def research_provider(post: dict) -> list[dict]:
