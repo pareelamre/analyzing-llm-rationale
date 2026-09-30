@@ -61,6 +61,32 @@ def _fetch_secret_from_gcp(secret_name: str) -> Optional[str]:
 
 REMOTE_PROVIDER_CHOICES = ["local-qwen", "hf-router", "openai-compatible"]
 NEWS_SOURCE_CHOICES = ["newsapi", "gdelt", "google-news", "stooq", "rss"]
+METACULUS_BOT_PROFILES = {
+    "qwen-primary": (
+        "qwen3-8-27b",
+        "gemma-4-26b-a4b-it",
+        "METACULUS_QWEN_TOKEN",
+        "METACULUS_QWEN_USERNAME",
+    ),
+    "gemma-secondary": (
+        "gemma-4-26b-a4b-it",
+        "",
+        "METACULUS_GEMMA_TOKEN",
+        "METACULUS_GEMMA_USERNAME",
+    ),
+    "glm-secondary": (
+        "glm-5-3-flash",
+        "",
+        "METACULUS_GLM_TOKEN",
+        "METACULUS_GLM_USERNAME",
+    ),
+    "deepseek-secondary": (
+        "deepseek-v4-flash",
+        "",
+        "METACULUS_DEEPSEEK_TOKEN",
+        "METACULUS_DEEPSEEK_USERNAME",
+    ),
+}
 
 
 def repo_root() -> Path:
@@ -337,29 +363,38 @@ def build_parser() -> argparse.ArgumentParser:
     metaculus_parser.add_argument("--submit", action="store_true", help="Enable publication after the confirmation phrase is supplied.")
     metaculus_parser.add_argument("--confirm-submit", default="", help='Required exact phrase: SUBMIT METACULUS FORECASTS')
     metaculus_parser.add_argument("--include-forecasted", action="store_true")
-    metaculus_parser.add_argument("--model", default="minimax-m3")
+    metaculus_parser.add_argument(
+        "--bot-profile",
+        choices=(*METACULUS_BOT_PROFILES, "custom"),
+        default="qwen-primary",
+        help="Select the Qwen primary, a model-specific secondary, or an explicit custom test run.",
+    )
+    metaculus_parser.add_argument("--model", default=None)
     metaculus_parser.add_argument(
         "--fallback-forecaster-model",
-        default="gpt-oss-120b",
-        help="Backup forecaster used only after a provider-level failure from the primary model.",
+        default=None,
+        help=(
+            "Backup after a retryable forecaster error; the Qwen primary uses Gemma. "
+            "Named secondary profiles have no forecaster fallback. All use SCADS."
+        ),
     )
     metaculus_parser.add_argument(
         "--expected-bot-username",
-        default=os.environ.get("METACULUS_EXPECTED_USERNAME", "pareelforeal"),
-        help="Authenticated Metaculus bot account required before any forecast run.",
+        default=None,
+        help="Expected authenticated account; named profiles use their own username environment variable.",
     )
     metaculus_parser.add_argument("--parser-model", default="llama-3.3-70b-instruct")
     metaculus_parser.add_argument(
         "--fallback-parser-model",
-        default="gpt-oss-120b",
-        help="Backup JSON-only parser used only when the primary parser cannot produce a valid payload.",
+        default="gemma-4-26b-a4b-it",
+        help="Backup parser used only after the primary parser fails to produce a valid forecast.",
     )
     metaculus_parser.add_argument("--news-top-k", type=int, default=5)
     metaculus_parser.add_argument(
         "--audit-log-path",
         type=Path,
-        default=repo_root() / "results" / "metaculus_forecast_audit.jsonl",
-        help="Credential-free JSONL record of previewed and verified submissions.",
+        default=None,
+        help="Credential-free JSONL audit path; defaults to a separate file per bot profile.",
     )
     metaculus_parser.add_argument("--models-config", type=Path, default=repo_root() / "configs" / "models.yaml")
     metaculus_parser.add_argument("--provider")
@@ -374,14 +409,14 @@ def build_parser() -> argparse.ArgumentParser:
     metaculus_parser.add_argument(
         "--max-model-calls",
         type=int,
-        default=6,
-        help="Hard per-question cap across MiniMax and JSON-parser requests.",
+        default=8,
+        help="Cap across forecast and JSON-parser requests; submitting adds one bounded rationale request.",
     )
     metaculus_parser.add_argument(
         "--max-model-time-s",
         type=float,
-        default=90.0,
-        help="Hard per-question wall-clock budget checked before each model request.",
+        default=180.0,
+        help="Forecast-model wall-clock budget; rationale has an additional ceiling of min(this, 45 seconds).",
     )
     metaculus_parser.add_argument(
         "--fallback-forecaster-reserve-s",
@@ -416,6 +451,62 @@ def resolve_model_args(args: argparse.Namespace) -> argparse.Namespace:
     if getattr(args, "api_key_file", None) is None:
         args.api_key_file = model.api_key_file
     return args
+
+
+def resolve_auxiliary_model_args(
+    args: argparse.Namespace,
+    model_name: str,
+    *,
+    temperature: float,
+) -> argparse.Namespace:
+    """Resolve an auxiliary model from pristine CLI arguments."""
+    auxiliary = argparse.Namespace(**vars(args))
+    auxiliary.model = model_name
+    auxiliary.temperature = temperature
+    auxiliary._resolved_model_config = None
+    return resolve_model_args(auxiliary)
+
+
+def resolve_metaculus_profile(args: argparse.Namespace) -> str | None:
+    """Resolve a named bot without allowing another profile's account or model."""
+    profile = args.bot_profile
+    if profile == "custom":
+        args.model = args.model or "qwen3-8-27b"
+        if args.fallback_forecaster_model is None:
+            args.fallback_forecaster_model = ""
+        username = (args.expected_bot_username or os.environ.get("METACULUS_EXPECTED_USERNAME") or "").strip()
+        if not username:
+            raise ValueError("--expected-bot-username or METACULUS_EXPECTED_USERNAME must be set for custom runs.")
+        args.expected_bot_username = username
+        token = None
+    else:
+        model, fallback, token_var, username_var = METACULUS_BOT_PROFILES[profile]
+        if args.model is not None and args.model != model:
+            raise ValueError(f"--model cannot override the {profile} model {model}.")
+        if args.fallback_forecaster_model is not None and args.fallback_forecaster_model != fallback:
+            raise ValueError(f"--fallback-forecaster-model cannot override the {profile} fallback.")
+        token = (os.environ.get(token_var) or "").strip()
+        if not token:
+            raise ValueError(f"{token_var} must be set for the {profile} profile.")
+        configured_username = (os.environ.get(username_var) or "").strip()
+        if not configured_username:
+            raise ValueError(f"{username_var} must be set for the {profile} profile.")
+        if args.expected_bot_username is not None and args.expected_bot_username.strip() != configured_username:
+            raise ValueError(f"--expected-bot-username conflicts with {username_var}.")
+        username = configured_username
+        for other_profile, (_, _, other_token_var, other_username_var) in METACULUS_BOT_PROFILES.items():
+            if other_profile == profile:
+                continue
+            other_token = (os.environ.get(other_token_var) or "").strip()
+            other_username = (os.environ.get(other_username_var) or "").strip()
+            if (other_token and other_token == token) or (other_username and other_username == username):
+                raise ValueError(f"{profile} and {other_profile} must use distinct Metaculus bot accounts.")
+        args.model = model
+        args.fallback_forecaster_model = fallback
+        args.expected_bot_username = username
+    if args.audit_log_path is None:
+        args.audit_log_path = repo_root() / "results" / f"metaculus_{profile.replace('-', '_')}_audit.jsonl"
+    return token
 
 
 def resolve_api_key(args: argparse.Namespace) -> str:
@@ -856,38 +947,43 @@ def forecast_metaculus_command(args: argparse.Namespace) -> int:
     if args.submit and args.confirm_submit != "SUBMIT METACULUS FORECASTS":
         print("Refusing to publish: pass --confirm-submit 'SUBMIT METACULUS FORECASTS'.", file=sys.stderr)
         return 2
-    init_observability()
     try:
-        client = MetaculusClient.from_environment()
+        profile_token = resolve_metaculus_profile(args)
+        init_observability()
+        client = MetaculusClient(profile_token) if profile_token is not None else MetaculusClient.from_environment()
         bot_identity = client.current_user()
         if bot_identity.username != args.expected_bot_username:
             raise MetaculusError(
                 "Metaculus token belongs to "
                 f"{bot_identity.username!r}, not the expected bot {args.expected_bot_username!r}."
             )
+        pristine_model_args = argparse.Namespace(**vars(args))
         provider = build_provider(resolve_model_args(args))
         fallback_forecaster_provider = None
         if args.fallback_forecaster_model and args.fallback_forecaster_model != args.model:
-            fallback_forecaster_args = argparse.Namespace(**vars(args))
-            fallback_forecaster_args.model = args.fallback_forecaster_model
-            fallback_forecaster_args.temperature = args.temperature
-            fallback_forecaster_provider = build_provider(resolve_model_args(fallback_forecaster_args))
-        parser_args = argparse.Namespace(**vars(args))
-        parser_args.model = args.parser_model
-        parser_args.temperature = 0.0
-        parser_provider = build_provider(resolve_model_args(parser_args))
+            fallback_forecaster_args = resolve_auxiliary_model_args(
+                pristine_model_args,
+                args.fallback_forecaster_model,
+                temperature=pristine_model_args.temperature,
+            )
+            fallback_forecaster_provider = build_provider(fallback_forecaster_args)
+        parser_args = resolve_auxiliary_model_args(pristine_model_args, args.parser_model, temperature=0.0)
+        parser_provider = build_provider(parser_args)
         fallback_parser_provider = None
         if args.fallback_parser_model and args.fallback_parser_model != args.parser_model:
-            fallback_parser_args = argparse.Namespace(**vars(args))
-            fallback_parser_args.model = args.fallback_parser_model
-            fallback_parser_args.temperature = 0.0
-            fallback_parser_provider = build_provider(resolve_model_args(fallback_parser_args))
+            fallback_parser_args = resolve_auxiliary_model_args(
+                pristine_model_args, args.fallback_parser_model, temperature=0.0
+            )
+            fallback_parser_provider = build_provider(fallback_parser_args)
         news_pipeline = NewsPipeline(
             api_key=resolve_api_key(args) or None,
             base_url="https://llm.scads.ai/v1",
             model="openai/gpt-oss-120b",
             newsapi_key=os.environ.get("NEWSAPI_KEY"),
-            summarize_articles=True,
+            use_query_planner=False,
+            summarize_articles=False,
+            use_embeddings=False,
+            fetch_sources=("newsapi", "google-news", "rss", "stooq", "open-meteo"),
         )
 
         def research_provider(post: dict) -> list[dict]:
@@ -900,7 +996,7 @@ def forecast_metaculus_command(args: argparse.Namespace) -> int:
                 str(value)
                 for value in (
                     post.get("title"),
-                    post.get("description"),
+                    question.get("description") or post.get("description"),
                     question.get("resolution_criteria"),
                     question.get("fine_print"),
                 )
@@ -927,6 +1023,7 @@ def forecast_metaculus_command(args: argparse.Namespace) -> int:
             fallback_parser_provider=fallback_parser_provider,
             fallback_forecaster_provider=fallback_forecaster_provider,
             research_provider=research_provider,
+            staff_comment_provider=client.get_staff_comments,
             expected_author_id=bot_identity.id,
             bot_username=bot_identity.username,
         )
