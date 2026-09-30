@@ -80,6 +80,16 @@ def _post(session: Any, *args: Any, **kwargs: Any) -> Any:
 
 
 class ChatProvider:
+    def chat_completion_final(
+        self, messages: List[Dict[str, str]], temperature: float, max_tokens: int,
+    ) -> str:
+        """Return only attested complete final content, or fail closed.
+
+        Providers must opt into this publication contract explicitly. Ordinary
+        forecasting completion may still expose reasoning for downstream parsing.
+        """
+        raise ProviderResponseError("Provider cannot attest to a completed final answer")
+
     def chat_completion(
         self,
         messages: List[Dict[str, str]],
@@ -277,6 +287,7 @@ class OpenAICompatibleProvider(ChatProvider):
         reasoning_effort: Optional[str] = None,
         *,
         extra_body: Optional[Dict[str, Any]] = None,
+        final_only: bool = False,
     ) -> Dict[str, Any]:
         """Return content with an optional validated provider token receipt."""
         payload = self._payload(messages, temperature, max_tokens, reasoning_effort=reasoning_effort)
@@ -311,6 +322,13 @@ class OpenAICompatibleProvider(ChatProvider):
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise RetryableProviderError(f"Malformed provider response: {exc}") from exc
         content = message.get("content") if isinstance(message, dict) else None
+        if final_only:
+            # Publication callers must never substitute internal reasoning or
+            # tool arguments for a completed final answer.
+            if payload["choices"][0].get("finish_reason") != "stop":
+                raise ProviderResponseError("Provider did not return a completed final answer")
+            if not isinstance(content, str) or not content.strip():
+                raise ProviderResponseError("Provider returned no final answer content")
         if not isinstance(content, str) or not content.strip():
             for alt_key in ("reasoning_content", "reasoning", "thought"):
                 alt_val = message.get(alt_key) if isinstance(message, dict) else None
@@ -346,6 +364,13 @@ class OpenAICompatibleProvider(ChatProvider):
                     "total_tokens": total_tokens,
                 }
         return result
+
+    def chat_completion_final(
+        self, messages: List[Dict[str, str]], temperature: float, max_tokens: int,
+    ) -> str:
+        return self.chat_completion_with_usage(
+            messages, temperature, max_tokens, final_only=True,
+        )["response"]
 
     def chat_completion_with_extra_body(
         self,
