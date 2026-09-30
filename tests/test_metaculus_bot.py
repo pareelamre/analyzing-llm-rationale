@@ -95,6 +95,10 @@ class FakeSession:
 
 
 class FakeProvider:
+    def chat_completion_final(self, *args: Any, **kwargs: Any) -> str:
+        # This fixture explicitly attests that its synthetic text is final.
+        return self.chat_completion(*args, **kwargs)
+
     def __init__(self, output: str) -> None:
         self.output = output
         self.calls = 0
@@ -113,6 +117,9 @@ class FakeProvider:
 
 
 class SequencedProvider:
+    def chat_completion_final(self, *args: Any, **kwargs: Any) -> str:
+        return self.chat_completion(*args, **kwargs)
+
     def __init__(self, outputs: list[str]) -> None:
         self.outputs = outputs
         self.calls = 0
