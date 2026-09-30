@@ -48,6 +48,67 @@ MiniMax remains available this way for comparison.
 Pass `--fallback-forecaster-model qwen3-8-27b` explicitly if a custom MiniMax
 comparison should retain its old Qwen backup.
 
+## GitHub-hosted tournament runs
+
+`.github/workflows/metaculus-futureeval.yml` polls every ten minutes at minutes
+7, 17, 27, 37, 47, and 57 UTC. It runs the four named profiles in isolated
+matrix jobs, at most one question per profile per poll. A workflow-level
+concurrency group queues rather than cancels an in-progress poll. Manual
+dispatch defaults to a real non-submitting preview. Live submission requires
+`submit=true`, the default branch, and repository variable
+`METACULUS_BOTS_ENABLED=true`. Leave that variable unset until the hosted
+preview passes. It is also the kill switch. GitHub schedules run only from the default branch,
+so a PR containing this workflow is not an active scheduler. GitHub can delay
+or drop scheduled events; monitor the Actions run history during the tournament.
+
+The workflow requires the four `METACULUS_*_TOKEN` secrets and four matching
+`METACULUS_*_USERNAME` secrets listed in the table, plus the existing
+`SCADS_AI_API_KEY` and `GCP_SA_KEY` repository secrets. Hosted research uses
+Google News/RSS rather than an unverified NewsAPI production plan. Missing
+credentials fail the job before model calls. It authenticates
+each bot and checks the exact username before forecasting. Do not print or
+commit token values.
+
+GitHub-hosted runners are temporary. Before each cycle, the workflow restores
+that profile's private GCS audit JSONL from the existing Foresea bucket. Every
+new audit event is conditionally uploaded to GCS before the code may proceed
+to a forecast POST; a restore, generation check, or upload failure stops the
+job. Each profile has a separate object under
+`metaculus/fall-futureeval-2026/`. Do not treat Actions artifacts as a
+write-ahead audit store: an artifact-upload step runs only after the forecast
+process exits and cannot protect a crash between preparing and posting.
+An operator must explicitly seed each audit object with its existing local
+history (or an empty file for a genuinely new account) using a create-only
+generation precondition. Missing objects are fatal during scheduled runs;
+never reset an established history as a first run. Above 8 MiB, exact history
+is archived to content-addressed objects before the active replay state is
+compacted to the latest safety and other record per question. Quarantine states
+remain in the active file; archives must not be deleted during the tournament.
+The 64 MiB safety ceiling still halts malformed or unexpectedly large state.
+The service account needs `storage.objects.get`, `storage.objects.create`, and
+`storage.objects.delete` for generation-matched replacement, confined to the
+audit prefix where feasible. Before activation, verify uniform bucket access,
+no public IAM grants, and effective inherited IAM; enforce Public Access
+Prevention rather than relying only on a point-in-time policy snapshot.
+On 2026-09-30, the existing bucket had uniform access and no public bucket IAM
+grant, but Public Access Prevention was inherited, not explicitly enforced.
+The restored log is read by `_has_unresolved_submission` before submission;
+Metaculus readback additionally avoids repeating an existing forecast.
+Hosted dependencies are exact-version/hash locked in
+`requirements-metaculus-hosted.txt`; no local-model packages are needed.
+The owner confirmed SCADS use is free without a spending limit. Each question
+still has an eight-call forecast/parser cap plus one bounded rationale call;
+empty polls do not fetch news or invoke models. Provider errors are not a
+reason to assume negative outcome evidence. Disable the workflow variable
+if external rate limits or acceptable-use rules require reducing cadence.
+No score or calibration claim follows from a successful scheduled submission.
+The [official tournament rules](https://www.metaculus.com/notebooks/38928/bot-tournament-resources-page/)
+allow one prize-eligible bot and labelled secondary bots. The three secondary
+accounts use explicit secondary usernames; retain their linked-secondary
+designation. Bots must provide comments, preferably private notes, and only
+one forecast per question in these bot-only tournaments. The normal scheduler
+does not enable `--include-forecasted`.
+
 ## Question context and private reasoning
 
 The forecast prompt includes the full Metaculus question description (including

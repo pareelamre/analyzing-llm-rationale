@@ -1570,6 +1570,26 @@ class MetaculusBotTests(unittest.TestCase):
                     )
         self.assertFalse(any(method == "POST" for method, _, _ in retry_session.calls))
 
+    def test_remote_audit_upload_failure_prevents_forecast_post(self) -> None:
+        session = FakeSession()
+        session.posts = [binary_question()]
+        with TemporaryDirectory() as directory:
+            audit_path = Path(directory) / "audit.jsonl"
+            with patch.dict(os.environ, {"METACULUS_AUDIT_GCS_URI": "gs://bucket/metaculus/audit.jsonl"}):
+                with patch(
+                    "analyzing_llm_rationale.metaculus_audit_storage.upload_audit",
+                    side_effect=RuntimeError("remote unavailable"),
+                ) as upload:
+                    summary = run_forecast_cycle(
+                        MetaculusClient("not-a-real-token", session=session),
+                        FakeProvider('{"probability_yes": 0.7}'),
+                        ForecastCycleConfig(max_questions=1, submit=True, audit_log_path=audit_path),
+                        expected_author_id=99,
+                    )
+        upload.assert_called_once()
+        self.assertEqual(summary.failed, 1)
+        self.assertFalse(any(method == "POST" for method, _, _ in session.calls))
+
     def test_preview_writes_a_credential_free_audit_record(self) -> None:
         session = FakeSession()
         session.posts = [binary_question()]

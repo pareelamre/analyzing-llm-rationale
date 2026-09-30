@@ -707,6 +707,13 @@ def _append_audit_event(path: Path, event: Mapping[str, Any]) -> None:
             handle.write(line)
             handle.flush()
             os.fsync(handle.fileno())
+        remote_uri = os.environ.get("METACULUS_AUDIT_GCS_URI", "").strip()
+        if remote_uri:
+            from analyzing_llm_rationale.metaculus_audit_storage import upload_audit
+
+            # Hosted runners disappear after each job. Persist this event before
+            # any forecast POST can proceed; a failed upload halts the cycle.
+            upload_audit(path, remote_uri)
     finally:
         if lock_fd is not None:
             os.close(lock_fd)
