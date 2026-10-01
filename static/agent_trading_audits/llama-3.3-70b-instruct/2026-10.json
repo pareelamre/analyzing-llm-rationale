@@ -468,6 +468,100 @@
       "outcome": "rejected",
       "record_hash": "af3920989fd4f21353d874546218df9f56c45080511725ff5826e400df45b77f",
       "recorded_at": "2026-10-01T10:19:54.342069+00:00"
+    },
+    {
+      "action_id": "062a3ca9-54e4-407f-91db-af4ff01b06d6",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 27.566859175104167,
+          "marketable": true,
+          "observed_ask": 0.37,
+          "observed_bid": null,
+          "source": "live_venue_quote",
+          "spread": null,
+          "spread_status": "unknown_no_bid",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.37,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 6799.017407,
+          "cash_required": 229.30834,
+          "concentration_cap": 1146.529608,
+          "cycle_id": "30m:994924",
+          "cycle_spend_after": 229.30834,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 229.30834,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2293.059215,
+          "drawdown_after": 0.206152,
+          "fee": 5.63653,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 223.67181,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 223.67181,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1528.706144,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.27,
+          "eligible": true,
+          "horizon": "14-30d",
+          "horizon_validated": true,
+          "kelly_fraction": 0.25,
+          "lead_days": 27.6,
+          "market_shrinkage": 0.425,
+          "max_position_fraction": 0.03,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 229.305922,
+          "target_quantity": 604.5184053714015
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994924",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 229.30834,
+        "fee": 5.63653,
+        "netting_payout": 0.0,
+        "notional": 223.67181,
+        "price": 0.37,
+        "quantity": 604.5184053714015,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "no",
+        "ticker": "will-there-be-no-change-in-fed-interest-rates-after-the-october-2026-meeting-20260617190324031"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "d35e160d4349557d4d366c1adda3ce248fe77a7609c85775571ff90f3bfa5005",
+      "recorded_at": "2026-10-01T14:22:43.494909+00:00"
     }
   ],
   "month": "2026-10",
