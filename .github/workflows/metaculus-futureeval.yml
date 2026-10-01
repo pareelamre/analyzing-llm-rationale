@@ -21,9 +21,11 @@ concurrency:
 
 jobs:
   forecast:
-    if: github.event_name == 'workflow_dispatch' || vars.METACULUS_BOTS_ENABLED == 'true'
+    # Automated live dispatches must respect the execution kill switch.
+    # Explicit manual previews remain available with submit=false.
+    if: vars.METACULUS_BOTS_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.submit != true)
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 65
     env:
       PYTHONPATH: src
       AUDIT_PATH: results/${{ matrix.audit_file }}
@@ -99,6 +101,6 @@ jobs:
           python -c 'from analyzing_llm_rationale.cli import main; raise SystemExit(main())' forecast-metaculus \
             --bot-profile "${{ matrix.profile }}" \
             --tournament fall-futureeval-2026 \
-            --max-questions 1 \
+            --max-questions 5 \
             --audit-log-path "$AUDIT_PATH" \
             "${submit_args[@]}"
