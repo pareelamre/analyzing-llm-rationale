@@ -286,6 +286,130 @@
       "outcome": "rejected",
       "record_hash": "598d6a4c88aa45d068d995fdb6a4183dc72a4ad23c97c44ddd3b05284576a768",
       "recorded_at": "2026-10-01T14:21:16.292048+00:00"
+    },
+    {
+      "action_id": "6fe1b716-3443-4112-b2ee-b89b085df3f5",
+      "agent_id": "glm-5-3-flash",
+      "audit": {
+        "status": "legacy_record"
+      },
+      "cycle_id": "30m:994932",
+      "event_type": "settlement",
+      "execution": {
+        "cash_delta": 158.93334,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": null,
+        "quantity": 161.19,
+        "realized_pnl": 27.08272276574283,
+        "settlement_fee": 2.25666,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXAIMILLENNIUM-28-26OCT01"
+      },
+      "mode": "shadow",
+      "outcome": "no",
+      "record_hash": "85267ab586bfc15df5a216025d609305bd391ff5eb7e93b04f98d07c14b49808",
+      "recorded_at": "2026-10-01T18:11:38.212189+00:00"
+    },
+    {
+      "action_id": "c1531e91-5d23-4fa6-b130-1ae4437c7828",
+      "agent_id": "glm-5-3-flash",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 1187.4482949167477,
+          "marketable": true,
+          "observed_ask": 0.59,
+          "observed_bid": 0.5,
+          "source": "live_venue_quote",
+          "spread": 0.09,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.5900000000000001,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 8713.658374,
+          "cash_required": 194.505142,
+          "concentration_cap": 1482.084047,
+          "cycle_id": "30m:994932",
+          "cycle_spend_after": 194.505142,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 194.505142,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2964.168093,
+          "drawdown_after": 0.004301,
+          "fee": 5.426555,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 189.078586,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 189.078586,
+          "open_markets_after": 8,
+          "per_cycle_spend_limit": 1976.112062,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.11,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.25,
+          "lead_days": 1187.4,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.03,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 194.505142,
+          "target_quantity": 320.4721802148304
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994932",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 194.505142,
+        "fee": 5.426555,
+        "netting_payout": 0.0,
+        "notional": 189.078586,
+        "price": 0.59,
+        "quantity": 320.4721802148304,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXNBACITYEXPAND-01JAN30-15OCT26"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "18f47fd2924b50da67c7e9dd5b0c4fbf96286ddd4a5b8c9d378717ef60bc1be6",
+      "recorded_at": "2026-10-01T18:14:27.344333+00:00"
     }
   ],
   "month": "2026-10",
