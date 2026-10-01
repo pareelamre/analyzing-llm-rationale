@@ -246,6 +246,118 @@
       "outcome": "realized",
       "record_hash": "448f15c5a64b90d2106513afb88d5db752b8ce16c3781c927602abff567484bf",
       "recorded_at": "2026-10-01T04:15:40.949308+00:00"
+    },
+    {
+      "action_id": "dce494c5-bce8-4b68-8020-da20f525f320",
+      "agent_id": "qwen3-8-27b",
+      "audit": {
+        "status": "legacy_record"
+      },
+      "cycle_id": "30m:994908",
+      "event_type": "settlement",
+      "execution": {
+        "cash_delta": 167.62,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": null,
+        "quantity": 170.0,
+        "realized_pnl": 40.120000000000005,
+        "settlement_fee": 2.38,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXMLBDEBUT-FARIAS-26OCT01"
+      },
+      "mode": "shadow",
+      "outcome": "no",
+      "record_hash": "20d99761785abbbd0830d4b11be186b134c09aac2a0e877235f242da21cf5383",
+      "recorded_at": "2026-10-01T06:16:45.774527+00:00"
+    },
+    {
+      "action_id": "74c9f992-22b1-4f2f-a5dd-0f27580703e1",
+      "agent_id": "qwen3-8-27b",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_filled_partial",
+          "filled_quantity": 1.0
+        },
+        "initiated_by": "early_profit_harvest_rule",
+        "quote": {
+          "lead_days": 485.3633408478125,
+          "marketable": true,
+          "observed_ask": 0.04,
+          "observed_bid": 0.0,
+          "source": "live_venue_quote",
+          "spread": null,
+          "spread_status": "unknown_no_bid",
+          "status": "shadow_price_from_live_quote"
+        },
+        "requested_order": {
+          "price": null,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 7922.516196,
+          "cash_required": 0.0,
+          "concentration_cap": 1500.0,
+          "cycle_id": "30m:994908",
+          "cycle_spend_after": 0.0,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 0.0,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 3000.0,
+          "drawdown_after": 0.08513,
+          "fee": 0.142464,
+          "gross_notional_override": true,
+          "market_cost_basis_after": 0,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 2.12,
+          "open_markets_after": 7,
+          "per_cycle_spend_limit": 2000.0,
+          "reasons": [],
+          "risk_reducing": true
+        },
+        "sizing": {
+          "applied": false,
+          "mode": "close"
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994908",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": 0.9573119999999999,
+        "cash_required": 0.0,
+        "fee": 0.002688,
+        "netting_payout": 1.0,
+        "notional": 0.04,
+        "price": 0.04,
+        "quantity": 1.0,
+        "realized_pnl": 0.3573119999999997,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXJUSTICEGOV-28-26OCT01"
+      },
+      "mode": "shadow",
+      "outcome": "realized",
+      "record_hash": "79a871d2d626ac645fc4c8afcb724bc29e0dd257e61d1741aa9de5bd8e053ea2",
+      "recorded_at": "2026-10-01T06:16:47.577751+00:00"
     }
   ],
   "month": "2026-10",
