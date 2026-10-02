@@ -594,6 +594,100 @@
       "outcome": "rejected",
       "record_hash": "f9a121b1f5ffda80d78501c55bac94f019afe9304ba9b20f93c988d306cca3eb",
       "recorded_at": "2026-10-01T22:08:57.100131+00:00"
+    },
+    {
+      "action_id": "a28a1070-9a1f-4429-a999-f8ecf64428a0",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 14.160691904143519,
+          "marketable": true,
+          "observed_ask": 0.13,
+          "observed_bid": 0.11,
+          "source": "live_venue_quote",
+          "spread": 0.02,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.13,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 8072.629613,
+          "cash_required": 260.714068,
+          "concentration_cap": 1303.53159,
+          "cycle_id": "30m:994944",
+          "cycle_spend_after": 260.714068,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 260.714068,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2607.06318,
+          "drawdown_after": 0.198565,
+          "fee": 8.76773,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 251.946338,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 251.946338,
+          "open_markets_after": 4,
+          "per_cycle_spend_limit": 1738.04212,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.77,
+          "eligible": true,
+          "horizon": "14-30d",
+          "horizon_validated": true,
+          "kelly_fraction": 0.3,
+          "lead_days": 14.2,
+          "market_shrinkage": 0.1275,
+          "max_position_fraction": 0.03,
+          "mode": "convex_conviction",
+          "reason": null,
+          "target_notional": 260.706318,
+          "target_quantity": 1938.0487512662796
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:994944",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 260.714068,
+        "fee": 8.76773,
+        "netting_payout": 0.0,
+        "notional": 251.946338,
+        "price": 0.13,
+        "quantity": 1938.0487512662796,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "us-announces-end-of-iranian-blockade-by-october-15-2026"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "6a238c537bfb3db2a684ec32b7ff681eebfb00b9b8a3ca191de2fcc7d84b4e64",
+      "recorded_at": "2026-10-02T00:07:36.308350+00:00"
     }
   ],
   "month": "2026-10",
