@@ -13,6 +13,18 @@ WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "meta
 
 
 class MetaculusActionsWorkflowTests(unittest.TestCase):
+    def test_hosted_cycle_enables_guarded_refresh_not_manual_force(self):
+        from analyzing_llm_rationale.cli import build_parser
+
+        data = yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+        step = next(s for s in data["jobs"]["forecast"]["steps"] if s.get("name") == "Forecast and submit")
+        args = shlex.split(step["run"])
+        self.assertIn("--refresh-forecasted", args)
+        self.assertNotIn("--include-forecasted", args)
+        parsed = build_parser().parse_args(["forecast-metaculus", "--refresh-forecasted"])
+        self.assertTrue(parsed.refresh_forecasted)
+        self.assertFalse(parsed.include_forecasted)
+
     def test_hosted_question_limit_covers_two_simultaneous_questions(self):
         from analyzing_llm_rationale.metaculus_bot import ForecastCycleConfig, run_forecast_cycle
         from test_metaculus_bot import FakeProvider
