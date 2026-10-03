@@ -686,6 +686,192 @@
       "outcome": "rejected",
       "record_hash": "1b464f9bae9646bdd4c6b24ecf517611e065f03778d0fc88c719be98ece83b74",
       "recorded_at": "2026-10-03T16:26:40.125812+00:00"
+    },
+    {
+      "action_id": "f890ef75-8086-407e-bc8e-dd57aa7c1cd7",
+      "agent_id": "minimax-m3",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 28.404918749745367,
+          "marketable": true,
+          "observed_ask": 0.22,
+          "observed_bid": 0.21,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.22,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 8056.332614,
+          "cash_required": 163.625676,
+          "concentration_cap": 1227.170939,
+          "cycle_id": "30m:995028",
+          "cycle_spend_after": 163.625676,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 163.625676,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2454.341878,
+          "drawdown_after": 0.182671,
+          "fee": 4.95066,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 158.675016,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 158.675016,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1636.227918,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.66,
+          "eligible": true,
+          "horizon": "14-30d",
+          "horizon_validated": true,
+          "kelly_fraction": 0.5,
+          "lead_days": 28.4,
+          "market_shrinkage": 0.2125,
+          "max_position_fraction": 0.02,
+          "mode": "edge_kelly",
+          "reason": null,
+          "target_notional": 163.622792,
+          "target_quantity": 721.25007422904
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995028",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 163.625676,
+        "fee": 4.95066,
+        "netting_payout": 0.0,
+        "notional": 158.675016,
+        "price": 0.22,
+        "quantity": 721.25007422904,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "us-announces-end-of-iranian-blockade-by-october-31-2026-20260727171711632-895-372-622-413-171-454-592-696"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "0d2b8812d46becf59cdca1e42d0eb1a974306b5d38549242eba688c170e21dd7",
+      "recorded_at": "2026-10-03T18:15:55.092806+00:00"
+    },
+    {
+      "action_id": "92ceed68-916b-409b-b352-e001fa9f75af",
+      "agent_id": "minimax-m3",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_assumed_full",
+          "filled_quantity": 110.200123
+        },
+        "quote": {
+          "lead_days": 28.404761091863428,
+          "marketable": true,
+          "observed_ask": 0.22,
+          "observed_bid": 0.21,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.22,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 8056.332614,
+          "cash_required": 25.000437,
+          "concentration_cap": 1227.170939,
+          "cycle_id": "30m:995028",
+          "cycle_spend_after": 25.000437,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 25.000437,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2454.341878,
+          "drawdown_after": 0.182252,
+          "fee": 0.75641,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 24.244027,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 24.244027,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1636.227918,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.08,
+          "eligible": true,
+          "horizon": "14-30d",
+          "horizon_validated": true,
+          "kelly_fraction": 0.0,
+          "lead_days": 28.4,
+          "market_shrinkage": 0.0,
+          "max_position_fraction": 0.005,
+          "mode": "flat_probe",
+          "reason": null,
+          "target_notional": 25.0,
+          "target_quantity": 110.20012342413823
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995028",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": -25.000437153310408,
+        "cash_required": 25.000437153310408,
+        "fee": 0.75641,
+        "netting_payout": 0.0,
+        "notional": 24.24402715331041,
+        "price": 0.22,
+        "quantity": 110.20012342413823,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "us-announces-end-of-iranian-blockade-by-october-31-2026-20260727171711632-895-372-622-413-171-454-592-696"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "b6274195d1c8661ef4a0014aa79ec19be8a28be9dd59786f4150eeb5ba0d9b68",
+      "recorded_at": "2026-10-03T18:16:08.693610+00:00"
     }
   ],
   "month": "2026-10",
