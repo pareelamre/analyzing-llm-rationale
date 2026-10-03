@@ -145,6 +145,57 @@ under its tournament rules. The live comments readback represents
 schema calls it a boolean; verification accepts both nonempty snapshots and
 `true` while still requiring the private flag and exact note text.
 
+## Temporal reassessment
+
+The tournament workflow uses `--refresh-forecasted`. Each cycle prioritizes
+unanswered questions across up to ten 100-post pages, then uses any remaining
+slots in its five-attempt budget for existing predictions. Failed research or
+model attempts also consume a slot. Listings and question details are cached
+within the cycle; revisions receive a fresh pre-publication readback.
+Revisions are possible only
+while submissions remain open; a closed tournament question cannot be updated
+just because its outcome is still unresolved.
+
+The normal reassessment interval is six hours. When the scheduled submission
+close approaches, it tightens to one quarter of the remaining submission window,
+with a fifteen-minute floor (and the existing ten-minute dispatch cadence).
+Each due reassessment fetches fresh question details, staff clarifications and
+Foresea news, and supplies the prior prediction plus a current UTC timestamp.
+The model is instructed to distinguish observed events from future risk and not
+increase confidence solely because time passed or because evidence is missing.
+
+A revised forecast is published only if the maximum absolute probability change
+is at least 0.01: yes-probability for binary, any option for multiple choice,
+or any CDF point for numeric/discrete. Smaller changes are saved as
+`reviewed_unchanged` audit events, retaining the current forecast without posting
+another comment. These events also start a new cooldown. Material revisions keep
+the existing write-ahead audit, newer-forecast readback, private-reasoning comment
+and private-comment verification requirements. An ambiguous prior submission
+still halts publication until inspected. `--include-forecasted` remains the
+explicit manual reforecast mode without these periodic policy guards.
+Prior forecast vectors follow the [official Metaculus template](https://github.com/Metaculus/metac-bot-template/blob/main/main_with_no_framework.py):
+binary `[no, yes]`, multiple-choice option order, and numeric/discrete CDF order.
+Binary readback also rejects invalid totals or reversed probabilities.
+Question criteria, scale, options, staff clarifications and the prior forecast
+must still match at publication; a changed context cancels that candidate.
+Unchanged-review cooldowns persist through the existing synchronous GCS audit
+uploads and restoration on fresh runners. Missing or inaccessible remote audit
+history halts the workflow rather than silently resetting this state. An
+operator must reconcile ambiguous forecast/comment outcomes against Metaculus
+before resuming; never clear their audit entries merely to unblock a run.
+
+The [official FutureEval bot resources](https://www.metaculus.com/notebooks/38928/)
+allow bot updates, but prohibit tuning a bot from previews of open or upcoming
+tournament questions. Policy tests use synthetic questions, not human adjustments
+to live tournament predictions. Normal FutureEval does not require revisions;
+this is our automated evidence-refresh policy. API failures, including rate
+limits, remain subject to existing failure handling and the next scheduled cycle.
+
+These intervals and thresholds are operational defaults, not empirically fitted
+calibration. More recent evidence can improve predictions but does not guarantee
+that each revision is more accurate. Model failures and queue delays can still
+prevent a timely reassessment; no closed-question edits are attempted.
+
 ## Calibration gate
 
 No post-hoc probability adjustment is enabled for these four profiles. A

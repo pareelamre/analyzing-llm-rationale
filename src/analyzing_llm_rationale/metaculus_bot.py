@@ -56,6 +56,7 @@ _submission_verification_counter = _meter.create_counter(
     "metaculus.forecast.submission_verifications", unit="1"
 )
 _audit_counter = _meter.create_counter("metaculus.forecast.audit_events", unit="1")
+_revision_counter = _meter.create_counter("metaculus.forecast.reassessments", unit="1")
 _comment_counter = _meter.create_counter("metaculus.forecast.private_comments", unit="1")
 _comment_generation_counter = _meter.create_counter("metaculus.forecast.comment_generations", unit="1")
 _comment_generation_duration = _meter.create_histogram("metaculus.forecast.comment_generation.duration", unit="s")
@@ -120,6 +121,9 @@ class ForecastCycleConfig:
     max_tokens: int = 2048
     submit: bool = False
     include_forecasted: bool = False
+    refresh_forecasted: bool = False
+    refresh_interval_s: float = 6 * 3600
+    revision_min_delta: float = 0.01
     audit_log_path: Path | None = None
     max_model_calls: int = 8
     max_model_time_s: float = 180.0
@@ -755,6 +759,113 @@ def _has_unresolved_submission(path: Path | None, question_id: int) -> bool:
     return unresolved
 
 
+def _revision_open(post: Mapping[str, Any], question: Mapping[str, Any], now: datetime) -> tuple[bool, datetime | None]:
+    close_value = post.get("scheduled_close_time") or question.get("scheduled_close_time")
+    close = _parse_metaculus_time(close_value) if close_value else None
+    if close_value and (close is None or close.tzinfo is None):
+        raise MetaculusError("Question close time was invalid.")
+    return post.get("status", question.get("status")) == "open" and (close is None or close > now), close
+
+
+def _reassessment_times(path: Path, bot_username: str | None) -> dict[tuple[int, float], float]:
+    """Read only reviews of this account's same authoritative prior forecast."""
+    latest = {}
+    if not path.exists():
+        return latest
+    try:
+        with path.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                event = json.loads(line)
+                if not isinstance(event, Mapping):
+                    raise ValueError("Invalid audit event")
+                if (event.get("bot_username") == bot_username and event.get("outcome") == "reviewed_unchanged"):
+                    question_id = _positive_int(event.get("question_id"), "review question id")
+                    prior_start = _forecast_start_time({"start_time": event.get("forecast_provenance", {}).get(
+                        "previous_forecast_start_time")})
+                    recorded = _parse_metaculus_time(event.get("recorded_at"))
+                    if recorded is None or recorded.tzinfo is None:
+                        raise ValueError("Invalid review time")
+                    key = (question_id, prior_start)
+                    latest[key] = max(latest.get(key, prior_start), recorded.timestamp())
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
+        raise SubmissionAuditError("Unable to read the reassessment audit safely.") from exc
+    return latest
+
+
+def _revision_delta(question: Mapping[str, Any], payload: Mapping[str, Any], latest: Mapping[str, Any]) -> float:
+    """Maximum absolute change in probability (CDF distance for numeric types)."""
+    values = latest.get("forecast_values")
+    kind = question.get("type")
+    if kind == "binary":
+        prior = latest.get("probability_yes")
+        if prior is None:
+            if isinstance(values, Mapping):
+                prior = values.get("probability_yes", values.get("yes"))
+            elif isinstance(values, list) and len(values) == 2:
+                # Official template: [probability for no, probability for yes].
+                if not math.isclose(sum(_probability(v, "prior probability") for v in values), 1, abs_tol=1e-6):
+                    raise MetaculusError("Prior binary probabilities do not sum to one.")
+                prior = values[1]
+            else:
+                prior = values[0] if isinstance(values, list) and len(values) == 1 else None
+        before, after = [prior], [payload["probability_yes"]]
+    elif kind == "multiple_choice":
+        labels = _option_labels(question)
+        prior = latest.get("probability_yes_per_category")
+        if prior is None:
+            prior = values
+        if isinstance(prior, Mapping):
+            if set(prior) != set(labels):
+                raise MetaculusError("Prior forecast option labels do not match.")
+            before = [prior[label] for label in labels]
+        else:
+            before = prior
+        after = [payload["probability_yes_per_category"][label] for label in labels]
+    else:
+        before = values if values is not None else latest.get("continuous_cdf")
+        after = payload["continuous_cdf"]
+    if not isinstance(before, list) or len(before) != len(after) or not before:
+        raise MetaculusError("Prior forecast probabilities were missing or invalid.")
+    return max(abs(_probability(a, "prior probability") - _probability(b, "revised probability"))
+               for a, b in zip(before, after))
+
+
+def _forecast_pages(client: MetaculusClient, config: ForecastCycleConfig):
+    """Cover unanswered questions before revisiting predictions, across pages."""
+    cached_pages = []
+    for revision_pass in ((False, True) if config.refresh_forecasted else (None,)):
+        if revision_pass is True:
+            for posts in cached_pages:
+                yield revision_pass, posts
+            break
+        offset = 0
+        while True:
+            posts = client.list_open_posts(config.tournament, 100, offset=offset)
+            if not posts:
+                break
+            cached_pages.append(posts)
+            yield revision_pass, posts
+            if len(posts) < 100 or (config.refresh_forecasted and len(cached_pages) >= 10):
+                break
+            offset += len(posts)
+
+
+def _revision_fingerprint(post: Mapping[str, Any], question: Mapping[str, Any]) -> str:
+    """Ignore volatile community forecasts, but bind the candidate to its criteria."""
+    fields = ("id", "title", "description", "resolution_criteria", "fine_print", "type",
+              "options", "scaling", "unit", "inbound_outcome_count", "scheduled_close_time",
+              "scheduled_resolve_time", "status")
+    context = {"post": {key: post.get(key) for key in fields},
+               "question": {key: question.get(key) for key in fields},
+               "prior": (question.get("my_forecasts") or {}).get("latest"),
+               "staff_comments": post.get("staff_comments") or ()}
+    if is_platform_metric_question(post, question):
+        context["observed_platform_state"] = {key: post.get(key) for key in ("nr_forecasters", "open_time")}
+    return hashlib.sha256(json.dumps(context, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+
 def run_forecast_cycle(
     client: MetaculusClient,
     provider: ChatProvider,
@@ -775,16 +886,28 @@ def run_forecast_cycle(
         raise MetaculusError("max_model_time_s must be positive.")
     if config.fallback_forecaster_reserve_s < 0:
         raise MetaculusError("fallback_forecaster_reserve_s must not be negative.")
+    if config.refresh_forecasted:
+        if config.audit_log_path is None:
+            raise MetaculusError("Reassessment requires a durable audit log path.")
+        if not math.isfinite(config.refresh_interval_s) or config.refresh_interval_s <= 0:
+            raise MetaculusError("refresh_interval_s must be finite and positive.")
+        if not math.isfinite(config.revision_min_delta) or not 0 < config.revision_min_delta <= 1:
+            raise MetaculusError("revision_min_delta must be finite and in (0, 1].")
     if config.submit and expected_author_id is None:
         raise MetaculusError("Submitting requires a verified Metaculus bot identity.")
     if config.submit and config.audit_log_path is None:
         raise MetaculusError("Submitting requires a durable Metaculus audit log path.")
     started = perf_counter()
     examined = forecasted = submitted = skipped = failed = 0
+    attempted = 0
+    details_cache: dict[int, Mapping[str, Any]] = {}
+    examined_ids: set[int] = set()
+    reassessment_times = _reassessment_times(config.audit_log_path, bot_username) if config.refresh_forecasted else {}
     outcome = "success"
     with _tracer.start_as_current_span("metaculus.forecast_cycle") as span:
         span.set_attribute("metaculus.tournament", config.tournament)
         span.set_attribute("metaculus.submit", config.submit)
+        span.set_attribute("metaculus.refresh", config.refresh_forecasted)
         model_name = getattr(provider, "model_name", "unknown")
         if isinstance(model_name, str) and model_name:
             span.set_attribute("gen_ai.request.model", model_name)
@@ -792,22 +915,43 @@ def run_forecast_cycle(
         try:
             # Ask the API for the global close-time order; sorting within the
             # page gives deterministic behavior when close times tie or are absent.
-            page_size = 100
-            offset = 0
-            while forecasted < config.max_questions:
-                posts = client.list_open_posts(config.tournament, page_size, offset=offset)
-                if not posts:
+            for revision_pass, posts in _forecast_pages(client, config):
+                if attempted >= config.max_questions:
                     break
                 for post in sorted(posts, key=_post_close_sort_key):
-                    if forecasted >= config.max_questions:
+                    if attempted >= config.max_questions:
                         break
-                    examined += 1
                     try:
                         post_id = _positive_int(post.get("id"), "post id")
-                        details = client.get_post(post_id)
+                        if post_id not in examined_ids:
+                            examined += 1
+                            examined_ids.add(post_id)
+                        if post_id not in details_cache:
+                            details_cache[post_id] = client.get_post(post_id)
+                        details = details_cache[post_id]
                         question = _question_from_post(details)
                         question_id = _positive_int(question.get("id"), "question id")
-                        if not config.include_forecasted and _latest_forecast_exists(question):
+                        if config.refresh_forecasted and _latest_forecast_exists(question) != revision_pass:
+                            continue
+                        if config.refresh_forecasted and _latest_forecast_exists(question):
+                            latest = question["my_forecasts"]["latest"]
+                            now = datetime.now(timezone.utc)
+                            is_open, close = _revision_open(details, question, now)
+                            if not is_open:
+                                skipped += 1
+                                continue
+                            if expected_author_id is not None and latest.get("author_id") != expected_author_id:
+                                raise MetaculusError("Prior forecast belongs to a different account.")
+                            prior_start = _forecast_start_time(latest)
+                            last_review = reassessment_times.get((question_id, prior_start), prior_start)
+                            refresh_interval = config.refresh_interval_s
+                            if close is not None:
+                                refresh_interval = min(refresh_interval, max(15 * 60, (close - now).total_seconds() / 4))
+                            if now.timestamp() - last_review < refresh_interval:
+                                skipped += 1
+                                _revision_counter.add(1, {"outcome": "cooldown"})
+                                continue
+                        if not (config.include_forecasted or config.refresh_forecasted) and _latest_forecast_exists(question):
                             skipped += 1
                             continue
                         if config.submit and _has_unresolved_submission(config.audit_log_path, question_id):
@@ -815,17 +959,26 @@ def run_forecast_cycle(
                                 "Metaculus has an unresolved prior submission for this question; check it before submitting again."
                             )
                         previous_forecast_start_time = None
-                        if config.submit and config.include_forecasted and _latest_forecast_exists(question):
+                        if config.submit and (config.include_forecasted or config.refresh_forecasted) and _latest_forecast_exists(question):
                             latest_before = question["my_forecasts"]["latest"]
                             if not isinstance(latest_before, Mapping):
                                 raise MetaculusError("Metaculus prior forecast had an invalid shape.")
                             previous_forecast_start_time = _forecast_start_time(latest_before)
+                        if config.refresh_forecasted and _latest_forecast_exists(question):
+                            details = {**details, "revision_context": {
+                                "previous_forecast_start_time": _forecast_start_time(latest),
+                                "previous_forecast": {key: latest.get(key) for key in (
+                                    "probability_yes", "probability_yes_per_category", "continuous_cdf", "forecast_values",
+                                )},
+                            }}
+                        attempted += 1
                         if staff_comment_provider is not None:
                             with _tracer.start_as_current_span("metaculus.staff_clarifications") as context_span:
                                 context_span.set_attribute("metaculus.post.id", post_id)
                                 comments = tuple(staff_comment_provider(post_id))
                                 context_span.set_attribute("items.count", len(comments))
                             details = {**details, "staff_comments": comments}
+                        revision_fingerprint = _revision_fingerprint(details, question)
                         evidence: Sequence[Mapping[str, Any]] = ()
                         if research_provider is not None:
                             evidence_started = perf_counter()
@@ -854,6 +1007,26 @@ def run_forecast_cycle(
                             evidence=evidence,
                             audit_metadata=forecast_metadata,
                         )
+                        if config.refresh_forecasted and _latest_forecast_exists(question):
+                            delta = _revision_delta(question, payload, latest)
+                            forecast_metadata["previous_forecast_start_time"] = _forecast_start_time(latest)
+                            forecast_metadata["revision_probability_delta"] = delta
+                            forecast_metadata["refresh_interval_s"] = refresh_interval
+                            if delta < config.revision_min_delta and not math.isclose(
+                                delta, config.revision_min_delta, rel_tol=0, abs_tol=1e-9,
+                            ):
+                                forecasted += 1
+                                _write_forecast_audit(
+                                    config.audit_log_path, post=details, question=question, payload=payload,
+                                    evidence=evidence, primary_model=getattr(provider, "model_name", "unknown"),
+                                    parser_model=getattr(parser_provider, "model_name", None),
+                                    fallback_parser_model=getattr(fallback_parser_provider, "model_name", None),
+                                    bot_username=bot_username, outcome="reviewed_unchanged", forecast_metadata=forecast_metadata,
+                                )
+                                _revision_counter.add(1, {"outcome": "unchanged"})
+                                logger.info("Metaculus reassessment retained the current forecast.")
+                                continue
+                            _revision_counter.add(1, {"outcome": "changed"})
                         private_comment = None
                         if config.submit:
                             comment_provider = (
@@ -894,6 +1067,21 @@ def run_forecast_cycle(
                             ).hexdigest()
                             forecast_metadata["comment_model"] = getattr(comment_provider, "model_name", None)
                             forecast_metadata["staff_comment_count"] = len(details.get("staff_comments") or ())
+                        if config.submit and config.refresh_forecasted and _latest_forecast_exists(question):
+                            current_post = client.get_post(post_id)
+                            current_question = _question_from_post(current_post)
+                            if staff_comment_provider is not None:
+                                current_post = {**current_post, "staff_comments": tuple(staff_comment_provider(post_id))}
+                            current_latest = (current_question.get("my_forecasts") or {}).get("latest")
+                            still_open, _ = _revision_open(current_post, current_question, datetime.now(timezone.utc))
+                            if (not still_open or current_question.get("id") != question_id
+                                    or not isinstance(current_latest, Mapping)
+                                    or current_latest.get("author_id") != expected_author_id
+                                    or _forecast_start_time(current_latest) != previous_forecast_start_time
+                                    or _revision_fingerprint(current_post, current_question) != revision_fingerprint
+                                    or (question.get("type") == "multiple_choice"
+                                        and _option_labels(current_question) != _option_labels(question))):
+                                raise MetaculusError("Question or prior forecast changed during reassessment; not publishing.")
                         forecasted += 1
                         _write_forecast_audit(
                             config.audit_log_path,
@@ -1043,9 +1231,8 @@ def run_forecast_cycle(
                             submission_outcome = "unverified" if isinstance(exc, SubmissionUnverifiedError) else "failure"
                             _submission_counter.add(1, {"outcome": submission_outcome})
                         logger.warning("Metaculus forecast skipped: %s", _safe_error_detail(exc))
-                if len(posts) < page_size:
+                if attempted >= config.max_questions:
                     break
-                offset += len(posts)
             if failed:
                 outcome = "partial"
             return ForecastCycleSummary(examined, forecasted, submitted, skipped, failed)
@@ -2163,7 +2350,16 @@ def _submission_payload_matches(
         if actual_probability is None and isinstance(forecast_values, Mapping):
             actual_probability = forecast_values.get("probability_yes", forecast_values.get("yes"))
         if actual_probability is None and isinstance(forecast_values, Sequence) and not isinstance(forecast_values, (str, bytes)):
-            actual_probability = forecast_values[0] if len(forecast_values) == 1 else None
+            if len(forecast_values) == 2:
+                try:
+                    total = sum(_probability(value, "readback probability") for value in forecast_values)
+                except MetaculusError:
+                    return False
+                if not math.isclose(total, 1, abs_tol=1e-6):
+                    return False
+                actual_probability = forecast_values[1]
+            else:
+                actual_probability = forecast_values[0] if len(forecast_values) == 1 else None
         return _same_probability(payload.get("probability_yes"), actual_probability)
     if question_type == "multiple_choice":
         expected = payload.get("probability_yes_per_category")
@@ -2328,6 +2524,7 @@ def _question_prompt(
         "fine_print": question.get("fine_print", ""),
         "description": question.get("description") or post.get("description", ""),
         "staff_clarifications": clarifications,
+        "revision_context": post.get("revision_context"),
         "options": question.get("options"),
         "scaling": question.get("scaling"),
         "inbound_outcome_count": question.get("inbound_outcome_count"),
@@ -2362,7 +2559,10 @@ def _question_prompt(
         "Apply the exact named population, qualifying event, cutoff exceptions and source rules. "
         "The submission close time is not necessarily the event-window end. Check source publication "
         "dates against the event window; accession or policy news alone does not establish departures. "
-        "Historical base-rate numbers require supporting data; otherwise treat them as uncertain assumptions."
+        "Historical base-rate numbers require supporting data; otherwise treat them as uncertain assumptions. "
+        "For a revision, reassess the remaining event window using fresh evidence and explain what changed. "
+        "The previous forecast is not factual evidence. Elapsed time alone does not justify increasing confidence; "
+        "absence of an event is evidence only when its non-occurrence has been reliably observed."
     )
     if for_forecast:
         prompt += temporal_instructions

@@ -364,6 +364,10 @@ def build_parser() -> argparse.ArgumentParser:
     metaculus_parser.add_argument("--confirm-submit", default="", help='Required exact phrase: SUBMIT METACULUS FORECASTS')
     metaculus_parser.add_argument("--include-forecasted", action="store_true")
     metaculus_parser.add_argument(
+        "--refresh-forecasted", action="store_true",
+        help="Reassess prior forecasts with cooldown and material-change guards; unanswered questions first.",
+    )
+    metaculus_parser.add_argument(
         "--bot-profile",
         choices=(*METACULUS_BOT_PROFILES, "custom"),
         default="qwen-primary",
@@ -1014,6 +1018,7 @@ def forecast_metaculus_command(args: argparse.Namespace) -> int:
                 max_tokens=args.max_tokens,
                 submit=args.submit,
                 include_forecasted=args.include_forecasted,
+                refresh_forecasted=args.refresh_forecasted,
                 audit_log_path=args.audit_log_path,
                 max_model_calls=args.max_model_calls,
                 max_model_time_s=args.max_model_time_s,
