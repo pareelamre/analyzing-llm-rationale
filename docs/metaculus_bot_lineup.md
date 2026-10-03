@@ -156,9 +156,14 @@ Revisions are possible only
 while submissions remain open; a closed tournament question cannot be updated
 just because its outcome is still unresolved.
 
-The normal reassessment interval is six hours. When the scheduled submission
-close approaches, it tightens to one quarter of the remaining submission window,
-with a fifteen-minute floor (and the existing ten-minute dispatch cadence).
+The normal reassessment interval is one hour. The effective interval is the lesser
+of one hour and one quarter of the remaining submission window, with a
+fifteen-minute floor. It therefore tightens inside the final four hours before
+submission closes (with the existing ten-minute dispatch cadence).
+This is eligibility, not a promise to process every question at an exact hourly
+time when the batch is full. Hourly reassessment can increase research/model calls
+up to sixfold versus the old six-hour base; the five-attempt budget and execution
+kill switch remain unchanged. No external API quota guarantee is implied.
 Each due reassessment fetches fresh question details, staff clarifications and
 Foresea news, and supplies the prior prediction plus a current UTC timestamp.
 The model is instructed to distinguish observed events from future risk and not
