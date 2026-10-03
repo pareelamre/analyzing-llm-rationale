@@ -122,7 +122,7 @@ class ForecastCycleConfig:
     submit: bool = False
     include_forecasted: bool = False
     refresh_forecasted: bool = False
-    refresh_interval_s: float = 6 * 3600
+    refresh_interval_s: float = 3600
     revision_min_delta: float = 0.01
     audit_log_path: Path | None = None
     max_model_calls: int = 8

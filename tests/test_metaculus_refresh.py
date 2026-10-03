@@ -55,6 +55,18 @@ class Client:
 
 
 class RefreshTests(unittest.TestCase):
+    def test_default_hourly_refresh_preserves_cooldown_and_reassesses_due_forecast(self):
+        self.assertEqual(ForecastCycleConfig().refresh_interval_s, 3600)
+        for minutes, expected in ((30, 0), (59, 0), (61, 1), (90, 1)):
+            with self.subTest(age_minutes=minutes), TemporaryDirectory() as directory:
+                client, provider = Client(), FakeProvider('{"probability_yes":0.8}')
+                client.posts[0]["question"]["my_forecasts"]["latest"]["start_time"] = (
+                    datetime.now(timezone.utc).timestamp() - minutes * 60)
+                summary = self.run_cycle(client, provider, Path(directory) / "audit.jsonl")
+                self.assertEqual(summary.submitted, expected)
+                self.assertEqual(bool(provider.calls), bool(expected))
+                self.assertEqual(summary.skipped, 1 - expected)
+
     def run_cycle(self, client, provider, path, **kwargs):
         return run_forecast_cycle(
             client, provider,
@@ -156,7 +168,7 @@ class RefreshTests(unittest.TestCase):
         client, provider = Client(), FakeProvider('{"probability_yes":0.8}')
         now = datetime.now(timezone.utc)
         client.posts[0]["scheduled_close_time"] = (now + timedelta(minutes=30)).isoformat()
-        client.posts[0]["question"]["my_forecasts"]["latest"]["start_time"] = now.timestamp() - 3600
+        client.posts[0]["question"]["my_forecasts"]["latest"]["start_time"] = now.timestamp() - 1800
         with TemporaryDirectory() as directory:
             summary = self.run_cycle(client, provider, Path(directory) / "audit.jsonl")
         self.assertEqual(summary.submitted, 1)
