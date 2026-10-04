@@ -6,7 +6,8 @@ name: Track record MTM tick
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # Hourly MTM heartbeat (at minute 15). Reduces daily transfer from 134GB to ~4GB.
+    - cron: "15 * * * *"
   workflow_dispatch: {}
 
 env:
