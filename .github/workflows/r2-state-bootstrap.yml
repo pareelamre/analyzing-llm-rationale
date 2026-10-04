@@ -1,0 +1,190 @@
+name: R2 state bootstrap (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: track-record-store-gcs-write
+  cancel-in-progress: false
+
+jobs:
+  copy-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Require paused and drained state writers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          def gh(*args):
+              return json.loads(subprocess.check_output(['gh', *args], text=True))
+          workflows = gh('api', 'repos/{owner}/{repo}/actions/workflows', '--paginate', '--slurp')
+          required = {str(p).replace('\\', '/') for p in Path('.github/workflows').glob('agent-trading*.yml')}
+          required |= {'.github/workflows/' + p for p in (
+              '_agent-trading-tick-reusable.yml', 'track-record.yml', 'track-record-tick.yml',
+              'track-record-forecast.yml', 'track-record-resolved.yml')}
+          found = {w['path']: w for page in workflows for w in page['workflows']}
+          if not required or required - found.keys():
+              raise RuntimeError('Expected writer workflow inventory is incomplete')
+          ids = {found[path]['id'] for path in required}
+          if any(w['state'] == 'active' for page in workflows for w in page['workflows'] if w['id'] in ids):
+              raise RuntimeError('Disable all state writer workflows before bootstrap')
+          for status in ('queued', 'in_progress', 'waiting', 'pending', 'requested'):
+              pages = gh('api', 'repos/{owner}/{repo}/actions/runs?status=' + status, '--paginate', '--slurp')
+              if any(r['workflow_id'] in ids for page in pages for r in page['workflow_runs']):
+                  raise RuntimeError('State writers have not drained')
+          print('State writers are paused and drained')
+          PY
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: Install transfer dependencies
+        run: pip install boto3==1.43.108 google-cloud-storage==3.13.1 duckdb==1.5.5 opentelemetry-api==1.44.0
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+      - name: Copy private state, verify hashes, seed recovery copies
+        env:
+          PYTHONPATH: src
+          FORESEA_STORAGE_BACKEND: ${{ vars.FORESEA_STORAGE_BACKEND || 'gcs' }}
+          R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_RUNTIME_ACCESS_KEY_ID: ${{ secrets.R2_RUNTIME_ACCESS_KEY_ID }}
+          R2_RUNTIME_SECRET_ACCESS_KEY: ${{ secrets.R2_RUNTIME_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import sqlite3
+          import subprocess
+          import tempfile
+          import uuid
+          from pathlib import Path
+
+          import boto3
+          import duckdb
+          from botocore.exceptions import ClientError
+          from google.cloud import storage
+          from analyzing_llm_rationale.r2_store import R2Blob, get_client
+
+          if os.environ['FORESEA_STORAGE_BACKEND'] != 'gcs':
+              raise RuntimeError('Bootstrap is forbidden once R2 writers are activated')
+          if not os.environ['R2_RUNTIME_ACCESS_KEY_ID'] or not os.environ['R2_RUNTIME_SECRET_ACCESS_KEY']:
+              raise RuntimeError('Separate read-only runtime secrets must be configured first')
+          if os.environ['R2_RUNTIME_ACCESS_KEY_ID'] == os.environ['R2_ACCESS_KEY_ID']:
+              raise RuntimeError('Runtime and writer credentials must differ')
+          project = 'brave-drive-471109-d9'
+          runtime = subprocess.run(['gcloud', 'run', 'services', 'describe', 'analyzing-llm-rationale',
+              '--region', 'us-central1', '--project', project,
+              '--format=json(spec.template.spec.containers[0].env,status.traffic,status.latestReadyRevisionName)'], check=True, capture_output=True, text=True)
+          service = json.loads(runtime.stdout)
+          traffic = service['status'].get('traffic', [])
+          if len(traffic) != 1 or traffic[0].get('percent') != 100 or traffic[0].get('revisionName') != service['status']['latestReadyRevisionName']:
+              raise RuntimeError('Bootstrap requires one latest ready revision serving all traffic')
+          environment = service['spec']['template']['spec']['containers'][0].get('env', [])
+          if any(e.get('name') == 'FORESEA_STORAGE_BACKEND' and
+                 (e.get('valueFrom') or e.get('value', '').strip() != 'gcs') for e in environment):
+              raise RuntimeError('Runtime backend is not confirmed GCS; bootstrap is forbidden')
+          bucket = os.environ['R2_STATE_BUCKET']
+          if not bucket:
+              raise RuntimeError('R2_STATE_BUCKET is required')
+          client = get_client()
+          reader = boto3.client('s3', endpoint_url=os.environ['R2_ENDPOINT_URL'], region_name='auto',
+              aws_access_key_id=os.environ['R2_RUNTIME_ACCESS_KEY_ID'],
+              aws_secret_access_key=os.environ['R2_RUNTIME_SECRET_ACCESS_KEY'])
+          probe = '_permission_probe/' + uuid.uuid4().hex
+          try:
+              for operation in ('put_object', 'delete_object'):
+                  try:
+                      getattr(reader, operation)(Bucket=bucket, Key=probe, **({'Body': b'probe'} if operation == 'put_object' else {}))
+                  except ClientError as error:
+                      if error.response['Error']['Code'] not in ('AccessDenied', 'Unauthorized'):
+                          raise
+                  else:
+                      raise RuntimeError('Runtime credentials allow writes; bootstrap aborted')
+              client.put_object(Bucket=bucket, Key=probe, Body=b'probe')
+              try:
+                  client.copy_object(Bucket=bucket, Key=probe + '.copy',
+                      CopySource={'Bucket': bucket, 'Key': probe}, CopySourceIfMatch='"invalid-etag"')
+              except ClientError as error:
+                  if error.response['ResponseMetadata']['HTTPStatusCode'] != 412:
+                      raise
+              else:
+                  raise RuntimeError('R2 ignored copy precondition; bootstrap aborted')
+          finally:
+              client.delete_object(Bucket=bucket, Key=probe)
+              client.delete_object(Bucket=bucket, Key=probe + '.copy')
+          gcs_bucket = storage.Client(project=project).bucket(project + '-track-record-store')
+          objects = [b for b in gcs_bucket.list_blobs() if re.fullmatch(
+              r'track_record_store\.duckdb|agent_trading_store__[A-Za-z0-9_.-]+\.sqlite|agent_trading_notes__[A-Za-z0-9_.-]+\.json', b.name)]
+          if not any(b.name == 'track_record_store.duckdb' for b in objects):
+              raise RuntimeError('Forecast store absent; bootstrap aborted')
+          manifest = []
+          def digest(path):
+              with path.open('rb') as stream:
+                  return hashlib.file_digest(stream, 'sha256').hexdigest()
+          with tempfile.TemporaryDirectory() as directory:
+              root = Path(directory)
+              for blob in objects:
+                  local = root / blob.name
+                  blob.download_to_filename(str(local), if_generation_match=int(blob.generation))
+                  if blob.name.endswith('.duckdb'):
+                      with duckdb.connect(str(local), read_only=True) as db:
+                          db.execute('SHOW TABLES').fetchall()
+                  elif blob.name.endswith('.sqlite'):
+                      with sqlite3.connect(local.as_uri() + '?mode=ro', uri=True) as db:
+                          if db.execute('PRAGMA integrity_check').fetchall() != [('ok',)]:
+                              raise RuntimeError('SQLite integrity failed')
+                  else:
+                      json.loads(local.read_text())
+                  expected = digest(local)
+                  client.upload_file(str(local), bucket, blob.name)
+                  downloaded = root / 'readback'
+                  target = R2Blob(reader, bucket, blob.name)
+                  target.reload()
+                  target.download_to_filename(str(downloaded))
+                  if digest(downloaded) != expected or downloaded.stat().st_size != local.stat().st_size:
+                      raise RuntimeError('R2 checksum readback failed')
+                  client.copy_object(Bucket=bucket, Key=blob.name + '.previous',
+                      CopySource={'Bucket': bucket, 'Key': blob.name}, CopySourceIfMatch=target.generation)
+                  recovery = R2Blob(reader, bucket, blob.name + '.previous')
+                  recovery.reload()
+                  recovery.download_to_filename(str(downloaded))
+                  if digest(downloaded) != expected:
+                      raise RuntimeError('R2 recovery readback failed')
+                  manifest.append({'key': blob.name, 'sha256': expected, 'bytes': local.stat().st_size,
+                      'gcs_generation': str(blob.generation)})
+                  print('Object verified:', len(manifest))
+          for blob, entry in zip(objects, manifest):
+              blob.reload()
+              if str(blob.generation) != entry['gcs_generation']:
+                  raise RuntimeError('GCS changed during bootstrap; retry with writers paused')
+          latest = {b.name: str(b.generation) for b in gcs_bucket.list_blobs() if re.fullmatch(
+              r'track_record_store\.duckdb|agent_trading_store__[A-Za-z0-9_.-]+\.sqlite|agent_trading_notes__[A-Za-z0-9_.-]+\.json', b.name)}
+          if latest != {e['key']: e['gcs_generation'] for e in manifest}:
+              raise RuntimeError('GCS inventory changed during bootstrap')
+          client.put_object(Bucket=bucket, Key='migration_manifest.json',
+              Body=json.dumps(manifest).encode(), ContentType='application/json')
+          for name, variable in [('FORESEA_R2_READ_ACCESS_KEY_ID', 'R2_RUNTIME_ACCESS_KEY_ID'),
+                                 ('FORESEA_R2_READ_SECRET_ACCESS_KEY', 'R2_RUNTIME_SECRET_ACCESS_KEY')]:
+              # Operator pre-creates these names and grants secretVersionAdder only.
+              subprocess.run(['gcloud', 'secrets', 'versions', 'add', name, '--project', project,
+                  '--data-file=-'], input=os.environ[variable].encode(), check=True, stdout=subprocess.DEVNULL)
+          print('Bootstrap verified:', len(manifest), 'objects; runtime secrets stored. No backend activated.')
+          PY

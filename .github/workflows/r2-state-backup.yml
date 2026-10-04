@@ -1,0 +1,104 @@
+name: R2 state daily backup
+
+on:
+  schedule:
+    - cron: '43 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: track-record-store-gcs-write
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: vars.FORESEA_STORAGE_BACKEND == 'r2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - run: pip install boto3==1.43.108 opentelemetry-api==1.44.0
+      - name: Copy daily state and expire only dated backups older than seven days
+        env:
+          PYTHONPATH: src
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+          R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import hashlib
+          import json
+          from botocore.exceptions import ClientError
+          from datetime import datetime, timedelta, timezone
+          from analyzing_llm_rationale.r2_store import get_client
+
+          client = get_client()
+          bucket = os.environ['R2_STATE_BUCKET']
+          today = datetime.now(timezone.utc).date()
+          state = r'track_record_store\.duckdb|agent_trading_store__[A-Za-z0-9_.-]+\.sqlite|agent_trading_notes__[A-Za-z0-9_.-]+\.json'
+          objects = []
+          for page in client.get_paginator('list_objects_v2').paginate(Bucket=bucket):
+              objects.extend(o for o in page.get('Contents', []) if re.fullmatch(state, o['Key']))
+          if not any(o['Key'] == 'track_record_store.duckdb' for o in objects):
+              raise RuntimeError('Forecast store absent; no retention cleanup allowed')
+          prefix = 'daily/' + today.isoformat() + '/'
+          def digest(key, etag):
+              response = client.get_object(Bucket=bucket, Key=key, IfMatch=etag)
+              result = hashlib.sha256()
+              with response['Body'] as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                      result.update(chunk)
+              return result.hexdigest()
+          try:
+              response = client.get_object(Bucket=bucket, Key=prefix + 'manifest.json')
+          except ClientError as error:
+              if error.response['Error']['Code'] not in ('NoSuchKey', '404', 'NotFound'):
+                  raise
+              manifest = None
+          else:
+              with response['Body'] as stream:
+                  manifest = json.loads(stream.read())
+          if manifest is None:
+              existing = client.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=1)
+              if existing.get('Contents'):
+                  raise RuntimeError('Incomplete daily prefix exists; refusing to overwrite recovery')
+              manifest = []
+              for obj in objects:
+                  key = obj['Key']
+                  expected = digest(key, obj['ETag'])
+                  destination = prefix + key
+                  client.copy_object(Bucket=bucket, Key=destination,
+                      CopySource={'Bucket': bucket, 'Key': key}, CopySourceIfMatch=obj['ETag'])
+                  copied = client.head_object(Bucket=bucket, Key=destination)
+                  if copied['ContentLength'] != obj['Size'] or digest(destination, copied['ETag']) != expected:
+                      raise RuntimeError('Backup checksum mismatch; no retention cleanup allowed')
+                  manifest.append({'key': key, 'bytes': obj['Size'], 'sha256': expected, 'etag': copied['ETag']})
+              client.put_object(Bucket=bucket, Key=prefix + 'manifest.json',
+                  Body=json.dumps(manifest).encode(), ContentType='application/json', IfNoneMatch='*')
+          else:
+              if not any(e['key'] == 'track_record_store.duckdb' for e in manifest):
+                  raise RuntimeError('Existing daily manifest is incomplete')
+              for entry in manifest:
+                  if not re.fullmatch(state, entry['key']):
+                      raise RuntimeError('Unexpected daily manifest key')
+                  copied = client.head_object(Bucket=bucket, Key=prefix + entry['key'])
+                  if copied['ContentLength'] != entry['bytes'] or digest(prefix + entry['key'], copied['ETag']) != entry['sha256']:
+                      raise RuntimeError('Existing immutable daily recovery verification failed')
+          expired = []
+          for page in client.get_paginator('list_objects_v2').paginate(Bucket=bucket, Prefix='daily/'):
+              for obj in page.get('Contents', []):
+                  match = re.fullmatch(r'daily/(\d{4}-\d{2}-\d{2})/(' + state + r'|manifest\.json)', obj['Key'])
+                  if match and datetime.strptime(match[1], '%Y-%m-%d').date() < today - timedelta(days=6):
+                      expired.append(obj['Key'])
+          for key in expired:
+              client.delete_object(Bucket=bucket, Key=key)
+          print('Daily snapshots copied:', len(objects), 'old backup objects removed:', len(expired))
+          PY
