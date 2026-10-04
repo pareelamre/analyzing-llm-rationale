@@ -517,5 +517,12 @@ class DuckDBStore:
         ent.key = Key(kind, key_val)
         return ent
 
+    def vacuum(self) -> None:
+        """Compact database and reclaim dead WAL space while preserving 100% of rows."""
+        try:
+            self._con.execute("VACUUM")
+        except Exception:
+            pass
+
     def close(self) -> None:
         self._con.close()

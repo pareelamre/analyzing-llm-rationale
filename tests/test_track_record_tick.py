@@ -235,7 +235,7 @@ class TrackRecordTickTests(unittest.TestCase):
             root / ".github" / "workflows" / "track-record-resolved.yml"
         ).read_text()
 
-        self.assertIn('cron: "*/5 * * * *"', mtm_workflow)
+        self.assertIn('cron: "15 * * * *"', mtm_workflow)
         self.assertIn("track-record-mtm", mtm_workflow)
         self.assertIn("python scripts/track_record_tick.py --mtm-only", mtm_workflow)
         self.assertIn("static/mark_to_market_live.json", mtm_workflow)

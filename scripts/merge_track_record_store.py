@@ -109,6 +109,7 @@ def merge_stores(target: Path, sources: list[Path]) -> dict[str, int]:
         finally:
             con.execute(f"DETACH {_quote_ident(alias)}")
 
+    con.execute("VACUUM")
     con.close()
     return merged
 

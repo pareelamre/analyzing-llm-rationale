@@ -1301,6 +1301,8 @@ async def main() -> int:
         "primary_resolved_before": before_primary["resolved_snapshots"],
         "primary_resolved_after": after_primary["resolved_snapshots"],
     }
+    store.vacuum()
+    store.close()
     print(json.dumps(summary))
     if run_snapshots:
         if _predict_stats["http_401"]:
