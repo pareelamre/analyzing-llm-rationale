@@ -1621,6 +1621,195 @@
       "outcome": "rejected",
       "record_hash": "0e76f76ef1c7782a0c5cacff6e78e38a74bddf9dd24776a973ce75e61ae4f18c",
       "recorded_at": "2026-10-03T14:06:29.293066+00:00"
+    },
+    {
+      "action_id": "102fde4d-b809-4a10-893f-a777c4989ff3",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 1.3714982277546297,
+          "marketable": true,
+          "observed_ask": 0.48,
+          "observed_bid": 0.47,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.48,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 7819.409127,
+          "cash_required": 172.662772,
+          "concentration_cap": 1294.970789,
+          "cycle_id": "30m:995060",
+          "cycle_spend_after": 172.662772,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 172.662772,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2589.941578,
+          "drawdown_after": 0.201436,
+          "fee": 6.064188,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 166.598583,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 166.598583,
+          "open_markets_after": 4,
+          "per_cycle_spend_limit": 1726.627718,
+          "reasons": [
+            "profile_price_ceiling_exceeded",
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.108,
+          "eligible": true,
+          "horizon": "1-3d",
+          "horizon_validated": false,
+          "kelly_fraction": 0.3,
+          "lead_days": 1.4,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.02,
+          "mode": "convex_conviction",
+          "reason": null,
+          "target_notional": 172.662772,
+          "target_quantity": 347.08038209957544
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995060",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 172.662772,
+        "fee": 6.064188,
+        "netting_payout": 0.0,
+        "notional": 166.598583,
+        "price": 0.48,
+        "quantity": 347.08038209957544,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXHIGHNY-26OCT04-T63"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "4ed478b3692e7acb118bfb646c790c98a7db54a202cf8a829e1e028e6c5019cf",
+      "recorded_at": "2026-10-04T10:05:02.580827+00:00"
+    },
+    {
+      "action_id": "8e0a6968-2d1c-478f-a13f-dedf1ec57534",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 1915.204428794433,
+          "marketable": true,
+          "observed_ask": 0.08,
+          "observed_bid": 0.07,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.08,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 7819.409127,
+          "cash_required": 258.994158,
+          "concentration_cap": 1294.970789,
+          "cycle_id": "30m:995060",
+          "cycle_spend_after": 258.994158,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 258.994158,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2589.941578,
+          "drawdown_after": 0.202349,
+          "fee": 15.670071,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 243.324087,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 243.324087,
+          "open_markets_after": 4,
+          "per_cycle_spend_limit": 1726.627718,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.14,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.3,
+          "lead_days": 1915.2,
+          "market_shrinkage": 0.15,
+          "max_position_fraction": 0.03,
+          "mode": "convex_conviction",
+          "reason": null,
+          "target_notional": 258.994158,
+          "target_quantity": 3041.5510823675304
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995060",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 258.994158,
+        "fee": 15.670071,
+        "netting_payout": 0.0,
+        "notional": 243.324087,
+        "price": 0.08,
+        "quantity": 3041.5510823675304,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXFDAAPPROVE-MDMA-27JAN01"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "853fc727a15d46214d80d9588d094ab165be35bf0b2811b8095b2176c665abaf",
+      "recorded_at": "2026-10-04T10:05:37.356852+00:00"
     }
   ],
   "month": "2026-10",
