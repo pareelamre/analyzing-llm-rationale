@@ -113,7 +113,8 @@ class TrackRecordTickTests(unittest.TestCase):
         # Store persistence moved off git into GCS (the file outgrew GitHub's
         # 100MB push limit) -- these lock in the new plumbing.
         self.assertIn("google-github-actions/auth@v2", workflow)
-        self.assertIn("gcloud storage cp", workflow)
+        self.assertIn('r2_store cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"', workflow)
+        self.assertIn('r2_store cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"', workflow)
         self.assertIn("track-record-store-gcs-write", workflow)
         self.assertNotIn("git add data/track_record_store.duckdb", workflow)
         for model in (

@@ -11,6 +11,10 @@ on:
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
+  FORESEA_STORAGE_BACKEND: ${{ vars.FORESEA_STORAGE_BACKEND || 'gcs' }}
+  R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+  R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+  PYTHONPATH: src
   TRACK_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
   TRACK_STORE_OBJECT: track_record_store.duckdb
 
@@ -38,7 +42,7 @@ jobs:
 
       - name: Install deps
         run: >-
-          pip install --quiet requests duckdb pyyaml
+          pip install --quiet 'boto3>=1.35,<2' google-cloud-storage requests duckdb pyyaml
           opentelemetry-sdk
           opentelemetry-instrumentation-requests
 
@@ -49,7 +53,10 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Download track record store
-        run: gcloud storage cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: python -m analyzing_llm_rationale.r2_store cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
 
       - name: Score resolved forecasts
         env:
@@ -59,7 +66,10 @@ jobs:
         run: python scripts/track_record_tick.py --resolved-only
 
       - name: Upload track record store
-        run: gcloud storage cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: python -m analyzing_llm_rationale.r2_store cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"
 
       # Additive, like the MTM tick: published to GCS *and* still committed,
       # until the server is verified reading the GCS copy. track_record_live

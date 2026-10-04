@@ -28,6 +28,10 @@ on:
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
+  FORESEA_STORAGE_BACKEND: ${{ vars.FORESEA_STORAGE_BACKEND || 'gcs' }}
+  R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+  R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+  PYTHONPATH: src
   AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
 
 permissions:
@@ -75,7 +79,7 @@ jobs:
 
       - name: Install deps
         run: >-
-          pip install --quiet requests pyyaml
+          pip install --quiet 'boto3>=1.35,<2' google-cloud-storage requests pyyaml
           opentelemetry-sdk
           opentelemetry-instrumentation-requests
 
@@ -86,17 +90,20 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Download every model's shadow account store
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           set -u
           models="deepseek-v4-flash gemma-4-26b-a4b-it glm-5-3 glm-5-3-flash gpt-oss-120b llama-3.3-70b-instruct minimax-m3 qwen3-8-27b"
           for model in $models; do
             mkdir -p "tmp/agent-trading-board/$model"
-            gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${model}.sqlite" \
-              "tmp/agent-trading-board/$model/store.sqlite" \
-              || echo "no store yet for $model, board builder will use an empty account for it"
-            gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${model}.json" \
-              "tmp/agent-trading-board/$model/notes.json" \
-              || echo "no notes yet for $model"
+            python -m analyzing_llm_rationale.r2_store cp --allow-missing "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${model}.sqlite" \
+              "tmp/agent-trading-board/$model/store.sqlite"
+
+            python -m analyzing_llm_rationale.r2_store cp --allow-missing "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${model}.json" \
+              "tmp/agent-trading-board/$model/notes.json"
+
           done
 
       - name: Build the public agent-trading board

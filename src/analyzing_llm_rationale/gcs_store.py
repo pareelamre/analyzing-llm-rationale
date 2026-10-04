@@ -84,12 +84,24 @@ def ensure_local_copy(local_path: Path) -> bool:
                 return local_path.exists()
             _last_check_monotonic = now
 
-            client = _get_gcs_client()
+            backend = os.environ.get("FORESEA_STORAGE_BACKEND", "gcs").strip()
+            if backend == "r2":
+                from .r2_store import R2Client
+                client = R2Client()
+            elif backend == "gcs":
+                client = _get_gcs_client()
+            else:
+                raise ValueError("FORESEA_STORAGE_BACKEND must be gcs or r2")
             if client is None:
                 return local_path.exists()
 
             try:
-                blob = client.bucket(_TRACK_STORE_BUCKET).blob(_TRACK_STORE_OBJECT)
+                bucket_name = _TRACK_STORE_BUCKET
+                if backend == "r2":
+                    bucket_name = os.environ.get("R2_STATE_BUCKET", "").strip()
+                    if not bucket_name:
+                        raise ValueError("R2_STATE_BUCKET is required for R2")
+                blob = client.bucket(bucket_name).blob(_TRACK_STORE_OBJECT)
                 blob.reload()
             except Exception:
                 _log_sync_failure("GCS blob metadata check failed")
