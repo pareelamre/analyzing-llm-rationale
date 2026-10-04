@@ -2623,6 +2623,23 @@ def _mount_public_mcp_endpoint() -> None:
             streamable_http_path="/",
         )
         _PUBLIC_MCP_APP = _PUBLIC_MCP.streamable_http_app()
+
+        async def reject_mcp_listen_stream() -> Response:
+            # This stateless server sends responses on POST, never on a standalone
+            # GET stream. The SDK otherwise keeps a billable request open while waiting.
+            return Response(status_code=405, headers={"Allow": "POST"})
+
+        for path in ("/mcp", "/mcp/"):
+            app.add_api_route(
+                path, reject_mcp_listen_stream, methods=["GET", "HEAD"],
+                include_in_schema=False,
+            )
+
+        async def redirect_mcp_post() -> Response:
+            return RedirectResponse(url="/mcp/", status_code=307)
+
+        # The exact GET route suppresses Starlette's automatic slash redirect.
+        app.add_api_route("/mcp", redirect_mcp_post, methods=["POST"], include_in_schema=False)
         app.mount("/mcp", _PUBLIC_MCP_APP)
     except Exception as exc:
         _PUBLIC_MCP = None
