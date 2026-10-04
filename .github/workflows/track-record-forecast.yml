@@ -27,6 +27,10 @@ on:
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
+  FORESEA_STORAGE_BACKEND: ${{ vars.FORESEA_STORAGE_BACKEND || 'gcs' }}
+  R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+  R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+  PYTHONPATH: src
   TRACK_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
   TRACK_STORE_OBJECT: track_record_store.duckdb
 
@@ -83,9 +87,12 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Prepare isolated read-only store for target discovery
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           mkdir -p tmp/prepare-targets
-          gcloud storage cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" "tmp/prepare-targets/store.duckdb" || true
+          python -m analyzing_llm_rationale.r2_store cp --allow-missing "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" "tmp/prepare-targets/store.duckdb"
 
       - name: Discover and prepare unified target contexts
         env:
@@ -161,9 +168,12 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Prepare isolated model store
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           mkdir -p tmp/model-forecast
-          gcloud storage cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" "tmp/model-forecast/${{ matrix.artifact }}.duckdb"
+          python -m analyzing_llm_rationale.r2_store cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" "tmp/model-forecast/${{ matrix.artifact }}.duckdb"
 
       - name: Download prepared forecast targets
         uses: actions/download-artifact@v4
@@ -279,6 +289,8 @@ jobs:
 
       - name: Publish forecast snapshots and refresh MTM
         env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           FORESEA_BASE_URL: https://foresea.ink
           TRACK_MODEL: "council"
           CYCLE_INTERVAL_MINUTES: "5"
@@ -307,12 +319,12 @@ jobs:
           for attempt in 1 2 3 4 5 6 7 8; do
             git fetch origin main
             git checkout -B "forecast-publish-batch" origin/main
-            gcloud storage cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
+            python -m analyzing_llm_rationale.r2_store cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
             python scripts/merge_track_record_store.py \
               --target data/track_record_store.duckdb \
               "${forecast_stores[@]}"
             python scripts/track_record_tick.py --mtm-only
-            gcloud storage cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"
+            python -m analyzing_llm_rationale.r2_store cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"
             git add static/mark_to_market_live.json
             if git diff --cached --quiet; then
               echo "No forecast snapshot changes to commit."

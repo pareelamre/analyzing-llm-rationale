@@ -44,6 +44,10 @@ on:
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
+  FORESEA_STORAGE_BACKEND: ${{ vars.FORESEA_STORAGE_BACKEND || 'gcs' }}
+  R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+  R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+  PYTHONPATH: src
   AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
 
 concurrency:
@@ -89,16 +93,18 @@ jobs:
 
       - name: Download this lane's isolated shadow account stores
         env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           MODELS: ${{ inputs.models }}
         run: |
           for MODEL in $MODELS; do
             mkdir -p "tmp/agent-trading/$MODEL"
-            gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite" \
-              "tmp/agent-trading/$MODEL/store.sqlite" \
-              || echo "No existing store for ${MODEL} yet -- starting fresh."
-            gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json" \
-              "tmp/agent-trading/$MODEL/notes.json" \
-              || echo '{}' > "tmp/agent-trading/$MODEL/notes.json"
+            python -m analyzing_llm_rationale.r2_store cp --allow-missing "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite" \
+              "tmp/agent-trading/$MODEL/store.sqlite"
+
+            python -m analyzing_llm_rationale.r2_store cp --missing-json "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json" \
+              "tmp/agent-trading/$MODEL/notes.json"
+
           done
 
       - name: Write Kalshi credentials for the fee-tiers lookup (optional)
@@ -111,6 +117,8 @@ jobs:
 
       - name: Run every model in this lane and persist each result
         env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           MODELS: ${{ inputs.models }}
           FORESEA_AGENT_PLACE_TRADE_MODE: shadow
           FORESEA_AGENT_CYCLE_MINUTES: "30"
@@ -160,9 +168,9 @@ jobs:
                 hard_failures=$((hard_failures + 1))
               fi
             fi
-            gcloud storage cp "tmp/agent-trading/$MODEL/store.sqlite" \
+            python -m analyzing_llm_rationale.r2_store cp "tmp/agent-trading/$MODEL/store.sqlite" \
               "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite"
-            gcloud storage cp "tmp/agent-trading/$MODEL/notes.json" \
+            python -m analyzing_llm_rationale.r2_store cp "tmp/agent-trading/$MODEL/notes.json" \
               "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json"
           done
           if [ "$provider_degradations" -gt 0 ]; then
