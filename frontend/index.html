@@ -2314,7 +2314,7 @@
     })();
   </script>
 
-  <script type="module" src="/src/page-context.ts"></script>
+  <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
 
@@ -3382,7 +3382,10 @@ function setSyncStatus(text) {
 
 async function loadRemoteConversations() {
   const r = await fetch('/chat/conversations', { headers: authHeaders() });
-  if (!r.ok) throw new Error('Could not load saved chats.');
+  if (!r.ok) {
+    if (r.status === 401) handleAuthExpiry('Conversations load unauthorised');
+    throw new Error('Could not load saved chats.');
+  }
   const data = await r.json();
   return {
     conversations: Object.fromEntries((data.conversations || []).map(c => [c.id, c])),
@@ -4427,7 +4430,10 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
     typingEl._setForecastProgress?.('fallback');
     return { ok: false, fallback: true, detail: err?.message || 'Stream unavailable' };
   }
-  if (!resp.ok || !resp.body) return { ok: false, fallback: true };
+  if (!resp.ok || !resp.body) {
+    if (resp.status === 401) handleAuthExpiry('Predict stream unauthorised');
+    return { ok: false, fallback: true, status: resp.status };
+  }
 
   const messagesEl = document.getElementById('messages');
   let typingRemoved = false;
@@ -4639,7 +4645,10 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     if (err?.name === 'AbortError') throw err;
     return { ok: false, fallback: true, detail: err?.message || 'Agent stream unavailable' };
   }
-  if (!resp.ok || !resp.body) return { ok: false, fallback: true };
+  if (!resp.ok || !resp.body) {
+    if (resp.status === 401) handleAuthExpiry('Agent stream unauthorised');
+    return { ok: false, fallback: true, status: resp.status };
+  }
 
   const messagesEl = document.getElementById('messages');
   let typingRemoved = false;
@@ -5022,15 +5031,41 @@ async function sendQuestion(options = {}) {
         addError(streamed.detail || 'Agent streaming error', request.convId);
         return;
       }
-      const resp = await fetch('/agent/analyze', {
+      let resp = await fetch('/agent/analyze', {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(agentBody),
         signal: request.controller.signal,
       });
-      const report = await _readJson(resp);
-      typingEl.remove();
-      if (!resp.ok) { addError(report.detail || 'Agent error', request.convId); return; }
+      let report = await _readJson(resp);
+      if (!resp.ok && resp.status === 401) {
+        handleAuthExpiry(report?.detail || 'Session expired');
+        // Retry forecasting via public /predict to not block the user
+        const retryResp = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: request.controller.signal,
+        });
+        if (retryResp.ok) {
+          const retryData = await _readJson(retryResp);
+          typingEl.remove();
+          data = retryData;
+          data.question = question;
+          data.market_context = buildMarketContext(question, data);
+          // proceed to rendering bubble
+        } else {
+          typingEl.remove();
+          addError(report.detail || 'Session expired. Please sign in again.', request.convId);
+          return;
+        }
+      } else if (!resp.ok) {
+        typingEl.remove();
+        addError(report.detail || 'Agent error', request.convId);
+        return;
+      } else {
+        typingEl.remove();
+      }
       data = _agentReportData(report);
       if (data.live_trade_intent) data.source_conversation_id = request.convId;
       if (data.agent_run) syncAgentRunsFromServer();
@@ -5045,13 +5080,27 @@ async function sendQuestion(options = {}) {
       }
       typingEl._setForecastProgress?.('fallback');
       // Streaming failed (network/server) — fall back to blocking request
-      const resp = await fetch('/predict', {
+      let resp = await fetch('/predict', {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(body),
         signal: request.controller.signal,
       });
       data = await _readJson(resp);
+      if (!resp.ok && resp.status === 401) {
+        handleAuthExpiry(data?.detail || 'Session expired');
+        // Retry immediately without Authorization header
+        const retryResp = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: request.controller.signal,
+        });
+        if (retryResp.ok) {
+          data = await _readJson(retryResp);
+          resp = retryResp;
+        }
+      }
       typingEl._finishForecastWait?.(resp.ok ? 'completed' : 'error');
       typingEl.remove();
       if (!resp.ok) { addError(data.detail || 'Server error', request.convId); return; }
@@ -10745,7 +10794,10 @@ async function _syncFavoritesFromServer() {
   if (!currentUser) return;
   try {
     const r = await fetch('/favorites', { headers: authHeaders() });
-    if (!r.ok) return;
+    if (!r.ok) {
+      if (r.status === 401) handleAuthExpiry('Favorites sync unauthorised');
+      return;
+    }
     const d = await r.json();
     // Server is the source of truth for a signed-in account — replace the local
     // cache so one account never shows another's saved markets in this browser.
@@ -10874,7 +10926,10 @@ async function _fetchQuotes() {
   if (!currentUser) return null;
   try {
     const r = await fetch('/favorites/prices', { headers: authHeaders() });
-    if (!r.ok) return null;
+    if (!r.ok) {
+      if (r.status === 401) handleAuthExpiry('Favorites quotes unauthorised');
+      return null;
+    }
     return await r.json();
   } catch (_) { return null; }
 }
@@ -12117,6 +12172,16 @@ function _clearSession() {
   currentUser = null;
 }
 
+function handleAuthExpiry(reason = 'Session expired') {
+  const hadSession = Boolean(localStorage.getItem('foresea_session') || currentUser);
+  _clearSession();
+  if (typeof _wlStopPolling === 'function') _wlStopPolling();
+  if (typeof updateAuthUI === 'function') updateAuthUI(null);
+  if (hadSession) {
+    console.warn('Session expired or invalidated:', reason);
+  }
+}
+
 function _setAuthEl(id, show, data) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -12480,7 +12545,10 @@ async function _verifySession() {
   if (!token) return null;
   try {
     const r = await fetch('/auth/me', { headers: { Authorization: 'Bearer ' + token } });
-    if (!r.ok) { _clearSession(); return null; }
+    if (!r.ok) {
+      handleAuthExpiry('Initial verification failed');
+      return null;
+    }
     const d = await _readJson(r);
     return { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
   } catch { return user; /* offline: trust cached data */ }

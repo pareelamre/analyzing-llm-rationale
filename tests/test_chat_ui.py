@@ -905,6 +905,17 @@ if (vm.runInContext('_ebView', context) !== 'markets') throw new Error('_ebSetVi
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_session_expiry_handling_and_recovery(self) -> None:
+        self.assertIn("function handleAuthExpiry(", self.index_html)
+        self.assertIn("handleAuthExpiry('Agent stream unauthorised');", self.index_html)
+        self.assertIn("handleAuthExpiry('Predict stream unauthorised');", self.index_html)
+        self.assertIn("handleAuthExpiry('Favorites quotes unauthorised');", self.index_html)
+        self.assertIn("handleAuthExpiry('Favorites sync unauthorised');", self.index_html)
+        self.assertIn("handleAuthExpiry('Conversations load unauthorised');", self.index_html)
+        self.assertIn("handleAuthExpiry('Initial verification failed');", self.index_html)
+        self.assertIn("fetch('/predict', {", self.index_html)
+        self.assertIn("headers: { 'Content-Type': 'application/json' },", self.index_html)
+
 
 if __name__ == "__main__":
     unittest.main()
