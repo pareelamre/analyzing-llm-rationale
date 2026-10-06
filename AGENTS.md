@@ -274,6 +274,10 @@ Foresea provides a 19-tool ReAct execution loop for autonomous agents and mounts
 Push to `main` triggers GitHub Actions:
 1. `ci.yml` — lint + tests
 2. `docker.yml` — build CPU image → push to GHCR + GCP Artifact Registry → deploy to Cloud Run
+3. `oci-deploy.yml` — SSH deploy to the OCI instance (opt-in: only runs once
+   the repo variable `OCI_DEPLOY_ENABLED=true` and the `OCI_HOST`,
+   `OCI_SSH_USER`, `OCI_SSH_PRIVATE_KEY` secrets are set; see
+   `deploy/vps/OCI.md` §8)
 
 Required GitHub secrets: `GCP_SA_KEY`.
 
