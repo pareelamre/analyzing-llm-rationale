@@ -292,7 +292,7 @@ class DatastoreStrategyRunStore:
 
     @staticmethod
     def _entity(key: Any, run: StrategyRun):
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         encoded = _encoded(run)
         if len(encoded.encode("utf-8")) > 900_000:

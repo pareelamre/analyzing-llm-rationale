@@ -467,7 +467,7 @@ class DatastoreWorkerJobs:
 
     @classmethod
     def _entity(cls, job: WorkerJob, key: Any):
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         entity = datastore.Entity(key=key, exclude_from_indexes=("payload_json", "result_json"))
         entity.update({

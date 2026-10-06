@@ -484,7 +484,7 @@ class DatastoreLifecycleStore:
         return self._decode(entity) if entity is not None else None
 
     def save(self, projection: LifecycleProjection, *, expected_revision: int) -> LifecycleProjection:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         key = self._key(projection.scope_id, projection.command_id)
         with self._client.transaction():

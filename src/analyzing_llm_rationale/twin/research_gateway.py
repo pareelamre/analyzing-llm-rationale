@@ -167,7 +167,7 @@ class DatastorePublicEvidenceCache:
         self, instrument_id: str, as_of: datetime,
         evidence: tuple[PublicEvidence, ...],
     ) -> str:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         evidence = tuple(evidence)
         cache_id = public_evidence_set_id(instrument_id, as_of, evidence)
@@ -371,7 +371,7 @@ class DatastoreResearchCaptureStore:
         return restore_research_capture(payload)
 
     def record_capture(self, assignment_id: str, capture: PublicResearchCapture) -> bool:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         key = str(assignment_id).strip()
         if not key:
@@ -787,7 +787,7 @@ class DatastoreResearchResultStore:
                 if _result_json(stored) != encoded:
                     raise ResearchResultStoreError("research reservation has a conflicting decision")
                 return True
-            from google.cloud import datastore
+            from analyzing_llm_rationale import datastore_backend as datastore
 
             entity = datastore.Entity(key=datastore_key, exclude_from_indexes=("payload_json",))
             entity.update({

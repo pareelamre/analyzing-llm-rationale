@@ -309,7 +309,7 @@ class DatastoreResearchBudget:
         })
 
     def reserve(self, reservation_id: str, *, key: str, estimated_usd: Decimal, estimated_tokens: int, policy: BudgetPolicy) -> BudgetReservation:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         estimate = _amount(estimated_usd)
         _tokens(estimated_tokens)

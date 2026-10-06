@@ -249,7 +249,7 @@ class DatastoreAccountSnapshotStore:
                         snapshot_events.add(1, {"outcome": "duplicate"})
                         span.set_attribute("outcome", "duplicate")
                         return existing_snapshot
-                from google.cloud import datastore
+                from analyzing_llm_rationale import datastore_backend as datastore
 
                 entity = datastore.Entity(key=key, exclude_from_indexes=("payload_json",))
                 entity.update({"generation": snapshot.generation, "fingerprint": fingerprint, "payload_json": encoded})

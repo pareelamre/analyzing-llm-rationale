@@ -379,11 +379,19 @@ def _decrypt_provider_secret(user_id: str, provider_id: str, record: Dict[str, A
 _memory_user_providers: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
 def _get_datastore_client() -> Any:
-    if not (os.environ.get("K_SERVICE") or os.environ.get("DATASTORE_EMULATOR_HOST") or os.environ.get("ENABLE_DATASTORE") == "1"):
+    from analyzing_llm_rationale import datastore_backend
+
+    # The SQL backend is explicitly configured, so it does not need the
+    # Cloud Run marker (K_SERVICE) that gates the GCP client.
+    if not (
+        datastore_backend.is_sql()
+        or os.environ.get("K_SERVICE")
+        or os.environ.get("DATASTORE_EMULATOR_HOST")
+        or os.environ.get("ENABLE_DATASTORE") == "1"
+    ):
         return None
     try:
-        from google.cloud import datastore
-        return datastore.Client()
+        return datastore_backend.Client()
     except Exception:
         return None
 
@@ -453,7 +461,7 @@ def put_user_model_provider(
     if client is None:
         _memory_user_providers.setdefault(user_id, {})[provider_id] = record
     else:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
         entity = datastore.Entity(
             key=_model_provider_key(client, user_id, provider_id),
             exclude_from_indexes=("encrypted_secret", "wrapped_data_key"),

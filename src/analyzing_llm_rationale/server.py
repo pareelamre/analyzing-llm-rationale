@@ -854,7 +854,7 @@ def _get_datastore():
     global _ds_client
     if _ds_client is None:
         try:
-            from google.cloud import datastore as _ds
+            from analyzing_llm_rationale import datastore_backend as _ds
             _ds_client = _ds.Client()
         except Exception:
             pass
@@ -889,7 +889,7 @@ def _upsert_user(sub: str, email: str, name: str, picture: str) -> str:
     client = _get_datastore()
     if client is None:
         return sub
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
     now = datetime.now(timezone.utc)
     entity = None
     if email:
@@ -962,7 +962,7 @@ def _enroll_market_sync(platform: str, ident: str, market_url: str,
     if client is None:
         return
     try:
-        from google.cloud import datastore as _ds
+        from analyzing_llm_rationale import datastore_backend as _ds
         key = client.key(_ENROLLED_MARKET_KIND, f"{platform}:{ident}")
         entity = client.get(key)
         now = datetime.now(timezone.utc)
@@ -1059,7 +1059,7 @@ def _create_password_user(user_id: str, email: str, name: str, password_hash: st
             "last_login": now,
         }
         return
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
     entity = _ds.Entity(
         key=client.key("User", user_id),
         exclude_from_indexes=("picture", "password_hash"),
@@ -1180,7 +1180,7 @@ def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, A
     if client is None:
         _state.setdefault("chat_conversations", {}).setdefault(user_id, {})[conversation["id"]] = conversation
         return conversation
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
     key = _conversation_key(client, user_id, conversation["id"])
     entity = _ds.Entity(key=key, exclude_from_indexes=("conversationSteer",))
     entity.update({
@@ -1276,7 +1276,7 @@ def _put_favorite(user_id: str, favorite: Dict[str, Any]) -> Dict[str, Any]:
     if client is None:
         _state.setdefault("favorites", {}).setdefault(user_id, {})[favorite["key"]] = favorite
         return favorite
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
     key = _favorite_key(client, user_id, favorite["key"])
     # Only short scalar identity/order fields need indexing; exclude free text.
     indexed = {"key", "platform", "ident", "notify", "createdAt", "updatedAt"}
@@ -1346,7 +1346,7 @@ def _put_personal_ledger_entry(user_id: str, entry: Dict[str, Any]) -> Dict[str,
     if client is None:
         _state.setdefault("personal_ledger", {}).setdefault(user_id, {})[entry["id"]] = entry
         return entry
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
     key = _personal_ledger_key(client, user_id, entry["id"])
     indexed = {"id", "conversation_id", "message_id", "probability", "model", "createdAt"}
     entity = _ds.Entity(key=key, exclude_from_indexes=tuple(field for field in entry if field not in indexed))
@@ -1420,7 +1420,7 @@ def _put_agent_run(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
     if client is None:
         _state.setdefault("agent_runs", {}).setdefault(user_id, {})[record["id"]] = record
         return record
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
 
     entity = _ds.Entity(
         key=_agent_run_key(client, user_id, record["id"]),
@@ -1495,7 +1495,7 @@ def _put_agent_profile(user_id: str, profile: Dict[str, Any]) -> Dict[str, Any]:
     if client is None:
         _state.setdefault("agent_profiles", {}).setdefault(user_id, {})[profile["id"]] = profile
         return profile
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
 
     entity = _ds.Entity(
         key=_agent_profile_key(client, user_id, profile["id"]),
@@ -1551,7 +1551,7 @@ def _rag_add(user_id: str, namespace: str, items: List[Dict[str, Any]]) -> int:
     if client is None:
         _state.setdefault("rag", {}).setdefault(user_id, []).extend(records)
         return len(records)
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
     entities = []
     for r in records:
         entity = _ds.Entity(
@@ -4824,7 +4824,7 @@ async def mark_enrolled(req: MarkEnrolledRequest, request: Request = None) -> Di
         return {"marked": 0, "pruned": 0}
 
     def _apply():
-        from google.cloud import datastore as _ds  # noqa: F401
+        from analyzing_llm_rationale import datastore_backend as _ds  # noqa: F401
         marked = 0
         for ident_key in req.idents[:500]:
             key = client.key(_ENROLLED_MARKET_KIND, ident_key)
@@ -7673,7 +7673,7 @@ def _record_visit_datastore(
     IP is ever stored.
     """
     client = _get_datastore()
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
 
     vid = _visitor_id(request)
     day = time.strftime("%Y-%m-%d", time.gmtime())
@@ -7759,7 +7759,7 @@ def _record_analytics_event_datastore(
     account_ref: Optional[str],
 ) -> None:
     client = _get_datastore()
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
 
     now = datetime.now(timezone.utc)
     entity = _ds.Entity(
@@ -8168,7 +8168,7 @@ def _store_shared_forecast(req: SharedForecastRequest, request: Request) -> "Sha
     client = _get_datastore()
     if client is not None:
         try:
-            from google.cloud import datastore as _ds
+            from analyzing_llm_rationale import datastore_backend as _ds
             entity = _ds.Entity(
                 key=client.key("SharedForecast", share_id),
                 exclude_from_indexes=("payload",),
@@ -10538,7 +10538,7 @@ def _put_trading_connection(
     if client is None:
         _state.setdefault("trading_connections", {}).setdefault(user_id, {})[platform] = record
     else:
-        from google.cloud import datastore as _ds
+        from analyzing_llm_rationale import datastore_backend as _ds
 
         entity = _ds.Entity(
             key=_trading_connection_key(client, user_id, platform),
@@ -10683,7 +10683,7 @@ def _put_trading_order(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
     if client is None:
         _state.setdefault("trading_orders", {}).setdefault(user_id, {})[record["id"]] = record
         return record
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
 
     entity = _ds.Entity(
         key=_trading_order_key(client, user_id, record["id"]),
@@ -10727,7 +10727,7 @@ def _put_trading_run(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
     if client is None:
         _state.setdefault("trading_runs", {}).setdefault(user_id, {})[record["id"]] = record
         return record
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
 
     entity = _ds.Entity(
         key=_trading_run_key(client, user_id, record["id"]),
@@ -10836,7 +10836,7 @@ def _put_trading_guardrails(user_id: str, policy: Dict[str, Any]) -> Dict[str, A
     if client is None:
         _state.setdefault("trading_guardrails", {})[user_id] = record
         return record
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
 
     entity = _ds.Entity(key=_trading_guardrails_key(client, user_id))
     entity.update(record)
@@ -10897,7 +10897,7 @@ def _record_trading_risk_event(
         events.append(record)
         del events[:-250]
         return record
-    from google.cloud import datastore as _ds
+    from analyzing_llm_rationale import datastore_backend as _ds
 
     entity = _ds.Entity(key=_trading_risk_event_key(client, user_id, record["id"]))
     entity.update(record)

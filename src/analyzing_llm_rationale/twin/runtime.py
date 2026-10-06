@@ -194,6 +194,7 @@ class PrivateTwinRuntime:
     research_worker: Optional[TwinResearchWorker] = None
     research_operation: Optional[Callable[[ResearchAssignment], ResearchCompletion]] = None
     token_verifier: Optional[TokenVerifier] = None
+    shared_secret: Optional[str] = None
 
     def __post_init__(self) -> None:
         self.role = WorkerRole(self.role)
@@ -237,8 +238,22 @@ class PrivateTwinRuntime:
         scheme, separator, token = header.partition(" ")
         if scheme.lower() != "bearer" or not separator or not token.strip():
             raise WorkerAuthenticationError("private worker requires a bearer token")
+        token = token.strip()
+
+        # Off GCP there is no Google OIDC issuer to verify against, so the
+        # dispatcher and the worker share a secret instead. This is a weaker
+        # guarantee than OIDC -- it authenticates the caller, not a Google
+        # identity -- so it is only reachable when a secret is configured, and
+        # the comparison is constant-time.
+        if self.shared_secret:
+            import hmac
+
+            if hmac.compare_digest(token, self.shared_secret):
+                return "local-dispatcher"
+            raise WorkerAuthenticationError("private worker shared secret is invalid")
+
         principal = verify_google_worker_oidc(
-            token.strip(), expected_audience=self.identities.audience,
+            token, expected_audience=self.identities.audience,
             allowed_service_accounts=allowed, now=self.clock(),
             verifier=self.token_verifier,
         )

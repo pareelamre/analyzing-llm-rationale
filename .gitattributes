@@ -11,3 +11,9 @@ OPEN_AI_API_KEY.txt export-ignore
 *.pyc export-ignore
 __pycache__/ export-ignore
 *.duckdb binary
+
+# Shell scripts and cron files must keep LF endings. With CRLF, `sh` on the
+# Linux host fails with "set: illegal option -" and cron silently does nothing.
+*.sh text eol=lf
+crontab text eol=lf
+deploy/vps/cron/* text eol=lf

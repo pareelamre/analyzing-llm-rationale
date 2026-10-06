@@ -1,0 +1,18 @@
+# Foresea cron schedule -- replaces the five Cloud Scheduler jobs.
+#
+#   twin-due-work              */5 * * * *        (was: Cloud Scheduler)
+#   foresea-tick-track-record  */15 * * * *       (was: Cloud Scheduler)
+#   foresea-tick-forecast      17 * * * *         (was: Cloud Scheduler)
+#   foresea-tick-agent-trading 0 */2 * * *        (was: Cloud Scheduler)
+#   metaculus-github-dispatch  3,13,23,33,43,53 * * * *  (was: Cloud Run job)
+#
+# Install:  crontab /opt/foresea/deploy/vps/crontab
+
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/bin:/bin
+
+*/5 * * * * /opt/foresea/bin/foresea-cron.sh twin-due-work >> /var/log/foresea-cron.log 2>&1
+*/15 * * * * /opt/foresea/bin/foresea-cron.sh track-record >> /var/log/foresea-cron.log 2>&1
+17 * * * * /opt/foresea/bin/foresea-cron.sh forecast >> /var/log/foresea-cron.log 2>&1
+0 */2 * * * /opt/foresea/bin/foresea-cron.sh agent-trading >> /var/log/foresea-cron.log 2>&1
+3,13,23,33,43,53 * * * * /opt/foresea/bin/foresea-cron.sh metaculus-dispatch >> /var/log/foresea-cron.log 2>&1
