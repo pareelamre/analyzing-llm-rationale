@@ -1,5 +1,13 @@
 # Deploying Foresea on Oracle Cloud (OCI) Always Free
 
+> **Status: PREPARED, ON HOLD (2026-10-06).** The migration this runbook
+> supports is not currently planned: PR #671 (`--min-instances 0`) plus
+> pausing the `twin-due-work` scheduler job cut the projected Cloud Run bill
+> from ~$86/month to ~$1.50/month, inside the free tier. This walkthrough is
+> kept ready to execute if that changes — most plausibly if the autonomous
+> twin project revives (its runtime costs ~$15–19/month on GCP but would run
+> free here). See `deploy/vps/README.md` for the full status note.
+
 OCI's Always Free tier gives **2 ARM Ampere OCPUs and 12 GB RAM** (tenancy-wide,
 not per instance), 200 GB block storage, and **10 TB/month egress**. The egress
 allowance is what makes it viable — the GCP `e2-micro` free tier allows only
