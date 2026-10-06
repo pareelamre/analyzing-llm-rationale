@@ -185,6 +185,74 @@ class CredibleEdgeSizingCapTests(unittest.TestCase):
         self.assertNotEqual(plan["mode"], "edge_kelly")
 
 
+class ProbabilityBiasCorrectionTests(unittest.TestCase):
+    """The tick feeds each agent's measured calibration bias back into sizing.
+
+    A positive measured bias means the agent systematically overestimates YES;
+    the correction shifts its stated P(YES) down before Kelly sizes the stake.
+    The raw stated probability stays in the audit trail.
+    """
+
+    def _sizing_with_bias(self, model_probability, bias, price=0.50, mode="quarter_kelly"):
+        benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = PUBLISHED
+        try:
+            with mock.patch.dict(os.environ, {"FORESEA_AGENT_PROBABILITY_BIAS": str(bias)}):
+                return benchmark_tools._sizing_plan(
+                    {"sizing_mode": mode, "model_probability": model_probability},
+                    price=price, side="yes", account_value=10_000.0,
+                )
+        finally:
+            benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+
+    def test_a_positive_bias_shifts_stated_probability_down(self):
+        # deepseek-v4-flash: measured bias +0.219. Stated P(YES)=0.60 on a
+        # 0.50 market is a 10pp edge raw; corrected it is -0.119 -> no trade.
+        raw = sizing(0.60)
+        corrected = self._sizing_with_bias(0.60, 0.219)
+        self.assertTrue(raw["eligible"])
+        self.assertFalse(corrected["eligible"])
+        self.assertEqual(corrected["reason"], "edge_below_threshold")
+
+    def test_the_correction_is_bounded_so_it_cannot_invert_the_probability(self):
+        # A bias beyond +-0.5 would invert the probability's sign (0.90 - 5.0
+        # = -4.1), which is a measurement failure, not a calibration signal.
+        # The clamp bounds the correction; the corrected probability can
+        # still fall below the price, which correctly makes the trade
+        # ineligible rather than crashing or trading an inverted probability.
+        corrected = self._sizing_with_bias(0.90, 5.0)
+        self.assertFalse(corrected["eligible"])
+        self.assertEqual(corrected["reason"], "edge_below_threshold")
+
+    def test_a_clamped_bias_still_sizes_a_genuinely_high_claim(self):
+        # Even with the clamp at 0.5, a very high stated probability on a
+        # cheap contract keeps a positive corrected edge and trades.
+        corrected = self._sizing_with_bias(0.99, 5.0, price=0.11)
+        self.assertTrue(corrected["eligible"])
+        self.assertGreater(corrected["target_notional"], 0.0)
+
+    def test_no_bias_env_var_means_no_correction(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("FORESEA_AGENT_PROBABILITY_BIAS", None)
+            benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = PUBLISHED
+            try:
+                plan = benchmark_tools._sizing_plan(
+                    {"sizing_mode": "quarter_kelly", "model_probability": 0.60},
+                    price=0.50, side="yes", account_value=10_000.0,
+                )
+            finally:
+                benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+        self.assertTrue(plan["eligible"])
+
+    def test_a_negative_bias_shifts_stated_probability_up(self):
+        # An agent that systematically underestimates YES gets shifted up.
+        # P(YES)=0.40 on a 0.50 market is a -10pp edge raw; corrected by
+        # -0.15 it becomes 0.55 -> +5pp edge -> a larger stake.
+        raw = sizing(0.40)
+        corrected = self._sizing_with_bias(0.40, -0.15)
+        self.assertFalse(raw["eligible"], "raw -10pp edge must not trade")
+        self.assertTrue(corrected["eligible"], "corrected +5pp edge should trade")
+
+
 class LoaderTests(unittest.TestCase):
     def setUp(self):
         benchmark_tools._EDGE_CALIBRATION_CACHE.clear()

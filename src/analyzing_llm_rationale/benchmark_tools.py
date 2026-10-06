@@ -269,16 +269,18 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         model_id="gemma-4-26b-a4b-it",
         role_title="Positive-Skew Asymmetric Value Sniper",
         tactical_mandate=(
-            "You are Foresea's #1 realized P&L leader (+$99.36 net realized). Your proven mathematical edge "
-            "is asymmetric payoff betting on underpriced contracts (p <= 0.40, ideally 10c-30c) where 3x to 10x "
-            "payout multipliers compound into substantial gains even with a ~16% win rate. You are strictly "
-            "forbidden from purchasing contracts > 0.45, where poor payoff odds (< 1.2:1) destroy edge. ALWAYS "
-            "size using sizing_mode='convex_conviction' with positive-skew payout boosting. Prioritize Polymarket "
-            "or zero-fee categories to eliminate fee drag."
+            "CALIBRATION REHABILITATION: Your forecast Brier (0.399) is far worse than the market's (0.156) -- "
+            "the worst on the board -- and your realized P&L is -$2,098, almost all of it from 52 trades on "
+            "contracts priced >= 0.70 (avg -$13.32 each). Your one profitable pocket is cheap contracts: "
+            "<0.10 returned +$176 (avg +$11.01). You are now restricted to contracts priced <= 0.30, where "
+            "your asymmetric-payout approach actually works. You are strictly forbidden from purchasing "
+            "contracts > 0.30. Size with sizing_mode='convex_conviction' on cheap underpriced contracts. "
+            "Your stated probabilities are anti-correlated with outcomes: shrink every estimate 50% toward "
+            "the market price before acting on it."
         ),
-        max_contract_price=0.45,
+        max_contract_price=0.30,
         min_profile_edge=None,
-        forbidden_price_range=None,
+        forbidden_price_range=(0.30, 1.00),
         max_trades_per_cycle=None,
         preferred_sizing_mode="convex_conviction",
         horizon_preference="underpriced_skew",
@@ -291,17 +293,19 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         model_id="qwen3-8-27b",
         role_title="Macro & Calibrated Anchor",
         tactical_mandate=(
-            "You are Foresea's highest hit-rate trader (63.6% win rate, +$80.66 net realized). Your empirical edge "
-            "is disciplined 14-30 day macro fundamentals, inflation/rates prints, economic data, and high-probability "
-            "political milestones where you have verified +3.52pp skill. Your default action on all open positions is "
-            "strictly HOLD until event resolution or convergence; do not churn or flip. Size new positions using "
-            "sizing_mode='convex_conviction' or 'quarter_kelly'. You are strictly banned from short-term (<7d) fast-moving "
-            "news noise. Focus on high-signal 14-30d horizons."
+            "VOLUME DISCIPLINE: You are the fleet's most active trader (175 fills) with a genuine 65% win "
+            "rate, yet you lost $649 -- because 66 of those fills were on contracts priced >= 0.70, losing "
+            "$843, and your YES-side trades average -$6.06 while your NO-side trades average only -$0.43. "
+            "Your forecasting is real: your Brier (0.159) beats the market's (0.147) on cheap contracts, and "
+            "your <0.10 trades returned +$137. You are now strictly forbidden from purchasing contracts "
+            "priced > 0.60. Trade less, not more: your per-trade edge (~$1.94 on cheap contracts) is thin, "
+            "so fees eat high frequency. Tilt toward NO/fade positions over YES. Keep your 14-30 day macro "
+            "focus and HOLD discipline on open positions."
         ),
-        max_contract_price=None,
+        max_contract_price=0.60,
         min_profile_edge=None,
         forbidden_price_range=None,
-        max_trades_per_cycle=None,
+        max_trades_per_cycle=3,
         preferred_sizing_mode="convex_conviction",
         horizon_preference="14-30d",
         min_lead_days=7.0,
@@ -313,16 +317,20 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         model_id="glm-5-3",
         role_title="Patient Deep Reasoner",
         tactical_mandate=(
-            "You have the lowest fee drag in the fleet ($2.34 total) and 100% historical accuracy on 14-30d horizon "
-            "questions. Your strategy is ultra-patient deep reasoning: never chase speculative noise or intraday "
-            "price blips. Require at least 4.0pp of net edge before executing any new trade. You are banned from short-term "
-            "(<7d) breaking news contracts. Sizing: use sizing_mode='scaled_edge' or 'edge_kelly'. If no candidate offers "
-            "verified primary-source evidence and a >=4pp edge, your optimal action is PASS."
+            "FLEET TEMPLATE: You are the only agent in profit (+$10.65) and the pattern is the lesson: "
+            "mid-price contracts only, balanced YES/NO, tiny drawdown (0.3%), positive Sharpe. Your "
+            "discipline works -- keep it. You have the lowest fee drag in the fleet and 100% historical "
+            "accuracy on 14-30d horizon questions. Never chase speculative noise or intraday price blips. "
+            "Require at least 4.0pp of net edge before executing any new trade. You are banned from "
+            "short-term (<7d) breaking news contracts. Sizing: use sizing_mode='scaled_edge' or "
+            "'edge_kelly'. If no candidate offers verified primary-source evidence and a >=4pp edge, your "
+            "optimal action is PASS. Your per-trade economics (+$10.20 avg on 0.30-0.70 contracts) justify "
+            "more activity than you currently attempt -- take up to 3 qualified trades per cycle."
         ),
         max_contract_price=None,
         min_profile_edge=0.04,
         forbidden_price_range=None,
-        max_trades_per_cycle=None,
+        max_trades_per_cycle=3,
         preferred_sizing_mode="scaled_edge",
         horizon_preference="14-30d",
         min_lead_days=7.0,
@@ -334,10 +342,13 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         model_id="glm-5-3-flash",
         role_title="Balanced Cost-Efficient Sniper",
         tactical_mandate=(
-            "You combine low fee burn with 100% historical accuracy on 14-30d horizon markets (50% overall win rate). "
-            "Target contracts with dated catalyst events inside the 14-30d window. Require at least 3.0pp net edge. "
-            "Avoid near-term (<7d) sentiment flips. Sizing: use sizing_mode='scaled_edge' or 'quarter_kelly'. "
-            "When edge is ambiguous, maintain portfolio discipline and PASS."
+            "NEAR-BREAKEVEN, ONE RULE FROM PROFITABLE: You lost only $32 across 100 fills -- your losses are "
+            "spread thin, not concentrated. Your Brier (0.155) beats the market's (0.108) is wrong to claim: "
+            "yours is 0.155 vs market 0.108, so the market is better calibrated than you. Your cheap-contract "
+            "trades (<0.10) returned +$41. Apply the fleet-wide rule: no entries on contracts priced >= 0.70. "
+            "Target contracts with dated catalyst events inside the 14-30d window. Require at least 3.0pp net "
+            "edge. Avoid near-term (<7d) sentiment flips. Sizing: use sizing_mode='scaled_edge' or "
+            "'quarter_kelly'. When edge is ambiguous, maintain portfolio discipline and PASS."
         ),
         max_contract_price=None,
         min_profile_edge=0.03,
@@ -354,13 +365,17 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         model_id="gpt-oss-120b",
         role_title="Disciplined Low-Turnover Specialist",
         tactical_mandate=(
-            "REHABILITATION & OVERTRADING DISCIPLINE: Your previous hyperactive trading (113 trades, $271.16 in fee drag) "
-            "wiped out an otherwise solid 39.7% win rate and caused severe capital destruction. You are now strictly "
-            "rate-limited to at most 1 trade per cycle. You are forbidden from trading thin edges (< 5.0pp net edge). "
-            "Never enter a position unless you have an unpriced, dated catalyst with >= 5pp verified edge. Sizing: use "
-            "sizing_mode='quarter_kelly'. If no high-conviction candidate clears the 5pp bar, your required action is PASS."
+            "REHABILITATION CONTINUES: You lost $1,825 across 162 fills with a 2.82% fee drag ($1,300 in fees "
+            "on $46k notional). Your forecast Brier (0.287) is no better than the market's (0.284) -- you have "
+            "no demonstrated forecasting edge, yet you traded more than anyone. Your profitable pockets are "
+            "cheap contracts (<0.10: +$196) and mid-price (0.30-0.70: +$326); your 0.70+ trades lost $218. "
+            "You remain strictly rate-limited to at most 1 trade per cycle. You are forbidden from trading "
+            "thin edges (< 5.0pp net edge) and from contracts priced > 0.70. Never enter a position unless "
+            "you have an unpriced, dated catalyst with >= 5pp verified edge. Sizing: use "
+            "sizing_mode='quarter_kelly'. If no high-conviction candidate clears the 5pp bar, your required "
+            "action is PASS. Fewer, better trades: your win rate (26W/47L) does not justify 162 fills."
         ),
-        max_contract_price=None,
+        max_contract_price=0.70,
         min_profile_edge=0.05,
         forbidden_price_range=None,
         max_trades_per_cycle=1,
@@ -375,15 +390,18 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
     ),
     "llama-3.3-70b-instruct": AgentSpecializationProfile(
         model_id="llama-3.3-70b-instruct",
-        role_title="14-30d Asymmetric Value Specialist",
+        role_title="14-30d Mid-Price Value Specialist",
         tactical_mandate=(
-            "HORIZON RESTRICTION & VALUE FOCUS: You suffered severe losses on noisy short-term (<7d) contracts, but "
-            "Foresea's empirical validation proved you possess +2.59pp skill on 14-30 day contracts. You are strictly "
-            "banned from trading short-term (<7d) contracts. You are capped at contract prices <= 0.40 (where payout "
-            "odds >= 1.5:1 provide positive EV for your ~20% hit rate). Sizing: use sizing_mode='convex_conviction' "
-            "on 14-30d contracts under 35c. Do not buy expensive favorites."
+            "MID-PRICE FOCUS & CALIBRATION: Your 0.30-0.70 trades made +$416 (avg +$21.91 -- the best per-trade "
+            "economics on the board); everything else was noise. Your measured probability bias is +0.287, the "
+            "highest on the board: you systematically overestimate probabilities, and the sizing engine now "
+            "corrects for it automatically. Your historical NO-side trades average +$12.04 while YES-side "
+            "trades average $0 -- prefer NO/fade positions. You are strictly banned from trading short-term "
+            "(<7d) contracts and from contracts priced > 0.70. Sizing: use sizing_mode='convex_conviction' on "
+            "14-30d contracts in the 0.30-0.70 band, where your edge is proven. Do not re-attempt trades the "
+            "risk guard has rejected: if a market is at your concentration cap, pick a different market."
         ),
-        max_contract_price=0.40,
+        max_contract_price=0.70,
         min_profile_edge=None,
         forbidden_price_range=None,
         max_trades_per_cycle=None,
@@ -398,11 +416,14 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         model_id="deepseek-v4-flash",
         role_title="Steamroller Defense & Micro-Probe Sniper",
         tactical_mandate=(
-            "STEAMROLLER DEFENSE MANDATE: You previously suffered severe capital loss (-$567) by buying expensive 81c "
-            "contracts that collapsed to 0c. You are strictly forbidden from purchasing contracts priced > 0.70. "
-            "Never pick up pennies in front of steamrollers: expensive contracts have catastrophic downside when "
-            "unexpected events hit. Sizing: use sizing_mode='probe_kelly' (1.5% micro cap) or 'scaled_edge' to "
-            "keep exposure contained. Prefer underpriced contracts or PASS."
+            "STEAMROLLER DEFENSE & BIAS CORRECTION: You lost $500 across 107 fills. Your measured probability "
+            "bias is +0.219 -- you systematically overestimate YES by ~22pp, and the sizing engine now corrects "
+            "for it automatically before Kelly sizes your stakes. Your Brier (0.119) is worse than the market's "
+            "(0.094), so do not trade on raw conviction alone. You previously suffered severe capital loss "
+            "(-$567) by buying expensive 81c contracts that collapsed to 0c. You are strictly forbidden from "
+            "purchasing contracts priced > 0.70. Never pick up pennies in front of steamrollers. Sizing: use "
+            "sizing_mode='probe_kelly' (1.5% micro cap) or 'scaled_edge' to keep exposure contained. Prefer "
+            "underpriced contracts or PASS."
         ),
         max_contract_price=0.70,
         min_profile_edge=None,
@@ -419,15 +440,19 @@ AGENT_PROFILES: Dict[str, AgentSpecializationProfile] = {
         model_id="minimax-m3",
         role_title="Research Synthesis & Capital Preservation",
         tactical_mandate=(
-            "CAPITAL PRESERVATION & COIN-FLIP AVOIDANCE: You previously had a 0% win rate (0/10) and paid $9.46 "
-            "average fees on 50c-75c mid-range contracts. You are strictly prohibited from trading within the "
-            "50c-75c dead zone. Focus your deep research on either high-asymmetry underpriced opportunities (<40c) "
-            "or verified high-probability events (>80c). Sizing: use sizing_mode='flat_probe' ($25 fixed toehold) "
-            "or 'probe_kelly' to conserve capital while building empirical edge."
+            "CAPITAL PRESERVATION & FAVORITES BAN: You lost $359 across only 38 fills -- and $402 of your "
+            "losses came from just 15 trades on contracts priced >= 0.70 (avg -$26.78, the worst per-trade "
+            "economics on the board). Your Brier (0.277) is far worse than the market's (0.138): the market "
+            "is much better calibrated than you on expensive contracts. You are now strictly forbidden from "
+            "purchasing contracts priced > 0.60. Your <0.10 trades are mildly profitable (+$41) -- stay "
+            "there. You are also prohibited from trading within the 50c-60c dead zone. Focus your deep "
+            "research on high-asymmetry underpriced opportunities (<40c). Sizing: use sizing_mode="
+            "'flat_probe' ($25 fixed toehold) or 'probe_kelly' to conserve capital while building empirical "
+            "edge."
         ),
-        max_contract_price=None,
+        max_contract_price=0.60,
         min_profile_edge=None,
-        forbidden_price_range=(0.50, 0.75),
+        forbidden_price_range=(0.50, 0.60),
         max_trades_per_cycle=None,
         preferred_sizing_mode="flat_probe",
         horizon_preference=None,
@@ -882,6 +907,15 @@ def _sizing_plan(
         model_side_probability = _clean_probability(args.get("calibrated_probability"), name="calibrated_probability")
     else:
         model_yes_probability = _clean_probability(args.get("model_probability"), name="model_probability")
+        # Apply the agent's measured calibration bias before deriving the
+        # side probability: a positive measured bias means the agent
+        # systematically overestimates YES, so its stated P(YES) is shifted
+        # down by that amount before Kelly sizes the stake. The raw stated
+        # probability stays in the audit trail; only the sizing input is
+        # corrected.
+        bias = _probability_bias_correction()
+        if bias:
+            model_yes_probability = max(0.0, min(1.0, model_yes_probability - bias))
         model_side_probability = model_yes_probability if side == "yes" else 1.0 - model_yes_probability
     edge = model_side_probability - price
 
@@ -2543,6 +2577,30 @@ def _min_net_edge() -> float:
 def _max_credible_edge() -> float:
     """Stated edge at or above which a new position is refused. 0 disables."""
     return max(0.0, _env_float("FORESEA_AGENT_MAX_CREDIBLE_EDGE", DEFAULT_MAX_CREDIBLE_EDGE))
+
+
+def _probability_bias_correction() -> float:
+    """Per-agent calibration correction, in probability points, to subtract
+    from a stated P(YES) before sizing.
+
+    The tick measures each agent's historical bias
+    (AVG(model_probability - resolved_outcome)) from resolved thesis
+    forecasts and sets FORESEA_AGENT_PROBABILITY_BIAS for the cycle. A
+    positive value means the agent systematically overestimates YES, so the
+    correction shifts its stated probability down before Kelly sizes the
+    stake. The raw stated probability is preserved in the audit trail; only
+    the sizing input is corrected. 0 (the default) disables the correction.
+    """
+    raw = os.environ.get("FORESEA_AGENT_PROBABILITY_BIAS")
+    if raw in (None, ""):
+        return 0.0
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    # Bounded: a correction beyond +-0.5 would flip the sign of any
+    # probability, which is a measurement failure, not a calibration signal.
+    return max(-0.5, min(0.5, value))
 
 
 def _blocked_categories() -> frozenset:

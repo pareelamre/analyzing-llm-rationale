@@ -4182,6 +4182,25 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     # in this cycle's tool loop could read a guard.
     with benchmark_tools._account_transaction() as conn:
         os.environ["FORESEA_AGENT_ACCOUNT_VALUE"] = str(_current_account_value(conn, agent_id, held_quotes))
+        # Feed the agent's measured calibration bias back into sizing: a
+        # positive bias (systematic YES overestimation) shifts its stated
+        # P(YES) down before Kelly sizes the stake. Only applied with enough
+        # resolved forecasts to be a signal, not noise.
+        bias_row = conn.execute(
+            """
+            SELECT AVG(model_probability - resolved_outcome) AS bias,
+                   COUNT(*) AS n
+            FROM agent_thesis_forecasts
+            WHERE agent_id = ? AND resolved_outcome IS NOT NULL
+            """,
+            (agent_id,),
+        ).fetchone()
+        bias = float(bias_row["bias"]) if bias_row and bias_row["bias"] is not None else 0.0
+        resolved_n = int(bias_row["n"]) if bias_row else 0
+        if resolved_n >= 20 and abs(bias) >= 0.05:
+            os.environ["FORESEA_AGENT_PROBABILITY_BIAS"] = f"{bias:.6f}"
+        else:
+            os.environ.pop("FORESEA_AGENT_PROBABILITY_BIAS", None)
     _configure_max_order_notional(agent_id=agent_id)
 
     question = _build_question(
