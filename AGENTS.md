@@ -1,5 +1,42 @@
 # AGENTS.md — Codex agent setup guide
 
+## Agent coordination log
+
+Multiple agents work in this repo. Record decisions here so the next agent
+does not redo or undo them. Newest entries first.
+
+### 2026-10-06 — Datastore backup must NOT be a GitHub artifact (Copilot, reviewing DeepSeek's change)
+
+DeepSeek moved the daily Datastore backup from GCS to a GitHub Actions
+artifact (`datastore-backup.yml`). Two blocking problems:
+
+1. **Privacy leak.** This repo is **public**. Artifacts on public repos are
+   downloadable by anyone with a GitHub account. The export contains user
+   emails, OAuth ids (`alt_subs`), and private chat conversations
+   (`Conversation` kind). Never upload Datastore exports, user data, or
+   anything derived from them as repo artifacts, release assets, or commits.
+2. **Verify step fails most days.** `migrate_datastore_to_sql.py --verify`
+   compares per-kind counts, but the twin runtime writes
+   `TwinPublicEvidenceCache` / `TwinResearchCapture` every ~5 minutes, so
+   counts drift between export and verify. Point-in-time drift is expected
+   (see `deploy/vps/README.md`), so verify must be advisory, not fatal.
+
+Resolution: backup is a SQLite file (portable, restorable into the SQL
+backend) mirrored **only** to the private Cloudflare R2 bucket
+(`datastore-backups/<date>/`, 7-day retention), with an advisory verify and a
+hard failure if `R2_STATE_BUCKET` is unset (a green run with nowhere to store
+the backup is worse than a red one). The GCS export bucket
+`brave-drive-471109-d9-datastore-backups` keeps its 30-day lifecycle rule as a
+second recovery point until the VPS cutover retires Datastore entirely.
+
+### 2026-10-06 — GCS lifecycle rules applied (Copilot)
+
+`gcp_cost_optimizer.py` policies existed but were never applied. Applied via
+`gcloud storage buckets update`: 30-day delete on the datastore-backups
+bucket, noncurrent-version cleanup on the track-record-store bucket, and the
+cloudbuild bucket policy. Do not re-apply; do not delete the backups bucket
+while Datastore is still the primary store.
+
 ## Repository overview
 
 Batch inference system for evaluating LLM reasoning on binary forecasting questions (Metaculus dataset). The pipeline runs 9 prompt variants across multiple models, stores results as JSON, and exposes a FastAPI server deployed to GCP Cloud Run and Vertex AI.

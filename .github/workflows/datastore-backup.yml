@@ -1,38 +1,146 @@
 name: Datastore backup
 
-# Scheduled export of Cloud Datastore (users, conversations, analytics) to a
-# GCS bucket so the data has a recovery point and survives accidental
-# corruption/deletion. Zero idle cost: GitHub-hosted cron + a short-lived
-# export job; the bucket has a 30-day delete lifecycle.
+# Daily recovery point for Cloud Datastore (users, conversations, analytics,
+# trading state), stored as a private SQLite file in the Cloudflare R2 state
+# bucket.
+#
+# This replaces the previous `gcloud datastore export` -> GCS approach. The
+# export is a portable SQLite file produced by the same copier used for the
+# VPS migration, so the backup is directly restorable into the SQL backend.
+#
+# The backup is deliberately NOT uploaded as a GitHub Actions artifact: this
+# repository is public, and artifacts on public repos are downloadable by
+# anyone with a GitHub account. The export contains user emails, OAuth ids
+# and private chat conversations, so it may only live in private storage.
+# See the "Agent coordination log" in AGENTS.md before changing this.
+#
+# GCP credentials are still required to *read* Datastore while it remains the
+# source of truth. Once the app runs on the SQL backend, this workflow can be
+# retired entirely.
 
 on:
   schedule:
     - cron: "17 3 * * *"   # daily at 03:17 UTC
-  workflow_dispatch: {}      # allow manual runs from the Actions tab
+  workflow_dispatch: {}
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
-  BACKUP_BUCKET: gs://brave-drive-471109-d9-datastore-backups
+  # Recovery points retained in R2, matching the state-backup window.
+  BACKUP_RETENTION_DAYS: "7"
 
 jobs:
   export:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
-      id-token: write
       contents: read
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install export dependencies
+        run: pip install google-cloud-datastore==2.20.2 google-auth==2.35.0 boto3==1.43.108
+
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - uses: google-github-actions/setup-gcloud@v2
-
-      - name: Export Datastore to GCS
+      - name: Export Datastore to SQLite
+        env:
+          PYTHONPATH: src
         run: |
-          STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
-          DEST="${BACKUP_BUCKET}/${STAMP}"
-          echo "Exporting Datastore -> ${DEST}"
-          gcloud datastore export "${DEST}" \
-            --project "${GCP_PROJECT_ID}"
-          echo "Backup complete: ${DEST}"
+          STAMP=$(date -u +%Y-%m-%d)
+          python scripts/migrate_datastore_to_sql.py \
+            --project "${GCP_PROJECT_ID}" \
+            --output "foresea-${STAMP}.sqlite3"
+          echo "STAMP=${STAMP}" >> "$GITHUB_ENV"
+
+      - name: Verify the export (advisory)
+        # The twin runtime writes new entities every few minutes, so per-kind
+        # counts can drift between the export and this check. That is expected
+        # for a point-in-time snapshot (see deploy/vps/README.md), not
+        # corruption -- so a mismatch warns instead of failing the job and
+        # discarding the recovery point.
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/migrate_datastore_to_sql.py --verify \
+            --project "${GCP_PROJECT_ID}" \
+            --output "foresea-${STAMP}.sqlite3" || \
+            echo "::warning::Kind counts drifted during export (twin writer is live). Recovery point kept; re-run manually before using it for a cutover."
+
+      - name: Record export metadata
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, sqlite3
+          from pathlib import Path
+
+          path = Path(f"foresea-{os.environ['STAMP']}.sqlite3")
+          digest = hashlib.sha256(path.read_bytes()).hexdigest()
+          with sqlite3.connect(path) as db:
+              kinds = dict(db.execute(
+                  "SELECT kind, COUNT(*) FROM entities GROUP BY kind ORDER BY kind"
+              ).fetchall())
+              total = sum(kinds.values())
+          meta = {
+              "date": os.environ["STAMP"],
+              "bytes": path.stat().st_size,
+              "sha256": digest,
+              "entities": total,
+              "kinds": kinds,
+          }
+          Path("backup-manifest.json").write_text(json.dumps(meta, indent=2) + "\n")
+          print(f"{total} entities across {len(kinds)} kinds, sha256={digest[:16]}...")
+          PY
+
+      - name: Upload to Cloudflare R2 (private)
+        if: vars.R2_STATE_BUCKET != ''
+        env:
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+          R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          PYTHONPATH: src
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import datetime, timedelta, timezone
+          from analyzing_llm_rationale.r2_store import get_client
+
+          client = get_client()
+          bucket = os.environ["R2_STATE_BUCKET"]
+          stamp = os.environ["STAMP"]
+          retention = int(os.environ["BACKUP_RETENTION_DAYS"])
+          for name in (f"foresea-{stamp}.sqlite3", "backup-manifest.json"):
+              key = f"datastore-backups/{stamp}/{name}"
+              client.upload_file(name, bucket, key)
+              print(f"uploaded {key}")
+          # Expire dated recovery points older than the retention window.
+          cutoff = datetime.now(timezone.utc).date() - timedelta(days=retention)
+          expired = []
+          for page in client.get_paginator("list_objects_v2").paginate(
+              Bucket=bucket, Prefix="datastore-backups/"
+          ):
+              for obj in page.get("Contents", []):
+                  parts = obj["Key"].split("/")
+                  if len(parts) >= 2:
+                      try:
+                          if datetime.strptime(parts[1], "%Y-%m-%d").date() < cutoff:
+                              expired.append(obj["Key"])
+                      except ValueError:
+                          continue
+          for key in expired:
+              client.delete_object(Bucket=bucket, Key=key)
+          print(f"expired {len(expired)} recovery-point objects older than {retention} days")
+          PY
+
+      - name: Fail if R2 is not configured
+        # A backup that goes nowhere is worse than a failed run: it would look
+        # green while leaving user data without a recovery point.
+        if: vars.R2_STATE_BUCKET == ''
+        run: |
+          echo "::error::R2_STATE_BUCKET is not configured; the Datastore backup has nowhere private to go."
+          exit 1
