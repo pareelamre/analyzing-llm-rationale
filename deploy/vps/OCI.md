@@ -125,18 +125,57 @@ The first build compiles nothing (wheels are prebuilt) but does download
 PyTorch, so allow a few minutes. The first boot then downloads the RAG
 embedding model into the `models` volume.
 
-## 7. Verify
+Sections 2–6 above are automated by `deploy/vps/bootstrap-oci.sh` (idempotent;
+it stops short of starting the stack so you can fill in `.env` first):
 
 ```bash
-curl -fsS localhost:8000/health    # {"status":"ok"}
-curl -fsS localhost:8000/ready     # {"ready":true,...}
+scp -i ~/.ssh/oci_foresea deploy/vps/bootstrap-oci.sh ubuntu@<instance-ip>:
+ssh -i ~/.ssh/oci_foresea ubuntu@<instance-ip> 'sh bootstrap-oci.sh'
+```
+
+## 7. Verify
+
+The compose stack does not publish port 8000 — only Caddy's 80/443 are
+exposed, and the app is reachable only through them. Verify from inside the
+containers:
+
+```bash
+docker compose exec app python -c \
+  "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/health').read())"
+docker compose exec app python -c \
+  "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/ready').read())"
 ```
 
 `/ready` returns 503 with `provider_configured: false` if `SCADS_AI_API_KEY`
 is unset — that is a missing LLM key, not a storage problem.
 
 Then point `foresea.ink` at the instance's public IP. Caddy issues the TLS
-certificate on first request.
+certificate on first request, after which the public checks work:
+
+```bash
+curl -fsS https://foresea.ink/health
+curl -fsS https://foresea.ink/ready
+```
+
+## 8. Ongoing deploys
+
+Two paths, both running `deploy/vps/deploy.sh` on the box:
+
+- **Manual** — `ssh -i ~/.ssh/oci_foresea ubuntu@<ip> \
+  'sh /opt/foresea/deploy/vps/deploy.sh'`. It pulls latest `main`, rebuilds,
+  polls `/ready` for up to 5 minutes and **auto-rolls back** to the previous
+  image if the health gate fails. `deploy.sh --rollback` restores the previous
+  image by hand.
+- **CI** — `.github/workflows/oci-deploy.yml` runs the same script on every
+  push to `main`. It is gated on the repo variable `OCI_DEPLOY_ENABLED=true`
+  plus three secrets (`OCI_HOST`, `OCI_SSH_USER`, `OCI_SSH_PRIVATE_KEY`), so
+  set them only after the first manual deploy has succeeded. This replaces the
+  Cloud Run deploy job in `docker.yml` at cutover; until then `docker.yml`
+  keeps deploying to Cloud Run.
+
+The compose stack does not publish port 8000 (only Caddy's 80/443), so the
+health gate probes `127.0.0.1:8000` from inside the app container — nothing
+new is exposed publicly.
 
 ## Resource sizing
 

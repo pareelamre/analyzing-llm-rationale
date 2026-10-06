@@ -32,6 +32,9 @@ the container onto a box that costs a flat **~€5–15/month**.
 | TLS | `deploy/vps/Caddyfile` | ✅ written |
 | Scheduler replacement | `deploy/vps/cron/` | ✅ written |
 | Cloud Run job replacement | `metaculus-dispatch` compose service | ✅ tested |
+| Instance bootstrap | `deploy/vps/bootstrap-oci.sh` | ✅ written |
+| On-box deploy + rollback | `deploy/vps/deploy.sh` | ✅ written |
+| CI deploy to the box | `.github/workflows/oci-deploy.yml` | ✅ written (opt-in) |
 
 The shim is a **drop-in for the `google.cloud.datastore` surface the app
 actually calls** — `Client`, `Key`, `Entity`, `PropertyFilter`, ancestor
@@ -155,6 +158,14 @@ crontab /opt/foresea/deploy/vps/crontab
 crontab -l   # confirm
 ```
 
+The crontab appends to `/var/log/foresea-cron.log`; create it first and make
+sure it is owned by the cron user, or every entry fails silently:
+
+```bash
+sudo touch /var/log/foresea-cron.log
+sudo chown "$(id -u):$(id -g)" /var/log/foresea-cron.log
+```
+
 The `metaculus-dispatch` entry runs the app image with a different command
 (`python -m analyzing_llm_rationale.metaculus_dispatch`), which is exactly what
 the Cloud Run job did. It needs `METACULUS_GITHUB_DISPATCH_TOKEN` in `.env`.
@@ -176,11 +187,33 @@ docker compose logs -f app
 Wait for `/health` to return `{"status": "ok"}`. The first boot downloads the
 embedding model into the `models` volume, so it takes a few minutes.
 
-### 4. Verify before moving DNS
+### 3b. Ongoing deploys and rollback
+
+`deploy/vps/deploy.sh` (on the box) automates the update path:
 
 ```bash
-curl -fsS http://<vps-ip>:8000/health
-curl -fsS http://<vps-ip>:8000/ready
+sh /opt/foresea/deploy/vps/deploy.sh             # pull main, rebuild, health-gate
+sh /opt/foresea/deploy/vps/deploy.sh --rollback  # restore the previous image
+```
+
+It records the running image ID before each deploy, polls `/ready` (probed
+inside the app container, since port 8000 is not published to the host) for up
+to 5 minutes after the restart, and auto-rolls back if the gate fails. On OCI
+the same script is invoked by `.github/workflows/oci-deploy.yml` on every push
+to `main` once the `OCI_*` secrets and the `OCI_DEPLOY_ENABLED=true` variable
+are set (see [OCI.md](./OCI.md) §8).
+
+### 4. Verify before moving DNS
+
+The compose stack does not publish port 8000 — only Caddy's 80/443 are
+exposed. Verify from inside the container, then through Caddy once DNS is
+pointed:
+
+```bash
+docker compose exec app python -c \
+  "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/health').read())"
+docker compose exec app python -c \
+  "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/ready').read())"
 ```
 
 Then point `foresea.ink` at the VPS. Caddy issues the certificate on first

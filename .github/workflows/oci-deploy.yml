@@ -1,0 +1,44 @@
+# Deploy to the OCI Ampere instance on every push to main.
+#
+# Replaces the Cloud Run deploy job in docker.yml once the cutover is done.
+# The box pulls the commit itself (deploy/vps/deploy.sh does fetch + reset),
+# rebuilds the image on the host (ARM-native, no buildx needed), health-gates
+# on /ready and auto-rolls back to the previous image on failure.
+#
+# Enable by setting these repository secrets:
+#   OCI_HOST            instance public IP (or DNS name)
+#   OCI_SSH_USER        login user, normally "ubuntu"
+#   OCI_SSH_PRIVATE_KEY contents of the private key whose public half is on
+#                       the instance (~/.ssh/oci_foresea, see deploy/vps/OCI.md)
+#
+# The deploy is opt-in per repository setting: set the variable
+# OCI_DEPLOY_ENABLED to "true" (repo Settings -> Variables -> Actions) after
+# the first manual deploy has succeeded, so pushes cannot take the box down
+# before it is ready.
+name: OCI deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: oci-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: vars.OCI_DEPLOY_ENABLED == 'true'
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_SSH_USER }}
+          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          # The first build downloads torch and can take several minutes.
+          command_timeout: 30m
+          script: |
+            set -e
+            sh /opt/foresea/deploy/vps/deploy.sh
