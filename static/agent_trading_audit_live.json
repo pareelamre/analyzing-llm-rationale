@@ -2,6 +2,100 @@
   "audits": {
     "deepseek-v4-flash": [
       {
+        "action_id": "c5b937d7-6331-4d19-9659-c37ee4c03f46",
+        "agent_id": "deepseek-v4-flash",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 818.2047772403936,
+            "marketable": true,
+            "observed_ask": 0.73,
+            "observed_bid": 0.67,
+            "source": "live_venue_quote",
+            "spread": 0.06,
+            "spread_status": "checked",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.73,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 9263.788736,
+            "cash_required": 13.198253,
+            "concentration_cap": 1415.292536,
+            "cycle_id": "30m:995156",
+            "cycle_spend_after": 13.198253,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 14.501742,
+            "daily_risk_before": 1.303489,
+            "daily_risk_limit": 2830.585072,
+            "drawdown_after": 0.062451,
+            "fee": 1.603378,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 31.369665,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 84.83484,
+            "open_markets_after": 4,
+            "per_cycle_spend_limit": 1887.056715,
+            "reasons": [
+              "profile_price_ceiling_exceeded"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.05,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": 818.2,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.02,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 86.438219,
+            "target_quantity": 116.21211012237022
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995156",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 13.198253,
+          "fee": 1.603378,
+          "netting_payout": 73.239966,
+          "notional": 84.83484,
+          "price": 0.73,
+          "quantity": 116.21211012237022,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXCABLEAVE-26MAY22-26NOV"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "44179e8492f39650d3a5b58519ef559295bd9938ec7ccf3f38b363ae6ec47643",
+        "recorded_at": "2026-10-06T10:05:07.279678+00:00"
+      },
+      {
         "action_id": "1cf88942-723d-4d7c-9472-163d9b216a5f",
         "agent_id": "deepseek-v4-flash",
         "audit": {
@@ -38480,6 +38574,192 @@
       }
     ],
     "gpt-oss-120b": [
+      {
+        "action_id": "beb9f221-5b98-4382-a4a4-8d0a48de6e12",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_quote_unavailable",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": null,
+            "marketable": false,
+            "observed_ask": null,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_quote_unavailable"
+          },
+          "requested_order": {
+            "price": 0.85,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 7165.444182,
+            "cash_required": 235.04663,
+            "concentration_cap": 1175.233148,
+            "cycle_id": "30m:995156",
+            "cycle_spend_after": 235.04663,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 277.053179,
+            "daily_risk_before": 42.006549,
+            "daily_risk_limit": 2350.466296,
+            "drawdown_after": 0.226441,
+            "fee": 2.442345,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 232.604285,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 1,
+            "notional": 232.604285,
+            "open_markets_after": 5,
+            "per_cycle_spend_limit": 1566.977531,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.09,
+            "eligible": true,
+            "horizon": "unknown",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": null,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 235.04663,
+            "target_quantity": 273.6520995434759
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995156",
+        "event_type": "unfilled_order",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 0.85,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "WILL-AN-ARTWORK-SELL-FOR-150-MILLION-BY-DECEMBER-31"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "e767eb3c3c6cc5317ca66e1740342b57017f52346875dc6a7140348867e8824f",
+        "recorded_at": "2026-10-06T10:16:14.022016+00:00"
+      },
+      {
+        "action_id": "05e1e090-9d20-4aa3-8854-a94410f95de8",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": null,
+            "marketable": false,
+            "observed_ask": null,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_quote_unavailable"
+          },
+          "requested_order": {
+            "price": 0.85,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 7165.444182,
+            "cash_required": 235.04663,
+            "concentration_cap": 1175.233148,
+            "cycle_id": "30m:995156",
+            "cycle_spend_after": 235.04663,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 277.053179,
+            "daily_risk_before": 42.006549,
+            "daily_risk_limit": 2350.466296,
+            "drawdown_after": 0.226441,
+            "fee": 2.442345,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 232.604285,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 1,
+            "notional": 232.604285,
+            "open_markets_after": 5,
+            "per_cycle_spend_limit": 1566.977531,
+            "reasons": [
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.13,
+            "eligible": true,
+            "horizon": "unknown",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": null,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 235.04663,
+            "target_quantity": 273.6520995434759
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995156",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 235.04663,
+          "fee": 2.442345,
+          "netting_payout": 0.0,
+          "notional": 232.604285,
+          "price": 0.85,
+          "quantity": 273.6520995434759,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "WILL-AN-ARTWORK-SELL-FOR-150-MILLION-BY-DECEMBER-31"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "948df1988744706dfcb28a78e234ed51b09d3c97aecf4d0c625d312ffe44a308",
+        "recorded_at": "2026-10-06T10:16:09.912350+00:00"
+      },
       {
         "action_id": "aba8891b-ca85-4ca8-86bf-2d3498e71980",
         "agent_id": "gpt-oss-120b",
@@ -83501,6 +83781,100 @@
     ],
     "qwen3-8-27b": [
       {
+        "action_id": "8fef3794-fd32-47a4-b885-24b780cf624b",
+        "agent_id": "qwen3-8-27b",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 86.77596408707176,
+            "marketable": true,
+            "observed_ask": 0.39,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.61,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 7983.87183,
+            "cash_required": 286.926225,
+            "concentration_cap": 1434.645513,
+            "cycle_id": "30m:995156",
+            "cycle_spend_after": 286.926225,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 286.926225,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2869.291026,
+            "drawdown_after": 0.086758,
+            "fee": 6.83424,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 280.091985,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 280.091985,
+            "open_markets_after": 7,
+            "per_cycle_spend_limit": 1912.860684,
+            "reasons": [
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.39,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.5,
+            "lead_days": 86.8,
+            "market_shrinkage": 0.25,
+            "max_position_fraction": 0.03,
+            "mode": "edge_kelly",
+            "reason": null,
+            "target_notional": 286.929103,
+            "target_quantity": 718.184577973318
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995156",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 286.926225,
+          "fee": 6.83424,
+          "netting_payout": 0.0,
+          "notional": 280.091985,
+          "price": 0.39,
+          "quantity": 718.184577973318,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-an-artwork-sell-for-150-million-by-december-31"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "31ef78bfa00d4430aa21cfe475ad6cd2f12ca4b34363b629a23bed8077aa34a4",
+        "recorded_at": "2026-10-06T10:21:36.790271+00:00"
+      },
+      {
         "action_id": "358a5b6c-27fa-4994-9ed6-5c0fd07d8e64",
         "agent_id": "qwen3-8-27b",
         "audit": {
@@ -98228,7 +98602,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-06T09:28:37.107973+00:00",
+  "generated_at": "2026-10-06T10:23:39.721228+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
