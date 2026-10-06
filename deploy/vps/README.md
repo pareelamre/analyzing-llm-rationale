@@ -1,11 +1,23 @@
 # Migrating Foresea off GCP to a single VPS
 
+> **Status: PREPARED, ON HOLD (2026-10-06).** The cost driver that motivated
+> this migration is gone. PR #671 set the main Cloud Run service to
+> `--min-instances 0` (it now scales to zero between requests: $2.08/day →
+> $0.04/day measured), and the `twin-due-work` scheduler job was paused
+> (twin-maintenance was ~93% of the bill, ~$15–19/month, running a shadow
+> runtime whose adapters were never wired). The projected Cloud Run bill is
+> now **~$1.50/month**, inside the free tier. A €20 budget alert
+> (`bf9e0444-a41b-42ea-89d2-62f812ffe26b`) watches the account. Everything
+> below is merged and ready to execute if the calculus changes — e.g. the
+> twin project reviving (its runtime would cost ~$15–19/month on GCP but run
+> free on an OCI Ampere box), or GCP free-tier terms changing.
+
 ## Why
 
-The GCP bill is **~$86/month**, and ~$87 of that is Cloud Run compute. The
+The GCP bill was **~$86/month**, and ~$87 of that was Cloud Run compute. The
 Datastore data layer — the hard part to move — costs roughly **$0** (free
-tier). So the migration is not about saving money on data; it is about getting
-the container onto a box that costs a flat **~€5–15/month**.
+tier). So the migration was not about saving money on data; it was about
+getting the container onto a box that costs a flat **~€5–15/month**.
 
 | | GCP (now) | VPS (target) |
 |---|---|---|
@@ -16,7 +28,7 @@ the container onto a box that costs a flat **~€5–15/month**.
 | Scheduler | Cloud Scheduler (5 jobs) | cron |
 | Secrets | Secret Manager (14) | `.env` (chmod 600) |
 | TLS | Cloud Run managed domain | Caddy + Let's Encrypt |
-| **Cost** | **~$86/mo** | **~€5–15/mo** |
+| **Cost** | ~~$86/mo~~ → **~$1.50/mo** after #671 + twin pause | ~€5–15/mo |
 
 ## What was built
 

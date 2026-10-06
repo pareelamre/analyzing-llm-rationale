@@ -5,6 +5,37 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-06 — GCP cost collapse: OCI migration on hold, twin scheduler paused (Copilot)
+
+Two changes cut the projected Cloud Run bill from ~$86/month to ~$1.50/month:
+
+1. **PR #671** set the main service to `--min-instances 0`. Measured:
+   $2.08/day (always-on) → $0.04/day (scale-to-zero). Do not re-add
+   `--min-instances 1` without checking the bill impact.
+2. **`twin-due-work` Cloud Scheduler job paused** (2026-10-06). The
+   twin-maintenance runtime was ~93% of the bill (~$15–19/month) while its
+   account-maintenance/research adapters were never wired — every cycle
+   degraded (`account_maintenance_adapter_unconfigured`), and the forward
+   trial gate G1 shows 0 collected days. Resume with
+   `gcloud scheduler jobs resume twin-due-work --location=us-central1` only
+   after wiring the adapters; otherwise tear down per `infra/twin/README.md`.
+
+Consequences:
+
+- **The OCI/VPS migration is prepared but on hold.** All tooling is merged
+  (#669 data layer, #670 runbook, #673 bootstrap/deploy/CI automation) and
+  ready to execute if the calculus changes — most plausibly a twin revival
+  (its runtime costs ~$15–19/month on GCP, free on an OCI Ampere box). Do not
+  re-run the migration runbook without a cost or capability reason; see
+  `deploy/vps/README.md` (status note at top).
+- A **€20 monthly budget alert** (`bf9e0444-a41b-42ea-89d2-62f812ffe26b`,
+  billing account `014119-99A1B6-A1BA39`, scoped to this project) now watches
+  spend at 50/90/100%. If it fires, something regressed — check
+  `--min-instances` and the twin scheduler state first.
+- The VPS cron's `twin-due-work` entry only works if the twin runtime moves
+  to the box (shared-secret auth); against the GCP-deployed twin it fails
+  auth by design. Leave it alone during any future cutover decision.
+
 ### 2026-10-06 — Llama retry-loop fix: capacity pre-filter + credible-edge sizing cap (Copilot)
 
 Llama claimed 66–83pp edges on the Khamenei market and re-attempted the same

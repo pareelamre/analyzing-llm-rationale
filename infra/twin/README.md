@@ -1,5 +1,15 @@
 # Foresea private twin runtime
 
+> **Status: PAUSED (2026-10-06).** The `twin-due-work` Cloud Scheduler job is
+> paused, so `twin-maintenance` scales to zero and stops billing (~$15–19/month
+> was 93% of the GCP bill). The runtime's account-maintenance and research
+> adapters were never wired — every cycle degraded with
+> `account_maintenance_adapter_unconfigured` / `research_pipeline_unconfigured`,
+> and the forward-trial gate G1 shows 0 collected days
+> (`docs/autonomous-twin/TRIAL_REPORT.md`). Resume with
+> `gcloud scheduler jobs resume twin-due-work --location=us-central1` only once
+> those adapters are wired; otherwise consider full teardown (commands below).
+
 This directory defines the **shadow-only** private runtime used by T17. It is separate from the public `analyzing-llm-rationale` Cloud Run service. The deployer supplies an immutable Artifact Registry image tag and *secret names*, never secret values.
 
 The default project/region mirror the repository deployment workflow: `brave-drive-471109-d9` and `us-central1`. Use a separate staging project where available.
