@@ -107,7 +107,10 @@ account user only for maintenance.
   backoff, one-hour retry window.
 - `twin-maintenance`: 5 dispatches/s, 1 concurrent, 10 attempts, 5-300 second
   backoff, one-day retry window.
-- `twin-due-work`: enabled every five minutes with the scheduler identity, exact
+- `twin-due-work`: enabled every fifteen minutes (cost-reduced from the
+  original five-minute cadence on 2026-10-06; durable `TwinWorkerJob` rows
+  recover any work a longer interval delays) with the scheduler identity,
+  exact
   maintenance audience and 120-second deadline. A forced run completed with an
   empty status object and a recorded `lastAttemptTime`.
 

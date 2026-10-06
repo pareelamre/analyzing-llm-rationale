@@ -260,7 +260,7 @@ which matches.
 | Option | RAM | Egress | Region | Arch |
 |---|---|---|---|---|
 | GCP `e2-micro` | 1 GB | **1 GB/mo, then $0.12/GB** | US only | x86 |
-| **OCI Ampere** | **24 GB** | **10 TB/mo** | incl. Mumbai | **ARM** |
+| **OCI Ampere** | **12 GB** | **10 TB/mo** | incl. Mumbai | **ARM** |
 
 **The e2-micro's binding constraint is egress, not RAM.** `/radar` is 3.6 MB
 and `/track-record` is 3.4 MB, so the 1 GB/month free allowance is roughly
@@ -271,8 +271,9 @@ becomes a metered bill almost immediately, and it is US-only.
 PyTorch publishes aarch64 CPU wheels and the dependency set resolves cleanly
 (verified with `pip install --dry-run --platform linux/arm64`). The compose
 file builds for the host architecture by default, so no change is needed on an
-Ampere instance. The real cost is capacity scarcity — ARM instances often need
-retries to provision.
+Ampere instance. Note the free allowance was **halved to 2 OCPU / 12 GB in June
+2026** and is tenancy-wide; the real cost is capacity scarcity — ARM instances
+often need retries to provision.
 
 **See [OCI.md](./OCI.md) for the full Oracle Cloud walkthrough**, including the
 two-layer firewall that is the usual cause of "server up but unreachable".

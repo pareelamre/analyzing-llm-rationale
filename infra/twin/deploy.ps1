@@ -150,7 +150,7 @@ foreach ($service in @("twin-research", "twin-maintenance")) {
         "--project", $ProjectId, "--to-latest")
 }
 
-$schedulerFlags = @("--schedule", "*/5 * * * *", "--time-zone", "UTC",
+$schedulerFlags = @("--schedule", "*/15 * * * *", "--time-zone", "UTC",
     "--uri", "$maintenanceUrl/internal/twin/dispatch", "--http-method", "POST",
     "--oidc-service-account-email", $schedulerServiceAccount, "--oidc-token-audience", $maintenanceUrl,
     "--attempt-deadline", "120s", "--location", $Region, "--project", $ProjectId)

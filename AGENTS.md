@@ -1,5 +1,92 @@
 # AGENTS.md — Codex agent setup guide
 
+## Agent coordination log
+
+Multiple agents work in this repo. Record decisions here so the next agent
+does not redo or undo them. Newest entries first.
+
+### 2026-10-06 — Moved redundant Cloud Run work to GitHub Actions (Copilot)
+
+Deleted the `metaculus-github-dispatch` Cloud Run job and paused its
+scheduler: `.github/workflows/metaculus-futureeval.yml` already has its own
+6x-hourly GitHub cron at the same cadence, so the job was a redundant
+duplicate trigger (~$13/mo for nothing). If tournament dispatches ever stop,
+check the GitHub cron first, not Cloud Run.
+
+Repointed `agent_trading_tick.py`'s leaderboard fetch from
+`https://foresea.ink/agent-trading/board` to the raw GitHub payload it
+proxies (`raw.githubusercontent.com/.../static/agent_trading_live.json`).
+The tick runs on GitHub runners, so this removes ~58% of all requests
+hitting production (the board endpoint was the single biggest warm-keeper)
+at zero cost. Do not point scheduled scripts at foresea.ink when the same
+data is published to raw.githubusercontent.com or a bucket.
+
+Twin dispatch stays on Cloud Scheduler: moving it to Actions saves nothing
+(the scheduler is ~free; the twin compute remains either way).
+
+### 2026-10-06 — GCP cost reduction applied; target host is OCI, not a generic VPS (Copilot)
+
+Executed the two cheapest cost actions on project `brave-drive-471109-d9`:
+
+1. **Deleted the three idle staging chat services** (last deployed Jul 31,
+   unused since): `analyzing-llm-rationale-staging-chat`,
+   `-chat-branch`, `-chat-ui`. Kept `analyzing-llm-rationale-staging`
+   because `.github/workflows/staging.yml` still targets it via
+   workflow_dispatch / push to the `staging` branch.
+2. **Reduced Cloud Scheduler `twin-due-work` from every 5 min to every
+   15 min** (`infra/twin/deploy.ps1` updated to match). Safe because twin
+   work is durable in the `TwinWorkerJob` table and recovered by the next
+   `dispatch_due_jobs` pass — the schedule only controls latency, not
+   correctness.
+
+**Target host decision: OCI Always Free (Ampere A1, ARM), not Hetzner.**
+The compose stack in `deploy/vps/` is arch-agnostic (builds for the host
+arch by default; PyTorch aarch64 CPU wheels verified). See
+`434a71719 docs(deploy): add Oracle Cloud (OCI) Always Free walkthrough`
+for the OCI-specific runbook. Do not provision a paid Hetzner box for this.
+
+### 2026-10-06 — Datastore backup must NOT be a GitHub artifact (Copilot, reviewing DeepSeek's change)
+
+DeepSeek moved the daily Datastore backup from GCS to a GitHub Actions
+artifact (`datastore-backup.yml`). Two blocking problems:
+
+1. **Privacy leak.** This repo is **public**. Artifacts on public repos are
+   downloadable by anyone with a GitHub account. The export contains user
+   emails, OAuth ids (`alt_subs`), and private chat conversations
+   (`Conversation` kind). Never upload Datastore exports, user data, or
+   anything derived from them as repo artifacts, release assets, or commits.
+2. **Verify step fails most days.** `migrate_datastore_to_sql.py --verify`
+   compares per-kind counts, but the twin runtime writes
+   `TwinPublicEvidenceCache` / `TwinResearchCapture` every ~5 minutes, so
+   counts drift between export and verify. Point-in-time drift is expected
+   (see `deploy/vps/README.md`), so verify must be advisory, not fatal.
+
+Resolution: backup is a SQLite file (portable, restorable into the SQL
+backend) mirrored **only** to the private Cloudflare R2 bucket
+(`datastore-backups/<date>/`, 7-day retention), with an advisory verify and a
+hard failure if `R2_STATE_BUCKET` is unset (a green run with nowhere to store
+the backup is worse than a red one). The GCS export bucket
+`brave-drive-471109-d9-datastore-backups` keeps its 30-day lifecycle rule as a
+second recovery point until the VPS cutover retires Datastore entirely.
+
+**Status: applied.** `datastore-backup.yml` now exports to SQLite, verifies
+advisory, uploads to `R2_STATE_BUCKET` (`foresea-state`) under
+`datastore-backups/<date>/`, and expires objects past the retention window.
+There is no `actions/upload-artifact` step and no `gs://` destination. The
+workflow fails fast if `R2_STATE_BUCKET` is unset.
+
+Note for future agents: the same rule applies to any new workflow. Before
+adding an artifact, release asset, or committed file, ask whether it contains
+or derives from user data. This repo is public.
+
+### 2026-10-06 — GCS lifecycle rules applied (Copilot)
+
+`gcp_cost_optimizer.py` policies existed but were never applied. Applied via
+`gcloud storage buckets update`: 30-day delete on the datastore-backups
+bucket, noncurrent-version cleanup on the track-record-store bucket, and the
+cloudbuild bucket policy. Do not re-apply; do not delete the backups bucket
+while Datastore is still the primary store.
+
 ## Repository overview
 
 Batch inference system for evaluating LLM reasoning on binary forecasting questions (Metaculus dataset). The pipeline runs 9 prompt variants across multiple models, stores results as JSON, and exposes a FastAPI server deployed to GCP Cloud Run and Vertex AI.
@@ -42,7 +129,14 @@ analyze-llm-rationale run-batch \
   --temperature 0.0 --temperature-tag temperature_00
 
 # Start API server locally (Note: Port 8000 is reserved, run on 8080 instead)
-PYTHONPATH=src python -m uvicorn analyzing_llm_rationale.server:app --port 8080
+# Use the `serve` command, NOT `uvicorn server:app`: importing the module
+# directly leaves `_state` empty, so /ready stays 503 and every data endpoint
+# fails. `serve` calls init_server_state() first.
+PYTHONPATH=src analyze-llm-rationale serve \
+  --model gpt-oss-120b --variant variant0_neutral_baseline --port 8080
+
+# Note: `python -m analyzing_llm_rationale.cli` is a no-op -- cli.py has no
+# `if __name__ == "__main__"` guard. Use the console script, or call main().
 
 # Fetch + rank news for a question (LangChain pipeline)
 PYTHONPATH=src analyze-llm-rationale fetch-and-rank \
@@ -102,6 +196,37 @@ results/<model>/<temperature>/
 
 All hosted models use `openai-compatible` provider pointing to `https://llm.scads.ai/v1`, authenticated via `SCADS_AI_API_KEY`. Default for serving: `gpt-oss-120b`, variant `variant0_neutral_baseline`.
 
+Verify a route is live before debugging anything else — the provider publishes
+a status probe, and a retired route fails with only a generic "provider
+unavailable":
+
+```bash
+curl -s https://llm.scads.ai/status/state.json | python -c \
+  "import json,sys; [print(m['name'], m['state']) for m in json.load(sys.stdin)['models']['Chat']]"
+analyze-llm-rationale smoke-test --model glm-5-3
+```
+
+Note that the reasoning models (`glm-5-3-flash`, `deepseek-v4-flash`) emit
+`reasoning_content` before `content`. A smoke test with a very small
+`max_tokens` can return an empty `content` because the budget was spent on
+reasoning — that is not a broken route.
+
+## Data storage
+
+Durable state lives in Cloud Datastore, reached through
+`analyzing_llm_rationale.datastore_backend`, which selects the implementation
+from `FORESEA_DATASTORE_BACKEND`:
+
+| Value | Backend |
+|---|---|
+| `gcp` (default) | `google.cloud.datastore` — unchanged production behaviour |
+| `sql` | SQLite via `datastore_sql.py` (portable; used off GCP) |
+
+`datastore_sql.py` is a drop-in for the Datastore surface the app uses
+(`Client`, `Key`, `Entity`, `PropertyFilter`, ancestor queries, namespaces,
+transactions). `trackrec_store.py` is the same pattern for the track record.
+See `deploy/vps/README.md` for the migration and cutover runbook.
+
 ## Deployment
 
 ### Cloud Run (public, scales to zero)
@@ -111,6 +236,18 @@ https://foresea.ink
 - `GET /health` → `{"status": "ok"}`
 - `POST /predict` — PredictRequest → PredictResponse
 - `GET /mcp/` — Model Context Protocol Streamable-HTTP endpoint
+
+Cloud Run sizing is set in `docker.yml` via `CLOUD_RUN_MEMORY` /
+`CLOUD_RUN_CPU` (default `1Gi` / `1`). Override a manual run with
+`gh workflow run docker.yml -f memory=2Gi`. Do not hardcode these in the
+deploy step — a hardcoded value silently reverts any manual change on the
+next push to `main`.
+
+### Self-hosted VPS
+`deploy/vps/` holds a provider-agnostic Docker Compose stack (app + Caddy TLS
++ nightly SQLite backup + the metaculus-dispatch job), a cron schedule
+replacing Cloud Scheduler, and the cutover runbook. See
+`deploy/vps/README.md` and `deploy/vps/OCI.md`.
 
 ## Foresea runtime notes
 

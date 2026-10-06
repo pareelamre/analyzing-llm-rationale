@@ -1,10 +1,17 @@
 # Deploying Foresea on Oracle Cloud (OCI) Always Free
 
-OCI's Always Free tier is the most generous of the free options: **4 ARM
-Ampere cores and 24 GB RAM** (as one instance or split), 200 GB block storage,
-and **10 TB/month egress**. That last figure is what makes it viable — the GCP
-`e2-micro` free tier allows only 1 GB/month egress, which this app would burn
-through in roughly 280 page loads.
+OCI's Always Free tier gives **2 ARM Ampere OCPUs and 12 GB RAM** (tenancy-wide,
+not per instance), 200 GB block storage, and **10 TB/month egress**. The egress
+allowance is what makes it viable — the GCP `e2-micro` free tier allows only
+1 GB/month, which this app would burn through in roughly 280 page loads.
+
+> **The limit was halved in June 2026.** It used to be 4 OCPU / 24 GB. Oracle
+> made the change without a public announcement, and instances over the new cap
+> were administratively disabled from 18 August 2026 and **deleted after 30
+> days** unless the tenancy was brought within limits or upgraded to paid.
+> Provisioning above 2 OCPU / 12 GB as an Always Free user is no longer
+> possible, and a terminated over-limit instance cannot be recreated at the old
+> size. **Stay at or below 2 OCPU / 12 GB total across all A1 instances.**
 
 ## Why ARM is fine here
 
@@ -30,10 +37,14 @@ In the OCI console: **Compute → Instances → Create instance**.
 |---|---|
 | Image | Canonical Ubuntu 22.04 (or 24.04) |
 | Shape | **VM.Standard.A1.Flex** (Ampere ARM) |
-| OCPUs | 2 (up to 4 free) |
-| Memory | 12 GB (up to 24 free) |
+| OCPUs | **2** (this is the whole free allowance) |
+| Memory | **12 GB** (this is the whole free allowance) |
 | Boot volume | 50 GB (up to 200 free) |
 | SSH key | paste `~/.ssh/oci_foresea.pub` |
+
+Do not add a second A1 instance: the 2 OCPU / 12 GB is **tenancy-wide**, so a
+second instance puts the tenancy over the cap and risks all of them being
+disabled and deleted.
 
 A dedicated key was generated for this at `~/.ssh/oci_foresea`:
 
@@ -135,6 +146,12 @@ leaves room for the twin runtime and marketd later.
 
 ## Cost
 
-Always Free covers 4 OCPUs / 24 GB / 200 GB / 10 TB egress. Staying inside
-those limits costs **nothing**. The main risk is leaving a second instance
-running beyond the free allowance, or exceeding 200 GB of block storage.
+Always Free covers 2 OCPU / 12 GB / 200 GB / 10 TB egress. Staying inside those
+limits costs **nothing**. The risks are:
+
+- **Exceeding the A1 cap.** The 2 OCPU / 12 GB is tenancy-wide. A second A1
+  instance puts the tenancy over it, and over-limit instances are disabled and
+  then deleted after 30 days.
+- **Exceeding 200 GB of block storage**, which is billed.
+- **Leaving a non-A1 paid shape running** (for example an E4 or GPU instance),
+  which is not covered by Always Free at all.
