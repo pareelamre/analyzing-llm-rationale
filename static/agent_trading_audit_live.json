@@ -38575,6 +38575,101 @@
     ],
     "gpt-oss-120b": [
       {
+        "action_id": "f9b3d28d-f8c0-4806-8ad7-0af011ff1c9a",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 86.68383398292825,
+            "marketable": false,
+            "observed_ask": 0.85,
+            "observed_bid": 0.61,
+            "source": "live_venue_quote",
+            "spread": 0.24,
+            "spread_status": "checked",
+            "status": "shadow_unfilled_below_market"
+          },
+          "requested_order": {
+            "price": 0.49,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 7165.444182,
+            "cash_required": 137.425929,
+            "concentration_cap": 1175.138528,
+            "cycle_id": "30m:995161",
+            "cycle_spend_after": 137.425929,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 179.432478,
+            "daily_risk_before": 42.006549,
+            "daily_risk_limit": 2350.277056,
+            "drawdown_after": 0.226472,
+            "fee": 2.74744,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 134.678489,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 1,
+            "notional": 134.678489,
+            "open_markets_after": 5,
+            "per_cycle_spend_limit": 1566.851371,
+            "reasons": [
+              "wide_bid_ask_spread",
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.1,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": 86.7,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 235.027706,
+            "target_quantity": 274.8540587070284
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995161",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 137.425929,
+          "fee": 2.74744,
+          "netting_payout": 0.0,
+          "notional": 134.678489,
+          "price": 0.49,
+          "quantity": 274.8540587070284,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "will-an-artwork-sell-for-150-million-by-december-31"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "8919e5dea3551010c8d5ed33c52e5aa65fd74747ce1081eb66ac563ba9e8fc2a",
+        "recorded_at": "2026-10-06T12:34:16.845338+00:00"
+      },
+      {
         "action_id": "beb9f221-5b98-4382-a4a4-8d0a48de6e12",
         "agent_id": "gpt-oss-120b",
         "audit": {
@@ -98602,7 +98697,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-06T10:23:39.721228+00:00",
+  "generated_at": "2026-10-06T12:40:17.564324+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
