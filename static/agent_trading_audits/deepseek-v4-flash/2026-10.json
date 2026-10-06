@@ -1988,6 +1988,192 @@
       "outcome": "realized",
       "record_hash": "2afebe7b4fe12faa0870f5e739d438d4443e6fde2805d1185cd5f1c7cad4e613",
       "recorded_at": "2026-10-04T20:03:09.243524+00:00"
+    },
+    {
+      "action_id": "1c543724-713e-4b84-b766-89024e0cc4cf",
+      "agent_id": "deepseek-v4-flash",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 1.7886212499189813,
+          "marketable": true,
+          "observed_ask": 0.57,
+          "observed_bid": 0.56,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.57,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 9263.839409,
+          "cash_required": 142.342814,
+          "concentration_cap": 1423.428138,
+          "cycle_id": "30m:995136",
+          "cycle_spend_after": 142.342814,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 142.342814,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2846.856276,
+          "drawdown_after": 0.053714,
+          "fee": 4.159323,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 138.183491,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 138.183491,
+          "open_markets_after": 5,
+          "per_cycle_spend_limit": 1897.904184,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.13,
+          "eligible": true,
+          "horizon": "1-3d",
+          "horizon_validated": false,
+          "kelly_fraction": 0.15,
+          "lead_days": 1.8,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.015,
+          "mode": "probe_kelly",
+          "reason": null,
+          "target_notional": 142.342814,
+          "target_quantity": 242.42717675851605
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995136",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 142.342814,
+        "fee": 4.159323,
+        "netting_payout": 0.0,
+        "notional": 138.183491,
+        "price": 0.57,
+        "quantity": 242.42717675851605,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXHIGHNY-26OCT06-T63"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "58389d42fb39c604c386b30a395777866bf9d0248baf46b75210c1a87c9d4b82",
+      "recorded_at": "2026-10-06T00:04:23.162260+00:00"
+    },
+    {
+      "action_id": "1f3e391b-a6db-4382-b7cf-c74597f0f3b9",
+      "agent_id": "deepseek-v4-flash",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_filled_partial",
+          "filled_quantity": 2.22
+        },
+        "quote": {
+          "lead_days": 1.7885791800115742,
+          "marketable": true,
+          "observed_ask": 0.57,
+          "observed_bid": 0.56,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.57,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 9263.839409,
+          "cash_required": 84.73775,
+          "concentration_cap": 1423.428138,
+          "cycle_id": "30m:995136",
+          "cycle_spend_after": 84.73775,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 84.73775,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2846.856276,
+          "drawdown_after": 0.053546,
+          "fee": 2.476076,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 82.261674,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 82.261674,
+          "open_markets_after": 5,
+          "per_cycle_spend_limit": 1897.904184,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.09,
+          "eligible": true,
+          "horizon": "1-3d",
+          "horizon_validated": false,
+          "kelly_fraction": 0.15,
+          "lead_days": 1.8,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.015,
+          "mode": "probe_kelly",
+          "reason": null,
+          "target_notional": 84.73775,
+          "target_quantity": 144.31872579293912
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995136",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": -1.3034890000000001,
+        "cash_required": 1.3034890000000001,
+        "fee": 0.038089,
+        "netting_payout": 0.0,
+        "notional": 1.2654,
+        "price": 0.57,
+        "quantity": 2.22,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXHIGHNY-26OCT06-T63"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "4c317a1acf01b80a245a0cb2ec7c985eb73830a07ad9d0fd5cc33fe53dd0644d",
+      "recorded_at": "2026-10-06T00:04:26.853077+00:00"
     }
   ],
   "month": "2026-10",
