@@ -5,6 +5,27 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-06 — GCP cost reduction applied; target host is OCI, not a generic VPS (Copilot)
+
+Executed the two cheapest cost actions on project `brave-drive-471109-d9`:
+
+1. **Deleted the three idle staging chat services** (last deployed Jul 31,
+   unused since): `analyzing-llm-rationale-staging-chat`,
+   `-chat-branch`, `-chat-ui`. Kept `analyzing-llm-rationale-staging`
+   because `.github/workflows/staging.yml` still targets it via
+   workflow_dispatch / push to the `staging` branch.
+2. **Reduced Cloud Scheduler `twin-due-work` from every 5 min to every
+   15 min** (`infra/twin/deploy.ps1` updated to match). Safe because twin
+   work is durable in the `TwinWorkerJob` table and recovered by the next
+   `dispatch_due_jobs` pass — the schedule only controls latency, not
+   correctness.
+
+**Target host decision: OCI Always Free (Ampere A1, ARM), not Hetzner.**
+The compose stack in `deploy/vps/` is arch-agnostic (builds for the host
+arch by default; PyTorch aarch64 CPU wheels verified). See
+`434a71719 docs(deploy): add Oracle Cloud (OCI) Always Free walkthrough`
+for the OCI-specific runbook. Do not provision a paid Hetzner box for this.
+
 ### 2026-10-06 — Datastore backup must NOT be a GitHub artifact (Copilot, reviewing DeepSeek's change)
 
 DeepSeek moved the daily Datastore backup from GCS to a GitHub Actions
