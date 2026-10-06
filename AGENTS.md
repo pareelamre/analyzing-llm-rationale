@@ -5,6 +5,25 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-06 — Moved redundant Cloud Run work to GitHub Actions (Copilot)
+
+Deleted the `metaculus-github-dispatch` Cloud Run job and paused its
+scheduler: `.github/workflows/metaculus-futureeval.yml` already has its own
+6x-hourly GitHub cron at the same cadence, so the job was a redundant
+duplicate trigger (~$13/mo for nothing). If tournament dispatches ever stop,
+check the GitHub cron first, not Cloud Run.
+
+Repointed `agent_trading_tick.py`'s leaderboard fetch from
+`https://foresea.ink/agent-trading/board` to the raw GitHub payload it
+proxies (`raw.githubusercontent.com/.../static/agent_trading_live.json`).
+The tick runs on GitHub runners, so this removes ~58% of all requests
+hitting production (the board endpoint was the single biggest warm-keeper)
+at zero cost. Do not point scheduled scripts at foresea.ink when the same
+data is published to raw.githubusercontent.com or a bucket.
+
+Twin dispatch stays on Cloud Scheduler: moving it to Actions saves nothing
+(the scheduler is ~free; the twin compute remains either way).
+
 ### 2026-10-06 — GCP cost reduction applied; target host is OCI, not a generic VPS (Copilot)
 
 Executed the two cheapest cost actions on project `brave-drive-471109-d9`:

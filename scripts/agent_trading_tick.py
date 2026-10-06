@@ -2573,7 +2573,14 @@ def _recalled_notes_block(agent_id: str, limit: int = 20) -> str:
 
 
 LEADERBOARD_URL = os.environ.get(
-    "AGENT_TRADING_LEADERBOARD_URL", "https://foresea.ink/agent-trading/board")
+    "AGENT_TRADING_LEADERBOARD_URL",
+    # Read the published payload directly instead of the live server: the
+    # /agent-trading/board endpoint just proxies this same file, and every
+    # request to foresea.ink keeps a Cloud Run instance warm. The tick runs
+    # on GitHub runners, so fetching raw.githubusercontent.com is free and
+    # does not wake production.
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/agent_trading_live.json")
 LEADERBOARD_TIMEOUT_S = float(os.environ.get("AGENT_TRADING_LEADERBOARD_TIMEOUT_S", "10"))
 
 
