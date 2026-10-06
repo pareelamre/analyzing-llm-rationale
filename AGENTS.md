@@ -5,36 +5,49 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
-### 2026-10-06 — GCP cost collapse: OCI migration on hold, twin scheduler paused (Copilot)
+### 2026-10-06 — Per-agent profile prescriptions + fleet-wide bias correction (Copilot)
 
-Two changes cut the projected Cloud Run bill from ~$86/month to ~$1.50/month:
+Applied the individual improvement prescriptions from the Sep–Oct P&L and
+forecast-calibration analysis (fleet: -$5,378; 55% of losses from trades on
+contracts priced >= 0.70):
 
-1. **PR #671** set the main service to `--min-instances 0`. Measured:
-   $2.08/day (always-on) → $0.04/day (scale-to-zero). Do not re-add
-   `--min-instances 1` without checking the bill impact.
-2. **`twin-due-work` Cloud Scheduler job paused** (2026-10-06). The
-   twin-maintenance runtime was ~93% of the bill (~$15–19/month) while its
-   account-maintenance/research adapters were never wired — every cycle
-   degraded (`account_maintenance_adapter_unconfigured`), and the forward
-   trial gate G1 shows 0 collected days. Resume with
-   `gcloud scheduler jobs resume twin-due-work --location=us-central1` only
-   after wiring the adapters; otherwise tear down per `infra/twin/README.md`.
+**Fleet-wide (mechanical, in `_sizing_plan`):**
+- New `FORESEA_AGENT_PROBABILITY_BIAS` env var: the tick measures each
+  agent's historical bias (AVG(model_probability - resolved_outcome)) from
+  resolved thesis forecasts and injects it per cycle (only when >= 20
+  resolved forecasts and |bias| >= 0.05). `_sizing_plan` subtracts it from
+  the stated P(YES) before Kelly sizes the stake. The raw stated probability
+  stays in the audit trail. Correction is clamped to +-0.5 so it can never
+  invert a probability's sign.
 
-Consequences:
+**Profile updates (AGENT_PROFILES in benchmark_tools.py), driven by measured
+data, not vibes:**
+- gemma-4-26b-a4b-it: price ceiling 0.45 -> 0.30, forbidden band (0.30,1.00).
+  Worst forecaster on the board (Brier 0.399 vs market 0.156); its only
+  profitable pocket is <0.10 contracts (+$176).
+- qwen3-8-27b: price ceiling None -> 0.60, max_trades_per_cycle None -> 3.
+  175 fills (most active) but -$843 from 0.70+ trades; thin per-trade edge
+  means fees eat high frequency.
+- gpt-oss-120b: price ceiling None -> 0.70. No forecasting edge (Brier 0.287
+  vs market 0.284) yet 162 fills at 2.82% fee drag.
+- llama-3.3-70b-instruct: price ceiling 0.40 -> 0.70, mandate now points at
+  the 0.30-0.70 band where it makes +$21.91/trade (best on the board) and
+  tells it to prefer NO/fade (+$12.04 avg) and not re-attempt rejected
+  trades.
+- minimax-m3: price ceiling None -> 0.60, forbidden band (0.50,0.75) ->
+  (0.50,0.60). -$402 of its -$359 loss came from 15 trades at 0.70+.
+- deepseek-v4-flash: mandate updated with its measured +0.219 bias (the
+  sizing engine now corrects for it mechanically).
+- glm-5-3: max_trades_per_cycle None -> 3 (only profitable agent; its
+  discipline is the template -- take more qualified trades, not fewer).
+- glm-5-3-flash: mandate corrected (its Brier 0.155 is WORSE than the
+  market's 0.108, not better) and given the 0.70+ ban.
 
-- **The OCI/VPS migration is prepared but on hold.** All tooling is merged
-  (#669 data layer, #670 runbook, #673 bootstrap/deploy/CI automation) and
-  ready to execute if the calculus changes — most plausibly a twin revival
-  (its runtime costs ~$15–19/month on GCP, free on an OCI Ampere box). Do not
-  re-run the migration runbook without a cost or capability reason; see
-  `deploy/vps/README.md` (status note at top).
-- A **€20 monthly budget alert** (`bf9e0444-a41b-42ea-89d2-62f812ffe26b`,
-  billing account `014119-99A1B6-A1BA39`, scoped to this project) now watches
-  spend at 50/90/100%. If it fires, something regressed — check
-  `--min-instances` and the twin scheduler state first.
-- The VPS cron's `twin-due-work` entry only works if the twin runtime moves
-  to the box (shared-secret auth); against the GCP-deployed twin it fails
-  auth by design. Leave it alone during any future cutover decision.
+Do not revert these ceilings to `None` without new evidence: they are set
+from two months of realized P&L per price bucket, not judgement. The bias
+correction is descriptive-feedback-turned-mechanical; if an agent's bias
+corrects, the tick stops injecting it automatically (the >= 20 resolved
+forecasts and |bias| >= 0.05 gates).
 
 ### 2026-10-06 — Llama retry-loop fix: capacity pre-filter + credible-edge sizing cap (Copilot)
 
