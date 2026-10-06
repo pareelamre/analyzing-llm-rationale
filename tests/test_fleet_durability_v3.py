@@ -178,7 +178,10 @@ class CapacityExhaustedCandidateFilterTests(unittest.TestCase):
             concentration_limit=0.10,  # $100 cap
             cluster_concentration_limit=0.15,  # $150 cap
         )
-        mock_profile = mock.MagicMock(max_cluster_concentration_pct=None)
+        mock_profile = mock.MagicMock(
+            max_cluster_concentration_pct=None,
+            max_order_notional_pct=0.03,
+        )
         # 145 >= 150 * 0.95 (142.5) -> cluster capacity is exhausted
         mock_open_positions = [
             {"platform": "kalshi", "ticker": "IRAN-OTHER-MKT", "cost_basis": 145.0},
@@ -205,6 +208,71 @@ class CapacityExhaustedCandidateFilterTests(unittest.TestCase):
         quotes = [{"platform": "kalshi", "ident": "TICKER1"}]
         kept = agent_trading_tick._drop_capacity_exhausted_candidates(quotes, agent_id=None)
         self.assertEqual(kept, quotes)
+
+    def test_drops_candidates_below_95pct_when_min_order_would_breach_cap(self):
+        # Llama's Khamenei loop: existing cluster cost sits just UNDER the 95%
+        # threshold, but any minimum-sized order would breach the cap. The old
+        # filter kept the candidate and the guard rejected it every cycle.
+        quotes = [
+            {"platform": "kalshi", "ident": "IRAN-LEAD-2026", "ticker": "IRAN-LEAD-2026"},
+            {"platform": "kalshi", "ident": "FED-RATE-CUT", "ticker": "FED-RATE-CUT"},
+        ]
+        mock_policy = mock.MagicMock(
+            account_value=1000.0,
+            concentration_limit=0.10,  # $100 market cap
+            cluster_concentration_limit=0.15,  # $150 cluster cap
+        )
+        # Profile orders up to 3% of account ($30 minimum order)
+        mock_profile = mock.MagicMock(
+            max_cluster_concentration_pct=None,
+            max_order_notional_pct=0.03,
+        )
+        # $125 < 95% of $150 ($142.5), but $125 + $30 = $155 > $150 cap
+        mock_open_positions = [
+            {"platform": "kalshi", "ticker": "IRAN-OTHER-MKT", "cost_basis": 125.0},
+        ]
+
+        with mock.patch("agent_trading_tick.benchmark_tools._risk_guard_policy", return_value=mock_policy), \
+             mock.patch("agent_trading_tick.benchmark_tools.get_agent_profile", return_value=mock_profile), \
+             mock.patch("agent_trading_tick.benchmark_tools._account_transaction", side_effect=_dummy_transaction), \
+             mock.patch("agent_trading_tick.benchmark_tools._account_summary", return_value={"open_positions": mock_open_positions}), \
+             mock.patch("agent_trading_tick.benchmark_tools._extract_market_cluster") as mock_cluster:
+
+            def fake_cluster(ticker, platform=None):
+                if "IRAN" in ticker:
+                    return "iran_succession"
+                return "monetary_policy"
+
+            mock_cluster.side_effect = fake_cluster
+
+            kept = agent_trading_tick._drop_capacity_exhausted_candidates(quotes, agent_id="llama-3.3-70b")
+            self.assertEqual(len(kept), 1)
+            self.assertEqual(kept[0]["ident"], "FED-RATE-CUT")
+
+    def test_keeps_candidates_with_genuine_headroom(self):
+        quotes = [{"platform": "kalshi", "ident": "IRAN-LEAD-2026", "ticker": "IRAN-LEAD-2026"}]
+        mock_policy = mock.MagicMock(
+            account_value=1000.0,
+            concentration_limit=0.10,
+            cluster_concentration_limit=0.15,
+        )
+        mock_profile = mock.MagicMock(
+            max_cluster_concentration_pct=None,
+            max_order_notional_pct=0.03,
+        )
+        # $50 + $30 = $80 < $150 cap -> real headroom, must be kept
+        mock_open_positions = [
+            {"platform": "kalshi", "ticker": "IRAN-OTHER-MKT", "cost_basis": 50.0},
+        ]
+
+        with mock.patch("agent_trading_tick.benchmark_tools._risk_guard_policy", return_value=mock_policy), \
+             mock.patch("agent_trading_tick.benchmark_tools.get_agent_profile", return_value=mock_profile), \
+             mock.patch("agent_trading_tick.benchmark_tools._account_transaction", side_effect=_dummy_transaction), \
+             mock.patch("agent_trading_tick.benchmark_tools._account_summary", return_value={"open_positions": mock_open_positions}), \
+             mock.patch("agent_trading_tick.benchmark_tools._extract_market_cluster", return_value="iran_succession"):
+
+            kept = agent_trading_tick._drop_capacity_exhausted_candidates(quotes, agent_id="llama-3.3-70b")
+            self.assertEqual(len(kept), 1)
 
 
 class IndicativePricingSnapshotTests(unittest.TestCase):
