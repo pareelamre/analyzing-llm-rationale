@@ -885,6 +885,23 @@ def _sizing_plan(
         model_side_probability = model_yes_probability if side == "yes" else 1.0 - model_yes_probability
     edge = model_side_probability - price
 
+    # Cap the edge used for sizing at the credible-edge ceiling. The guard
+    # rejects entries whose stated edge exceeds it as almost certainly model
+    # error, so sizing must not treat a fantasy edge as real: quarter-Kelly on
+    # a claimed 80pp edge produced stakes the guard was always going to refuse
+    # (Llama re-attempting the Khamenei market 26 times in one month). The
+    # stated probability is preserved untouched in the audit trail; only the
+    # stake derivation is tempered.
+    max_credible = _max_credible_edge()
+    sizing_edge = edge
+    if max_credible > 0 and edge > max_credible:
+        sizing_edge = max_credible
+    # Guard against float drift at the boundary (0.21 - 0.11 = 0.0999...):
+    # a capped edge must be exactly the ceiling so both the sizing and the
+    # guard's boundary bucket agree.
+    if max_credible > 0 and sizing_edge > max_credible - 1e-9:
+        sizing_edge = max_credible
+
     # Resolve lead days & horizon bucket
     if lead_days is None:
         raw_days = args.get("lead_days") or args.get("lead_time_days")
@@ -908,13 +925,13 @@ def _sizing_plan(
     is_short_horizon = (lead_days is not None and lead_days < 7.0 and not is_weather)
 
     if canonical_mode == "auto":
-        if edge >= 0.10 and price >= 0.40:
+        if sizing_edge >= 0.10 and price >= 0.40:
             policy = AGENT_SIZING_POLICIES["edge_kelly"]
-        elif edge >= 0.012:
+        elif sizing_edge >= 0.012:
             policy = AGENT_SIZING_POLICIES["convex_conviction"]
-        elif edge >= 0.002:
+        elif sizing_edge >= 0.002:
             policy = AGENT_SIZING_POLICIES["probe_kelly"]
-        elif edge >= 0.001:
+        elif sizing_edge >= 0.001:
             policy = AGENT_SIZING_POLICIES["flat_probe"]
         else:
             policy = AGENT_SIZING_POLICIES["probe_kelly"]
@@ -947,12 +964,12 @@ def _sizing_plan(
 
     allow_fallback = bool(args.get("allow_sizing_fallback") or args.get("fallback_to_probe") or args.get("fallback"))
     fallback_from = None
-    if edge < effective_min_edge:
-        if allow_fallback and edge >= (0.02 if is_short_horizon else 0.001):
+    if sizing_edge < effective_min_edge:
+        if allow_fallback and sizing_edge >= (0.02 if is_short_horizon else 0.001):
             fallback_from = policy.key
-            if edge >= 0.012 and not is_short_horizon:
+            if sizing_edge >= 0.012 and not is_short_horizon:
                 policy = AGENT_SIZING_POLICIES["convex_conviction"]
-            elif edge >= 0.002 and not is_short_horizon:
+            elif sizing_edge >= 0.002 and not is_short_horizon:
                 policy = AGENT_SIZING_POLICIES["probe_kelly"]
             else:
                 policy = AGENT_SIZING_POLICIES["flat_probe"]
@@ -1003,9 +1020,12 @@ def _sizing_plan(
         # allows full conviction scaling
         effective_shrinkage = max(0.10, effective_shrinkage * 0.85)
 
-    reliability = _edge_reliability(edge, _published_edge_calibration())
+    reliability = _edge_reliability(sizing_edge, _published_edge_calibration())
     kept = (1.0 - effective_shrinkage) * reliability["weight"]
-    p_win = price + kept * (model_side_probability - price)
+    # Kelly stakes the *capped* edge: p_win is derived from the tempered
+    # disagreement, so a claimed 80pp edge is staked like the 10pp ceiling it
+    # will be held to, not like a fantasy.
+    p_win = price + kept * sizing_edge
     # Kelly must price the bet actually on offer. A contract costs the ask
     # *plus* the taker fee, so gross odds overstate the payoff and overstate
     # the stake with it -- by 3.2x at a 5pp edge on a 50c contract, and worst
@@ -1045,7 +1065,7 @@ def _sizing_plan(
             "mode": policy.key,
             "label": policy.label,
             "applied": True,
-            "eligible": target_notional > 1e-9 and edge >= effective_min_edge,
+            "eligible": target_notional > 1e-9 and sizing_edge >= effective_min_edge,
             "edge": round(edge, 6),
             "min_edge": effective_min_edge,
             "kelly_fraction": policy.kelly_fraction,
@@ -1058,7 +1078,7 @@ def _sizing_plan(
             "target_notional": round(target_notional, 6),
             "fee_per_contract": round(fee_per_contract, 6),
             "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
-            "reason": "edge_below_threshold" if edge < effective_min_edge else None,
+            "reason": "edge_below_threshold" if sizing_edge < effective_min_edge else None,
             "lead_days": round(lead_days, 1) if lead_days is not None else None,
             "horizon": horizon_bucket,
             "horizon_validated": is_validated_horizon,
@@ -1068,14 +1088,14 @@ def _sizing_plan(
         return res
 
     if policy.key == "scaled_edge":
-        scale = min(1.0, max(0.0, edge / 0.05))
+        scale = min(1.0, max(0.0, sizing_edge / 0.05))
         target_fraction = min(effective_max_position_fraction, effective_max_position_fraction * scale)
         target_notional = account_value * target_fraction
         res = {
             "mode": policy.key,
             "label": policy.label,
             "applied": True,
-            "eligible": target_notional > 1e-9 and edge >= effective_min_edge,
+            "eligible": target_notional > 1e-9 and sizing_edge >= effective_min_edge,
             "edge": round(edge, 6),
             "min_edge": effective_min_edge,
             "kelly_fraction": policy.kelly_fraction,
@@ -1088,7 +1108,7 @@ def _sizing_plan(
             "target_notional": round(target_notional, 6),
             "fee_per_contract": round(fee_per_contract, 6),
             "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
-            "reason": "edge_below_threshold" if edge < effective_min_edge else None,
+            "reason": "edge_below_threshold" if sizing_edge < effective_min_edge else None,
             "lead_days": round(lead_days, 1) if lead_days is not None else None,
             "horizon": horizon_bucket,
             "horizon_validated": is_validated_horizon,
@@ -1108,10 +1128,10 @@ def _sizing_plan(
         raw_kelly *= skew_multiplier
     target_fraction = min(policy.kelly_fraction * raw_kelly, effective_max_position_fraction)
     target_notional = account_value * target_fraction
-    if policy.key == "probe_kelly" and target_notional <= 1e-9 and edge >= effective_min_edge:
+    if policy.key == "probe_kelly" and target_notional <= 1e-9 and sizing_edge >= effective_min_edge:
         target_notional = min(25.0, account_value * effective_max_position_fraction)
         target_fraction = target_notional / account_value if account_value else 0.0
-    if target_notional <= 1e-9 and allow_fallback and edge >= (0.02 if is_short_horizon else 0.001):
+    if target_notional <= 1e-9 and allow_fallback and sizing_edge >= (0.02 if is_short_horizon else 0.001):
         fb_policy = AGENT_SIZING_POLICIES["flat_probe"]
         max_notional = account_value * fb_policy.max_position_fraction
         target_notional = min(25.0, max_notional)

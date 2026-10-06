@@ -2046,12 +2046,29 @@ def _drop_capacity_exhausted_candidates(
             cluster_name = benchmark_tools._extract_market_cluster(ticker, platform=platform)
             cluster_cost = cluster_costs.get(cluster_name, 0.0) if cluster_name else 0.0
 
-            # If already at or above 95% of cap, the agent cannot trade this candidate
+            # Drop when the agent is already at/above 95% of cap, OR when even
+            # the smallest possible additional order would breach the cap. The
+            # 95% check alone let agents sitting just under the cap (e.g. Llama
+            # at ~$1,355 of a $1,500 cluster cap) keep re-attempting orders the
+            # guard was guaranteed to reject, burning a cycle per attempt.
             if mkt_cost >= concentration_cap * 0.95:
                 dropped_clusters[f"market:{ticker}"] += 1
                 continue
             if cluster_name and cluster_cost >= cluster_cap * 0.95:
                 dropped_clusters[f"cluster:{cluster_name}"] += 1
+                continue
+            # Smallest meaningful order: the profile's per-order notional cap
+            # (fraction of account value), floored so a missing profile still
+            # reserves headroom for one minimum-sized probe.
+            profile_order_pct = profile.max_order_notional_pct if (
+                profile and profile.max_order_notional_pct is not None
+            ) else 0.01
+            min_order = max(policy.account_value * profile_order_pct, 1.0)
+            if mkt_cost + min_order > concentration_cap:
+                dropped_clusters[f"market_no_headroom:{ticker}"] += 1
+                continue
+            if cluster_name and cluster_cost + min_order > cluster_cap:
+                dropped_clusters[f"cluster_no_headroom:{cluster_name}"] += 1
                 continue
             kept.append(q)
 

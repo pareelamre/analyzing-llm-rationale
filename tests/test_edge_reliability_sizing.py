@@ -122,14 +122,18 @@ class SizingTests(unittest.TestCase):
 
     def test_the_kept_share_is_the_policy_share_times_reliability(self):
         plan = sizing(0.90)
-        weight = 0.2059 / 0.5036
+        # The stated 40pp edge is capped at the 10pp credible ceiling for
+        # sizing, so reliability comes from the 10-20pp bucket.
+        weight = 0.3140 / 0.4267
         self.assertAlmostEqual(plan["effective_market_shrinkage"], 1.0 - 0.5 * weight, places=5)
         self.assertEqual(plan["market_shrinkage"], 0.5)
 
     def test_the_evidence_is_returned_with_the_plan(self):
         detail = sizing(0.90)["calibration_reliability"]
-        self.assertEqual(detail["edge_bucket"], "20pp+")
-        self.assertEqual(detail["n"], 185)
+        # Sizing uses the capped edge (10pp -> 10-20pp bucket); the stated
+        # edge remains visible in plan["edge"].
+        self.assertEqual(detail["edge_bucket"], "10-20pp")
+        self.assertEqual(detail["n"], 51)
 
     def test_with_no_record_the_old_formula_is_reproduced(self):
         plan = sizing(0.90, calibration=None)
@@ -146,6 +150,39 @@ class SizingTests(unittest.TestCase):
         uncalibrated = sizing(0.62, mode="edge_kelly", calibration=None)
         self.assertLess(uncalibrated["target_notional"], 800.0, "must be below the cap")
         self.assertLess(calibrated["target_notional"], uncalibrated["target_notional"])
+
+
+class CredibleEdgeSizingCapTests(unittest.TestCase):
+    """Sizing stakes the credible-edge ceiling, not a fantasy edge.
+
+    Llama claimed 66-83pp edges on the Khamenei market; quarter-Kelly sized
+    those fantasies into stakes the guard was always going to reject, and it
+    re-attempted the same trade 26 times in one month. The guard holds
+    entries to a 10pp credible ceiling, so sizing must not pretend the edge
+    beyond it is real.
+    """
+
+    def test_a_fantasy_edge_is_sized_like_the_ceiling(self):
+        fantasy = sizing(0.94, price=0.11, mode="quarter_kelly")   # 83pp claimed
+        ceiling = sizing(0.21, price=0.11, mode="quarter_kelly")   # exactly 10pp
+        self.assertGreater(fantasy["target_notional"], 0.0)
+        self.assertAlmostEqual(fantasy["target_notional"], ceiling["target_notional"], delta=1.0)
+
+    def test_the_stated_edge_is_still_reported_untouched(self):
+        plan = sizing(0.94, price=0.11, mode="quarter_kelly")
+        self.assertEqual(plan["edge"], 0.83)
+
+    def test_a_legitimate_edge_is_not_capped(self):
+        honest = sizing(0.18, price=0.11, mode="quarter_kelly")    # 7pp edge
+        self.assertGreater(honest["target_notional"], 0.0)
+        # 7pp < 10pp ceiling: sizing must reflect the full stated edge
+        ceiling = sizing(0.21, price=0.11, mode="quarter_kelly")
+        self.assertLess(honest["target_notional"], ceiling["target_notional"])
+
+    def test_auto_mode_does_not_escalate_a_capped_edge(self):
+        """A fantasy edge must not buy edge_kelly treatment via auto sizing."""
+        plan = sizing(0.94, price=0.11, mode="auto")
+        self.assertNotEqual(plan["mode"], "edge_kelly")
 
 
 class LoaderTests(unittest.TestCase):

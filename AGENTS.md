@@ -5,6 +5,31 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-06 — Llama retry-loop fix: capacity pre-filter + credible-edge sizing cap (Copilot)
+
+Llama claimed 66–83pp edges on the Khamenei market and re-attempted the same
+blocked trade 26 times in October (34 attempts, all `rejected_before_execution`).
+Two fixes:
+
+1. **`_drop_capacity_exhausted_candidates`** (scripts/agent_trading_tick.py)
+   now also drops candidates where the *smallest possible order* (profile
+   `max_order_notional_pct` of account value) would breach the market or
+   cluster cap — not just when existing cost is already ≥95% of cap. Llama
+   sat at ~$1,355 of a ~$1,500 cap, under the 95% threshold, so every cycle
+   burned a full LLM run on a guaranteed rejection.
+2. **`_sizing_plan`** (src/analyzing_llm_rationale/benchmark_tools.py) caps
+   the edge used for *sizing* at `FORESEA_AGENT_MAX_CREDIBLE_EDGE` (10pp).
+   The guard already rejects entries above it; sizing must not stake a
+   fantasy edge. The stated edge is still reported untouched in
+   `plan["edge"]` for the audit trail; only the stake derivation is
+   tempered. Float boundary handled: a capped edge is snapped to exactly the
+   ceiling so the guard's and sizing's edge buckets agree.
+
+Do not revert the sizing cap thinking it hides information: the raw stated
+probability and edge remain in the audit; only Kelly's stake input changes.
+Tests: `CredibleEdgeSizingCapTests` (test_edge_reliability_sizing.py) and
+`CapacityExhaustedCandidateFilterTests` (test_fleet_durability_v3.py).
+
 ### 2026-10-06 — Moved redundant Cloud Run work to GitHub Actions (Copilot)
 
 Deleted the `metaculus-github-dispatch` Cloud Run job and paused its
