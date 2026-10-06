@@ -81,11 +81,20 @@ QUERIES = [
     (
         "4. Brier score per model (lower is better)",
         """
+        -- Stored `confidence` is confidence in the predicted answer
+        -- (P(predicted_answer)), not P(YES). Convert with the answer
+        -- direction: P(YES) = confidence when the answer is Yes, else
+        -- 1 - confidence. This matches Example.p_yes in metrics.py.
         SELECT
             p.model,
             COUNT(*) AS n,
             ROUND(AVG(
-                POWER(p.confidence - CASE WHEN LOWER(q.answer) = 'yes' THEN 1.0 ELSE 0.0 END, 2)
+                POWER(
+                    CASE WHEN LOWER(p.predicted_answer) = 'yes'
+                         THEN p.confidence ELSE 1.0 - p.confidence END
+                    - CASE WHEN LOWER(q.answer) = 'yes' THEN 1.0 ELSE 0.0 END,
+                    2
+                )
             ), 5) AS brier_score
         FROM predictions p
         JOIN questions q ON p.question_id = q.id
@@ -284,20 +293,26 @@ def _ingest_results_for_analytics(conn, include_rationales: bool = False) -> int
                     continue
 
                 run_id = str(uuid.uuid4())
-                rows = [
-                    (
-                        run_id,
-                        model,
-                        temperature,
-                        variant,
-                        int(r.get("id", 0)),
-                        r.get("predicted_answer"),
-                        r.get("confidence"),
-                        r.get("rationale") if include_rationales else None,
+                rows = []
+                for r in records:
+                    if not isinstance(r, dict):
+                        continue
+                    try:
+                        question_id = int(r.get("id", 0))
+                    except (TypeError, ValueError):
+                        continue
+                    rows.append(
+                        (
+                            run_id,
+                            model,
+                            temperature,
+                            variant,
+                            question_id,
+                            r.get("predicted_answer"),
+                            r.get("confidence"),
+                            r.get("rationale") if include_rationales else None,
+                        )
                     )
-                    for r in records
-                    if isinstance(r, dict)
-                ]
                 df = pd.DataFrame(
                     rows,
                     columns=[
