@@ -5,6 +5,7 @@ so that cairosvg / Inkscape can render them.
 import re
 import sys
 
+
 def strip_tags(html):
     """Remove HTML tags, return plain text lines split on <br>."""
     html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
@@ -25,15 +26,44 @@ def px(val):
     m = re.match(r'([\d.]+)', str(val))
     return float(m.group(1)) if m else 0.0
 
-def make_svg_text(x, y, text, anchor, font_size, font_weight, color, font_family, line_height_factor=1.25):
+def wrap_to_width(text, width, font_size, char_w=0.52):
+    """Word-wrap a single logical line to an estimated pixel width."""
+    max_chars = max(4, int(width / (font_size * char_w)))
+    words = text.split()
+    if not words:
+        return [text]
+    lines, cur = [], words[0]
+    for w in words[1:]:
+        if len(cur) + 1 + len(w) > max_chars:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}"
+    lines.append(cur)
+    return lines
+
+
+def make_svg_text(x, y, text, anchor, font_size, font_weight, color, font_family,
+                  line_height_factor=1.25, wrap_width=None, valign='center'):
     lines = text.split('\n')
+    if wrap_width:
+        wrapped = []
+        for line in lines:
+            wrapped.extend(wrap_to_width(line, wrap_width, font_size))
+        lines = wrapped
     n = len(lines)
     fs = float(font_size)
     lh = fs * line_height_factor
 
-    # padding-top is the baseline of the first line (draw.io encodes it this way
-    # for both top-aligned multi-line cells and single-line centred cells).
-    y0 = y
+    # draw.io encodes padding-top as the vertical centre of the text block, so
+    # shift the first baseline up by half the block height to keep the text
+    # centred inside its cell.
+    if valign == 'center':
+        y0 = y - (n - 1) * lh / 2.0
+    elif valign == 'bottom':
+        y0 = y - (n - 1) * lh
+    else:
+        y0 = y
 
     color = color.strip()
     # strip light-dark() wrapper draw.io sometimes emits
@@ -148,7 +178,20 @@ def convert(svg_path, out_path):
 
         y = pad_y
 
-        svg_text = make_svg_text(x, y, text, anchor, font_size, font_weight, color, font_family)
+        valign_map = {
+            'center': 'center', 'unsafe center': 'center',
+            'flex-start': 'top', 'unsafe flex-start': 'top',
+            'flex-end': 'bottom', 'unsafe flex-end': 'bottom',
+        }
+        valign = valign_map.get(valign.strip(), 'center')
+
+        # Wrap text to the cell width so long single-line cells (captions,
+        # interpretation boxes) cannot overflow the canvas. Reserve a small
+        # margin on each side.
+        usable = max(40.0, width - 12.0)
+
+        svg_text = make_svg_text(x, y, text, anchor, font_size, font_weight, color,
+                                 font_family, wrap_width=usable, valign=valign)
         return svg_text
 
     new_content = switch_pat.sub(replace_switch, content)
@@ -169,5 +212,9 @@ def convert(svg_path, out_path):
     print(f"Saved: {out_path}")
 
 if __name__ == '__main__':
-    base = '/data/horse/ws/paam844f-codabench-restored/paam844f-codabench-1777266844/analyzing-llm-rationale/paper'
-    convert(f'{base}/system_flow.svg', f'{base}/system_flow_fixed.svg')
+    import os
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    src = sys.argv[1] if len(sys.argv) > 1 else os.path.join(base, 'system_flow.svg')
+    dst = sys.argv[2] if len(sys.argv) > 2 else os.path.join(base, 'system_flow_fixed.svg')
+    convert(src, dst)
