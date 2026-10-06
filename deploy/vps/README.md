@@ -274,6 +274,9 @@ file builds for the host architecture by default, so no change is needed on an
 Ampere instance. The real cost is capacity scarcity — ARM instances often need
 retries to provision.
 
+**See [OCI.md](./OCI.md) for the full Oracle Cloud walkthrough**, including the
+two-layer firewall that is the usual cause of "server up but unreachable".
+
 ## Known gaps (be honest about these)
 
 1. **Postgres is not implemented.** The shim is SQLite-only. SQLite is fine
