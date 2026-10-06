@@ -402,7 +402,7 @@ class DatastoreStrategyStore:
         return StrategyCycle.from_storage(payload)
 
     def record_cycle(self, cycle: StrategyCycle) -> bool:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         payload = cycle.to_storage()
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
@@ -430,7 +430,7 @@ class DatastoreStrategyStore:
     def cycles(self, scope_ids: frozenset[str], *, limit: int = 100) -> tuple[StrategyCycle, ...]:
         if not 1 <= limit <= 200:
             raise ValueError("strategy cycle page limit must be within 1..200")
-        from google.cloud.datastore.query import PropertyFilter
+        from analyzing_llm_rationale.datastore_backend import PropertyFilter
 
         cycles: list[StrategyCycle] = []
         for scope_id in sorted(scope_ids):
@@ -454,7 +454,7 @@ class DatastoreStrategyStore:
         return CandidateMemory.from_storage(entity)
 
     def record_candidate(self, scope_id: str, memory: CandidateMemory) -> None:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         key = self._candidate_key(scope_id, memory.instrument_id)
         with self._client.transaction():

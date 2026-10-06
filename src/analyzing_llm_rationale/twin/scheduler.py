@@ -7,11 +7,20 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from typing import Any, Mapping, Protocol
 
-from google.api_core.exceptions import AlreadyExists
 from opentelemetry import metrics, trace
 
 from .strategy import strategy_cycle_key_for_identity
 from .worker import WorkerJob, WorkerJobKind, WorkerJobs
+
+try:  # google-api-core ships with the GCP client libraries, not with the app.
+    from google.api_core.exceptions import AlreadyExists
+except ImportError:  # pragma: no cover - exercised only on the SQL backend
+    class AlreadyExists(Exception):  # type: ignore[no-redef]
+        """Stand-in so the module imports without the GCP client libraries.
+
+        Only ``CloudTasksDispatcher`` catches this, and that class is never
+        constructed off GCP, so the stand-in is never raised.
+        """
 
 tracer = trace.get_tracer(__name__)
 dispatch_operations = metrics.get_meter(__name__).create_counter(
@@ -183,6 +192,72 @@ class CloudTasksDispatcher:
             raise WorkerDispatchError("Cloud Tasks enqueue failed") from exc
         dispatch_operations.add(1, {"queue_role": "research" if research else "maintenance", "outcome": "created"})
         return str(getattr(response, "name", task_name))
+
+
+@dataclass(frozen=True)
+class LocalDispatchConfig:
+    """Targets and shared secret for in-process worker dispatch."""
+
+    maintenance_url: str
+    research_url: str
+    shared_secret: str
+    timeout_seconds: float = 10.0
+
+    def __post_init__(self) -> None:
+        if not self.maintenance_url.startswith("https://") and not self.maintenance_url.startswith("http://"):
+            raise WorkerDispatchError("worker targets must be absolute URLs")
+        if not self.research_url.startswith("https://") and not self.research_url.startswith("http://"):
+            raise WorkerDispatchError("worker targets must be absolute URLs")
+        if not self.shared_secret.strip():
+            raise WorkerDispatchError("local dispatch requires a shared secret")
+        if not 0 < self.timeout_seconds <= 30:
+            raise WorkerDispatchError("local dispatch timeout must be within 30 seconds")
+
+
+class LocalTaskDispatcher:
+    """In-process replacement for Cloud Tasks on a single box.
+
+    Cloud Tasks provided three things: durable delivery, at-least-once retry,
+    and authenticated HTTP. On one VPS the durable queue is already the
+    ``TwinWorkerJob`` table -- jobs are persisted before dispatch and claimed
+    with a fence, so a lost or duplicated HTTP call is recovered by the next
+    ``dispatch_due_jobs`` pass. That leaves this dispatcher responsible only
+    for delivering the job id over HTTP with a shared secret.
+
+    The body is byte-identical to the Cloud Tasks body (``{"job_id": ...}``),
+    so the worker route needs no change to accept it.
+    """
+
+    def __init__(self, config: LocalDispatchConfig, session: Any | None = None) -> None:
+        self.config = config
+        if session is None:
+            import requests
+
+            session = requests.Session()
+        self._session = session
+
+    @tracer.start_as_current_span("twin.worker.dispatch")
+    def enqueue(self, job: WorkerJob) -> str:
+        research = job.kind is WorkerJobKind.RESEARCH
+        url = self.config.research_url if research else self.config.maintenance_url
+        role = "research" if research else "maintenance"
+        body = json.dumps({"job_id": job.id}, sort_keys=True, separators=(",", ":")).encode()
+        try:
+            response = self._session.post(
+                url,
+                data=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.config.shared_secret}",
+                },
+                timeout=self.config.timeout_seconds,
+            )
+            response.raise_for_status()
+        except Exception as exc:
+            dispatch_operations.add(1, {"queue_role": role, "outcome": "error"})
+            raise WorkerDispatchError("local worker dispatch failed") from exc
+        dispatch_operations.add(1, {"queue_role": role, "outcome": "created"})
+        return f"local:{job.id}"
 
 
 def dispatch_due_jobs(

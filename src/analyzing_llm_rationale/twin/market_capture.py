@@ -299,7 +299,7 @@ class DatastoreMarketCaptureStore:
 
     @tracer.start_as_current_span("twin.market.capture_store.record")
     def record(self, cycle_id: str, batch: MarketCaptureBatch) -> bool:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         if not isinstance(cycle_id, str) or not cycle_id.strip():
             raise MarketCaptureError("market capture cycle ID is required")

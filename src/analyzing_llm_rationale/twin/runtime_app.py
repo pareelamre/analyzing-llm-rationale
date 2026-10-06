@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 from opentelemetry import metrics, trace
 
@@ -66,7 +67,13 @@ from .runtime import (
     RuntimeIdentityPolicy,
     create_private_worker_app,
 )
-from .scheduler import CloudTasksConfig, CloudTasksDispatcher, ShadowCycleSchedule
+from .scheduler import (
+    CloudTasksConfig,
+    CloudTasksDispatcher,
+    LocalDispatchConfig,
+    LocalTaskDispatcher,
+    ShadowCycleSchedule,
+)
 from .simulator import CapturedBook, DepthLevel, ShadowAssumptions, ShadowVenue
 from .store import DatastoreTwinStore, TwinStoreError
 from .strategy import (
@@ -559,6 +566,24 @@ def _required(name: str) -> str:
     return value
 
 
+def _project_id() -> str:
+    """GCP project id, or a placeholder when running on the SQL backend.
+
+    The SQL backend has no project, but the twin runtime still threads a
+    project id into the Cloud Tasks dispatcher config. Off GCP that dispatcher
+    is replaced, so a placeholder keeps the config object constructible
+    without pretending a real project exists.
+    """
+    from analyzing_llm_rationale import datastore_backend
+
+    value = os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
+    if value:
+        return value
+    if datastore_backend.is_sql():
+        return "local"
+    raise RuntimeConfigurationError("GOOGLE_CLOUD_PROJECT is required")
+
+
 def _accounts(name: str, *, required: bool = True) -> frozenset[str]:
     values = frozenset(
         item.strip() for item in os.environ.get(name, "").split(",") if item.strip()
@@ -600,7 +625,7 @@ class _DatastoreLedgerAdapter:
         return self._client.query(kind=kind)
 
     def insert_immutable(self, source) -> bool:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         key = self._client.key(source.key.kind, source.key.id)
         with self._client.transaction():
@@ -1011,6 +1036,41 @@ def _research_operation(
     )
 
 
+def _dispatch_secret() -> str | None:
+    """Shared secret for local dispatch, or None on GCP (which uses OIDC)."""
+    from analyzing_llm_rationale import datastore_backend
+
+    if not datastore_backend.is_sql():
+        return None
+    return _required("FORESEA_TWIN_DISPATCH_SECRET")
+
+
+def _build_dispatcher() -> Any:
+    """Cloud Tasks on GCP, in-process HTTP dispatch on the SQL backend.
+
+    The two share the ``TaskDispatcher`` protocol, so ``dispatch_due_jobs``
+    and every caller are unchanged.
+    """
+    from analyzing_llm_rationale import datastore_backend
+
+    if datastore_backend.is_sql():
+        return LocalTaskDispatcher(LocalDispatchConfig(
+            _required("FORESEA_TWIN_MAINTENANCE_URL") + "/internal/twin/maintain",
+            _required("FORESEA_TWIN_RESEARCH_URL") + "/internal/twin/research",
+            _required("FORESEA_TWIN_DISPATCH_SECRET"),
+        ))
+    return CloudTasksDispatcher(CloudTasksConfig(
+        _project_id(), _required("FORESEA_TWIN_TASKS_LOCATION"),
+        _required("FORESEA_TWIN_MAINTENANCE_QUEUE"),
+        _required("FORESEA_TWIN_RESEARCH_QUEUE"),
+        _required("FORESEA_TWIN_MAINTENANCE_URL") + "/internal/twin/maintain",
+        _required("FORESEA_TWIN_RESEARCH_URL") + "/internal/twin/research",
+        _required("FORESEA_TWIN_DISPATCHER_SERVICE_ACCOUNT"),
+        _required("FORESEA_TWIN_MAINTENANCE_AUDIENCE"),
+        _required("FORESEA_TWIN_RESEARCH_AUDIENCE"),
+    ))
+
+
 def create_environment_app():
     """Build a role-specific app from secret-free deployment configuration."""
     _assert_shadow_only()
@@ -1039,9 +1099,9 @@ def create_environment_app():
     )
 
     if role is WorkerRole.MAINTENANCE:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
-        client = datastore.Client(project=_required("GOOGLE_CLOUD_PROJECT"))
+        client = datastore.Client(project=_project_id())
         jobs = DatastoreWorkerJobs(client)
         budget = DatastoreResearchBudget(client)
         captures = DatastoreResearchCaptureStore(client)
@@ -1055,16 +1115,7 @@ def create_environment_app():
         evidence_cache = DatastorePublicEvidenceCache(client)
         evidence_gateway = NewsPipelinePublicArticleGateway()
         ledger = ForecastLedger(_DatastoreLedgerAdapter(client))
-        dispatcher = CloudTasksDispatcher(CloudTasksConfig(
-            _required("GOOGLE_CLOUD_PROJECT"), _required("FORESEA_TWIN_TASKS_LOCATION"),
-            _required("FORESEA_TWIN_MAINTENANCE_QUEUE"),
-            _required("FORESEA_TWIN_RESEARCH_QUEUE"),
-            _required("FORESEA_TWIN_MAINTENANCE_URL") + "/internal/twin/maintain",
-            _required("FORESEA_TWIN_RESEARCH_URL") + "/internal/twin/research",
-            _required("FORESEA_TWIN_DISPATCHER_SERVICE_ACCOUNT"),
-            _required("FORESEA_TWIN_MAINTENANCE_AUDIENCE"),
-            _required("FORESEA_TWIN_RESEARCH_AUDIENCE"),
-        ))
+        dispatcher = _build_dispatcher()
 
         def stage_continuation(assignment: ResearchAssignment) -> WorkerJob | None:
             return _stage_strategy_continuation(
@@ -1202,6 +1253,7 @@ def create_environment_app():
                 lambda: _calibration_observations(ledger, as_of=now()),
             ),
             research_gateway=gateway,
+            shared_secret=_dispatch_secret(),
         )
     else:
         # Startup validates the configured secret, model identity, endpoint,
@@ -1218,6 +1270,7 @@ def create_environment_app():
                 assignment, research_policy, gateway,
                 provider,
             ),
+            shared_secret=_dispatch_secret(),
         )
     app = create_private_worker_app(runtime)
     init_observability(app)

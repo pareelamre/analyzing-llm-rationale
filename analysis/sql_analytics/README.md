@@ -8,9 +8,9 @@ CSV: `1_accuracy_per_model_all_variants_combined.csv`
 
 ```text
               model     n  accuracy
-       GPT-OSS-120B 85320    0.8114
-Qwen2.5-7b-instruct 85302    0.7254
-          Qwen3-32B 85274    0.7029
+       GPT-OSS-120B 96368    0.8103
+Qwen2.5-7b-instruct 96361    0.7293
+          Qwen3-32B 96333    0.7083
 ```
 
 ## 2. Best-performing variant per model
@@ -18,10 +18,10 @@ Qwen2.5-7b-instruct 85302    0.7254
 CSV: `2_best_performing_variant_per_model.csv`
 
 ```text
-              model                   variant  accuracy    n
-       GPT-OSS-120B variant8_temporal_anchors    0.8167 9480
-Qwen2.5-7b-instruct variant0_neutral_baseline    0.7434 9480
-          Qwen3-32B      variant4_credibility    0.7301 9475
+              model                            variant  accuracy    n
+       GPT-OSS-120B variant12_random_structure_control    0.8288 1577
+Qwen2.5-7b-instruct     variant15_neutral_no_rationale    0.7873 1580
+          Qwen3-32B          variant13_rationale_first    0.7840 1579
 ```
 
 ## 3. Confidence calibration (10 bins): stated confidence vs actual accuracy
@@ -30,17 +30,17 @@ CSV: `3_confidence_calibration_10_bins_stated_confidence_vs_actual_accuracy.csv`
 
 ```text
  conf_bin     n  avg_confidence  accuracy  calibration_gap
-      0.0   119           0.010    0.8571          -0.8476
-      0.1   553           0.156    0.8174          -0.6614
-      0.2  4886           0.243    0.8258          -0.5827
-      0.3  6829           0.339    0.7836          -0.4445
-      0.4  4277           0.435    0.6687          -0.2333
-      0.5  5919           0.553    0.5744          -0.0216
-      0.6 41881           0.647    0.6679          -0.0204
-      0.7 72841           0.747    0.6925           0.0543
-      0.8 81340           0.845    0.7728           0.0717
-      0.9 36949           0.934    0.9008           0.0334
-      1.0   302           1.000    0.9470           0.0530
+      0.0   179           0.026    0.8492          -0.8228
+      0.1  1585           0.147    0.8164          -0.6698
+      0.2  7023           0.239    0.8246          -0.5854
+      0.3  7233           0.339    0.7769          -0.4381
+      0.4  4452           0.435    0.6644          -0.2290
+      0.5  6969           0.548    0.5661          -0.0184
+      0.6 43958           0.647    0.6632          -0.0160
+      0.7 76015           0.747    0.6892           0.0576
+      0.8 90127           0.845    0.7693           0.0754
+      0.9 50741           0.937    0.8916           0.0451
+      1.0   780           1.000    0.9308           0.0692
 ```
 
 ## 4. Brier score per model (lower is better)
@@ -49,9 +49,9 @@ CSV: `4_brier_score_per_model_lower_is_better.csv`
 
 ```text
               model     n  brier_score
-       GPT-OSS-120B 85320      0.35884
-          Qwen3-32B 85274      0.36476
-Qwen2.5-7b-instruct 85302      0.46517
+       GPT-OSS-120B 96368      0.16983
+Qwen2.5-7b-instruct 96361      0.20335
+          Qwen3-32B 96333      0.22800
 ```
 
 ## 5. Consensus questions: all models predict the same answer
@@ -66,9 +66,9 @@ CSV: `5_consensus_questions_all_models_predict_the_same_answer.csv`
        38557                                         Will Andrew Cuomo win the 2025 Democratic primary for New York City mayor?           no            3               No           0.954
        38529                                         Will Andrew Cuomo win the 2025 Democratic primary for New York City mayor?           no            3               No           0.953
        35476                                              Will Nasa's SphereX space telescope be launched before April 1, 2025?          yes            3              Yes           0.947
+       34507                                       Will Kash Patel be confirmed by the Senate as FBI Director by June 30, 2025?          yes            3              Yes           0.946
        39955 Is it the case that Sunderland AFC and Aston Villa will finish their September 21 EPL match with identical scores?          yes            3              Yes           0.946
        37238                                                                                  Will Donald Trump attend UFC 316?          yes            3              Yes           0.946
-       34507                                       Will Kash Patel be confirmed by the Senate as FBI Director by June 30, 2025?          yes            3              Yes           0.946
        37087                                     Will Chris Stapleton win an award at the 60th Academy of Country Music Awards?          yes            3              Yes           0.944
 ```
 
@@ -95,22 +95,22 @@ CSV: `6_disagreement_questions_highest_confidence_variance_across_models.csv`
 CSV: `7_variant_lift_over_baseline_variant0_accuracy_delta_per_model.csv`
 
 ```text
-              model                         variant  base_acc  var_acc   delta
-          Qwen3-32B            variant4_credibility    0.7146   0.7301  0.0155
-       GPT-OSS-120B       variant8_temporal_anchors    0.8148   0.8167  0.0019
-       GPT-OSS-120B variant6_step_by_step_reasoning    0.8148   0.8166  0.0018
-       GPT-OSS-120B            variant4_credibility    0.8148   0.8150  0.0002
-       GPT-OSS-120B          variant2_key_attribute    0.8148   0.8130 -0.0018
-       GPT-OSS-120B   variant7_uncertainty_language    0.8148   0.8126 -0.0022
-          Qwen3-32B       variant8_temporal_anchors    0.7146   0.7122 -0.0024
-Qwen2.5-7b-instruct       variant8_temporal_anchors    0.7434   0.7388 -0.0046
-       GPT-OSS-120B         variant5_key_conditions    0.8148   0.8090 -0.0058
-       GPT-OSS-120B         variant3_reasoning_type    0.8148   0.8040 -0.0108
-Qwen2.5-7b-instruct            variant4_credibility    0.7434   0.7312 -0.0122
-Qwen2.5-7b-instruct variant6_step_by_step_reasoning    0.7434   0.7310 -0.0124
-       GPT-OSS-120B        variant1_predicted_event    0.8148   0.8013 -0.0135
-          Qwen3-32B          variant2_key_attribute    0.7146   0.6983 -0.0163
-          Qwen3-32B   variant7_uncertainty_language    0.7146   0.6966 -0.0180
+              model                                 variant  base_acc  var_acc  delta
+          Qwen3-32B               variant13_rationale_first    0.7146   0.7840 0.0694
+          Qwen3-32B          variant15_neutral_no_rationale    0.7146   0.7829 0.0683
+          Qwen3-32B        variant10_length_matched_neutral    0.7146   0.7608 0.0462
+          Qwen3-32B variant14_temporal_credibility_combined    0.7146   0.7595 0.0449
+Qwen2.5-7b-instruct          variant15_neutral_no_rationale    0.7434   0.7873 0.0439
+Qwen2.5-7b-instruct      variant12_random_structure_control    0.7434   0.7816 0.0382
+          Qwen3-32B    variant11_generic_detailed_rationale    0.7146   0.7519 0.0373
+Qwen2.5-7b-instruct variant14_temporal_credibility_combined    0.7434   0.7797 0.0363
+Qwen2.5-7b-instruct        variant10_length_matched_neutral    0.7434   0.7797 0.0363
+          Qwen3-32B      variant12_random_structure_control    0.7146   0.7481 0.0335
+Qwen2.5-7b-instruct    variant11_generic_detailed_rationale    0.7434   0.7722 0.0288
+          Qwen3-32B                    variant4_credibility    0.7146   0.7301 0.0155
+       GPT-OSS-120B      variant12_random_structure_control    0.8148   0.8288 0.0140
+       GPT-OSS-120B          variant15_neutral_no_rationale    0.8148   0.8241 0.0093
+       GPT-OSS-120B        variant10_length_matched_neutral    0.8148   0.8205 0.0057
 ```
 
 ## 8. Temperature sensitivity: accuracy by temperature per model
@@ -144,22 +144,22 @@ Qwen2.5-7b-instruct         2.00 1580    0.7380
 CSV: `9_overconfident_errors_wrong_predictions_with_confidence_0_8.csv`
 
 ```text
-    model                         variant  question_id predicted_answer ground_truth  confidence
-Qwen3-32B          variant2_key_attribute        41634              Yes           no         1.0
-Qwen3-32B       variant0_neutral_baseline        41634              Yes           no         1.0
-Qwen3-32B         variant5_key_conditions        35472              Yes           no         1.0
-Qwen3-32B       variant0_neutral_baseline        35472              Yes           no         1.0
-Qwen3-32B variant6_step_by_step_reasoning        41634              Yes           no         1.0
-Qwen3-32B       variant0_neutral_baseline        42011               No          yes         1.0
-Qwen3-32B        variant1_predicted_event        35472              Yes           no         1.0
-Qwen3-32B       variant0_neutral_baseline        39191              Yes           no         1.0
-Qwen3-32B        variant1_predicted_event        35472              Yes           no         1.0
-Qwen3-32B         variant3_reasoning_type        41634              Yes           no         1.0
-Qwen3-32B          variant2_key_attribute        35472              Yes           no         1.0
-Qwen3-32B       variant8_temporal_anchors        41634              Yes           no         1.0
-Qwen3-32B       variant8_temporal_anchors        35472              Yes           no         1.0
-Qwen3-32B variant6_step_by_step_reasoning        35286              Yes           no         1.0
-Qwen3-32B   variant7_uncertainty_language        35472              Yes           no         1.0
+              model                        variant  question_id predicted_answer ground_truth  confidence
+Qwen2.5-7b-instruct      variant13_rationale_first        34976              Yes           no         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        39773              Yes           no         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        35286              Yes           no         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        40185              Yes           no         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        40128               No          yes         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        35472              Yes           no         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        39191              Yes           no         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        40306               No          yes         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        40994              Yes           no         1.0
+       GPT-OSS-120B      variant13_rationale_first        39028               No          yes         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        41634              Yes           no         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        35480              Yes           no         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        39028               No          yes         1.0
+Qwen2.5-7b-instruct      variant13_rationale_first        42008              Yes           no         1.0
+Qwen2.5-7b-instruct variant15_neutral_no_rationale        40128               No          yes         1.0
 ```
 
 ## 10. Category difficulty: accuracy per question category (hardest first)

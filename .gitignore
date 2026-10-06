@@ -27,6 +27,7 @@ paper/*.fls
 paper/*.log
 paper/*.out
 paper/*.synctex.gz
+paper/system_flow.svg
 *.pdf
 !paper/*.pdf
 paper/acl_long_paper.pdf
@@ -51,6 +52,10 @@ POLYMARKET_PRIVATE_KEY.txt
 sa-key.json
 *-sa-key.json
 *.service-account.json
+# Local SQLite Datastore replacement (holds user data; never commit)
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 # MCP registry DNS-auth private key (never commit)
 key.pem
 *.pem

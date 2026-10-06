@@ -147,7 +147,7 @@ class DatastorePauseStore:
         self, owner_id: str, *, paused: bool, reason: str,
         idempotency_key: str, now: datetime,
     ) -> OwnerPause:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         fingerprint = _control_fingerprint(paused, reason)
         state_key, request_key = self._state_key(owner_id), self._request_key(owner_id, idempotency_key)

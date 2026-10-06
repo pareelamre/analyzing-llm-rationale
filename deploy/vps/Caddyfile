@@ -1,0 +1,14 @@
+# Caddy terminates TLS for foresea.ink and proxies to the app container.
+# Certificates are issued and renewed automatically -- this replaces the
+# Cloud Run managed-domain mapping.
+
+foresea.ink {
+	encode zstd gzip
+	reverse_proxy app:8000 {
+		# Streaming forecast responses are long-lived; do not let the proxy
+		# time them out before the app does (app timeout is 180s).
+		transport http {
+			read_timeout 300s
+		}
+	}
+}

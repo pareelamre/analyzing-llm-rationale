@@ -648,7 +648,7 @@ class DatastoreTwinStore:
         })
 
     def register_account(self, scope: AccountScope, *, venue_available_cash: Decimal, loss_limit: Decimal) -> AccountProjection:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         cash, loss = _decimal("venue_available_cash", venue_available_cash), _decimal("loss_limit", loss_limit)
         key = self._key(scope.id)
@@ -700,7 +700,7 @@ class DatastoreTwinStore:
     def account_scopes(self, owner_id: str, *, limit: int = 25) -> tuple[AccountScope, ...]:
         if not 1 <= limit <= 100:
             raise TwinStoreError("account scope page limit must be within 1..100")
-        from google.cloud.datastore.query import PropertyFilter
+        from analyzing_llm_rationale.datastore_backend import PropertyFilter
 
         query = self._client.query(kind=self._KIND)
         query.add_filter(filter=PropertyFilter("owner_id", "=", owner_id))
@@ -751,7 +751,7 @@ class DatastoreTwinStore:
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
         client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
     ) -> Reservation:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         reserved_cash, reserved_loss, now = _decimal("cash", cash), _decimal("max_loss", max_loss), now or _now()
         root = self._key(intent.account_scope_id)
@@ -1041,7 +1041,7 @@ class DatastoreTwinStore:
 
     def receive_inbox(self, scope_id: str, message_id: str) -> bool:
         """Durably deduplicate a worker delivery under its account root."""
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         key = self._key(scope_id, "TwinInbox", message_id)
         with self._client.transaction():

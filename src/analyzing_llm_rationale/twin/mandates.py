@@ -311,7 +311,7 @@ class DatastoreMandateStore:
 
     @staticmethod
     def _entity(key: Any, mandate: Mandate):
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         payload = mandate.to_storage()
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -325,7 +325,7 @@ class DatastoreMandateStore:
         return entity
 
     def create(self, mandate: Mandate) -> Mandate:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         key = self._version_key(mandate.owner_id, mandate.id, mandate.version)
         pointer_key = self._pointer_key(mandate.owner_id, mandate.id)
@@ -353,7 +353,7 @@ class DatastoreMandateStore:
         return self._entity_payload(entity) if entity is not None else None
 
     def save_transition(self, before: Mandate, after: Mandate, *, idempotency_key: str) -> Mandate:
-        from google.cloud import datastore
+        from analyzing_llm_rationale import datastore_backend as datastore
 
         if not idempotency_key.strip():
             raise MandateError("idempotency key is required")

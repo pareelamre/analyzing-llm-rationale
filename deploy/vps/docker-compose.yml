@@ -1,0 +1,109 @@
+# Foresea on a single VPS.
+#
+# Replaces the Cloud Run + Datastore + Cloud Tasks + Cloud Scheduler stack with
+# one always-on box. The app container is the same image Cloud Run ran; only
+# the storage backend and the scheduler change.
+#
+#   docker compose up -d --build
+#
+# See README.md in this directory for the full cutover runbook.
+#
+# Architecture: the image builds for the host's architecture by default, so
+# this works on x86 (Hetzner, DigitalOcean, e2-micro) and on ARM (OCI Ampere,
+# Graviton) without changes. PyTorch publishes aarch64 CPU wheels, so the ARM
+# path resolves normally. To build for a different architecture than the host
+# you are on, use buildx:
+#
+#   docker buildx build --platform linux/arm64 --target cpu -t foresea-app .
+
+name: foresea
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: cpu
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # SQLite-backed Datastore replacement. The file lives on the `state`
+      # volume so it survives image rebuilds.
+      FORESEA_DATASTORE_BACKEND: sql
+      FORESEA_DATASTORE_PATH: /data/foresea.sqlite3
+      MODEL_DEVICE: cpu
+      # The image ships HF_HUB_OFFLINE=1 because Cloud Run mounted a
+      # pre-populated cache. Here the cache is a named volume that fills on
+      # first boot, so offline mode has to be off until it is warm.
+      HF_HUB_OFFLINE: "0"
+      TRANSFORMERS_OFFLINE: "0"
+      HF_HOME: /app/.hf_cache
+    volumes:
+      - state:/data
+      - models:/app/.hf_cache
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  # Nightly SQLite snapshot. Replaces the Datastore export workflow; keeps 14
+  # days locally. Point FORESEA_STORAGE_BACKEND=r2 at the app to mirror these
+  # to Cloudflare R2 using the existing r2_store.py path.
+  backup:
+    image: alpine:3.20
+    restart: unless-stopped
+    volumes:
+      - state:/data:ro
+      - backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache sqlite >/dev/null
+        while true; do
+          stamp=$$(date -u +%Y-%m-%dT%H-%M-%SZ)
+          sqlite3 /data/foresea.sqlite3 ".backup '/backups/foresea-$$stamp.sqlite3'"
+          find /backups -name 'foresea-*.sqlite3' -mtime +14 -delete
+          sleep 86400
+        done
+
+  # Replaces the `metaculus-github-dispatch` Cloud Run job. That job used the
+  # same image as the app with a different command, so it is the same image
+  # here too -- no separate build. Runs on the cron schedule below.
+  metaculus-dispatch:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: cpu
+    profiles: ["jobs"]
+    env_file: .env
+    environment:
+      FORESEA_DATASTORE_BACKEND: sql
+      FORESEA_DATASTORE_PATH: /data/foresea.sqlite3
+      MODEL_DEVICE: cpu
+    volumes:
+      - state:/data
+    command: ["python", "-m", "analyzing_llm_rationale.metaculus_dispatch"]
+
+volumes:
+  state:
+  models:
+  backups:
+  caddy_data:
+  caddy_config:
