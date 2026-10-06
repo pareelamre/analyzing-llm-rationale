@@ -29,6 +29,16 @@ the backup is worse than a red one). The GCS export bucket
 `brave-drive-471109-d9-datastore-backups` keeps its 30-day lifecycle rule as a
 second recovery point until the VPS cutover retires Datastore entirely.
 
+**Status: applied.** `datastore-backup.yml` now exports to SQLite, verifies
+advisory, uploads to `R2_STATE_BUCKET` (`foresea-state`) under
+`datastore-backups/<date>/`, and expires objects past the retention window.
+There is no `actions/upload-artifact` step and no `gs://` destination. The
+workflow fails fast if `R2_STATE_BUCKET` is unset.
+
+Note for future agents: the same rule applies to any new workflow. Before
+adding an artifact, release asset, or committed file, ask whether it contains
+or derives from user data. This repo is public.
+
 ### 2026-10-06 — GCS lifecycle rules applied (Copilot)
 
 `gcp_cost_optimizer.py` policies existed but were never applied. Applied via
@@ -79,7 +89,14 @@ analyze-llm-rationale run-batch \
   --temperature 0.0 --temperature-tag temperature_00
 
 # Start API server locally (Note: Port 8000 is reserved, run on 8080 instead)
-PYTHONPATH=src python -m uvicorn analyzing_llm_rationale.server:app --port 8080
+# Use the `serve` command, NOT `uvicorn server:app`: importing the module
+# directly leaves `_state` empty, so /ready stays 503 and every data endpoint
+# fails. `serve` calls init_server_state() first.
+PYTHONPATH=src analyze-llm-rationale serve \
+  --model gpt-oss-120b --variant variant0_neutral_baseline --port 8080
+
+# Note: `python -m analyzing_llm_rationale.cli` is a no-op -- cli.py has no
+# `if __name__ == "__main__"` guard. Use the console script, or call main().
 
 # Fetch + rank news for a question (LangChain pipeline)
 PYTHONPATH=src analyze-llm-rationale fetch-and-rank \
@@ -139,6 +156,37 @@ results/<model>/<temperature>/
 
 All hosted models use `openai-compatible` provider pointing to `https://llm.scads.ai/v1`, authenticated via `SCADS_AI_API_KEY`. Default for serving: `gpt-oss-120b`, variant `variant0_neutral_baseline`.
 
+Verify a route is live before debugging anything else — the provider publishes
+a status probe, and a retired route fails with only a generic "provider
+unavailable":
+
+```bash
+curl -s https://llm.scads.ai/status/state.json | python -c \
+  "import json,sys; [print(m['name'], m['state']) for m in json.load(sys.stdin)['models']['Chat']]"
+analyze-llm-rationale smoke-test --model glm-5-3
+```
+
+Note that the reasoning models (`glm-5-3-flash`, `deepseek-v4-flash`) emit
+`reasoning_content` before `content`. A smoke test with a very small
+`max_tokens` can return an empty `content` because the budget was spent on
+reasoning — that is not a broken route.
+
+## Data storage
+
+Durable state lives in Cloud Datastore, reached through
+`analyzing_llm_rationale.datastore_backend`, which selects the implementation
+from `FORESEA_DATASTORE_BACKEND`:
+
+| Value | Backend |
+|---|---|
+| `gcp` (default) | `google.cloud.datastore` — unchanged production behaviour |
+| `sql` | SQLite via `datastore_sql.py` (portable; used off GCP) |
+
+`datastore_sql.py` is a drop-in for the Datastore surface the app uses
+(`Client`, `Key`, `Entity`, `PropertyFilter`, ancestor queries, namespaces,
+transactions). `trackrec_store.py` is the same pattern for the track record.
+See `deploy/vps/README.md` for the migration and cutover runbook.
+
 ## Deployment
 
 ### Cloud Run (public, scales to zero)
@@ -148,6 +196,18 @@ https://foresea.ink
 - `GET /health` → `{"status": "ok"}`
 - `POST /predict` — PredictRequest → PredictResponse
 - `GET /mcp/` — Model Context Protocol Streamable-HTTP endpoint
+
+Cloud Run sizing is set in `docker.yml` via `CLOUD_RUN_MEMORY` /
+`CLOUD_RUN_CPU` (default `1Gi` / `1`). Override a manual run with
+`gh workflow run docker.yml -f memory=2Gi`. Do not hardcode these in the
+deploy step — a hardcoded value silently reverts any manual change on the
+next push to `main`.
+
+### Self-hosted VPS
+`deploy/vps/` holds a provider-agnostic Docker Compose stack (app + Caddy TLS
++ nightly SQLite backup + the metaculus-dispatch job), a cron schedule
+replacing Cloud Scheduler, and the cutover runbook. See
+`deploy/vps/README.md` and `deploy/vps/OCI.md`.
 
 ## Foresea runtime notes
 
