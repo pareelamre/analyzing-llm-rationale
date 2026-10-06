@@ -83,7 +83,8 @@ class AgentRecalibrationProfilesTests(unittest.TestCase):
 
     def test_profile_calibrations_match_empirical_findings(self):
         gemma = benchmark_tools.get_agent_profile("gemma-4-26b-a4b-it")
-        self.assertEqual(gemma.max_contract_price, 0.45)
+        self.assertEqual(gemma.max_contract_price, 0.30)
+        self.assertEqual(gemma.forbidden_price_range, (0.30, 1.00))
         self.assertEqual(gemma.preferred_sizing_mode, "convex_conviction")
         self.assertEqual(gemma.horizon_preference, "underpriced_skew")
 
@@ -92,25 +93,30 @@ class AgentRecalibrationProfilesTests(unittest.TestCase):
         self.assertEqual(deepseek.preferred_sizing_mode, "probe_kelly")
 
         minimax = benchmark_tools.get_agent_profile("minimax-m3")
-        self.assertEqual(minimax.forbidden_price_range, (0.50, 0.75))
+        self.assertEqual(minimax.max_contract_price, 0.60)
+        self.assertEqual(minimax.forbidden_price_range, (0.50, 0.60))
         self.assertEqual(minimax.preferred_sizing_mode, "flat_probe")
 
         gpt = benchmark_tools.get_agent_profile("gpt-oss-120b")
         self.assertEqual(gpt.max_trades_per_cycle, 1)
         self.assertEqual(gpt.min_profile_edge, 0.05)
+        self.assertEqual(gpt.max_contract_price, 0.70)
         self.assertEqual(gpt.preferred_sizing_mode, "quarter_kelly")
 
         llama = benchmark_tools.get_agent_profile("llama-3.3-70b-instruct")
-        self.assertEqual(llama.max_contract_price, 0.40)
+        self.assertEqual(llama.max_contract_price, 0.70)
         self.assertEqual(llama.horizon_preference, "14-30d")
         self.assertEqual(llama.preferred_sizing_mode, "convex_conviction")
 
         qwen = benchmark_tools.get_agent_profile("qwen3-8-27b")
+        self.assertEqual(qwen.max_contract_price, 0.60)
+        self.assertEqual(qwen.max_trades_per_cycle, 3)
         self.assertEqual(qwen.horizon_preference, "14-30d")
         self.assertEqual(qwen.preferred_sizing_mode, "convex_conviction")
 
         glm = benchmark_tools.get_agent_profile("glm-5-3")
         self.assertEqual(glm.min_profile_edge, 0.04)
+        self.assertEqual(glm.max_trades_per_cycle, 3)
         self.assertEqual(glm.horizon_preference, "14-30d")
 
 
@@ -293,15 +299,17 @@ class AgentTradingTickPromptAndDiscoveryTests(unittest.TestCase):
     def test_tactical_profile_block_renders_for_known_models(self):
         gemma_block = agent_trading_tick._agent_tactical_profile_block("gemma-4-26b-a4b-it")
         self.assertIn("Positive-Skew Asymmetric Value Sniper", gemma_block)
-        self.assertIn("Price ceiling: <= $0.45", gemma_block)
+        self.assertIn("Price ceiling: <= $0.30", gemma_block)
+        self.assertIn("Forbidden price band: $0.30-$1.00", gemma_block)
 
         gpt_block = agent_trading_tick._agent_tactical_profile_block("gpt-oss-120b")
         self.assertIn("Disciplined Low-Turnover Specialist", gpt_block)
         self.assertIn("Max trades per cycle: 1", gpt_block)
         self.assertIn("Minimum net edge hurdle: >= 5.0%", gpt_block)
+        self.assertIn("Price ceiling: <= $0.70", gpt_block)
 
         minimax_block = agent_trading_tick._agent_tactical_profile_block("minimax-m3")
-        self.assertIn("Forbidden price band: $0.50-$0.75", minimax_block)
+        self.assertIn("Forbidden price band: $0.50-$0.60", minimax_block)
 
         unknown_block = agent_trading_tick._agent_tactical_profile_block("unknown-test")
         self.assertEqual(unknown_block, "")
