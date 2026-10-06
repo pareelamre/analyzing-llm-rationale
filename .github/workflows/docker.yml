@@ -4,6 +4,16 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      memory:
+        description: "Cloud Run memory (e.g. 1Gi, 2Gi)"
+        required: false
+        default: "1Gi"
+      cpu:
+        description: "Cloud Run vCPU count"
+        required: false
+        default: "1"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,6 +23,12 @@ env:
   GCP_REGION: us-central1
   GCP_PROJECT_ID: brave-drive-471109-d9
   SERVICE_NAME: analyzing-llm-rationale
+  # Cloud Run sizing. Defaults apply on push; a manual `workflow_dispatch`
+  # can override them without editing this file. 1 GiB is sufficient: measured
+  # under a hard 1 GB cgroup the app uses 146 MB idle and 611 MB peak with the
+  # RAG embedder loaded, with no OOM kill.
+  CLOUD_RUN_MEMORY: ${{ inputs.memory || '1Gi' }}
+  CLOUD_RUN_CPU: ${{ inputs.cpu || '1' }}
 
 jobs:
   build-and-push:
@@ -101,8 +117,8 @@ jobs:
             --allow-unauthenticated \
             --port 8000 \
             --timeout 180 \
-            --cpu 1 \
-            --memory 1Gi \
+            --cpu ${{ env.CLOUD_RUN_CPU }} \
+            --memory ${{ env.CLOUD_RUN_MEMORY }} \
             --min-instances 0 \
             --max-instances 3 \
             --concurrency 20 \
