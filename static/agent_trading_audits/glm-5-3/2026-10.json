@@ -1499,6 +1499,101 @@
       "outcome": "rejected",
       "record_hash": "df2a9a9071e75049756b2a14532e042e9571856932e55c56237509a4274add3e",
       "recorded_at": "2026-10-06T02:09:59.917844+00:00"
+    },
+    {
+      "action_id": "91b79daa-a6bd-408f-a1c3-6311b9e704f5",
+      "agent_id": "glm-5-3",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 1.1984542454976852,
+          "marketable": false,
+          "observed_ask": 0.67,
+          "observed_bid": 0.64,
+          "source": "live_venue_quote",
+          "spread": 0.03,
+          "spread_status": "checked",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.63,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 9504.155736,
+          "cash_required": 189.074493,
+          "concentration_cap": 1503.978111,
+          "cycle_id": "30m:995212",
+          "cycle_spend_after": 189.074493,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 189.074493,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 3007.956223,
+          "drawdown_after": 0.000664,
+          "fee": 4.773398,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 184.301094,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 3,
+          "notional": 184.301094,
+          "open_markets_after": 4,
+          "per_cycle_spend_limit": 2005.304148,
+          "reasons": [
+            "insufficient_profile_edge",
+            "profile_horizon_restricted"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.1288,
+          "eligible": true,
+          "horizon": "1-3d",
+          "horizon_validated": false,
+          "kelly_fraction": 0.25,
+          "lead_days": 1.2,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.02,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 200.530415,
+          "target_quantity": 292.5414198200669
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995212",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 189.074493,
+        "fee": 4.773398,
+        "netting_payout": 0.0,
+        "notional": 184.301094,
+        "price": 0.63,
+        "quantity": 292.5414198200669,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXHIGHNY-26OCT07-T66"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "00ebe8d9c0ab47ff1c9311be0a9057b4259b2e42f42e63a525bda97f73f2d01d",
+      "recorded_at": "2026-10-07T14:14:13.581941+00:00"
     }
   ],
   "month": "2026-10",
