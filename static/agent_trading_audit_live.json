@@ -61015,6 +61015,100 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "01b64e2f-3a33-4df2-a722-fdbaabe4a72c",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 26.86330477403935,
+            "marketable": true,
+            "observed_ask": 0.1,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.1,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 6799.017407,
+            "cash_required": 114.872748,
+            "concentration_cap": 1147.603141,
+            "cycle_id": "30m:995248",
+            "cycle_spend_after": 114.872748,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 114.872748,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2295.206283,
+            "drawdown_after": 0.205987,
+            "fee": 3.99172,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 110.881028,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 110.881028,
+            "open_markets_after": 2,
+            "per_cycle_spend_limit": 1530.137522,
+            "reasons": [
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.9,
+            "eligible": true,
+            "horizon": "14-30d",
+            "horizon_validated": true,
+            "kelly_fraction": 0.25,
+            "lead_days": 26.9,
+            "market_shrinkage": 0.425,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 114.872746,
+            "target_quantity": 1108.8102847682703
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995248",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 114.872748,
+          "fee": 3.99172,
+          "netting_payout": 0.0,
+          "notional": 110.881028,
+          "price": 0.1,
+          "quantity": 1108.8102847682703,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-the-democratic-party-control-the-house-after-the-2026-midterm-elections"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "8aec2f82fb6169a9ff6992b9eea7961e126f16c6c86231ee72edca7328b09c02",
+        "recorded_at": "2026-10-08T08:15:50.578287+00:00"
+      },
+      {
         "action_id": "7e28c9f5-2939-4311-ba61-b9507347db02",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -103583,7 +103677,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-08T06:19:59.519173+00:00",
+  "generated_at": "2026-10-08T08:20:50.415973+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
