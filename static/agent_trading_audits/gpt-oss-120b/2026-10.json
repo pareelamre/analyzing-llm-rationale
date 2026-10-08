@@ -3325,6 +3325,100 @@
       "outcome": "no",
       "record_hash": "ac91ea6f7c38667cb7675aba7bae0ead2837849d97ed79992b4c72279133ecd0",
       "recorded_at": "2026-10-08T06:12:00.037586+00:00"
+    },
+    {
+      "action_id": "5493ab6f-be04-437c-a89c-d6a29992fbe7",
+      "agent_id": "gpt-oss-120b",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 450.19515498663196,
+          "marketable": true,
+          "observed_ask": 0.77,
+          "observed_bid": 0.73,
+          "source": "live_venue_quote",
+          "spread": 0.04,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.77,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 7514.409969,
+          "cash_required": 235.899649,
+          "concentration_cap": 1179.498246,
+          "cycle_id": "30m:995252",
+          "cycle_spend_after": 235.899649,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 235.899649,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2358.996492,
+          "drawdown_after": 0.219562,
+          "fee": 3.737806,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 232.161844,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 1,
+          "notional": 232.161844,
+          "open_markets_after": 3,
+          "per_cycle_spend_limit": 1572.664328,
+          "reasons": [
+            "profile_price_ceiling_exceeded"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.137626,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.25,
+          "lead_days": 450.2,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.03,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 235.899649,
+          "target_quantity": 301.50888769504485
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995252",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 235.899649,
+        "fee": 3.737806,
+        "netting_payout": 0.0,
+        "notional": 232.161844,
+        "price": 0.77,
+        "quantity": 301.50888769504485,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXMEDIARELEASESPIDERMAN-DEC26"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "4e35a65f616eecdc24a5cfb33f50b46a67b0e9748eba67e4933b3e0ad754021e",
+      "recorded_at": "2026-10-08T10:18:58.642273+00:00"
     }
   ],
   "month": "2026-10",
