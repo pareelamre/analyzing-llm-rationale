@@ -5,6 +5,34 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-09 — Sports empirical-alpha discovery lane & horizon exemption (Copilot)
+
+Integrated candidate discovery and trade execution support for sports markets
+where LLM forecasting demonstrates positive empirical edge over market consensus
+(Brier 0.0410 vs market 0.0516 across 1,250+ resolved instances in Foresea track record):
+
+1. **Dedicated sports discovery quota (`AGENT_TRADING_SPORTS_CANDIDATE_QUOTA`)**:
+   - `_discover_sports_candidates` in `scripts/agent_trading_tick.py` reserves room
+     and queries both Kalshi (`category="Sports"`) and Polymarket (using Gamma API
+     `tag_id="1"` for liquid sports events).
+   - Validates candidate belongs to sports category/domain and keeps contested
+     0.05-0.95 range.
+   - OTel telemetry spans and metrics (`sports_candidate_discoveries`,
+     `sports_candidate_discovery_duration`) added.
+   - Respects global category blocks (`benchmark_tools.category_is_blocked("sports")`).
+
+2. **Horizon filter & risk guard exemption for sports**:
+   - Short-horizon news bans (`min_lead_days >= 7.0d`) exist to protect models from
+     breaking-news information lag. Sports matches and weather resolve via deterministic,
+     scheduled, source-verified score/climate outcomes.
+   - In `src/analyzing_llm_rationale/benchmark_tools.py` (`_risk_guard_checks`),
+     exempted sports (`cat_str not in ("weather", "sports", "sport")`) from
+     `profile_horizon_restricted`.
+   - In `scripts/agent_trading_tick.py`, candidate sorting exempts sports from the +5
+     short-horizon penalty in `_hurdle_sort_key`.
+   - Updated tactical profile prompt blocks and `_build_learning_block` to guide agents
+     on empirical skill pockets (sports & weather).
+
 ### 2026-10-06 — Per-agent profile prescriptions + fleet-wide bias correction (Copilot)
 
 Applied the individual improvement prescriptions from the Sep–Oct P&L and

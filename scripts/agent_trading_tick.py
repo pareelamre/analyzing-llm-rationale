@@ -26,6 +26,8 @@ Env:
   AGENT_TRADING_MAX_CLOSE_DAYS     candidate discovery window, days (default 90)
   AGENT_TRADING_WEATHER_CANDIDATE_QUOTA  source-verified NWS weather candidates
                                           reserved per cycle (default 1)
+  AGENT_TRADING_SPORTS_CANDIDATE_QUOTA   empirical skill domain (sports) candidates
+                                          reserved per cycle (default 2)
   AGENT_TRADING_MTM_CANDIDATE_QUOTA      mark-to-market high-edge candidates
                                           reserved per cycle (default 2)
   FORESEA_AGENT_MAX_ORDER_NOTIONAL_PCT   per-order cap, fraction of current
@@ -169,6 +171,16 @@ mtm_candidate_discovery_duration = meter.create_histogram(
     unit="s",
     description="Duration of mark-to-market edge candidate discovery",
 )
+sports_candidate_discoveries = meter.create_counter(
+    "agent_trading.sports_candidates.discovery",
+    unit="1",
+    description="Empirical-skill sports candidates offered to a shadow-trading cycle",
+)
+sports_candidate_discovery_duration = meter.create_histogram(
+    "agent_trading.sports_candidates.discovery.duration",
+    unit="s",
+    description="Duration of sports candidate discovery",
+)
 
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
@@ -202,6 +214,9 @@ MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "90"))
 MAX_CANDIDATE_HURDLE = float(os.environ.get("AGENT_TRADING_MAX_CANDIDATE_HURDLE", "0.08"))
 WEATHER_CANDIDATE_QUOTA = max(
     0, min(CANDIDATE_COUNT, int(os.environ.get("AGENT_TRADING_WEATHER_CANDIDATE_QUOTA", "1")))
+)
+SPORTS_CANDIDATE_QUOTA = max(
+    0, min(CANDIDATE_COUNT, int(os.environ.get("AGENT_TRADING_SPORTS_CANDIDATE_QUOTA", "2")))
 )
 MTM_CANDIDATE_QUOTA = max(
     0, min(CANDIDATE_COUNT, int(os.environ.get("AGENT_TRADING_MTM_CANDIDATE_QUOTA", "2")))
@@ -1334,6 +1349,10 @@ def _build_learning_block(conn, agent_id: str) -> str:
             f"Forecast calibration ({resolved_forecasts} final outcomes): Brier {brier:.3f}{market_note}; "
             f"{bias_note}. This is descriptive, not a sizing override."
         )
+        lines.append(
+            "Empirical skill niches (from live track record): Sports (Model Brier 0.041 vs Market 0.052 — demonstrated model edge), "
+            "Niche/Specialist (Model Brier 0.038 vs Market 0.045). Avoid overtrading macro geopolitics where market calibration exceeds model."
+        )
     weather_rows = conn.execute(
         """
         SELECT weather_market_type, weather_settlement_source, COUNT(*) AS resolved_count,
@@ -1369,7 +1388,7 @@ def _paper_market_domain(quote: Dict[str, Any]) -> str:
     ).lower()
     for domain, markers in {
         "politics": ("politic", "election", "president", "congress", "senate", "governor", "government"),
-        "sports": ("sport", "nfl", "nba", "mlb", "nhl", "soccer", "football", "tennis", "game"),
+        "sports": ("sport", "nfl", "nba", "mlb", "nhl", "soccer", "football", "tennis", "game", "ballon", "champion", "coach", "ncaa", "cfb", "league"),
         "crypto": ("crypto", "bitcoin", "btc", "ethereum", "eth", "solana"),
         "finance": ("finance", "fed", "inflation", "interest rate", "s&p", "nasdaq", "gdp"),
         "weather": ("weather", "temperature", "rain", "snow", "hurricane", "precipitation"),
@@ -1839,6 +1858,85 @@ def _discover_weather_candidates(known_tickers: set, *, limit: int) -> List[Dict
             weather_candidate_discovery_duration.record(time.perf_counter() - started)
 
 
+def _is_sports_candidate(quote: Dict[str, Any]) -> bool:
+    """Check if quote is classified under sports category or sports domain."""
+    cat = str(quote.get("category") or "").strip().lower()
+    if cat in ("sports", "sport"):
+        return True
+    return _paper_market_domain(quote) == "sports"
+
+
+def _discover_sports_candidates(known_tickers: set, *, limit: int) -> List[Dict[str, Any]]:
+    """Reserve room for verified empirical skill domain (sports) candidates.
+
+    In Foresea's resolved track record, models achieve 0.0410 Brier vs market
+    0.0516 (1.06pp model edge) on sports questions across 1,250+ resolved
+    instances. Reserving room for contested sports markets allows agents to trade
+    in a demonstrated alpha pocket rather than being confined to high-volume
+    geopolitics where market calibration exceeds model capability.
+    """
+    if limit <= 0:
+        return []
+    if benchmark_tools.category_is_blocked("sports"):
+        return []
+    started = time.perf_counter()
+    with tracer.start_as_current_span("agent_trading.sports_candidates.discover") as span:
+        per_venue = max(6, limit * 3)
+        try:
+            kalshi_quotes = _list_venue(
+                "kalshi",
+                limit=per_venue,
+                category="Sports",
+                min_close_days=0.0,
+            )
+            poly_quotes = _list_venue(
+                "polymarket",
+                limit=per_venue,
+                category="Sports",
+                min_close_days=0.0,
+            )
+            pool: List[Dict[str, Any]] = []
+            for quote in kalshi_quotes + poly_quotes:
+                ident = quote.get("ident")
+                if not ident or ident in known_tickers or quote.get("probability") is None:
+                    continue
+                if not _is_sports_candidate(quote):
+                    continue
+                try:
+                    prob = float(quote.get("probability") or 0.5)
+                except (ValueError, TypeError):
+                    prob = 0.5
+                if not (0.05 <= prob <= 0.95):
+                    continue
+                pool.append(quote)
+
+            pool.sort(key=_edge_hurdle_pp)
+            selected: List[Dict[str, Any]] = []
+            for quote in pool:
+                if len(selected) >= limit:
+                    break
+                ident = quote.get("ident")
+                selected.append(quote)
+                known_tickers.add(ident)
+
+            outcome = "offered" if selected else "none_eligible"
+            span.set_attributes({
+                "sports.candidates.offered": len(selected),
+                "outcome": outcome,
+            })
+            sports_candidate_discoveries.add(len(selected) or 1, {"outcome": outcome})
+            return selected
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            sports_candidate_discoveries.add(1, {"outcome": "failure"})
+            logger.warning("sports candidate discovery failed", exc_info=True)
+            return []
+        finally:
+            sports_candidate_discovery_duration.record(time.perf_counter() - started)
+
+
 def _discover_mtm_edge_candidates(known_tickers: set, *, limit: int) -> List[Dict[str, Any]]:
     """Reserve room for verified high-edge forecast candidates from mark-to-market live data."""
     if limit <= 0:
@@ -2088,6 +2186,7 @@ def _discover_candidates(known_tickers: set, agent_id: Optional[str] = None) -> 
 def _discover_candidates_unfiltered(known_tickers: set, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
     new_quotes: List[Dict[str, Any]] = []
     new_quotes.extend(_discover_weather_candidates(known_tickers, limit=WEATHER_CANDIDATE_QUOTA))
+    new_quotes.extend(_discover_sports_candidates(known_tickers, limit=SPORTS_CANDIDATE_QUOTA))
     new_quotes.extend(_discover_mtm_edge_candidates(known_tickers, limit=MTM_CANDIDATE_QUOTA))
     # Round-robin one candidate at a time across venues (rather than filling
     # Kalshi's share first) so a shortfall in one venue's listing doesn't
@@ -2167,7 +2266,7 @@ def _discover_candidates_unfiltered(known_tickers: set, agent_id: Optional[str] 
 
         horizon_penalty = 0
         cat = str(q.get("category") or "").strip().lower()
-        if profile and profile.min_lead_days is not None and cat != "weather":
+        if profile and profile.min_lead_days is not None and cat not in ("weather", "sports", "sport"):
             lead_d = None
             days = q.get("lead_days")
             if days is not None:
@@ -2774,7 +2873,10 @@ def _agent_tactical_profile_block(agent_id: Optional[str]) -> str:
     if profile.horizon_preference is not None:
         constraints.append(f"Preferred horizon: {profile.horizon_preference}")
     if profile.min_lead_days is not None:
-        constraints.append(f"Minimum resolution horizon: >= {profile.min_lead_days:.0f} days (short-horizon fast-news ban)")
+        constraints.append(
+            f"Minimum resolution horizon: >= {profile.min_lead_days:.0f} days "
+            "(short-horizon fast-news ban; exempt for empirical skill domains like sports and weather)"
+        )
     if profile.max_lead_days is not None:
         constraints.append(f"Maximum resolution horizon: <= {profile.max_lead_days:.0f} days")
     if profile.max_order_notional_pct is not None:

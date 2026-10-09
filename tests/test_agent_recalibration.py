@@ -329,8 +329,9 @@ class AgentTradingTickPromptAndDiscoveryTests(unittest.TestCase):
         mid_quote = _quote("KXMID", bid=0.58, ask=0.60, prob=0.59, close_days=20)
         with (
             mock.patch.object(agent_trading_tick, "_discover_weather_candidates", return_value=[]),
+            mock.patch.object(agent_trading_tick, "_discover_sports_candidates", return_value=[]),
             mock.patch.object(agent_trading_tick, "_discover_mtm_edge_candidates", return_value=[]),
-            mock.patch.object(agent_trading_tick, "_list_venue", side_effect=lambda p, lim: [cheap_quote, mid_quote] if p == "kalshi" else []),
+            mock.patch.object(agent_trading_tick, "_list_venue", side_effect=lambda p, *args, **kwargs: [cheap_quote, mid_quote] if p == "kalshi" else []),
         ):
             candidates = agent_trading_tick._discover_candidates(set(), agent_id="gemma-4-26b-a4b-it")
             self.assertTrue(len(candidates) >= 1)
