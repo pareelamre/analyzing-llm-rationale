@@ -231,6 +231,37 @@ class ProfileHorizonAndOrderNotionalTests(unittest.TestCase):
                 self.assertEqual(result["reason"], "profile_horizon_restricted")
                 self.assertIn("profile_horizon_restricted", result["message"])
 
+    def test_sports_exempt_from_short_horizon_ban(self):
+        ctx = benchmark_tools.ToolContext(agent_id="qwen3-8-27b", require_kelly_sizing=True)
+        with tempfile.TemporaryDirectory() as td:
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {**self._base_env(td), "FORESEA_AGENT_MAX_CREDIBLE_EDGE": "0.25"},
+                    clear=False,
+                ),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    return_value=_quote("KXSPORTSGAME", bid=0.20, ask=0.22, prob=0.21, lead_days=2.0, category="Sports"),
+                ),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi_orderbook",
+                    return_value=_book(),
+                ),
+            ):
+                result = place_trade(
+                    {
+                        "ticker": "KXSPORTSGAME",
+                        "side": "yes",
+                        "price": 0.22,
+                        "lead_days": 2.0,
+                        "sizing_mode": "scaled_edge",
+                        "model_probability": 0.28,
+                    },
+                    ctx,
+                )
+                self.assertTrue(result.get("ok"), f"Expected trade to pass but got: {result}")
+
     def test_qwen_allows_14_to_30d_horizon(self):
         ctx = benchmark_tools.ToolContext(agent_id="qwen3-8-27b", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:

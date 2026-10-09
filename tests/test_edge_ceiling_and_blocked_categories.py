@@ -256,6 +256,27 @@ class CandidateDiscoveryTests(unittest.TestCase):
         ):
             self.assertEqual(agent_trading_tick._discover_weather_candidates(set(), limit=3), [])
 
+    def test_the_sports_lane_runs_while_sports_is_tradable(self):
+        import agent_trading_tick
+
+        with (
+            mock.patch.object(market_data, "list_kalshi", return_value=[]) as listed_k,
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+        ):
+            agent_trading_tick._discover_sports_candidates(set(), limit=3)
+        self.assertTrue(listed_k.called)
+
+    def test_the_sports_lane_is_skipped_once_sports_is_blocked(self):
+        """Blocking sports must short-circuit the discovery lane before venue calls."""
+        import agent_trading_tick
+
+        with (
+            mock.patch.dict(os.environ, {"FORESEA_AGENT_BLOCKED_CATEGORIES": "crypto,sports"}),
+            mock.patch.object(market_data, "list_kalshi", side_effect=AssertionError("must not call the venue")),
+            mock.patch.object(market_data, "list_polymarket", side_effect=AssertionError("must not call the venue")),
+        ):
+            self.assertEqual(agent_trading_tick._discover_sports_candidates(set(), limit=3), [])
+
 
 if __name__ == "__main__":
     unittest.main()

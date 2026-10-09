@@ -460,6 +460,35 @@ class CandidateSelectionTests(unittest.TestCase):
         self.assertEqual(candidates[0]["ident"], "KXHIGHNY-26SEP07-B77.5")
         self.assertIn("KXHIGHNY", called_series)
 
+    def test_discover_sports_candidates_queries_venues_and_respects_quota(self):
+        sport_k = _quote("KXLEEDS", question="Will Leeds United win against Sheffield?", bid=0.40, ask=0.45)
+        sport_k["category"] = "Sports"
+        sport_p = _poly_quote("poly-chelsea", question="Will Chelsea FC win against Arsenal?", bid=0.40, ask=0.45, category="Sports")
+        non_sport = _quote("KXGEN", question="General question?", bid=0.40, ask=0.45)
+
+        def list_kalshi(**kwargs):
+            return [sport_k, non_sport] if kwargs.get("category") == "Sports" else [non_sport]
+
+        def list_poly(**kwargs):
+            return [sport_p] if kwargs.get("category") == "Sports" else []
+
+        with (
+            mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
+            mock.patch.object(market_data, "list_polymarket", side_effect=list_poly),
+        ):
+            candidates = agent_trading_tick._discover_sports_candidates(set(), limit=2)
+
+        self.assertEqual(len(candidates), 2)
+        idents = [c["ident"] for c in candidates]
+        self.assertIn("KXLEEDS", idents)
+        self.assertIn("poly-chelsea", idents)
+        self.assertNotIn("KXGEN", idents)
+
+    def test_discover_sports_candidates_blocked_category_returns_empty(self):
+        with mock.patch.object(benchmark_tools, "category_is_blocked", return_value=True):
+            candidates = agent_trading_tick._discover_sports_candidates(set(), limit=2)
+        self.assertEqual(candidates, [])
+
     def test_polymarket_edge_hurdle_has_no_taker_fee(self):
         k_quote = _quote("KXTEST", bid=0.40, ask=0.45)
         p_quote = _poly_quote("poly-test", bid=0.40, ask=0.45, category="geopolitics")

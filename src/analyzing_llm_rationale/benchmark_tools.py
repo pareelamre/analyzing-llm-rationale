@@ -2871,7 +2871,8 @@ def _check_trade_guards(
             if (price * quantity) > max_order_notional + max(0.50, price):
                 reasons.append("profile_order_notional_exceeded")
         raw_lead = args.get("lead_days") or (market_check.get("lead_days") if isinstance(market_check, dict) else None)
-        if raw_lead is not None and cat != "weather":
+        cat_str = str(cat or (market_check.get("category") if isinstance(market_check, dict) else "") or "").strip().lower()
+        if raw_lead is not None and cat_str not in ("weather", "sports", "sport"):
             try:
                 lead_val = float(raw_lead)
                 if profile.min_lead_days is not None and lead_val < profile.min_lead_days - 1e-6:

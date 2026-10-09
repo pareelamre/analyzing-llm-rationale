@@ -395,7 +395,8 @@ _CATEGORY_KEYWORDS = {
     "Sports": ["nfl", "nba", "mlb", "nhl", "soccer", "football", "basketball",
                "world cup", "super bowl", "premier league", "champion", "playoff",
                "tournament", " vs ", "ufc", "formula 1", " f1 ", "golf", "tennis",
-               "olympic", "world series"],
+               "olympic", "world series", "spread", "ballon", "coach", "cfb",
+               "ncaa", "uefa", "fc ", "league"],
     "Economics": ["fed", "interest rate", "inflation", "gdp", "jobs report",
                   "recession", "cpi", "unemployment", "economy", "jobless", "rate cut"],
     "Entertainment": ["movie", "film", "oscar", "album", "song", "box office",
@@ -439,15 +440,18 @@ def list_polymarket(limit: int = 5, query: Optional[str] = None,
     # Search deeper when filtering, since matches may not be top-volume.
     deeper = bool(want or cat or min_close_days is not None or max_close_days is not None)
     candidate_cap = min(500, limit * (60 if deeper else 10))
+    params: Dict[str, Any] = {
+        "active": "true",
+        "closed": "false",
+        "limit": candidate_cap,
+        "order": "volume24hr",
+        "ascending": "false",
+    }
+    if cat in ("sports", "sport"):
+        params["tag_id"] = "1"
     data = _get_json(
         POLYMARKET_GAMMA_URL,
-        params={
-            "active": "true",
-            "closed": "false",
-            "limit": candidate_cap,
-            "order": "volume24hr",
-            "ascending": "false",
-        },
+        params=params,
     )
     quotes: List[Dict[str, Any]] = []
     for market in data if isinstance(data, list) else []:
@@ -460,7 +464,10 @@ def list_polymarket(limit: int = 5, query: Optional[str] = None,
             continue
         if want and want not in (quote["question"] or "").lower():
             continue
-        quote["category"] = _market_category(quote["question"], quote.get("category"))
+        raw_cat = quote.get("category")
+        if cat in ("sports", "sport") and not raw_cat:
+            raw_cat = "Sports"
+        quote["category"] = _market_category(quote["question"], raw_cat)
         if cat and cat not in quote["category"].lower():
             continue
         if not _within_close_window(quote.get("close_time"), min_close_days, max_close_days):
