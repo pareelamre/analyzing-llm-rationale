@@ -1,6 +1,6 @@
 {
   "status": "completed",
-  "variant": "variant0_neutral_baseline",
+  "variant": "variant2_key_attribute",
   "model_key": "qwen3-32b",
   "model_label": "Qwen3-32B",
   "provider": "local-qwen",
@@ -17,20 +17,21 @@
   "cutoff_reference": "event_end",
   "forecast_lead_days": 30,
   "input_path": "forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json",
-  "output_path": "/data/horse/ws/paam844f-codabench/results/Qwen3-32B/temperature_0/lead_30d/results_variant0_neutral_baseline.json",
-  "error_log_path": "/data/horse/ws/paam844f-codabench/results/Qwen3-32B/temperature_0/lead_30d/errors_variant0_neutral_baseline.jsonl",
+  "output_path": "/data/horse/ws/paam844f-codabench/results/Qwen3-32B/temperature_0/lead_30d/results_variant2_key_attribute.json",
+  "error_log_path": "/data/horse/ws/paam844f-codabench/results/Qwen3-32B/temperature_0/lead_30d/errors_variant2_key_attribute.jsonl",
   "system_prompt_path": "prompts/system.txt",
-  "user_prompt_path": "/data/horse/ws/paam844f-codabench/prompts/variant0_neutral_baseline.txt",
+  "user_prompt_path": "/data/horse/ws/paam844f-codabench/prompts/variant2_key_attribute.txt",
   "output_fields": [
     "predicted_answer",
     "confidence",
-    "rationale"
+    "rationale",
+    "key_attribute"
   ],
   "input_record_count": 1580,
   "existing_result_count": 0,
   "system_prompt_sha256": "f6ea01ea31b77ff73f5c7b0f3c2a88097cdf087361dc8c23a6fe5e3e6794b9f0",
-  "user_prompt_sha256": "18ea307015646b84415733c59f286a8e784c48ea78e286499cc84d9537318e18",
-  "written_at": "2026-10-10T07:14:18",
+  "user_prompt_sha256": "9887ced8acb93488a7c6427520c7ea17e1a70c1deb18fad891846c8e4b12ebdd",
+  "written_at": "2026-10-10T08:20:46",
   "summary": {
     "processed": 1580,
     "total_results": 1580,

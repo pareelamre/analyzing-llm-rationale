@@ -1,0 +1,39 @@
+{
+  "status": "completed",
+  "variant": "variant4_credibility",
+  "model_key": "gpt-oss-120b",
+  "model_label": "GPT-OSS-120B",
+  "provider": "openai-compatible",
+  "model_identifier": "openai/gpt-oss-120b",
+  "provider_base_url": "https://llm.scads.ai/v1/chat/completions",
+  "temperature": 0.0,
+  "temperature_tag": "temperature_00",
+  "max_tokens": 2048,
+  "max_attempts": 6,
+  "retry_base_sleep_s": 1.5,
+  "reprocess_null_only": true,
+  "drop_article_text": false,
+  "omit_evidence": false,
+  "cutoff_reference": "event_end",
+  "forecast_lead_days": 30,
+  "input_path": "forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json",
+  "output_path": "/data/horse/ws/paam844f-codabench/results/GPT-OSS-120B/temperature_00/lead_30d/results_variant4_credibility.json",
+  "error_log_path": "/data/horse/ws/paam844f-codabench/results/GPT-OSS-120B/temperature_00/lead_30d/errors_variant4_credibility.jsonl",
+  "system_prompt_path": "prompts/system.txt",
+  "user_prompt_path": "/data/horse/ws/paam844f-codabench/prompts/variant4_credibility.txt",
+  "output_fields": [
+    "predicted_answer",
+    "confidence",
+    "rationale"
+  ],
+  "input_record_count": 1580,
+  "existing_result_count": 1571,
+  "system_prompt_sha256": "f6ea01ea31b77ff73f5c7b0f3c2a88097cdf087361dc8c23a6fe5e3e6794b9f0",
+  "user_prompt_sha256": "e188df4633f437c909dadc9e9d7af0d8decb4cbb07beac40749ab3ad914a5ddc",
+  "written_at": "2026-10-08T04:26:15",
+  "summary": {
+    "processed": 8,
+    "total_results": 1571,
+    "null_predictions": 2
+  }
+}
