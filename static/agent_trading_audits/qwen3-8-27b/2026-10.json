@@ -3384,6 +3384,100 @@
       "outcome": "no",
       "record_hash": "e61fe40fdefb688a77835cfa2b3bd3fd2d228580314ac6495c9633bc987584be",
       "recorded_at": "2026-10-08T06:15:46.966421+00:00"
+    },
+    {
+      "action_id": "2422dc30-5ddd-4d6f-a1ce-3823c00c64de",
+      "agent_id": "qwen3-8-27b",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 82.69140421041666,
+          "marketable": false,
+          "observed_ask": 0.332,
+          "observed_bid": 0.327,
+          "source": "live_venue_quote",
+          "spread": 0.005,
+          "spread_status": "checked",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.33,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 8315.282978,
+          "cash_required": 286.688066,
+          "concentration_cap": 1442.011108,
+          "cycle_id": "30m:995352",
+          "cycle_spend_after": 286.688066,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 286.688066,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2884.022216,
+          "drawdown_after": 0.08096,
+          "fee": 7.4827,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 279.205366,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 3,
+          "notional": 279.205366,
+          "open_markets_after": 6,
+          "per_cycle_spend_limit": 1922.681477,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.2285,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.3,
+          "lead_days": 82.7,
+          "market_shrinkage": 0.15,
+          "max_position_fraction": 0.03,
+          "mode": "convex_conviction",
+          "reason": null,
+          "target_notional": 288.402222,
+          "target_quantity": 846.076866759175
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995352",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 286.688066,
+        "fee": 7.4827,
+        "netting_payout": 0.0,
+        "notional": 279.205366,
+        "price": 0.33,
+        "quantity": 846.076866759175,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "will-lamine-yamal-win-the-2026-ballon-dor"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "ef45da37dbcb32dbb665c10259229b0dc50c91ca60bcdbe8bd2a18d38d25d04d",
+      "recorded_at": "2026-10-10T12:23:22.756962+00:00"
     }
   ],
   "month": "2026-10",
