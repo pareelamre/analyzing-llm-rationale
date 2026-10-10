@@ -6763,6 +6763,100 @@
       "outcome": "rejected",
       "record_hash": "ead2d730ce29702c29ff1a1ecdeb140ac10e2a6a147e287cdaa883753e92011e",
       "recorded_at": "2026-10-10T00:16:18.935878+00:00"
+    },
+    {
+      "action_id": "6a0982fe-b78a-4101-b0b3-63b82005d85d",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 24.94643232443287,
+          "marketable": true,
+          "observed_ask": 0.1,
+          "observed_bid": null,
+          "source": "live_venue_quote",
+          "spread": null,
+          "spread_status": "unknown_no_bid",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.1,
+          "quantity": "7156.9"
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 6799.017407,
+          "cash_required": 115.330585,
+          "concentration_cap": 1150.823743,
+          "cycle_id": "30m:995340",
+          "cycle_spend_after": 115.330585,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 115.330585,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2301.647486,
+          "drawdown_after": 0.205989,
+          "fee": 4.00763,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 111.322955,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 111.322955,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1534.431657,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.786654,
+          "eligible": true,
+          "horizon": "14-30d",
+          "horizon_validated": true,
+          "kelly_fraction": 0.25,
+          "lead_days": 24.9,
+          "market_shrinkage": 0.425,
+          "max_position_fraction": 0.03,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 115.330581,
+          "target_quantity": 1113.229547557776
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995340",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 115.330585,
+        "fee": 4.00763,
+        "netting_payout": 0.0,
+        "notional": 111.322955,
+        "price": 0.1,
+        "quantity": 1113.229547557776,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "no",
+        "ticker": "will-the-democratic-party-control-the-house-after-the-2026-midterm-elections"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "d1f909d000b0bc9edb805446b2068330635c9c56164eae9db266eb42ed2aadce",
+      "recorded_at": "2026-10-10T06:16:08.319107+00:00"
     }
   ],
   "month": "2026-10",
