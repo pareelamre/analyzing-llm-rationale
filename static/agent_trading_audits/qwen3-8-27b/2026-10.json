@@ -3478,6 +3478,100 @@
       "outcome": "rejected",
       "record_hash": "ef45da37dbcb32dbb665c10259229b0dc50c91ca60bcdbe8bd2a18d38d25d04d",
       "recorded_at": "2026-10-10T12:23:22.756962+00:00"
+    },
+    {
+      "action_id": "2a67e1f3-d648-4845-8620-ee91f0533fc3",
+      "agent_id": "qwen3-8-27b",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 81.86052286555555,
+          "marketable": false,
+          "observed_ask": 0.348,
+          "observed_bid": null,
+          "source": "live_venue_quote",
+          "spread": null,
+          "spread_status": "unknown_no_bid",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.34,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 8315.282978,
+          "cash_required": 281.075232,
+          "concentration_cap": 1438.012108,
+          "cycle_id": "30m:995392",
+          "cycle_spend_after": 281.075232,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 281.075232,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2876.024216,
+          "drawdown_after": 0.080935,
+          "fee": 7.22953,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 273.845702,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 3,
+          "notional": 273.845702,
+          "open_markets_after": 6,
+          "per_cycle_spend_limit": 1917.349477,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.2715,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.5,
+          "lead_days": 81.9,
+          "market_shrinkage": 0.25,
+          "max_position_fraction": 0.03,
+          "mode": "edge_kelly",
+          "reason": null,
+          "target_notional": 287.602422,
+          "target_quantity": 805.4285358244653
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995392",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 281.075232,
+        "fee": 7.22953,
+        "netting_payout": 0.0,
+        "notional": 273.845702,
+        "price": 0.34,
+        "quantity": 805.4285358244653,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "no",
+        "ticker": "will-harry-kane-win-the-2026-ballon-dor"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "22b01f2e5ea1a50efe0ea06ce2c74199eaff38b0ff8c72dd70980335d1a8098c",
+      "recorded_at": "2026-10-11T08:19:50.922840+00:00"
     }
   ],
   "month": "2026-10",
