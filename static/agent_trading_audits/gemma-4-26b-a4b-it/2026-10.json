@@ -4501,6 +4501,192 @@
       "outcome": "open",
       "record_hash": "4f3ae4948231573a381b1159a113415a712604505e0115379f4c64de9cf784a6",
       "recorded_at": "2026-10-11T08:07:11.424581+00:00"
+    },
+    {
+      "action_id": "dea59a31-1f5d-4129-a522-6b9a615c684d",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 454.2035764121528,
+          "marketable": false,
+          "observed_ask": 0.15,
+          "observed_bid": 0.14,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.14,
+          "quantity": 18
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 7481.042648,
+          "cash_required": 234.332304,
+          "concentration_cap": 1254.522778,
+          "cycle_id": "30m:995396",
+          "cycle_spend_after": 234.332304,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 486.429267,
+          "daily_risk_before": 252.096963,
+          "daily_risk_limit": 2509.045556,
+          "drawdown_after": 0.235115,
+          "fee": 13.305796,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 221.026508,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 221.026508,
+          "open_markets_after": 5,
+          "per_cycle_spend_limit": 1672.697037,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.195266,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.3,
+          "lead_days": 454.2,
+          "market_shrinkage": 0.15,
+          "max_position_fraction": 0.03,
+          "mode": "convex_conviction",
+          "reason": null,
+          "target_notional": 250.904556,
+          "target_quantity": 1578.7607715278905
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995396",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 234.332304,
+        "fee": 13.305796,
+        "netting_payout": 0.0,
+        "notional": 221.026508,
+        "price": 0.14,
+        "quantity": 1578.7607715278905,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXUKCHAGOS-28JAN01-26DEC01"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "30f739d840fc104a3dc320beb6424d72dac4daf84e7c0c2d8cf64a4710053f03",
+      "recorded_at": "2026-10-11T10:06:51.033673+00:00"
+    },
+    {
+      "action_id": "ea6743fa-db9f-4dcf-a50c-720c16eff96b",
+      "agent_id": "gemma-4-26b-a4b-it",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_unfilled_below_market",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 454.2034660595718,
+          "marketable": false,
+          "observed_ask": 0.15,
+          "observed_bid": 0.14,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.14,
+          "quantity": 18
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 7481.042648,
+          "cash_required": 234.332304,
+          "concentration_cap": 1254.522778,
+          "cycle_id": "30m:995396",
+          "cycle_spend_after": 234.332304,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 486.429267,
+          "daily_risk_before": 252.096963,
+          "daily_risk_limit": 2509.045556,
+          "drawdown_after": 0.235115,
+          "fee": 13.305796,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 221.026508,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 221.026508,
+          "open_markets_after": 5,
+          "per_cycle_spend_limit": 1672.697037,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.165266,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.3,
+          "lead_days": 454.2,
+          "market_shrinkage": 0.15,
+          "max_position_fraction": 0.03,
+          "mode": "convex_conviction",
+          "reason": null,
+          "target_notional": 250.904556,
+          "target_quantity": 1578.7607715278905
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995396",
+      "event_type": "unfilled_order",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": 0.14,
+        "quantity": 0.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXUKCHAGOS-28JAN01-26DEC01"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "5c17c40d7cee97613c0163c7b65a8a26888a1e28b0b5f6dc21f2dbda2b1d53e8",
+      "recorded_at": "2026-10-11T10:07:00.539109+00:00"
     }
   ],
   "month": "2026-10",
