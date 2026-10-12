@@ -7912,6 +7912,101 @@
       "outcome": "rejected",
       "record_hash": "75b988bf350037d95b733e5da84f3fac4237017e68ee466e2b9e4b557e118e68",
       "recorded_at": "2026-10-12T20:19:21.860449+00:00"
+    },
+    {
+      "action_id": "6160a53f-66af-4d88-80ed-f6e6e00a8248",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 22.281187555405094,
+          "marketable": false,
+          "observed_ask": 0.948,
+          "observed_bid": null,
+          "source": "live_venue_quote",
+          "spread": null,
+          "spread_status": "unknown_no_bid",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.94,
+          "quantity": "auto"
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 6799.017407,
+          "cash_required": 227.656864,
+          "concentration_cap": 1147.603141,
+          "cycle_id": "30m:995468",
+          "cycle_spend_after": 227.656864,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 227.656864,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2295.206283,
+          "drawdown_after": 0.205642,
+          "fee": 0.54507,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 227.111794,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 227.111794,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1530.137522,
+          "reasons": [
+            "edge_below_fee_floor",
+            "profile_price_ceiling_exceeded"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.052,
+          "eligible": true,
+          "horizon": "14-30d",
+          "horizon_validated": true,
+          "kelly_fraction": 0.25,
+          "lead_days": 22.3,
+          "market_shrinkage": 0.425,
+          "max_position_fraction": 0.03,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 229.520628,
+          "target_quantity": 241.60829110323482
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995468",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 227.656864,
+        "fee": 0.54507,
+        "netting_payout": 0.0,
+        "notional": 227.111794,
+        "price": 0.94,
+        "quantity": 241.60829110323482,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "no",
+        "ticker": "will-there-be-a-hormuz-agreement-and-the-republicans-win-the-senate"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "de7ca379ece6f7ea52924c67324afb58f4d72dd20bd677950f1412de69955f26",
+      "recorded_at": "2026-10-12T22:14:05.454992+00:00"
     }
   ],
   "month": "2026-10",
