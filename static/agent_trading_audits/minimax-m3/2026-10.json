@@ -1329,6 +1329,284 @@
       "outcome": "rejected",
       "record_hash": "f1bd356cbb578f889c3e56e38906fd387c9af37976e9ab6c0b549993c32de3ef",
       "recorded_at": "2026-10-11T16:17:21.020944+00:00"
+    },
+    {
+      "action_id": "b489130a-765b-4934-8492-61cf548a11b2",
+      "agent_id": "minimax-m3",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 1541.3640227078472,
+          "marketable": false,
+          "observed_ask": 0.33,
+          "observed_bid": 0.32,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.32,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 8165.919962,
+          "cash_required": 24.258634,
+          "concentration_cap": 1227.202197,
+          "cycle_id": "30m:995436",
+          "cycle_spend_after": 24.258634,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 24.258634,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2454.404394,
+          "drawdown_after": 0.181094,
+          "fee": 1.102244,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 23.15639,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 23.15639,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1636.269596,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.12,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.0,
+          "lead_days": 1541.4,
+          "market_shrinkage": 0.0,
+          "max_position_fraction": 0.005,
+          "mode": "flat_probe",
+          "reason": null,
+          "target_notional": 25.0,
+          "target_quantity": 72.36371741099985
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995436",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 24.258634,
+        "fee": 1.102244,
+        "netting_payout": 0.0,
+        "notional": 23.15639,
+        "price": 0.32,
+        "quantity": 72.36371741099985,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXNCAAFCOACHLEAVE-26BBEL-120126"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "d9e02b2be9642dd8f7b03a5732bb7871d0841e23fde9841ba2d998da8767912e",
+      "recorded_at": "2026-10-12T06:15:48.472572+00:00"
+    },
+    {
+      "action_id": "ab985787-9906-484a-aff1-29772eeae3f0",
+      "agent_id": "minimax-m3",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_unfilled_below_market",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 1541.363982314132,
+          "marketable": false,
+          "observed_ask": 0.33,
+          "observed_bid": 0.32,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.32,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 8165.919962,
+          "cash_required": 24.258634,
+          "concentration_cap": 1227.202197,
+          "cycle_id": "30m:995436",
+          "cycle_spend_after": 24.258634,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 24.258634,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2454.404394,
+          "drawdown_after": 0.181094,
+          "fee": 1.102244,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 23.15639,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 23.15639,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1636.269596,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.07,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.0,
+          "lead_days": 1541.4,
+          "market_shrinkage": 0.0,
+          "max_position_fraction": 0.005,
+          "mode": "flat_probe",
+          "reason": null,
+          "target_notional": 25.0,
+          "target_quantity": 72.36371741099985
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995436",
+      "event_type": "unfilled_order",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": 0.32,
+        "quantity": 0.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXNCAAFCOACHLEAVE-26BBEL-120126"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "24ce4b9c0ed984050eb0ca8a42b369f421dbcef01d3aa22d128b16b7a77fd83e",
+      "recorded_at": "2026-10-12T06:15:51.932763+00:00"
+    },
+    {
+      "action_id": "ef8730d6-5bdb-4369-b5a4-781efade4eb8",
+      "agent_id": "minimax-m3",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_filled_partial",
+          "filled_quantity": 1.0
+        },
+        "quote": {
+          "lead_days": 1541.3639539434375,
+          "marketable": true,
+          "observed_ask": 0.33,
+          "observed_bid": 0.32,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.33,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 8165.919962,
+          "cash_required": 25.0,
+          "concentration_cap": 1227.202197,
+          "cycle_id": "30m:995436",
+          "cycle_spend_after": 25.0,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 25.0,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2454.404394,
+          "drawdown_after": 0.181096,
+          "fee": 1.119973,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 23.880027,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 23.880027,
+          "open_markets_after": 2,
+          "per_cycle_spend_limit": 1636.269596,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.07,
+          "eligible": true,
+          "horizon": "30d+",
+          "horizon_validated": false,
+          "kelly_fraction": 0.0,
+          "lead_days": 1541.4,
+          "market_shrinkage": 0.0,
+          "max_position_fraction": 0.005,
+          "mode": "flat_probe",
+          "reason": null,
+          "target_notional": 25.0,
+          "target_quantity": 72.36371741099985
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995436",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": -0.34547700000000003,
+        "cash_required": 0.34547700000000003,
+        "fee": 0.015477,
+        "netting_payout": 0.0,
+        "notional": 0.33,
+        "price": 0.33,
+        "quantity": 1.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXNCAAFCOACHLEAVE-26BBEL-120126"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "af2da0b9a83be05f8e872f90daf32167d4888304f859ea5d118f61625d1c9503",
+      "recorded_at": "2026-10-12T06:15:54.477549+00:00"
     }
   ],
   "month": "2026-10",
