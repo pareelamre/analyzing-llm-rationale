@@ -5,6 +5,32 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-13 — Validated horizons are significance-driven, not hardcoded (Copilot)
+
+The published track record's 7-14d horizon crossed into significance
+(skill +0.36pp, CI [+0.03pp, +0.68pp], n=1,529; it was −0.25pp/insignificant
+on Oct 1). The sizing engine and the tick's candidate sorting still hardcoded
+14-30d as the only "validated" window, so the newly proven 7-14d pocket was
+sized with defensive shrinkage and sorted as unproven.
+
+- `benchmark_tools._validated_horizons()` reads `by_horizon` from
+  `static/track_record_live.json` (same file/rationale as the edge
+  calibration) and returns every horizon whose `skill_significant` is true
+  with >= `_MIN_CALIBRATION_N` (30) resolved snapshots. `_sizing_plan`'s
+  `is_validated_horizon` now checks membership instead of `== "14-30d"`.
+- Fallback is `{"14-30d"}` when the record is unreadable, so a data outage
+  never silently widens sizing.
+- `agent_trading_tick._is_validated_horizon_data` delegates to the same set
+  (via `_horizon_label_for_days`), so candidate sorting, the agent-facing
+  "Lead time validation" line, and Kelly sizing all follow one record.
+- The agent-facing line no longer quotes a fixed "+1.40pp / 84.4%" figure;
+  it points at the published record's validated set.
+
+Do not re-hardcode the horizon list: the whole point is that the record's
+significance gate decides. If 7-14d loses significance the sizing discount
+turns itself off. Tests: `test_validated_horizons_follow_the_published_record`
+and siblings in test_benchmark_tools.py.
+
 ### 2026-10-13 — Per-domain skill routing & domain-aware credible-edge ceilings (Copilot)
 
 Follow-up to the 2026-10-06 profile prescriptions. October analysis showed the

@@ -29,10 +29,12 @@ def setUpModule():
     # whenever a new track record was published. The reliability weighting
     # has its own tests, with a frozen record, in test_edge_reliability_sizing.py.
     benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = None
+    benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = None
 
 
 def tearDownModule():
     benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+    benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
 
 
 def _quote(ident, question="Q?", bid=0.4, ask=0.45, close="2026-09-01T00:00:00Z",
@@ -336,8 +338,8 @@ class CandidateSelectionTests(unittest.TestCase):
             "mtm_side": "YES",
         }
         line = agent_trading_tick._fmt_candidate_line(quote)
-        self.assertIn("Lead time validation: 14-30d ahead window (+1.40pp empirical skill", line)
-        self.assertIn("[Validated 14-30d Horizon]", line)
+        self.assertIn("Lead time validation: this horizon is in the published record's validated set", line)
+        self.assertIn("[Validated Horizon]", line)
 
     def test_discover_candidates_excludes_known_tickers_and_caps_count(self):
         listed = [_quote("KXA"), _quote("KXB"), _quote("KXC"), _quote("KXD")]

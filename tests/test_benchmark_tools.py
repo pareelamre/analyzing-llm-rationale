@@ -20,10 +20,12 @@ def setUpModule():
     # whenever a new track record was published. The reliability weighting
     # has its own tests, with a frozen record, in test_edge_reliability_sizing.py.
     benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = None
+    benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = None
 
 
 def tearDownModule():
     benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+    benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
 
 
 def _fetch_kalshi_quotes(quotes):
@@ -879,6 +881,70 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(plan_validated["horizon"], "14-30d")
         # Validated shrinkage is discounted below standard convex_conviction 15% shrinkage
         self.assertLess(plan_validated["market_shrinkage"], 0.15)
+
+    def test_validated_horizons_follow_the_published_record(self):
+        """The validated set comes from by_horizon's significance gate, not a constant.
+
+        7-14d crossed into significance in Oct 2026 (skill +0.36pp, CI low
+        +0.03pp, n=1529); the sizing engine must honor it without a code change
+        when the record says so, and drop it again if the record does.
+        """
+        record = [
+            {"horizon": "30d+", "n": 1303, "skill_significant": False},
+            {"horizon": "14-30d", "n": 772, "skill_significant": True},
+            {"horizon": "7-14d", "n": 1529, "skill_significant": True},
+            {"horizon": "3-7d", "n": 901, "skill_significant": False},
+        ]
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = record
+        try:
+            self.assertEqual(
+                benchmark_tools._validated_horizons(), {"14-30d", "7-14d"},
+            )
+            plan_7_14 = benchmark_tools._sizing_plan(
+                {"sizing_mode": "convex_conviction", "model_probability": 0.53, "lead_days": 10.0},
+                price=0.50, side="yes", account_value=10_000.0,
+            )
+            self.assertEqual(plan_7_14["horizon"], "7-14d")
+            self.assertTrue(plan_7_14["horizon_validated"])
+            self.assertLess(plan_7_14["market_shrinkage"], 0.15)
+        finally:
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
+
+    def test_a_horizon_losing_significance_loses_validation(self):
+        record = [
+            {"horizon": "14-30d", "n": 772, "skill_significant": True},
+            {"horizon": "7-14d", "n": 1529, "skill_significant": False},
+        ]
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = record
+        try:
+            self.assertEqual(benchmark_tools._validated_horizons(), {"14-30d"})
+            plan = benchmark_tools._sizing_plan(
+                {"sizing_mode": "convex_conviction", "model_probability": 0.53, "lead_days": 10.0},
+                price=0.50, side="yes", account_value=10_000.0,
+            )
+            self.assertFalse(plan["horizon_validated"])
+            # Unvalidated horizons keep the policy's own shrinkage (15% here)
+            self.assertGreaterEqual(plan["market_shrinkage"], 0.15)
+        finally:
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
+
+    def test_a_small_sample_horizon_is_never_validated(self):
+        record = [
+            {"horizon": "14-30d", "n": 772, "skill_significant": True},
+            {"horizon": "7-14d", "n": 12, "skill_significant": True},
+        ]
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = record
+        try:
+            self.assertEqual(benchmark_tools._validated_horizons(), {"14-30d"})
+        finally:
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
+
+    def test_an_unreadable_record_keeps_the_14_30d_default(self):
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = None
+        try:
+            self.assertEqual(benchmark_tools._validated_horizons(), {"14-30d"})
+        finally:
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
 
     def test_place_trade_returns_skipped_and_rejected_when_kelly_sizing_ineligible(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")

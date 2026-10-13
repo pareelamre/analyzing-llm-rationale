@@ -56,6 +56,7 @@ def reliability(edge, calibration=PUBLISHED):
 
 def sizing(model_probability, price=0.50, mode="quarter_kelly", calibration=PUBLISHED):
     benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = calibration
+    benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = None
     try:
         return benchmark_tools._sizing_plan(
             {"sizing_mode": mode, "model_probability": model_probability},
@@ -63,6 +64,7 @@ def sizing(model_probability, price=0.50, mode="quarter_kelly", calibration=PUBL
         )
     finally:
         benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+        benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
 
 
 class ReliabilityTests(unittest.TestCase):
@@ -198,6 +200,7 @@ class DomainEdgeCeilingTests(unittest.TestCase):
     def _sizing_with_domain(self, model_probability, price=0.11, mode="quarter_kelly",
                             category=None, ticker=None):
         benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = PUBLISHED
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = None
         try:
             with mock.patch.dict(os.environ, {"FORESEA_AGENT_DOMAIN_EDGE_CEILINGS": self.CEILINGS}):
                 return benchmark_tools._sizing_plan(
@@ -208,6 +211,7 @@ class DomainEdgeCeilingTests(unittest.TestCase):
                 )
         finally:
             benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
 
     def test_a_demonstrated_skill_domain_gets_a_higher_ceiling(self):
         # 20pp claimed edge on a sports market: above the global 10pp ceiling
@@ -234,6 +238,7 @@ class DomainEdgeCeilingTests(unittest.TestCase):
 
     def test_an_invalid_ceiling_mapping_is_ignored(self):
         benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = PUBLISHED
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = None
         try:
             with mock.patch.dict(os.environ, {"FORESEA_AGENT_DOMAIN_EDGE_CEILINGS": "not-json"}):
                 plan = benchmark_tools._sizing_plan(
@@ -242,11 +247,13 @@ class DomainEdgeCeilingTests(unittest.TestCase):
                 )
         finally:
             benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
         tempered = sizing(0.21, price=0.11, mode="quarter_kelly")  # no env: 10pp ceiling
         self.assertAlmostEqual(plan["target_notional"], tempered["target_notional"], delta=1.0)
 
     def test_an_out_of_range_ceiling_is_ignored(self):
         benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = PUBLISHED
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = None
         try:
             with mock.patch.dict(os.environ, {"FORESEA_AGENT_DOMAIN_EDGE_CEILINGS": json.dumps({"sports": 1.5})}):
                 plan = benchmark_tools._sizing_plan(
@@ -255,6 +262,7 @@ class DomainEdgeCeilingTests(unittest.TestCase):
                 )
         finally:
             benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
         tempered = sizing(0.21, price=0.11, mode="quarter_kelly")
         self.assertAlmostEqual(plan["target_notional"], tempered["target_notional"], delta=1.0)
 
@@ -279,6 +287,7 @@ class ProbabilityBiasCorrectionTests(unittest.TestCase):
 
     def _sizing_with_bias(self, model_probability, bias, price=0.50, mode="quarter_kelly"):
         benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = PUBLISHED
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = None
         try:
             with mock.patch.dict(os.environ, {"FORESEA_AGENT_PROBABILITY_BIAS": str(bias)}):
                 return benchmark_tools._sizing_plan(
@@ -287,6 +296,7 @@ class ProbabilityBiasCorrectionTests(unittest.TestCase):
                 )
         finally:
             benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
 
     def test_a_positive_bias_shifts_stated_probability_down(self):
         # deepseek-v4-flash: measured bias +0.219. Stated P(YES)=0.60 on a

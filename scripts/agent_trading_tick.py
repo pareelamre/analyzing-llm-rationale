@@ -1464,23 +1464,53 @@ def _paper_horizon_bucket(close_time: Any, *, now: Optional[datetime] = None) ->
     return "very_long"
 
 
+def _validated_horizon_buckets() -> set:
+    """Horizon buckets the published record proves, shared with sizing.
+
+    benchmark_tools._validated_horizons reads by_horizon's significance gate
+    from static/track_record_live.json (14-30d and 7-14d as of Oct 2026), so
+    candidate sorting, the agent-facing validation line, and Kelly sizing all
+    follow the same record instead of separate constants.
+    """
+    try:
+        return benchmark_tools._validated_horizons()
+    except Exception:  # noqa: BLE001 - candidate sorting must never fail a cycle
+        return {"14-30d"}
+
+
 def _is_validated_horizon_data(data: Mapping[str, Any], *, now: Optional[datetime] = None) -> bool:
-    """Return True if market's resolution horizon falls in the empirical 14-30d golden window."""
+    """Return True if market's resolution horizon falls in a horizon the
+    published track record proves (significance-gated, not a fixed window)."""
     bucket = str(data.get("lead_bucket") or data.get("horizon") or "").strip().lower()
-    if bucket == "14-30d":
+    if bucket in _validated_horizon_buckets():
         return True
     days = data.get("lead_days")
     if days is not None:
         try:
-            return 14.0 <= float(days) <= 30.0
+            return _horizon_label_for_days(float(days)) in _validated_horizon_buckets()
         except (TypeError, ValueError):
             pass
     res_time = data.get("expected_expiration_time") or data.get("resolve_time") or data.get("close_time")
     hours = _hours_until(res_time, now=now)
     if hours is not None:
         d = hours / 24.0
-        return 14.0 <= d <= 30.0
+        return _horizon_label_for_days(d) in _validated_horizon_buckets()
     return False
+
+
+def _horizon_label_for_days(lead_days: float) -> str:
+    """Mirror benchmark_tools._classify_horizon_bucket for lead-day values."""
+    if lead_days < 1.0:
+        return "<1d"
+    if lead_days <= 3.0:
+        return "1-3d"
+    if lead_days <= 7.0:
+        return "3-7d"
+    if lead_days <= 14.0:
+        return "7-14d"
+    if lead_days <= 30.0:
+        return "14-30d"
+    return "30d+"
 
 
 def _calibration_resolution_time(quote: Dict[str, Any]) -> Any:
@@ -1715,7 +1745,10 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
         line += f"\n    {weather_context}"
     validated_lead = _is_validated_horizon_data(quote)
     if validated_lead:
-        line += "\n    Lead time validation: 14-30d ahead window (+1.40pp empirical skill over market, 84.4% accuracy, validated)"
+        line += (
+            "\n    Lead time validation: this horizon is in the published record's validated set "
+            "(skill-vs-market significant; 14-30d and 7-14d as of Oct 2026)"
+        )
     mtm_edge = quote.get("mtm_executable_edge")
     model_p = quote.get("mtm_model_probability")
     mkt_p = quote.get("mtm_market_probability")
@@ -1723,7 +1756,7 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     if mtm_edge is not None and model_p is not None and mkt_p is not None and side:
         try:
             edge_val = float(mtm_edge) * 100
-            val_tag = " [Validated 14-30d Horizon]" if validated_lead else ""
+            val_tag = " [Validated Horizon]" if validated_lead else ""
             line += (
                 f"\n    Quant forecast signal: Model P(YES)={float(model_p):.2f} vs Market={float(mkt_p):.2f} "
                 f"-> {edge_val:+.1f}pp executable edge on {str(side).upper()} "
