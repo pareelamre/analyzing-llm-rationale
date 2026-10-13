@@ -52,6 +52,8 @@ jobs:
         run: ruff check scripts --select F821,F811,F632,F502,F522,F701,B002
       - name: Test
         run: python -m unittest discover -s tests
+      - name: Test independent Metaculus trigger
+        run: node --test infra/metaculus-dispatch/worker.test.mjs
       - name: Verify autonomous twin release contracts
         run: python scripts/verify_twin_release.py
 
