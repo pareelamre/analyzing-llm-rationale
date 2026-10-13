@@ -75,3 +75,24 @@ and the intended existing R2 destination, not object availability or charges.
 This constraint supersedes the earlier automatic deploy instruction. It does
 not claim that the existing cloud services have stopped billing, that R2 is
 free, or that T21/T22 are complete.
+
+## Read-only storage check, 2026-10-14
+
+GitHub repository variables currently name `FORESEA_STORAGE_BACKEND=r2`,
+`R2_STATE_BUCKET=foresea-state`, and an R2 endpoint. This confirms the
+configured destination, not bucket contents, access isolation, free-tier
+headroom, or a successful restore. No R2 object was read or written for this
+check.
+
+The private twin source (`src/analyzing_llm_rationale/twin/`) and deploy scripts
+(`infra/twin/`) contain no direct `gs://`, GCS client, or GCS bucket reference.
+Twin jobs, leases, budgets, and account state still use transactional Datastore;
+they have not been moved to R2 and should not be replaced by object writes.
+There is no deployed twin evidence-object writer to migrate. The trial plan now
+specifies local evidence while collection is paused and the existing private R2
+bucket for future evidence only after access, retention, restore, and cost
+checks. This does not certify that unrelated GCS consumers have migrated.
+In particular, the Metaculus audit workflow still names a GCS URI on this
+branch, while track-record publishing and the Docker workflow retain GCS
+paths or fallback code. They need separate consumer-by-consumer verification;
+the `r2` repository variable alone is not proof that all GCS usage has stopped.
