@@ -260,7 +260,9 @@ Build/deploy smoke tests verify health and readiness separately and inspect capt
 
 ## T21 — Run the forward shadow and strategy evidence gates
 
-**Depends on:** T20. **Size:** elapsed evaluation period, not a large coding session. **Files/artifacts:** trial configuration, versioned GCS evidence, `docs/autonomous-twin/TRIAL_REPORT.md`, progress entry.
+**Depends on:** T20. **Size:** elapsed evaluation period, not a large coding session. **Files/artifacts:** trial configuration, versioned immutable evidence (local during development; existing R2 only within verified cost limits), `docs/autonomous-twin/TRIAL_REPORT.md`, progress entry.
+
+The owner's 2026-10-13 no-new-cloud-spend constraint in [NO_NEW_CLOUD_SPEND.md](NO_NEW_CLOUD_SPEND.md) governs this card. Continue fixture fault drills and report verification locally. Do not start or redeploy a cloud collector to accumulate days under this instruction. Fixture observations cannot count as real forward-trial days or production fault-drill evidence.
 
 Freeze the strategy/config/model and run G1 for seven consecutive days using the private runtime. Capture actual market snapshots, decision provenance, order simulation, per-cycle cost and reconciliation drift. Reuse older prospective data for G2 only with demonstrable compatible provenance and versions. Do not repeatedly wake an expensive model to watch unchanged trial status; produce a compact automated report when evidence changes.
 

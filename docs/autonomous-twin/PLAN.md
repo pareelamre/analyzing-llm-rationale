@@ -8,6 +8,11 @@ The user chose **an autonomous Foresea trading agent, without modeling an indivi
 
 Read this document once for architecture, then execute the bounded cards in [TASKS.md](TASKS.md) using [EXECUTOR.md](EXECUTOR.md). [progress.json](progress.json) records progress across inexpensive model sessions. A planning request authorizes writing this pack, not enabling real trading or spending capital.
 
+Owner constraint, 2026-10-13: continue locally without increasing cloud billing.
+The owner removed a GCP bucket and reports existing Cloudflare buckets. Follow
+[NO_NEW_CLOUD_SPEND.md](NO_NEW_CLOUD_SPEND.md) before any storage, runtime or
+deployment work. Historical deployment evidence does not authorize new spend.
+
 ## 1. Product definition and completion criteria
 
 Foresea maintains a digital representation of an authorized trading account and its market environment. It researches opportunities, estimates outcome probabilities, simulates candidate actions against current inventory and liquidity, submits permitted orders, reconciles what actually happened, and measures whether its forecasts and execution deserve continued capital.
@@ -77,7 +82,7 @@ Current trade-run claiming is per run. Account-wide simultaneous intents and man
 - Python/FastAPI for the existing public API and two **private Cloud Run worker deployments**, research and maintenance/execution, built from the same repository/image with distinct service identities.
 - Existing Google Cloud Datastore for durable commands, account projections, event records, leases and budgets. Do not introduce PostgreSQL, Kafka, Redis locks or a vector database for this release.
 - Cloud Scheduler creates due work once a minute. Cloud Tasks delivers bounded research and account-maintenance jobs to the private worker. Use separate queues so slow model requests cannot block reconciliation or stopping trading.
-- GCS stores immutable bounded evidence/replay artifacts and archived events. DuckDB is for offline analysis and existing benchmark pipelines, not the live command authority.
+- Immutable bounded evidence/replay artifacts and archived events use local files during offline development. Reuse the existing Cloudflare R2 storage boundary only after its destination, access isolation and usage limits are verified; do not provision or recreate GCS buckets. DuckDB is for offline analysis and existing benchmark pipelines, not the live command authority.
 - Structured Cloud Logging and existing native OpenTelemetry hooks. No paid Superlog dependency. Telemetry export failure must not change risk decisions or block reconciliation.
 - GitHub Actions runs CI, fixture checks and deployment. It is not the live order scheduler.
 
@@ -133,7 +138,7 @@ All durable records contain `schema_version`, UTC timestamps, an owning account 
 | `DecisionRecord` | candidate set, explicit reason for trade/hold/pass, inputs and versions, risk result, cost, resulting command ID if any |
 | `BudgetUsage` | strategy/account/day key, reserved and actual model tokens/cost, external request counts, timestamps |
 
-Store large evidence in GCS by content hash, with short sanitized excerpts only where retention rights allow. Database records hold references. Never persist private keys, decrypted credentials or authenticated response headers in evidence, task payloads, traces or public feeds.
+Store large evidence by content hash in local files during offline development, or in the existing R2 boundary when verified and authorized within the owner's cost constraint. Database records hold references. Never persist private keys, decrypted credentials or authenticated response headers in evidence, task payloads, traces or public feeds.
 
 ### Persistence semantics
 

@@ -763,7 +763,12 @@
         "py -m unittest discover -s tests for worker recovery (pass: 2382 tests; 12 skipped)",
         "py -m ruff check src tests for worker recovery (pass)",
         "py -m graphify update . for worker recovery (pass: 10251 nodes, 26000 edges)",
-        "git diff --check for worker recovery (pass)"
+        "git diff --check for worker recovery (pass)",
+        "2026-10-13 offline verification: PYTHONPATH=src py -m unittest tests.test_twin_trial tests.test_twin_budget tests.test_twin_recovery tests.test_twin_simulator tests.test_twin_worker tests.test_twin_research_gateway tests.test_twin_store tests.test_twin_cycle_runtime (exit 0: 113 tests; no skips)",
+        "2026-10-13 historical report replay from 2026-09-12-runtime-audit.json (exit 0: G1 blocked, G2 collecting; historical evidence only)",
+        "2026-10-13 PYTHONPATH=src py -m unittest discover -s tests (exit 0: 2755 tests in 367.873s; 12 skipped; local only)",
+        "2026-10-13 py -m ruff check src tests (exit 0)",
+        "2026-10-13 git diff --check and AQG construction checker (exit 0; documentation-only increment)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -787,13 +792,16 @@
         "tests/test_twin_worker.py",
         "src/analyzing_llm_rationale/twin/account_store.py",
         "src/analyzing_llm_rationale/twin/simulator.py",
-        "src/analyzing_llm_rationale/forecast_ledger.py"
+        "src/analyzing_llm_rationale/forecast_ledger.py",
+        "docs/autonomous-twin/NO_NEW_CLOUD_SPEND.md",
+        "docs/autonomous-twin/OFFLINE_VERIFICATION.md"
       ],
       "blockers": [
         "Compatible audit-grade calibration observations must accumulate before entry intents can qualify.",
-        "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
+        "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated.",
+        "2026-10-13 owner cost constraint: new cloud deployment/dispatch and a running forward collector are not authorized; continue offline verification. Existing evidence has not been refreshed from cloud services."
       ],
-      "handoff": "Merge and deploy worker recovery, verify the expired production research job reaches a terminal continuation, run the four fault drills, then restart the seven-day collection clock."
+      "handoff": "Continue locally under the 2026-10-13 no-new-cloud-spend constraint. Use immutable existing evidence and offline fault regressions; prepare remaining GCS audit consumer migration safely. Do not merge/deploy or start a cloud collector; verify cost envelope before any later billable operation."
     },
     {
       "id": "T22",
@@ -810,5 +818,23 @@
       "blockers": [],
       "handoff": null
     }
-  ]
+  ],
+  "execution_constraints": {
+    "recorded_on": "2026-10-13",
+    "owner_instruction": "Continue without increasing cloud billing; GCP bucket removed, existing Cloudflare buckets reported.",
+    "mode": "local_offline",
+    "allow_cloud_resource_creation": false,
+    "allow_cloud_deployment": false,
+    "allow_cloud_job_dispatch": false,
+    "allow_paid_provider_probes": false,
+    "allow_main_merge_triggering_deployment": false,
+    "live_authorized": false,
+    "storage": "Local artifacts now; reuse existing R2 only after destination, access isolation and cost limits are verified.",
+    "evidence": [
+      "docs/autonomous-twin/NO_NEW_CLOUD_SPEND.md",
+      "docs/autonomous-twin/OFFLINE_VERIFICATION.md"
+    ],
+    "source_baseline": "0b10028878b9ae48b5c789a4385c76c74547b752",
+    "runtime_enforced": false
+  }
 }
