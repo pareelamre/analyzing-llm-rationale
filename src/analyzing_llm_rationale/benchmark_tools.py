@@ -756,6 +756,56 @@ def _clean_probability(value: Any, *, name: str) -> float:
 #: snapshots behind it; below that the policy's own shrinkage stands alone.
 _MIN_CALIBRATION_N = 30
 _EDGE_CALIBRATION_CACHE: Dict[str, Any] = {}
+_HORIZON_CALIBRATION_CACHE: Dict[str, Any] = {}
+
+
+def _published_horizon_calibration() -> Optional[List[Dict[str, Any]]]:
+    """by_horizon from the published track record, read once per process.
+
+    Same file and rationale as _published_edge_calibration: the validated
+    horizon set must follow the record everyone can see, not constants here.
+    """
+    if "rows" in _HORIZON_CALIBRATION_CACHE:
+        return _HORIZON_CALIBRATION_CACHE["rows"]
+    rows: Optional[List[Dict[str, Any]]] = None
+    default = Path(__file__).resolve().parents[2] / "static" / "track_record_live.json"
+    path = Path(os.environ.get("FORESEA_TRACK_RECORD_PATH") or default)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        found = payload.get("by_horizon") if isinstance(payload, dict) else None
+        rows = [r for r in found if isinstance(r, dict)] if isinstance(found, list) else None
+    except Exception:
+        logger.warning(
+            "horizon calibration unavailable path=%s; validated horizons fall back to 14-30d",
+            path, exc_info=True,
+        )
+    _HORIZON_CALIBRATION_CACHE["rows"] = rows
+    return rows
+
+
+def _validated_horizons() -> set:
+    """Horizon buckets where the published record shows proven skill.
+
+    A horizon is validated when its skill-vs-market lower CI bound clears
+    zero (the record's own significance gate) with at least
+    _MIN_CALIBRATION_N resolved snapshots. Only an *unreadable* record falls
+    back to {"14-30d"} — the historical default — so a data outage never
+    silently widens sizing. A readable record with no qualifying horizon
+    returns an empty set: no horizon is validated, and every horizon keeps
+    its policy shrinkage. That is the honest reading of a record that no
+    longer proves any window.
+    """
+    rows = _published_horizon_calibration()
+    if rows is None:
+        return {"14-30d"}
+    validated = set()
+    for row in rows:
+        if not row.get("skill_significant"):
+            continue
+        n = int(_as_float(row.get("n")) or 0)
+        if n >= _MIN_CALIBRATION_N:
+            validated.add(str(row.get("horizon")))
+    return validated
 
 
 def _published_edge_calibration() -> Optional[List[Dict[str, Any]]]:
@@ -847,18 +897,24 @@ def _calculate_lead_days(close_time_raw: Any, *, now: Optional[datetime] = None)
 
 
 def _classify_horizon_bucket(lead_days: Optional[float]) -> str:
-    """Classify lead days into published track-record horizon buckets."""
+    """Classify lead days into published track-record horizon buckets.
+
+    Matches track_record_live._HORIZONS, whose buckets are upper-exclusive
+    ([7,14) -> 7-14d, [14,30) -> 14-30d), so a lead of exactly 14.0 days is
+    14-30d and the sizing engine's horizon matches the record the validated
+    set was measured on.
+    """
     if lead_days is None:
         return "unknown"
     if lead_days < 1.0:
         return "<1d"
-    if lead_days <= 3.0:
+    if lead_days < 3.0:
         return "1-3d"
-    if lead_days <= 7.0:
+    if lead_days < 7.0:
         return "3-7d"
-    if lead_days <= 14.0:
+    if lead_days < 14.0:
         return "7-14d"
-    if lead_days <= 30.0:
+    if lead_days < 30.0:
         return "14-30d"
     return "30d+"
 
@@ -959,7 +1015,7 @@ def _sizing_plan(
             lead_days = _calculate_lead_days(close_raw)
 
     horizon_bucket = _classify_horizon_bucket(lead_days)
-    is_validated_horizon = (horizon_bucket == "14-30d")
+    is_validated_horizon = horizon_bucket in _validated_horizons()
     trade_category = trade_category_hint
     is_weather = str(trade_category or "").strip().lower() == "weather"
     is_short_horizon = (lead_days is not None and lead_days < 7.0 and not is_weather)
@@ -1056,8 +1112,8 @@ def _sizing_plan(
         # Defensive shrinkage for near-term noise and information lag
         effective_shrinkage = max(effective_shrinkage, 0.50)
     elif is_validated_horizon:
-        # Validated 14-30d golden window (+1.4pp empirical skill, 84.4% accuracy)
-        # allows full conviction scaling
+        # Validated horizon(s) per the published record's significance gate
+        # (14-30d and 7-14d as of Oct 2026) allow full conviction scaling
         effective_shrinkage = max(0.10, effective_shrinkage * 0.85)
 
     reliability = _edge_reliability(sizing_edge, _published_edge_calibration())
