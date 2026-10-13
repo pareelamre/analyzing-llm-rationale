@@ -221,6 +221,13 @@ SPORTS_CANDIDATE_QUOTA = max(
 MTM_CANDIDATE_QUOTA = max(
     0, min(CANDIDATE_COUNT, int(os.environ.get("AGENT_TRADING_MTM_CANDIDATE_QUOTA", "2")))
 )
+# Resolved thesis forecasts an agent needs in one domain before its measured
+# domain skill is trusted enough to raise that domain's credible-edge ceiling
+# or to route domain candidate quotas. Same spirit as the >=20 gate on the
+# fleet-wide probability-bias correction.
+DOMAIN_SKILL_MIN_RESOLVED = max(
+    1, min(200, int(os.environ.get("AGENT_TRADING_DOMAIN_SKILL_MIN_RESOLVED", "20")))
+)
 
 # ``agent_analyze`` already retries individual provider calls. Retrying the
 # complete ReAct cycle here can replay research/tool work after a transient
@@ -1353,6 +1360,35 @@ def _build_learning_block(conn, agent_id: str) -> str:
             "Empirical skill niches (from live track record): Sports (Model Brier 0.041 vs Market 0.052 — demonstrated model edge), "
             "Niche/Specialist (Model Brier 0.038 vs Market 0.045). Avoid overtrading macro geopolitics where market calibration exceeds model."
         )
+        domain_rows = conn.execute(
+            """
+            SELECT domain, COUNT(*) AS resolved_count,
+                   AVG(brier_score) AS brier_score,
+                   AVG(market_brier_score) AS market_brier_score
+            FROM agent_thesis_forecasts
+            WHERE agent_id = ? AND resolved_outcome IS NOT NULL AND domain IS NOT NULL
+            GROUP BY domain
+            ORDER BY resolved_count DESC, domain
+            LIMIT 6
+            """,
+            (agent_id,),
+        ).fetchall()
+        if domain_rows:
+            lines.append("Your calibration by domain (descriptive only):")
+            for row in domain_rows:
+                market_brier = row["market_brier_score"]
+                market_note = f", market Brier {float(market_brier):.3f}" if market_brier is not None else ""
+                verdict = ""
+                if market_brier is not None:
+                    verdict = (
+                        " — you beat the market here"
+                        if float(row["brier_score"]) < float(market_brier)
+                        else " — market beats you here"
+                    )
+                lines.append(
+                    f"  - {row['domain']}: {int(row['resolved_count'])} resolved, "
+                    f"Brier {float(row['brier_score']):.3f}{market_note}{verdict}."
+                )
     weather_rows = conn.execute(
         """
         SELECT weather_market_type, weather_settlement_source, COUNT(*) AS resolved_count,
@@ -2178,15 +2214,99 @@ def _drop_capacity_exhausted_candidates(
         return quotes
 
 
-def _discover_candidates(known_tickers: set, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    candidates = _drop_blocked_candidates(_discover_candidates_unfiltered(known_tickers, agent_id))
+def _domain_skill_map(agent_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """Per-domain measured skill for one agent, from resolved thesis forecasts.
+
+    Returns {domain: {"resolved": n, "brier": x, "market_brier": y}} for every
+    domain with at least one resolved forecast. Read-only and failure-tolerant:
+    discovery must proceed even when the ledger is unavailable.
+    """
+    if not agent_id:
+        return {}
+    db_path = os.environ.get("FORESEA_AGENT_ACCOUNT_DB_PATH")
+    if not db_path:
+        return {}
+    try:
+        import sqlite3
+
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT domain, COUNT(*) AS resolved_count,
+                       AVG(brier_score) AS brier_score,
+                       AVG(market_brier_score) AS market_brier_score
+                FROM agent_thesis_forecasts
+                WHERE agent_id = ? AND resolved_outcome IS NOT NULL AND domain IS NOT NULL
+                GROUP BY domain
+                """,
+                (agent_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        logger.debug("domain skill lookup failed agent=%s", agent_id, exc_info=True)
+        return {}
+    skill: Dict[str, Dict[str, Any]] = {}
+    for domain, n, brier, market_brier in rows:
+        if brier is None:
+            continue
+        skill[str(domain)] = {
+            "resolved": int(n or 0),
+            "brier": float(brier),
+            "market_brier": float(market_brier) if market_brier is not None else None,
+        }
+    return skill
+
+
+def _domain_has_negative_skill(
+    domain_skill: Optional[Dict[str, Dict[str, Any]]], domain: str
+) -> bool:
+    """Whether the agent has *demonstrated* negative skill in this domain.
+
+    Requires the same resolved-forecast floor as the ceiling injection: a
+    handful of unlucky outcomes is noise, not a routing signal.
+    """
+    if not domain_skill:
+        return False
+    stats = domain_skill.get(domain)
+    if not stats:
+        return False
+    if int(stats.get("resolved") or 0) < DOMAIN_SKILL_MIN_RESOLVED:
+        return False
+    market_brier = stats.get("market_brier")
+    if market_brier is None:
+        return False
+    return float(stats["brier"]) > float(market_brier)
+
+
+def _discover_candidates(
+    known_tickers: set,
+    agent_id: Optional[str] = None,
+    *,
+    domain_skill: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    candidates = _drop_blocked_candidates(
+        _discover_candidates_unfiltered(known_tickers, agent_id, domain_skill=domain_skill)
+    )
     return _drop_capacity_exhausted_candidates(candidates, agent_id)
 
 
-def _discover_candidates_unfiltered(known_tickers: set, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def _discover_candidates_unfiltered(
+    known_tickers: set,
+    agent_id: Optional[str] = None,
+    *,
+    domain_skill: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
     new_quotes: List[Dict[str, Any]] = []
-    new_quotes.extend(_discover_weather_candidates(known_tickers, limit=WEATHER_CANDIDATE_QUOTA))
-    new_quotes.extend(_discover_sports_candidates(known_tickers, limit=SPORTS_CANDIDATE_QUOTA))
+    # Route domain quotas by measured skill: an agent whose resolved record
+    # shows it forecasts a domain *worse* than the market does not get fresh
+    # candidates from that domain's reserved lane. Ordinary discovery can
+    # still surface such markets; the lane is the skill-targeted channel.
+    if not _domain_has_negative_skill(domain_skill, "weather"):
+        new_quotes.extend(_discover_weather_candidates(known_tickers, limit=WEATHER_CANDIDATE_QUOTA))
+    if not _domain_has_negative_skill(domain_skill, "sports"):
+        new_quotes.extend(_discover_sports_candidates(known_tickers, limit=SPORTS_CANDIDATE_QUOTA))
     new_quotes.extend(_discover_mtm_edge_candidates(known_tickers, limit=MTM_CANDIDATE_QUOTA))
     # Round-robin one candidate at a time across venues (rather than filling
     # Kalshi's share first) so a shortfall in one venue's listing doesn't
@@ -3624,6 +3744,19 @@ def _candidate_matching_price(
     return matches[0] if len(matches) == 1 else None
 
 
+def _forecast_domain(
+    candidates: List[Dict[str, Any]], platform: str, ticker: str
+) -> Optional[str]:
+    """Attach the paper's comparable domain to a forecast, keyed to the
+    contract the agent actually saw, so per-domain calibration is measured on
+    the same vocabulary the candidate quotas use."""
+    candidate = _candidate_for_execution(candidates, platform, ticker)
+    if candidate is None:
+        return None
+    domain = _paper_market_domain(candidate)
+    return domain or None
+
+
 def _weather_forecast_metadata(
     candidates: List[Dict[str, Any]], platform: str, ticker: str
 ) -> tuple[Optional[str], Optional[str]]:
@@ -3814,20 +3947,21 @@ def _persist_thesis_forecasts(
         weather_market_type, weather_settlement_source = _weather_forecast_metadata(
             candidates, str(record["platform"]), str(record["ticker"])
         )
+        domain = _forecast_domain(candidates, str(record["platform"]), str(record["ticker"]))
         conn.execute(
             """
             INSERT INTO agent_thesis_forecasts
             (agent_id, cycle_id, forecast_ts, platform, ticker, model_probability,
              market_probability, edge, action, strategy, evidence_delta,
-             weather_market_type, weather_settlement_source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             domain, weather_market_type, weather_settlement_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(agent_id, cycle_id, platform, ticker) DO NOTHING
             """,
             (
                 agent_id, cycle_id, created_at, record["platform"], record["ticker"],
                 record["model_probability"], market_probability, edge, record.get("action"),
                 record.get("strategy"), record.get("evidence_delta"),
-                weather_market_type, weather_settlement_source,
+                domain, weather_market_type, weather_settlement_source,
             ),
         )
     thesis_forecasts_recorded.add(len(records), {"outcome": "recorded"})
@@ -4275,7 +4409,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
                     exc,
                 )
     if not new_quotes:
-        new_quotes = _discover_candidates(known, agent_id=agent_id)
+        new_quotes = _discover_candidates(known, agent_id=agent_id, domain_skill=_domain_skill_map(agent_id))
     weather_candidates_offered = _weather_candidate_count(new_quotes)
 
     # Every agent-trading risk guard scales off FORESEA_AGENT_ACCOUNT_VALUE,
@@ -4303,6 +4437,36 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
             os.environ["FORESEA_AGENT_PROBABILITY_BIAS"] = f"{bias:.6f}"
         else:
             os.environ.pop("FORESEA_AGENT_PROBABILITY_BIAS", None)
+        # Per-domain credible-edge ceilings: where this agent has *demonstrated*
+        # skill (enough resolved forecasts and a better Brier than the market),
+        # sizing may stake a larger share of the disagreement than the flat
+        # global ceiling allows. Domains without proven skill keep the global
+        # ceiling -- the guard and sizing both read this mapping, so they can
+        # never disagree about what an agent is allowed to claim.
+        domain_rows = conn.execute(
+            """
+            SELECT domain,
+                   COUNT(*) AS resolved_count,
+                   AVG(brier_score) AS brier_score,
+                   AVG(market_brier_score) AS market_brier_score
+            FROM agent_thesis_forecasts
+            WHERE agent_id = ? AND resolved_outcome IS NOT NULL AND domain IS NOT NULL
+            GROUP BY domain
+            """,
+            (agent_id,),
+        ).fetchall()
+        ceilings = {
+            str(row["domain"]): round(min(0.30, max(0.10, float(row["market_brier_score"]) - float(row["brier_score"]) + 0.10)), 4)
+            for row in domain_rows
+            if int(row["resolved_count"] or 0) >= DOMAIN_SKILL_MIN_RESOLVED
+            and row["brier_score"] is not None
+            and row["market_brier_score"] is not None
+            and float(row["brier_score"]) < float(row["market_brier_score"])
+        }
+        if ceilings:
+            os.environ["FORESEA_AGENT_DOMAIN_EDGE_CEILINGS"] = json.dumps(ceilings)
+        else:
+            os.environ.pop("FORESEA_AGENT_DOMAIN_EDGE_CEILINGS", None)
     _configure_max_order_notional(agent_id=agent_id)
 
     question = _build_question(

@@ -925,8 +925,14 @@ def _sizing_plan(
     # a claimed 80pp edge produced stakes the guard was always going to refuse
     # (Llama re-attempting the Khamenei market 26 times in one month). The
     # stated probability is preserved untouched in the audit trail; only the
-    # stake derivation is tempered.
+    # stake derivation is tempered. A domain where this agent has *demonstrated*
+    # skill (measured by the tick from resolved forecasts) gets its own higher
+    # ceiling, so proven skill pockets can be staked harder than the flat cap.
+    trade_category_hint = category or args.get("category")
     max_credible = _max_credible_edge()
+    domain_ceiling = _domain_edge_ceiling(category=trade_category_hint, ticker=args.get("ticker"))
+    if domain_ceiling is not None and domain_ceiling > max_credible:
+        max_credible = domain_ceiling
     sizing_edge = edge
     if max_credible > 0 and edge > max_credible:
         sizing_edge = max_credible
@@ -954,7 +960,7 @@ def _sizing_plan(
 
     horizon_bucket = _classify_horizon_bucket(lead_days)
     is_validated_horizon = (horizon_bucket == "14-30d")
-    trade_category = category or args.get("category")
+    trade_category = trade_category_hint
     is_weather = str(trade_category or "").strip().lower() == "weather"
     is_short_horizon = (lead_days is not None and lead_days < 7.0 and not is_weather)
 
@@ -1644,6 +1650,7 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
             action TEXT,
             strategy TEXT,
             evidence_delta TEXT,
+            domain TEXT,
             weather_market_type TEXT,
             weather_settlement_source TEXT,
             resolved_outcome INTEGER,
@@ -1709,6 +1716,8 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
     thesis_columns = {
         str(row[1]) for row in conn.execute("PRAGMA table_info(agent_thesis_forecasts)")
     }
+    if "domain" not in thesis_columns:
+        conn.execute("ALTER TABLE agent_thesis_forecasts ADD COLUMN domain TEXT")
     if "weather_market_type" not in thesis_columns:
         conn.execute("ALTER TABLE agent_thesis_forecasts ADD COLUMN weather_market_type TEXT")
     if "weather_settlement_source" not in thesis_columns:
@@ -1717,6 +1726,12 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_agent_thesis_forecasts_weather_calibration
         ON agent_thesis_forecasts(weather_market_type, weather_settlement_source, resolved_outcome)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_agent_thesis_forecasts_domain_calibration
+        ON agent_thesis_forecasts(agent_id, domain, resolved_outcome)
         """
     )
     conn.execute(
@@ -2579,6 +2594,55 @@ def _max_credible_edge() -> float:
     return max(0.0, _env_float("FORESEA_AGENT_MAX_CREDIBLE_EDGE", DEFAULT_MAX_CREDIBLE_EDGE))
 
 
+def _domain_edge_ceiling(category: Any = None, ticker: Any = None) -> Optional[float]:
+    """Domain-specific credible-edge ceiling, or None to use the global one.
+
+    The tick measures each agent's per-domain calibration from resolved thesis
+    forecasts and sets FORESEA_AGENT_DOMAIN_EDGE_CEILINGS as a JSON mapping of
+    domain -> ceiling (probability points). A ceiling is only injected for a
+    domain where the agent has demonstrated skill (enough resolved forecasts
+    and a better Brier than the market), so sizing can stake a larger share of
+    a *proven* disagreement while the flat global ceiling still applies
+    everywhere else. An invalid or out-of-range value is ignored rather than
+    trusted.
+    """
+    raw = os.environ.get("FORESEA_AGENT_DOMAIN_EDGE_CEILINGS")
+    if not raw:
+        return None
+    try:
+        mapping = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(mapping, Mapping):
+        return None
+    domain = _domain_for_ceiling(category, ticker)
+    if not domain:
+        return None
+    value = mapping.get(domain)
+    if value is None:
+        return None
+    try:
+        ceiling = float(value)
+    except (TypeError, ValueError):
+        return None
+    # A domain ceiling must sit between the global floor of sanity and the
+    # maximum a probability can express; anything else is a measurement bug.
+    if not 0.0 < ceiling <= 1.0:
+        return None
+    return ceiling
+
+
+def _domain_for_ceiling(category: Any = None, ticker: Any = None) -> Optional[str]:
+    """Map a trade's category/ticker onto the tick's domain vocabulary."""
+    cat = str(category or "").strip().lower()
+    if cat in {"weather", "sports", "sport"}:
+        return "weather" if cat == "weather" else "sports"
+    tick = str(ticker or "").strip().upper()
+    if tick.startswith(("KXHIGH", "KXLOW", "KXTEMP")):
+        return "weather"
+    return None
+
+
 def _probability_bias_correction() -> float:
     """Per-agent calibration correction, in probability points, to subtract
     from a stated P(YES) before sizing.
@@ -2888,6 +2952,12 @@ def _check_trade_guards(
 
     blocked_category = None
     max_credible_edge = _max_credible_edge()
+    # The guard must apply the same domain-aware ceiling sizing uses, or a
+    # domain-skilled agent's legitimate stake would be sized under one ceiling
+    # and rejected under a stricter one.
+    domain_ceiling = _domain_edge_ceiling(category=cat, ticker=ticker)
+    if domain_ceiling is not None and domain_ceiling > max_credible_edge:
+        max_credible_edge = domain_ceiling
     stated_edge = _as_float(edge_check.get("gross_edge")) if edge_check.get("checked") else None
     if strict_risk_management and not risk_reducing:
         # Both gates are entry-only: an exit still clears, so nothing here can

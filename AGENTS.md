@@ -5,6 +5,47 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-13 — Per-domain skill routing & domain-aware credible-edge ceilings (Copilot)
+
+Follow-up to the 2026-10-06 profile prescriptions. October analysis showed the
+one demonstrated edge (sports, +1.06pp Brier skill) was traded by the worst
+forecaster (gemma took the −$166 EPL loss), while sizing stayed throttled at a
+flat 10pp credible-edge cap even for agents with proven domain skill. Three
+changes, all measured-not-vibes:
+
+1. **Domain column on thesis forecasts** (`agent_thesis_forecasts.domain`):
+   - Schema + `PRAGMA table_info` migration + `idx_agent_thesis_forecasts_domain_calibration`
+     index in `benchmark_tools.py`.
+   - Populated at insert from `_paper_market_domain(candidate)` via the new
+     `_forecast_domain` helper in `agent_trading_tick.py` — keyed to the
+     contract the agent actually saw, same vocabulary as the candidate quotas.
+
+2. **Domain-aware credible-edge ceiling** (`FORESEA_AGENT_DOMAIN_EDGE_CEILINGS`):
+   - The tick measures per-agent per-domain Brier vs market Brier from resolved
+     thesis forecasts. A domain with >= `AGENT_TRADING_DOMAIN_SKILL_MIN_RESOLVED`
+     (default 20) resolved forecasts AND model Brier < market Brier gets a
+     ceiling of `clamp(market_brier - model_brier + 0.10, 0.10, 0.30)` injected
+     as JSON. Domains without proven skill keep the flat global ceiling.
+   - `_sizing_plan` and the risk guard (`edge_beyond_credible_range`) both read
+     it through `_domain_edge_ceiling` — they can never disagree about what an
+     agent may claim. Invalid/out-of-range JSON values are ignored, never trusted.
+
+3. **Skill-routed domain candidate quotas**:
+   - `_discover_candidates` now takes the agent's measured `domain_skill` map
+     (read-only SQLite lookup, failure-tolerant). An agent whose resolved record
+     shows it forecasts a domain *worse* than the market (same 20-resolved floor)
+     does not receive that domain's reserved weather/sports lane. Ordinary
+     discovery can still surface such markets; only the skill-targeted channel
+     is gated.
+   - `_build_learning_block` now reports per-domain "you beat the market here /
+     market beats you here" calibration lines to the agent.
+
+Do not revert the flat `FORESEA_AGENT_MAX_CREDIBLE_EDGE` ceiling thinking the
+domain ceilings replace it: they only *raise* the cap for a domain where that
+specific agent has demonstrated skill, and the guard + sizing read the same
+mapping. Tests: `DomainEdgeCeilingTests` (test_edge_reliability_sizing.py),
+domain-routing tests in test_agent_trading_tick.py.
+
 ### 2026-10-09 — Sports empirical-alpha discovery lane & horizon exemption (Copilot)
 
 Integrated candidate discovery and trade execution support for sports markets

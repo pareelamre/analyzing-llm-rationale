@@ -489,6 +489,121 @@ class CandidateSelectionTests(unittest.TestCase):
             candidates = agent_trading_tick._discover_sports_candidates(set(), limit=2)
         self.assertEqual(candidates, [])
 
+    def test_domain_skill_routing_skips_sports_lane_for_negative_skill_agent(self):
+        """An agent whose resolved record shows it loses to the market in a
+        domain does not get that domain's reserved candidate lane."""
+        sport_k = _quote("KXLEEDS", question="Will Leeds United win against Sheffield?", bid=0.40, ask=0.45)
+        sport_k["category"] = "Sports"
+        general = _quote("KXGEN", question="General question?", bid=0.40, ask=0.45)
+
+        def list_kalshi(**kwargs):
+            return [sport_k] if kwargs.get("category") == "Sports" else [general]
+
+        skill = {"sports": {"resolved": 30, "brier": 0.30, "market_brier": 0.15}}
+        with (
+            mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
+            mock.patch.object(agent_trading_tick, "SPORTS_CANDIDATE_QUOTA", 1),
+        ):
+            found = agent_trading_tick._discover_candidates(set(), domain_skill=skill)
+
+        idents = [q["ident"] for q in found]
+        self.assertNotIn("KXLEEDS", idents)
+        self.assertIn("KXGEN", idents)
+
+    def test_domain_skill_routing_keeps_sports_lane_for_positive_skill_agent(self):
+        sport_k = _quote("KXLEEDS", question="Will Leeds United win against Sheffield?", bid=0.40, ask=0.45)
+        sport_k["category"] = "Sports"
+        general = _quote("KXGEN", question="General question?", bid=0.40, ask=0.45)
+
+        def list_kalshi(**kwargs):
+            return [sport_k] if kwargs.get("category") == "Sports" else [general]
+
+        skill = {"sports": {"resolved": 30, "brier": 0.04, "market_brier": 0.05}}
+        with (
+            mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
+            mock.patch.object(agent_trading_tick, "SPORTS_CANDIDATE_QUOTA", 1),
+        ):
+            found = agent_trading_tick._discover_candidates(set(), domain_skill=skill)
+
+        idents = [q["ident"] for q in found]
+        self.assertIn("KXLEEDS", idents)
+
+    def test_domain_skill_routing_requires_the_resolved_sample_floor(self):
+        """A handful of unlucky outcomes is noise, not a routing signal."""
+        sport_k = _quote("KXLEEDS", question="Will Leeds United win against Sheffield?", bid=0.40, ask=0.45)
+        sport_k["category"] = "Sports"
+        general = _quote("KXGEN", question="General question?", bid=0.40, ask=0.45)
+
+        def list_kalshi(**kwargs):
+            return [sport_k] if kwargs.get("category") == "Sports" else [general]
+
+        skill = {"sports": {"resolved": 5, "brier": 0.30, "market_brier": 0.15}}
+        with (
+            mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
+            mock.patch.object(agent_trading_tick, "SPORTS_CANDIDATE_QUOTA", 1),
+        ):
+            found = agent_trading_tick._discover_candidates(set(), domain_skill=skill)
+
+        idents = [q["ident"] for q in found]
+        self.assertIn("KXLEEDS", idents)
+
+    def test_domain_skill_map_reads_the_ledger(self):
+        import sqlite3
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = str(Path(tmp) / "ledger.db")
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE agent_thesis_forecasts (
+                    agent_id TEXT, cycle_id TEXT, forecast_ts TEXT, platform TEXT,
+                    ticker TEXT, model_probability REAL, market_probability REAL,
+                    edge REAL, action TEXT, strategy TEXT, evidence_delta TEXT,
+                    domain TEXT, weather_market_type TEXT, weather_settlement_source TEXT,
+                    resolved_outcome INTEGER, resolved_at TEXT,
+                    brier_score REAL, market_brier_score REAL
+                )
+                """
+            )
+            rows = [
+                ("agent-a", "sports", 1, 0.04, 0.05),
+                ("agent-a", "sports", 1, 0.05, 0.05),
+                ("agent-a", "sports", 1, 0.03, 0.05),
+                ("agent-a", "weather", 1, 0.30, 0.15),
+                ("agent-b", "sports", 1, 0.10, 0.05),
+            ]
+            conn.executemany(
+                """
+                INSERT INTO agent_thesis_forecasts
+                (agent_id, domain, resolved_outcome, brier_score, market_brier_score)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+            conn.commit()
+            conn.close()
+
+            with mock.patch.dict(os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": db_path}):
+                skill = agent_trading_tick._domain_skill_map("agent-a")
+
+        self.assertIn("sports", skill)
+        self.assertIn("weather", skill)
+        self.assertAlmostEqual(skill["sports"]["brier"], (0.04 + 0.05 + 0.03) / 3)
+        self.assertEqual(skill["sports"]["resolved"], 3)
+        self.assertNotIn("sports", agent_trading_tick._domain_skill_map("agent-b") or {})
+        self.assertNotIn("sports", agent_trading_tick._domain_skill_map("agent-b"))
+
+    def test_domain_skill_map_survives_a_missing_ledger(self):
+        with mock.patch.dict(os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path("Z:/nope/missing.db"))}):
+            self.assertEqual(agent_trading_tick._domain_skill_map("agent-a"), {})
+        self.assertEqual(agent_trading_tick._domain_skill_map(None), {})
+
     def test_polymarket_edge_hurdle_has_no_taker_fee(self):
         k_quote = _quote("KXTEST", bid=0.40, ask=0.45)
         p_quote = _poly_quote("poly-test", bid=0.40, ask=0.45, category="geopolitics")

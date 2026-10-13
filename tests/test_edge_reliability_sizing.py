@@ -185,6 +185,90 @@ class CredibleEdgeSizingCapTests(unittest.TestCase):
         self.assertNotEqual(plan["mode"], "edge_kelly")
 
 
+class DomainEdgeCeilingTests(unittest.TestCase):
+    """A domain where the agent has demonstrated skill gets a higher ceiling.
+
+    The tick measures per-domain Brier vs market Brier from resolved thesis
+    forecasts and injects FORESEA_AGENT_DOMAIN_EDGE_CEILINGS. Sizing and the
+    guard must both honor it, and only for the matching domain.
+    """
+
+    CEILINGS = json.dumps({"sports": 0.25, "weather": 0.20})
+
+    def _sizing_with_domain(self, model_probability, price=0.11, mode="quarter_kelly",
+                            category=None, ticker=None):
+        benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = PUBLISHED
+        try:
+            with mock.patch.dict(os.environ, {"FORESEA_AGENT_DOMAIN_EDGE_CEILINGS": self.CEILINGS}):
+                return benchmark_tools._sizing_plan(
+                    {"sizing_mode": mode, "model_probability": model_probability,
+                     "ticker": ticker},
+                    price=price, side="yes", account_value=10_000.0,
+                    category=category,
+                )
+        finally:
+            benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+
+    def test_a_demonstrated_skill_domain_gets_a_higher_ceiling(self):
+        # 20pp claimed edge on a sports market: above the global 10pp ceiling
+        # but under the injected 25pp sports ceiling, so it sizes on the full
+        # stated edge instead of being tempered to 10pp.
+        plan = self._sizing_with_domain(0.31, category="sports")
+        self.assertEqual(plan["edge"], 0.20)
+        self.assertGreater(plan.get("target_notional") or 0.0, 0.0)
+
+    def test_the_global_ceiling_still_applies_to_other_domains(self):
+        # Same 20pp claim on a non-sports market: tempered to the 10pp global
+        # ceiling exactly as before this feature.
+        plan = self._sizing_with_domain(0.31, category="geopolitics")
+        self.assertEqual(plan["edge"], 0.20)
+        tempered = self._sizing_with_domain(0.21, category="geopolitics")  # 10pp
+        self.assertAlmostEqual(plan["target_notional"], tempered["target_notional"], delta=1.0)
+
+    def test_the_ceiling_is_domain_keyed_by_ticker_when_category_is_missing(self):
+        # Kalshi weather tickers map to the weather domain even when the
+        # category string is absent from the call.
+        plan = self._sizing_with_domain(0.26, ticker="KXHIGHNY-26OCT13-B72.5")
+        self.assertEqual(plan["edge"], 0.15)
+        self.assertGreater(plan.get("target_notional") or 0.0, 0.0)
+
+    def test_an_invalid_ceiling_mapping_is_ignored(self):
+        benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = PUBLISHED
+        try:
+            with mock.patch.dict(os.environ, {"FORESEA_AGENT_DOMAIN_EDGE_CEILINGS": "not-json"}):
+                plan = benchmark_tools._sizing_plan(
+                    {"sizing_mode": "quarter_kelly", "model_probability": 0.31, "ticker": None},
+                    price=0.11, side="yes", account_value=10_000.0, category="sports",
+                )
+        finally:
+            benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+        tempered = sizing(0.21, price=0.11, mode="quarter_kelly")  # no env: 10pp ceiling
+        self.assertAlmostEqual(plan["target_notional"], tempered["target_notional"], delta=1.0)
+
+    def test_an_out_of_range_ceiling_is_ignored(self):
+        benchmark_tools._EDGE_CALIBRATION_CACHE["rows"] = PUBLISHED
+        try:
+            with mock.patch.dict(os.environ, {"FORESEA_AGENT_DOMAIN_EDGE_CEILINGS": json.dumps({"sports": 1.5})}):
+                plan = benchmark_tools._sizing_plan(
+                    {"sizing_mode": "quarter_kelly", "model_probability": 0.31, "ticker": None},
+                    price=0.11, side="yes", account_value=10_000.0, category="sports",
+                )
+        finally:
+            benchmark_tools._EDGE_CALIBRATION_CACHE.clear()
+        tempered = sizing(0.21, price=0.11, mode="quarter_kelly")
+        self.assertAlmostEqual(plan["target_notional"], tempered["target_notional"], delta=1.0)
+
+    def test_the_guard_uses_the_same_domain_ceiling(self):
+        """Guard and sizing must agree, or a legitimate stake gets rejected."""
+        from tests.test_benchmark_tools import _fetch_kalshi_quotes as _fq  # noqa: F401
+        # The guard reads the ceiling through the same helper; verify directly.
+        with mock.patch.dict(os.environ, {"FORESEA_AGENT_DOMAIN_EDGE_CEILINGS": self.CEILINGS}):
+            self.assertEqual(benchmark_tools._domain_edge_ceiling(category="sports"), 0.25)
+            self.assertEqual(benchmark_tools._domain_edge_ceiling(category="weather"), 0.20)
+            self.assertIsNone(benchmark_tools._domain_edge_ceiling(category="geopolitics"))
+            self.assertIsNone(benchmark_tools._domain_edge_ceiling(category=None, ticker=None))
+
+
 class ProbabilityBiasCorrectionTests(unittest.TestCase):
     """The tick feeds each agent's measured calibration bias back into sizing.
 
