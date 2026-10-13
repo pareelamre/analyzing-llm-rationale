@@ -120,7 +120,9 @@ class WeatherResearchTests(unittest.TestCase):
         self.assertEqual(first["source_status"], "nws_observation_available")
         self.assertFalse(first["research_cached"])
         self.assertTrue(second["research_cached"])
-        self.assertEqual(len(calls), 4)
+        # 4 NWS calls + 1 ensemble call on the first pass; the second pass is
+        # served entirely from cache.
+        self.assertEqual(len(calls), 5)
         self.assertIn("final NWS Daily Climate Report", second["notice"])
 
     def test_repeated_nws_failures_open_a_circuit_without_proxy_data(self):
@@ -165,10 +167,19 @@ class WeatherResearchTests(unittest.TestCase):
             "https://example.test/hourly": {
                 "properties": {"periods": []},
             },
-            "https://api.open-meteo.com/v1/forecast?latitude=40.7829&longitude=-73.9654&hourly=temperature_2m&temperature_unit=fahrenheit&forecast_days=2": {
+            "https://api.open-meteo.com/v1/forecast?latitude=40.7829&longitude=-73.9654&hourly=temperature_2m&temperature_unit=fahrenheit&forecast_days=2&timezone=auto": {
                 "hourly": {
-                    "time": ["2026-09-07T12:00", "2026-09-07T13:00", "2026-09-07T14:00"],
-                    "temperature_2m": [72.0, 78.5, 75.0],
+                    "time": ["2026-09-07T12:00", "2026-09-07T13:00", "2026-09-07T14:00",
+                             "2026-09-07T15:00", "2026-09-07T16:00", "2026-09-07T17:00",
+                             "2026-09-07T18:00", "2026-09-07T19:00", "2026-09-07T20:00",
+                             "2026-09-07T21:00", "2026-09-07T22:00", "2026-09-07T23:00",
+                             "2026-09-08T00:00", "2026-09-08T01:00", "2026-09-08T02:00",
+                             "2026-09-08T03:00", "2026-09-08T04:00", "2026-09-08T05:00",
+                             "2026-09-08T06:00", "2026-09-08T07:00", "2026-09-08T08:00",
+                             "2026-09-08T09:00", "2026-09-08T10:00", "2026-09-08T11:00"],
+                    "temperature_2m": [72.0, 78.5, 75.0, 74.0, 73.0, 72.0, 71.0, 70.0,
+                                       69.0, 68.0, 67.0, 66.0, 65.0, 64.0, 63.0, 62.0,
+                                       61.0, 60.0, 59.0, 58.0, 57.0, 56.0, 55.0, 54.0],
                 },
             },
         }

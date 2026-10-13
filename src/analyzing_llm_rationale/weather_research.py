@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import re
+import statistics
 import threading
 import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
@@ -96,6 +97,7 @@ _STATION_COORDINATES: Dict[str, Tuple[float, float]] = {
     "KDCA": (38.8512, -77.0402),  # Washington Reagan
 }
 _OPEN_METEO_API = "https://api.open-meteo.com/v1/forecast"
+_OPEN_METEO_ENSEMBLE_API = "https://ensemble-api.open-meteo.com/v1/ensemble"
 _GOOGLE_WEATHER_API = "https://weather.googleapis.com/v1/forecast/hours:lookup"
 
 _STATION_BIAS_PROFILES: Dict[str, Dict[str, Any]] = {
@@ -275,11 +277,18 @@ def _fetch_google_weather_forecast(
 def _fetch_open_meteo_forecast(
     http_get: Callable[..., Any], lat: float, lon: float
 ) -> Optional[Dict[str, Any]]:
-    """Fetch high-resolution global numerical / AI forecast via Open-Meteo."""
+    """Fetch high-resolution global numerical / AI forecast via Open-Meteo.
+
+    Requests station-local time (``timezone=auto``) and groups hours by local
+    calendar day, so the reported high/low is the max/min over one local day
+    rather than an arbitrary 24-hour UTC slice that can span two local days
+    and miss the afternoon peak entirely.
+    """
     try:
         url = (
             f"{_OPEN_METEO_API}?latitude={lat:.4f}&longitude={lon:.4f}&"
             f"hourly=temperature_2m&temperature_unit=fahrenheit&forecast_days=2"
+            f"&timezone=auto"
         )
         response = http_get(url, timeout=_REQUEST_TIMEOUT_S)
         if hasattr(response, "raise_for_status"):
@@ -292,21 +301,31 @@ def _fetch_open_meteo_forecast(
         temps = hourly.get("temperature_2m") or []
         if not times or not temps or len(times) != len(temps):
             return None
-        valid_pairs = [(t, float(temp)) for t, temp in zip(times[:24], temps[:24]) if temp is not None]
+        valid_pairs = [(t, float(temp)) for t, temp in zip(times, temps) if temp is not None]
         if not valid_pairs:
             return None
-        valid_temps = [p[1] for p in valid_pairs]
+        # Group by local calendar day; the first full day in the window is the
+        # tradeable one (a trailing partial day is dropped).
+        by_day: Dict[str, List[float]] = {}
+        for t, temp in valid_pairs:
+            by_day.setdefault(str(t)[:10], []).append(temp)
+        full_days = [(day, vals) for day, vals in sorted(by_day.items()) if len(vals) >= 20]
+        if not full_days:
+            full_days = sorted(by_day.items())[:1]
+        target_day, target_vals = full_days[0]
         return {
             "provider": "open-meteo",
             "model": "high_res_multi_model",
+            "forecast_day_local": target_day,
             "forecast_start": valid_pairs[0][0],
             "forecast_end": valid_pairs[-1][0],
-            "projected_high_f": round(max(valid_temps), 1),
-            "projected_low_f": round(min(valid_temps), 1),
+            "projected_high_f": round(max(target_vals), 1),
+            "projected_low_f": round(min(target_vals), 1),
             "hourly_curve": [
                 {"time": t, "temperature_f": temp}
-                for t, temp in valid_pairs[::2][:8]
-            ],
+                for t, temp in valid_pairs
+                if str(t)[:10] == target_day
+            ][:8],
             "notice": (
                 "Predictive multi-model numerical/AI forecast reference. "
                 "Official settlement is governed strictly by the contract's named settlement source."
@@ -315,6 +334,118 @@ def _fetch_open_meteo_forecast(
     except Exception as exc:
         logger.debug("Open-Meteo model forecast fetch unavailable: %s", exc)
         return None
+
+
+_ENSEMBLE_MODEL = os.environ.get("FORESEA_WEATHER_ENSEMBLE_MODEL", "gfs025")
+_ENSEMBLE_MIN_MEMBERS = 12
+
+
+def _fetch_ensemble_forecast(
+    http_get: Callable[..., Any], lat: float, lon: float
+) -> Optional[Dict[str, Any]]:
+    """Fetch a member ensemble and derive per-day high-temperature probabilities.
+
+    GEFS025 via Open-Meteo's ensemble API exposes ~30 perturbed members. The
+    member histogram of per-day maxima is a native probability distribution:
+    P(high < strike) is the fraction of members whose day-max sits below the
+    strike, which is exactly the quantity a daily-high contract settles on.
+    """
+    try:
+        url = (
+            f"{_OPEN_METEO_ENSEMBLE_API}?latitude={lat:.4f}&longitude={lon:.4f}&"
+            f"hourly=temperature_2m&temperature_unit=fahrenheit&forecast_days=2"
+            f"&models={_ENSEMBLE_MODEL}&timezone=auto"
+        )
+        response = http_get(url, timeout=max(_REQUEST_TIMEOUT_S, 15))
+        if hasattr(response, "raise_for_status"):
+            response.raise_for_status()
+        payload = response.json() if hasattr(response, "json") else None
+        if not isinstance(payload, Mapping):
+            return None
+        hourly = payload.get("hourly") or {}
+        times = hourly.get("time") or []
+        if not times:
+            return None
+        member_keys = [k for k in hourly if k.startswith("temperature_2m_")]
+        if len(member_keys) < _ENSEMBLE_MIN_MEMBERS:
+            return None
+        by_day: Dict[str, List[float]] = {}
+        for day in sorted({str(t)[:10] for t in times}):
+            idxs = [i for i, t in enumerate(times) if str(t)[:10] == day]
+            member_maxima = []
+            for k in member_keys:
+                series = hourly.get(k) or []
+                vals = [float(series[i]) for i in idxs if i < len(series) and series[i] is not None]
+                if vals:
+                    member_maxima.append(max(vals))
+            if len(member_maxima) >= _ENSEMBLE_MIN_MEMBERS:
+                by_day[day] = member_maxima
+        if not by_day:
+            return None
+        target_day, maxima = sorted(by_day.items())[0]
+        mean = statistics.fmean(maxima)
+        std = statistics.stdev(maxima) if len(maxima) > 1 else 0.0
+        return {
+            "provider": "open-meteo-ensemble",
+            "model": _ENSEMBLE_MODEL,
+            "member_count": len(maxima),
+            "forecast_day_local": target_day,
+            "ensemble_mean_high_f": round(mean, 1),
+            "ensemble_std_f": round(std, 2),
+            "ensemble_min_high_f": round(min(maxima), 1),
+            "ensemble_max_high_f": round(max(maxima), 1),
+            "member_maxima_f": [round(m, 1) for m in sorted(maxima)],
+            "notice": (
+                "Ensemble member histogram. Probabilities are empirical over "
+                f"{len(maxima)} members; official settlement remains the contract's named source."
+            ),
+        }
+    except Exception as exc:
+        logger.debug("Open-Meteo ensemble forecast fetch unavailable: %s", exc)
+        return None
+
+
+def _ensemble_strike_probability(
+    ensemble: Mapping[str, Any],
+    strike_spec: Mapping[str, Any],
+    bias_offset_f: float = 0.0,
+) -> Optional[Dict[str, Any]]:
+    """P(strike) from the member histogram, with the station bias applied to
+    each member's day-max before counting (a uniform shift preserves the
+    histogram shape and moves the threshold crossing)."""
+    maxima = ensemble.get("member_maxima_f")
+    if not isinstance(maxima, list) or len(maxima) < _ENSEMBLE_MIN_MEMBERS:
+        return None
+    shifted = [round(m + bias_offset_f, 2) for m in maxima]
+    strike_type = str(strike_spec.get("strike_type") or "less_than")
+
+    def _count(prob_fn) -> float:
+        hits = sum(1 for m in shifted if prob_fn(m))
+        return round(max(0.001, min(0.999, hits / len(shifted))), 3)
+
+    if strike_type in ("less_than", "less_than_or_equal"):
+        strike = float(strike_spec.get("strike_f", 0.0))
+        prob = _count(lambda m: m < strike)
+    elif strike_type in ("greater_than", "greater_than_or_equal"):
+        strike = float(strike_spec.get("strike_f", 0.0))
+        prob = _count(lambda m: m >= strike)
+    elif strike_type == "between":
+        low = float(strike_spec.get("strike_low_f", 0.0))
+        high = float(strike_spec.get("strike_high_f", 0.0))
+        prob = _count(lambda m: low <= m <= high)
+    else:
+        return None
+
+    return {
+        "strike_spec": dict(strike_spec),
+        "method": "ensemble_member_histogram",
+        "ensemble_model": ensemble.get("model"),
+        "member_count": len(shifted),
+        "ensemble_mean_high_f": ensemble.get("ensemble_mean_high_f"),
+        "ensemble_std_f": ensemble.get("ensemble_std_f"),
+        "bias_offset_applied_f": bias_offset_f,
+        "model_probability": prob,
+    }
 
 
 def _fetch_model_forecast(
@@ -594,6 +725,9 @@ def research_weather_market(
                     "forecast_periods": [],
                     "model_forecast": None,
                     "bracket_probability": None,
+                    "ensemble_forecast": None,
+                    "ensemble_probability": None,
+                    "cross_source_divergence": None,
                     "notice": "This contract is not classified as weather.",
                 }
                 outcome = "not_applicable"
@@ -605,6 +739,9 @@ def research_weather_market(
                     "forecast_periods": [],
                     "model_forecast": None,
                     "bracket_probability": None,
+                    "ensemble_forecast": None,
+                    "ensemble_probability": None,
+                    "cross_source_divergence": None,
                     "notice": (
                         "The Weather Company is the named settlement source. Foresea has no licensed "
                         "Weather Company feed, so no proxy is represented as official settlement data."
@@ -620,6 +757,9 @@ def research_weather_market(
                     "forecast_periods": [],
                     "model_forecast": None,
                     "bracket_probability": None,
+                    "ensemble_forecast": None,
+                    "ensemble_probability": None,
+                    "cross_source_divergence": None,
                     "notice": "No source-matched NWS lookup was performed; the contract data is incomplete for this research pass.",
                 }
                 outcome = reason
@@ -640,6 +780,9 @@ def research_weather_market(
                         "forecast_periods": [],
                         "model_forecast": None,
                         "bracket_probability": None,
+                        "ensemble_forecast": None,
+                        "ensemble_probability": None,
+                        "cross_source_divergence": None,
                         "research_cached": False,
                         "notice": "NWS research is temporarily paused after repeated upstream failures; retry later.",
                     }
@@ -674,9 +817,32 @@ def research_weather_market(
                         if coords
                         else None
                     )
+                    strike_spec = parse_market_strike(quote)
+                    bias_offset = 0.0
+                    if brief.station:
+                        profile = _STATION_BIAS_PROFILES.get(brief.station.upper())
+                        if profile:
+                            bias_offset = float(profile.get("bias_offset_f") or 0.0)
+
+                    # Primary decision input: ensemble member histogram. It
+                    # yields a native probability distribution over the day's
+                    # high, which is exactly what a strike bracket settles on.
+                    ensemble = (
+                        _fetch_ensemble_forecast(http_get, coords[0], coords[1])
+                        if coords
+                        else None
+                    )
+                    ensemble_prob = (
+                        _ensemble_strike_probability(ensemble, strike_spec, bias_offset)
+                        if ensemble and strike_spec
+                        else None
+                    )
+
+                    # Secondary reference: deterministic best_match with a
+                    # Gaussian read. Kept for continuity and as a divergence
+                    # check against the ensemble.
                     bracket_prob = None
                     if model_forecast and isinstance(model_forecast.get("projected_high_f"), (int, float)):
-                        strike_spec = parse_market_strike(quote)
                         if strike_spec:
                             bracket_prob = calculate_bracket_probability(
                                 float(model_forecast["projected_high_f"]),
@@ -698,12 +864,44 @@ def research_weather_market(
                                         bracket_prob["model_probability"] - prob_val, 3
                                     )
                                     break
+
+                    # Cross-source divergence: when the deterministic read and
+                    # the ensemble mean sit on opposite sides of the strike,
+                    # the sources disagree and this is a no-trade signal, not
+                    # an edge.
+                    divergence = None
+                    if (
+                        ensemble_prob
+                        and bracket_prob
+                        and strike_spec
+                        and isinstance(ensemble_prob.get("model_probability"), (int, float))
+                        and isinstance(bracket_prob.get("model_probability"), (int, float))
+                    ):
+                        p_ens = float(ensemble_prob["model_probability"])
+                        p_det = float(bracket_prob["model_probability"])
+                        divergence = {
+                            "ensemble_probability": p_ens,
+                            "deterministic_probability": p_det,
+                            "abs_disagreement": round(abs(p_ens - p_det), 3),
+                            "sources_straddle_strike": (p_ens - 0.5) * (p_det - 0.5) < 0,
+                        }
+                        ensemble_prob["deterministic_cross_check"] = {
+                            "model_probability": p_det,
+                            "sources_straddle_strike": divergence["sources_straddle_strike"],
+                        }
+                        if divergence["sources_straddle_strike"]:
+                            ensemble_prob["trade_signal"] = "sources_disagree_no_trade"
+                        else:
+                            ensemble_prob["trade_signal"] = "sources_agree"
                     result = {
                         "weather_market": brief.as_dict(),
                         "source_status": "nws_observation_available",
                         "observations": [observation],
                         "forecast_periods": periods,
                         "model_forecast": model_forecast,
+                        "ensemble_forecast": ensemble,
+                        "ensemble_probability": ensemble_prob,
+                        "cross_source_divergence": divergence,
                         "bracket_probability": bracket_prob,
                         "research_cached": False,
                         "notice": (
@@ -725,6 +923,9 @@ def research_weather_market(
                         "forecast_periods": [],
                         "model_forecast": None,
                         "bracket_probability": None,
+                        "ensemble_forecast": None,
+                        "ensemble_probability": None,
+                        "cross_source_divergence": None,
                         "research_cached": False,
                         "notice": (
                             "NWS source-matched research is temporarily unavailable; no proxy data was used. "
