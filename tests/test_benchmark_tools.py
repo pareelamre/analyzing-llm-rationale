@@ -946,6 +946,34 @@ class BenchmarkToolTests(unittest.TestCase):
         finally:
             benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
 
+    def test_a_readable_record_with_no_qualifying_horizon_validates_nothing(self):
+        """No proven window means no validated window — not a stale default."""
+        record = [
+            {"horizon": "14-30d", "n": 772, "skill_significant": False},
+            {"horizon": "7-14d", "n": 1529, "skill_significant": False},
+        ]
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = record
+        try:
+            self.assertEqual(benchmark_tools._validated_horizons(), set())
+            plan = benchmark_tools._sizing_plan(
+                {"sizing_mode": "convex_conviction", "model_probability": 0.53, "lead_days": 20.0},
+                price=0.50, side="yes", account_value=10_000.0,
+            )
+            self.assertFalse(plan["horizon_validated"])
+            self.assertGreaterEqual(plan["market_shrinkage"], 0.15)
+        finally:
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
+
+    def test_horizon_bucket_boundaries_match_the_published_record(self):
+        """track_record_live._HORIZONS is upper-exclusive: 14.0d is 14-30d."""
+        self.assertEqual(benchmark_tools._classify_horizon_bucket(13.999), "7-14d")
+        self.assertEqual(benchmark_tools._classify_horizon_bucket(14.0), "14-30d")
+        self.assertEqual(benchmark_tools._classify_horizon_bucket(29.999), "14-30d")
+        self.assertEqual(benchmark_tools._classify_horizon_bucket(30.0), "30d+")
+        self.assertEqual(benchmark_tools._classify_horizon_bucket(7.0), "7-14d")
+        self.assertEqual(benchmark_tools._classify_horizon_bucket(3.0), "3-7d")
+        self.assertEqual(benchmark_tools._classify_horizon_bucket(1.0), "1-3d")
+
     def test_place_trade_returns_skipped_and_rejected_when_kelly_sizing_ineligible(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 

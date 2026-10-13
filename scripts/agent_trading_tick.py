@@ -1499,16 +1499,22 @@ def _is_validated_horizon_data(data: Mapping[str, Any], *, now: Optional[datetim
 
 
 def _horizon_label_for_days(lead_days: float) -> str:
-    """Mirror benchmark_tools._classify_horizon_bucket for lead-day values."""
+    """Mirror the published record's _HORIZONS buckets (upper-exclusive).
+
+    track_record_live._HORIZONS assigns [7,14) to 7-14d and [14,30) to
+    14-30d, so a lead of exactly 14.0 days is 14-30d, not 7-14d. Using
+    inclusive upper bounds here would assign boundary leads to the wrong
+    bucket and disagree with the record the validated set was measured on.
+    """
     if lead_days < 1.0:
         return "<1d"
-    if lead_days <= 3.0:
+    if lead_days < 3.0:
         return "1-3d"
-    if lead_days <= 7.0:
+    if lead_days < 7.0:
         return "3-7d"
-    if lead_days <= 14.0:
+    if lead_days < 14.0:
         return "7-14d"
-    if lead_days <= 30.0:
+    if lead_days < 30.0:
         return "14-30d"
     return "30d+"
 

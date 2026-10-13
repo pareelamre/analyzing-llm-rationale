@@ -788,12 +788,15 @@ def _validated_horizons() -> set:
 
     A horizon is validated when its skill-vs-market lower CI bound clears
     zero (the record's own significance gate) with at least
-    _MIN_CALIBRATION_N resolved snapshots. 14-30d is the historical default
-    and stays validated when the record is unreadable, so sizing never
-    silently widens on a data outage.
+    _MIN_CALIBRATION_N resolved snapshots. Only an *unreadable* record falls
+    back to {"14-30d"} — the historical default — so a data outage never
+    silently widens sizing. A readable record with no qualifying horizon
+    returns an empty set: no horizon is validated, and every horizon keeps
+    its policy shrinkage. That is the honest reading of a record that no
+    longer proves any window.
     """
     rows = _published_horizon_calibration()
-    if not rows:
+    if rows is None:
         return {"14-30d"}
     validated = set()
     for row in rows:
@@ -802,7 +805,7 @@ def _validated_horizons() -> set:
         n = int(_as_float(row.get("n")) or 0)
         if n >= _MIN_CALIBRATION_N:
             validated.add(str(row.get("horizon")))
-    return validated or {"14-30d"}
+    return validated
 
 
 def _published_edge_calibration() -> Optional[List[Dict[str, Any]]]:
@@ -894,18 +897,24 @@ def _calculate_lead_days(close_time_raw: Any, *, now: Optional[datetime] = None)
 
 
 def _classify_horizon_bucket(lead_days: Optional[float]) -> str:
-    """Classify lead days into published track-record horizon buckets."""
+    """Classify lead days into published track-record horizon buckets.
+
+    Matches track_record_live._HORIZONS, whose buckets are upper-exclusive
+    ([7,14) -> 7-14d, [14,30) -> 14-30d), so a lead of exactly 14.0 days is
+    14-30d and the sizing engine's horizon matches the record the validated
+    set was measured on.
+    """
     if lead_days is None:
         return "unknown"
     if lead_days < 1.0:
         return "<1d"
-    if lead_days <= 3.0:
+    if lead_days < 3.0:
         return "1-3d"
-    if lead_days <= 7.0:
+    if lead_days < 7.0:
         return "3-7d"
-    if lead_days <= 14.0:
+    if lead_days < 14.0:
         return "7-14d"
-    if lead_days <= 30.0:
+    if lead_days < 30.0:
         return "14-30d"
     return "30d+"
 
