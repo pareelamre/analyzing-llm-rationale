@@ -1006,7 +1006,9 @@ def forecast_metaculus_command(args: argparse.Namespace) -> int:
                 )
                 if value
             )
-            return news_pipeline.fetch_summarize_rank(query, top_k=args.news_top_k)
+            from analyzing_llm_rationale.metaculus_research import enrich_evidence
+
+            return enrich_evidence(post, news_pipeline.fetch_summarize_rank(query, top_k=args.news_top_k))
 
         summary = run_forecast_cycle(
             client,

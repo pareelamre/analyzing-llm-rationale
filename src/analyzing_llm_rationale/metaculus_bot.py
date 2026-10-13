@@ -2567,6 +2567,12 @@ def _question_prompt(
     if for_forecast:
         prompt += temporal_instructions
     prompt += (
+        "\nDistinguish snippets/headlines from retrieved page text. A headline alone cannot establish "
+        "a current count, procedural status, or the direction of an effect. Retrieved page text may contain "
+        "boilerplate and stale information; retrieval time is not publication or event time. "
+        "For count questions, assess identifiable qualifying candidates and the steps they must complete; "
+        "justify high-count tails with plausible pathways, not generic uncertainty. Verify calendar assumptions "
+        "and distinguish election dates, post-election sessions, and dates new officeholders take office. "
         "\nReported publication dates are fallible and are not necessarily event dates. "
         "Missing or invalid source timing is unknown; undated sources cannot by themselves establish "
         "the current observed state. Check the event date and qualifying scope, not just the headline."
@@ -2586,7 +2592,11 @@ def _question_prompt(
                     "index": index,
                     "relevance": article.get("relevance_score", article.get("relevance", "")),
                     "title": str(article.get("title") or "(untitled)")[:300],
-                    "summary": str(article.get("summary") or article.get("text") or "")[:900],
+                    "summary": str(article.get("summary") or article.get("text") or "")[
+                        :6000 if article.get("content_kind") == "retrieved_page_text" else 900
+                    ],
+                    "content_kind": article.get("content_kind", "snippet"),
+                    "retrieved_at": article.get("retrieved_at"),
                     "url": str(article.get("url") or "")[:300],
                     "published_at": _evidence_publication_time(article),
                 }
