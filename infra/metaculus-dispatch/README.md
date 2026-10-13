@@ -18,6 +18,12 @@ Structured logs distinguish `dispatched`, `skipped`, and `failure`. A dispatch
 receipt means GitHub accepted the request, not that a forecast was submitted.
 Inspect GitHub's four job results and verified bot audit histories separately.
 
+The native workerd contract test validates request construction and the timer
+handler without making network writes. Workers currently accepts `manual` or
+`follow` redirect modes, not Node's `error` mode. We use `manual` and reject any
+status other than the expected 200/204; credentials never follow redirects.
+Failure stages are bounded labels, not upstream error messages or bodies.
+
 Run `npm ci` then `npm test` here. CLI is pinned in the lockfile.
 Use Node 22.18+ (Node 24 recommended) and
 `npx cf workers versions create --dry-run` to validate packaging.

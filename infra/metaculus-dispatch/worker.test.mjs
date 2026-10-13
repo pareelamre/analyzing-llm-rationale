@@ -19,7 +19,7 @@ test('idle workflow dispatches fixed main submit target after every active-state
   assert.deepEqual(f.calls.slice(0, 5).map(c => new URL(c.url).searchParams.get('status')), active);
   for (const { url, options } of f.calls) {
     assert.equal(new URL(url).origin, 'https://api.github.com');
-    assert.equal(options.redirect, 'error');
+    assert.equal(options.redirect, 'manual');
     assert.equal(options.headers.Authorization, `Bearer ${token}`);
     assert.ok(options.signal instanceof AbortSignal);
   }

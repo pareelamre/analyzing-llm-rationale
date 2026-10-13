@@ -53,7 +53,9 @@ jobs:
       - name: Test
         run: python -m unittest discover -s tests
       - name: Test independent Metaculus trigger
-        run: node --test infra/metaculus-dispatch/worker.test.mjs
+        run: |
+          npm ci --prefix infra/metaculus-dispatch --ignore-scripts
+          npm test --prefix infra/metaculus-dispatch
       - name: Verify autonomous twin release contracts
         run: python scripts/verify_twin_release.py
 
