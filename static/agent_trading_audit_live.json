@@ -47440,6 +47440,100 @@
     ],
     "gpt-oss-120b": [
       {
+        "action_id": "2c407a5f-4292-4960-9786-3bd575092a7a",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 13.569038631122687,
+            "marketable": true,
+            "observed_ask": 0.7,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.7,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 7489.91665,
+            "cash_required": 233.55779,
+            "concentration_cap": 1167.78895,
+            "cycle_id": "30m:995548",
+            "cycle_spend_after": 233.55779,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 233.55779,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2335.577901,
+            "drawdown_after": 0.227107,
+            "fee": 2.76946,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 230.78833,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 1,
+            "notional": 230.78833,
+            "open_markets_after": 3,
+            "per_cycle_spend_limit": 1557.051934,
+            "reasons": [
+              "insufficient_profile_edge"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.107626,
+            "eligible": true,
+            "horizon": "7-14d",
+            "horizon_validated": true,
+            "kelly_fraction": 0.0,
+            "lead_days": 13.6,
+            "market_shrinkage": 0.1,
+            "max_position_fraction": 0.03,
+            "mode": "scaled_edge",
+            "reason": null,
+            "target_notional": 233.55779,
+            "target_quantity": 329.6976144582722
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995548",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 233.55779,
+          "fee": 2.76946,
+          "netting_payout": 0.0,
+          "notional": 230.78833,
+          "price": 0.7,
+          "quantity": 329.6976144582722,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-benjamin-netanyahu-be-the-next-prime-minister-of-israel"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "fe2526d6966f29dc30e3a6282d9b12c84079e37d10a2cbce5bfde496dea0f3a7",
+        "recorded_at": "2026-10-14T14:19:35.151172+00:00"
+      },
+      {
         "action_id": "4762c62f-1791-4207-9999-ebe9058eaa4a",
         "agent_id": "gpt-oss-120b",
         "audit": {
@@ -118630,7 +118724,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-14T12:22:11.096477+00:00",
+  "generated_at": "2026-10-14T14:26:10.921144+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
