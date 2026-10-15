@@ -651,7 +651,7 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "production reached research_pending; worker readiness, stale-lease recovery, terminal research degradation, and Cloud Tasks retry signaling are ready for protected review",
+      "substep": "local research-completion restart recovery and receipt quarantine verified; production forward collection remains paused under the no-new-cloud-spend constraint",
       "branch": "codex/twin-readiness-recovery",
       "commit": "2a4fe53bf",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/644",
@@ -768,7 +768,11 @@
         "2026-10-13 historical report replay from 2026-09-12-runtime-audit.json (exit 0: G1 blocked, G2 collecting; historical evidence only)",
         "2026-10-13 PYTHONPATH=src py -m unittest discover -s tests (exit 0: 2755 tests in 367.873s; 12 skipped; local only)",
         "2026-10-13 py -m ruff check src tests (exit 0)",
-        "2026-10-13 git diff --check and AQG construction checker (exit 0; documentation-only increment)"
+        "2026-10-13 git diff --check and AQG construction checker (exit 0; documentation-only increment)",
+        "2026-10-15 local saved-completion restart, corrupt-receipt, size-limit, lost-continuation, stale-fence and research-lease regressions (pass; SQL-backed where durable state matters)",
+        "2026-10-15 PYTHONPATH=src py -m unittest discover -s tests (exit 0; local only)",
+        "2026-10-15 py -m ruff check src tests, git diff --check, Graphify AST update, AQG construction checker and audit adjudication validator (exit 0)",
+        "2026-10-15 deep review aud_vzdOFgln4Y (partial panel; two usable reviews, findings adjudicated and accepted fixes applied locally)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -801,7 +805,7 @@
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated.",
         "2026-10-13 owner cost constraint: new cloud deployment/dispatch and a running forward collector are not authorized; continue offline verification. Existing evidence has not been refreshed from cloud services."
       ],
-      "handoff": "Continue locally under the 2026-10-13 no-new-cloud-spend constraint. Use immutable existing evidence and offline fault regressions; prepare remaining GCS audit consumer migration safely. Do not merge/deploy or start a cloud collector; verify cost envelope before any later billable operation."
+      "handoff": "The unpushed codex/twin-r2-offline-verification branch contains the local research-completion recovery fix and R2 storage boundary notes. Preserve it for review, then use a free local Datastore emulator or equivalent to validate real transaction semantics before a cost-approved deployment. Keep the cloud collector paused and live trading disabled; G1/G2 forward evidence and the owner mandate remain outstanding. Do not merge to main while the Docker workflow would trigger cloud deployment."
     },
     {
       "id": "T22",

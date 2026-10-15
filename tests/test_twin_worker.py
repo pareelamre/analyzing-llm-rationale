@@ -1,6 +1,10 @@
 import json
+import os
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from unittest.mock import patch
 
 from google.api_core.exceptions import AlreadyExists
 
@@ -421,6 +425,297 @@ class TwinWorkerTests(unittest.TestCase):
             {"status": "degraded", "reason": "research_result_identity_mismatch"},
         )
         self.assertEqual(jobs.get("research").status, WorkerJobStatus.DEGRADED)
+
+    def test_saved_research_completion_recovers_after_finalizer_failure(self):
+        from analyzing_llm_rationale import datastore_sql
+        from analyzing_llm_rationale.twin.worker import (
+            DatastoreResearchCompletionStore,
+            DatastoreWorkerJobs,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, {"FORESEA_DATASTORE_BACKEND": "sql"},
+        ):
+            path = str(Path(tmp) / "jobs.sqlite3")
+            client = datastore_sql.Client(path=path)
+            try:
+                jobs = DatastoreWorkerJobs(client)
+                jobs.add(job(
+                    "research", kind=WorkerJobKind.RESEARCH,
+                    deadline=NOW + timedelta(minutes=5),
+                ))
+                stored = DatastoreResearchCompletionStore(client)
+                finalizations = []
+                model_calls = []
+
+                def finalize(_assignment, completion):
+                    finalizations.append((
+                        completion.result_payload, completion.actual_usd,
+                        completion.actual_tokens,
+                    ))
+                    if len(finalizations) == 1:
+                        raise TimeoutError("injected failure after durable receipt")
+                    return ResearchCompletion(
+                        "completed", research_result_id="result-001",
+                        usage_record_id="usage-001",
+                    )
+
+                def research(_assignment):
+                    model_calls.append(1)
+                    return ResearchCompletion(
+                        "completed", result_payload={"schema_version": 1},
+                        actual_usd="0", actual_tokens=12,
+                    )
+
+                gateway = MaintenanceResearchJobGateway(
+                    jobs, authorize_assignment=lambda _assignment: None,
+                    finalize_result=finalize, completion_store=stored,
+                )
+                worker = TwinResearchWorker(gateway, worker_id="research-worker")
+                with self.assertRaisesRegex(TimeoutError, "durable receipt"):
+                    worker.handle("research", now=NOW, research=research)
+                self.assertEqual(jobs.get("research").status, WorkerJobStatus.RUNNING)
+                saved_assignment = ResearchAssignment.from_job(jobs.get("research"))
+                self.assertEqual(stored.get("research").actual_tokens, 12)
+                with self.assertRaisesRegex(WorkerDegraded, "too_large"):
+                    DatastoreResearchCompletionStore(
+                        client, max_payload_bytes=1,
+                    ).record(saved_assignment, ResearchCompletion(
+                        "completed", result_payload={"schema_version": 1},
+                        actual_usd="0", actual_tokens=12,
+                    ))
+                with self.assertRaisesRegex(WorkerJobError, "conflicts"):
+                    stored.record(
+                        saved_assignment, ResearchCompletion(
+                            "completed", result_payload={"schema_version": 1},
+                            actual_usd="0", actual_tokens=13,
+                        ),
+                    )
+
+                client.close()
+                client = datastore_sql.Client(path=path)
+                jobs = DatastoreWorkerJobs(client)
+
+                recovered = MaintenanceResearchJobGateway(
+                    jobs,
+                    authorize_assignment=lambda _assignment: self.fail(
+                        "a saved completion must not claim another model budget"
+                    ),
+                    finalize_result=finalize,
+                    completion_store=DatastoreResearchCompletionStore(client),
+                )
+                replay = TwinResearchWorker(recovered, worker_id="restart-worker")
+                result = replay.handle(
+                    "research", now=NOW + timedelta(seconds=126), research=research,
+                )
+                self.assertEqual(result["research_result_id"], "result-001")
+                self.assertEqual(len(model_calls), 1)
+                self.assertEqual(finalizations, [
+                    ({"schema_version": 1}, "0", 12),
+                    ({"schema_version": 1}, "0", 12),
+                ])
+                self.assertEqual(jobs.get("research").status, WorkerJobStatus.COMPLETED)
+                self.assertIsNone(
+                    DatastoreResearchCompletionStore(client).get("research"),
+                )
+            finally:
+                client.close()
+
+    def test_stale_research_completion_does_not_run_finalizer(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job("research", kind=WorkerJobKind.RESEARCH))
+        first = jobs.claim("research", worker_id="old-worker", now=NOW)
+        jobs.claim("research", worker_id="new-worker", now=NOW + timedelta(seconds=31))
+        finalized = []
+        gateway = MaintenanceResearchJobGateway(
+            jobs, authorize_assignment=lambda _: None,
+            finalize_result=lambda _assignment, result: finalized.append(1) or result,
+        )
+        with self.assertRaisesRegex(WorkerJobError, "stale assignment"):
+            gateway.complete(
+                ResearchAssignment.from_job(first),
+                ResearchCompletion(
+                    "completed", research_result_id="result-001",
+                    usage_record_id="usage-001",
+                ),
+                now=NOW + timedelta(seconds=31),
+            )
+        self.assertEqual(finalized, [])
+
+    def test_research_lease_outlasts_private_request_timeout(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job(
+            "research", kind=WorkerJobKind.RESEARCH,
+            deadline=NOW + timedelta(minutes=5),
+        ))
+        gateway = MaintenanceResearchJobGateway(
+            jobs, authorize_assignment=lambda _: None,
+        )
+        self.assertIsNotNone(gateway.claim(
+            "research", worker_id="first", now=NOW,
+        ))
+        self.assertIsNone(gateway.claim(
+            "research", worker_id="second", now=NOW + timedelta(seconds=31),
+        ))
+        self.assertIsNotNone(gateway.claim(
+            "research", worker_id="third", now=NOW + timedelta(seconds=126),
+        ))
+
+    def test_corrupt_saved_completion_degrades_without_another_model_call(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job("research", kind=WorkerJobKind.RESEARCH))
+        degraded = []
+
+        class CorruptCompletionStore:
+            def get(self, _job_id):
+                raise WorkerJobError("durable research completion is malformed")
+
+            def record(self, _assignment, _completion):
+                raise AssertionError("corrupt receipt must not be overwritten")
+
+            def discard(self, _job_id):
+                return None
+
+        def finalize(_assignment, completion):
+            degraded.append((completion.status, completion.reason))
+            return completion
+
+        gateway = MaintenanceResearchJobGateway(
+            jobs,
+            authorize_assignment=lambda _: self.fail("must not claim budget"),
+            finalize_result=finalize,
+            completion_store=CorruptCompletionStore(),
+        )
+        worker = TwinResearchWorker(gateway, worker_id="research-worker")
+        result = worker.handle(
+            "research", now=NOW,
+            research=lambda _: self.fail("must not call model"),
+        )
+        self.assertEqual(result, {
+            "status": "degraded", "reason": "research_completion_unreadable",
+        })
+        self.assertEqual(degraded, [("degraded", "research_completion_unreadable")])
+        self.assertEqual(jobs.get("research").status, WorkerJobStatus.DEGRADED)
+
+    def test_corrupt_durable_completion_is_quarantined_after_degradation(self):
+        from analyzing_llm_rationale import datastore_sql
+        from analyzing_llm_rationale.twin.worker import (
+            DatastoreResearchCompletionStore,
+            DatastoreWorkerJobs,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, {"FORESEA_DATASTORE_BACKEND": "sql"},
+        ):
+            client = datastore_sql.Client(path=str(Path(tmp) / "jobs.sqlite3"))
+            try:
+                jobs = DatastoreWorkerJobs(client)
+                jobs.add(job(
+                    "research", kind=WorkerJobKind.RESEARCH,
+                    deadline=NOW + timedelta(minutes=5),
+                ))
+                first = jobs.claim(
+                    "research", worker_id="first", now=NOW, lease_seconds=125,
+                )
+                stored = DatastoreResearchCompletionStore(client)
+                stored.record(
+                    ResearchAssignment.from_job(first),
+                    ResearchCompletion(
+                        "completed", result_payload={"schema_version": 1},
+                        actual_usd="0", actual_tokens=12,
+                    ),
+                )
+                entity = client.get(stored._key("research"))
+                entity["payload_sha256"] = "corrupted"
+                client.put(entity)
+                gateway = MaintenanceResearchJobGateway(
+                    jobs, authorize_assignment=lambda _: self.fail(
+                        "corrupt receipt must not claim model budget"
+                    ),
+                    finalize_result=lambda _assignment, completion: completion,
+                    completion_store=stored,
+                )
+                replay = TwinResearchWorker(gateway, worker_id="second")
+                result = replay.handle(
+                    "research", now=NOW + timedelta(seconds=126),
+                    research=lambda _: self.fail("must not call model"),
+                )
+                self.assertEqual(result["reason"], "research_completion_unreadable")
+                self.assertEqual(jobs.get("research").status, WorkerJobStatus.DEGRADED)
+                self.assertIsNone(stored.get("research"))
+            finally:
+                client.close()
+
+    def test_oversized_completion_degrades_after_one_model_call(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job("research", kind=WorkerJobKind.RESEARCH))
+        model_calls = []
+        finalized = []
+
+        class OversizeCompletionStore:
+            def get(self, _job_id):
+                return None
+
+            def record(self, _assignment, _completion):
+                raise WorkerDegraded("research_completion_too_large")
+
+            def discard(self, _job_id):
+                return None
+
+        def finalize(_assignment, completion):
+            finalized.append(completion.status)
+            return completion
+
+        worker = TwinResearchWorker(
+            MaintenanceResearchJobGateway(
+                jobs, authorize_assignment=lambda _: None,
+                finalize_result=finalize,
+                completion_store=OversizeCompletionStore(),
+            ),
+            worker_id="research-worker",
+        )
+        result = worker.handle(
+            "research", now=NOW,
+            research=lambda _: model_calls.append(1) or ResearchCompletion(
+                "completed", result_payload={"schema_version": 1},
+                actual_usd="0", actual_tokens=12,
+            ),
+        )
+        self.assertEqual(result, {
+            "status": "degraded", "reason": "research_completion_too_large",
+        })
+        self.assertEqual(len(model_calls), 1)
+        self.assertEqual(finalized, ["degraded"])
+
+    def test_completed_research_retries_lost_continuation_dispatch(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(job("research", kind=WorkerJobKind.RESEARCH))
+        dispatches = []
+
+        def after_complete(_assignment, _job):
+            dispatches.append(1)
+            if len(dispatches) == 1:
+                raise TimeoutError("lost continuation acknowledgement")
+
+        gateway = MaintenanceResearchJobGateway(
+            jobs, authorize_assignment=lambda _: None,
+            after_complete=after_complete,
+        )
+        worker = TwinResearchWorker(gateway, worker_id="research-worker")
+        def research(_assignment):
+            return ResearchCompletion(
+                "completed", research_result_id="result-001",
+                usage_record_id="usage-001",
+            )
+        with self.assertRaisesRegex(TimeoutError, "continuation acknowledgement"):
+            worker.handle("research", now=NOW, research=research)
+        self.assertEqual(jobs.get("research").status, WorkerJobStatus.COMPLETED)
+        self.assertEqual(
+            worker.handle("research", now=NOW + timedelta(seconds=1), research=research),
+            {"status": "completed", "research_result_id": "result-001",
+             "usage_record_id": "usage-001"},
+        )
+        self.assertEqual(len(dispatches), 2)
 
     def test_safe_reads_retry_only_within_the_configured_budget(self):
         attempts, sleeps = [], []

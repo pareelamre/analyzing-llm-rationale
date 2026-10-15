@@ -87,6 +87,7 @@ from .strategy import (
     load_strategy_policy,
 )
 from .worker import (
+    DatastoreResearchCompletionStore,
     DatastoreWorkerJobs,
     MaintenanceResearchJobGateway,
     ResearchAssignment,
@@ -1106,6 +1107,7 @@ def create_environment_app():
         budget = DatastoreResearchBudget(client)
         captures = DatastoreResearchCaptureStore(client)
         results = DatastoreResearchResultStore(client)
+        completion_store = DatastoreResearchCompletionStore(client)
         strategy_store = DatastoreStrategyStore(client)
         account_snapshot_store = DatastoreAccountSnapshotStore(client)
         twin_store = DatastoreTwinStore(client)
@@ -1215,6 +1217,7 @@ def create_environment_app():
         gateway = MaintenanceResearchJobGateway(
             jobs, authorize_assignment=authorize, capture_loader=load_capture,
             authorize_repair=authorize_repair, finalize_result=finalize_result,
+            completion_store=completion_store,
             after_complete=lambda assignment, _completed: (
                 dispatcher.enqueue(continuation)
                 if (continuation := stage_continuation(assignment)) is not None
