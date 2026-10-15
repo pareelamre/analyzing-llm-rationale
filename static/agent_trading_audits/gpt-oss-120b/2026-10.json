@@ -6979,6 +6979,192 @@
       "outcome": "rejected",
       "record_hash": "a09ee4813a55616538b027283d0ca96ecf3f74b4561aac66afe29e9d316b86c0",
       "recorded_at": "2026-10-15T04:16:56.239647+00:00"
+    },
+    {
+      "action_id": "642f4739-db28-4ce9-b63f-10850ea10aeb",
+      "agent_id": "gpt-oss-120b",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "lead_days": 16.32022324480324,
+          "marketable": true,
+          "observed_ask": 0.07,
+          "observed_bid": 0.06,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.07,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": false,
+          "blocked_category": null,
+          "cash_before": 7489.91665,
+          "cash_required": 115.259292,
+          "concentration_cap": 1168.148354,
+          "cycle_id": "30m:995600",
+          "cycle_spend_after": 115.259292,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 115.259292,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2336.296708,
+          "drawdown_after": 0.227243,
+          "fee": 4.13387,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 111.125422,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 1,
+          "notional": 111.125422,
+          "open_markets_after": 3,
+          "per_cycle_spend_limit": 1557.531139,
+          "reasons": [
+            "edge_beyond_credible_range"
+          ],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.172374,
+          "eligible": true,
+          "horizon": "14-30d",
+          "horizon_validated": true,
+          "kelly_fraction": 0.25,
+          "lead_days": 16.3,
+          "market_shrinkage": 0.425,
+          "max_position_fraction": 0.03,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 115.252938,
+          "target_quantity": 1587.5060285816471
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995600",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 115.259292,
+        "fee": 4.13387,
+        "netting_payout": 0.0,
+        "notional": 111.125422,
+        "price": 0.07,
+        "quantity": 1587.5060285816471,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "will-the-los-angeles-dodgers-win-the-2026-world-series"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "b509165d8625ac2988466481e0504593224cb01b8820f710f37a8e8cbe322d6c",
+      "recorded_at": "2026-10-15T16:13:52.804866+00:00"
+    },
+    {
+      "action_id": "6710d6d9-5d52-4f31-bce0-2fa2c9e371c5",
+      "agent_id": "gpt-oss-120b",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_assumed_full",
+          "filled_quantity": 295.254624
+        },
+        "quote": {
+          "lead_days": 16.320181301747684,
+          "marketable": true,
+          "observed_ask": 0.07,
+          "observed_bid": 0.06,
+          "source": "live_venue_quote",
+          "spread": 0.01,
+          "spread_status": "checked",
+          "status": "shadow_filled_at_market"
+        },
+        "requested_order": {
+          "price": 0.07,
+          "quantity": null
+        },
+        "risk": {
+          "allowed": true,
+          "blocked_category": null,
+          "cash_before": 7489.91665,
+          "cash_required": 21.436664,
+          "concentration_cap": 1168.148354,
+          "cycle_id": "30m:995600",
+          "cycle_spend_after": 21.436664,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 21.436664,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2336.296708,
+          "drawdown_after": 0.226908,
+          "fee": 0.76884,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 20.667824,
+          "max_credible_edge": 0.1,
+          "max_drawdown_limit": 0.5,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 1,
+          "notional": 20.667824,
+          "open_markets_after": 3,
+          "per_cycle_spend_limit": 1557.531139,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.022374,
+          "eligible": true,
+          "horizon": "14-30d",
+          "horizon_validated": true,
+          "kelly_fraction": 0.25,
+          "lead_days": 16.3,
+          "market_shrinkage": 0.425,
+          "max_position_fraction": 0.03,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 21.435486,
+          "target_quantity": 295.25462401510504
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:995600",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": -21.436663681057354,
+        "cash_required": 21.436663681057354,
+        "fee": 0.76884,
+        "netting_payout": 0.0,
+        "notional": 20.667823681057353,
+        "price": 0.07,
+        "quantity": 295.25462401510504,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "polymarket",
+        "side": "yes",
+        "ticker": "will-the-los-angeles-dodgers-win-the-2026-world-series"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "ab9c20eff31746ba0d75d6f51f6960216517de2f66f2c9138b90afe818f2158a",
+      "recorded_at": "2026-10-15T16:13:56.414941+00:00"
     }
   ],
   "month": "2026-10",
