@@ -84,6 +84,14 @@ Tasks T01, T04, T14-T15 and T20 require a separate focused review pass. Use the 
 
 ## Stop conditions
 
+The owner's 2026-10-13 instruction in [NO_NEW_CLOUD_SPEND.md](NO_NEW_CLOUD_SPEND.md)
+requires local-first progress without increased cloud billing. Do not create
+buckets, deploy workers, dispatch cloud jobs, run paid provider probes, or merge
+changes that trigger cloud deployment under the earlier deployment instruction.
+Use fake providers, local evidence files and local emulators. Verify usage and
+obtain a concrete owner-approved cost envelope before any later billable runtime
+work. Existing Cloudflare buckets are not proof of a zero-cost entitlement.
+
 Stop a dependent step when a financial invariant fails, durable storage is absent for live mode, account identity is uncertain, venue eligibility is unverified, a submission cannot be reconciled, or live authority is missing. Record the exact blocker and continue only work that cannot weaken that boundary. These conditions do not prevent completing offline code, test fixtures, documentation or a shadow deployment.
 
 No recurring automation is created by this plan. If the owner later authorizes running the forward trial, use a bounded runtime report rather than keeping a coding model continuously active to poll it.
