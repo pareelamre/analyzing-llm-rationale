@@ -50764,6 +50764,36 @@
     ],
     "gpt-oss-120b": [
       {
+        "action_id": "2c60f551-2a07-4ed0-8ad4-84f4d6f1fb39",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:995632",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 295.25462401510504,
+          "realized_pnl": -20.667823681057353,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-the-los-angeles-dodgers-win-the-2026-world-series"
+        },
+        "mode": "shadow",
+        "outcome": "no",
+        "record_hash": "49321a28f478ff2d5ba730d82fd34ec8fcf6da0c3d9749acaacc8c9865de8044",
+        "recorded_at": "2026-10-16T08:13:57.884333+00:00"
+      },
+      {
         "action_id": "f25ad4ba-e9ca-426e-bfc7-7cf022952280",
         "agent_id": "gpt-oss-120b",
         "audit": {
@@ -75799,6 +75829,100 @@
       }
     ],
     "llama-3.3-70b-instruct": [
+      {
+        "action_id": "60256f44-3916-4c2a-a722-d74a9355c78a",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 399.86268226199076,
+            "marketable": true,
+            "observed_ask": 0.1,
+            "observed_bid": 0.09,
+            "source": "live_venue_quote",
+            "spread": 0.01,
+            "spread_status": "checked",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.91,
+            "quantity": "100"
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 6799.017407,
+            "cash_required": 94.487906,
+            "concentration_cap": 1159.412014,
+            "cycle_id": "30m:995632",
+            "cycle_spend_after": 94.487906,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 94.487906,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2318.824028,
+            "drawdown_after": 0.206148,
+            "fee": 5.599942,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 88.887964,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 88.887964,
+            "open_markets_after": 2,
+            "per_cycle_spend_limit": 1545.882685,
+            "reasons": [
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.9,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": 399.9,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 94.487906,
+            "target_quantity": 888.8796435572738
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995632",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 94.487906,
+          "fee": 5.599942,
+          "netting_payout": 0.0,
+          "notional": 88.887964,
+          "price": 0.1,
+          "quantity": 888.8796435572738,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXTHCLEGALSALE3MG-FED-26NOV16"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "992fbd1ae952f71f4bc2faa2393d28e644f9d86449f94c9e9a3ee4205e5dda5a",
+        "recorded_at": "2026-10-16T08:16:44.290963+00:00"
+      },
       {
         "action_id": "50e99a21-0e71-4c70-a36f-498dec023d1e",
         "agent_id": "llama-3.3-70b-instruct",
@@ -124012,7 +124136,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-16T06:22:23.940519+00:00",
+  "generated_at": "2026-10-16T08:22:25.842094+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
