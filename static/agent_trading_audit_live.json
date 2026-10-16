@@ -76049,6 +76049,100 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "273bb8be-17b2-4b5d-a52d-81bc944027a7",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 18.61104649341435,
+            "marketable": true,
+            "observed_ask": 0.1,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.1,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 6799.017407,
+            "cash_required": 116.08368,
+            "concentration_cap": 1158.33848,
+            "cycle_id": "30m:995644",
+            "cycle_spend_after": 116.08368,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 116.08368,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2316.67696,
+            "drawdown_after": 0.205991,
+            "fee": 4.0338,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 112.04988,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 112.04988,
+            "open_markets_after": 2,
+            "per_cycle_spend_limit": 1544.451307,
+            "reasons": [
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.9,
+            "eligible": true,
+            "horizon": "14-30d",
+            "horizon_validated": true,
+            "kelly_fraction": 0.25,
+            "lead_days": 18.6,
+            "market_shrinkage": 0.425,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 116.083676,
+            "target_quantity": 1120.498799183306
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995644",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 116.08368,
+          "fee": 4.0338,
+          "netting_payout": 0.0,
+          "notional": 112.04988,
+          "price": 0.1,
+          "quantity": 1120.498799183306,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-the-democratic-party-control-the-house-after-the-2026-midterm-elections"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "fd119ec19784e974e313c1df33de2b7bf5671999b43fc2cc53a71917ea0ac945",
+        "recorded_at": "2026-10-16T14:19:05.697498+00:00"
+      },
+      {
         "action_id": "2bd534b0-1755-4158-b0b7-20ac2072736f",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -109124,6 +109218,87 @@
     ],
     "qwen3-8-27b": [
       {
+        "action_id": "72f13bc3-5ce1-422f-9b19-56720394bfb6",
+        "agent_id": "qwen3-8-27b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 329.753103
+          },
+          "quote": {
+            "lead_days": 12.566889431041666,
+            "marketable": true,
+            "observed_ask": 0.14,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.14,
+            "quantity": 329.8
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 8315.282978,
+            "cash_required": 0.0,
+            "concentration_cap": 1437.127995,
+            "cycle_id": "30m:995644",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2874.255991,
+            "drawdown_after": 0.075318,
+            "fee": 1.58809,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 3,
+            "notional": 46.165434,
+            "open_markets_after": 4,
+            "per_cycle_spend_limit": 1916.170661,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995644",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 281.99957876658993,
+          "cash_required": 0.0,
+          "fee": 1.58809,
+          "netting_payout": 329.75310321696503,
+          "notional": 46.16543445037511,
+          "price": 0.14,
+          "quantity": 329.75310321696503,
+          "realized_pnl": 163.28846160848252,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-there-be-no-change-in-fed-interest-rates-after-the-october-2026-meeting-20260617190324031"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "38dadba81800417268ce81398b1e65a880a2aaae2c80d070f96a775a81761188",
+        "recorded_at": "2026-10-16T14:22:40.845678+00:00"
+      },
+      {
         "action_id": "f7d6e6bc-282d-4621-9728-3c67dfe05f72",
         "agent_id": "qwen3-8-27b",
         "audit": {
@@ -124449,7 +124624,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-16T12:27:00.315903+00:00",
+  "generated_at": "2026-10-16T14:24:46.452845+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
