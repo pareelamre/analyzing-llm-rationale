@@ -2,6 +2,36 @@
   "audits": {
     "deepseek-v4-flash": [
       {
+        "action_id": "c9ccb2c7-d7e6-4ace-a8d6-db3d61bfcd08",
+        "agent_id": "deepseek-v4-flash",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:995640",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 3.0,
+          "realized_pnl": -0.45,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXHIGHNY-26OCT15-B64.5"
+        },
+        "mode": "shadow",
+        "outcome": "yes",
+        "record_hash": "57cbeeb334f3f6704bc1a69ca5d5ada19517db32143058ac3874f09e8492b554",
+        "recorded_at": "2026-10-16T12:03:37.057670+00:00"
+      },
+      {
         "action_id": "a7c3b332-a59b-47d2-af25-344a121a7019",
         "agent_id": "deepseek-v4-flash",
         "audit": {
@@ -30627,6 +30657,100 @@
     ],
     "glm-5-3": [
       {
+        "action_id": "53070ae1-19ea-44a2-befb-41bcec6dfbfb",
+        "agent_id": "glm-5-3",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 76.69486151899306,
+            "marketable": true,
+            "observed_ask": 0.78,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.78,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 9498.178636,
+            "cash_required": 301.054608,
+            "concentration_cap": 1505.265388,
+            "cycle_id": "30m:995640",
+            "cycle_spend_after": 301.054608,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 602.37149,
+            "daily_risk_before": 301.316882,
+            "daily_risk_limit": 3010.530776,
+            "drawdown_after": 0.003033,
+            "fee": 2.62617,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 791.114088,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 3,
+            "notional": 298.428438,
+            "open_markets_after": 2,
+            "per_cycle_spend_limit": 2007.020517,
+            "reasons": [
+              "cluster_concentration_limit"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.22,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": 76.7,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 301.053078,
+            "target_quantity": 382.60056121889534
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995640",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 301.054608,
+          "fee": 2.62617,
+          "netting_payout": 0.0,
+          "notional": 298.428438,
+          "price": 0.78,
+          "quantity": 382.60056121889534,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "95e31544e1ef49a2a84e5d5ff6745868f5600cee6bdb5ef41f90e30da04cb683",
+        "recorded_at": "2026-10-16T12:18:24.034698+00:00"
+      },
+      {
         "action_id": "8b9bed81-90bd-4ea1-8df1-7480ba61dcc5",
         "agent_id": "glm-5-3",
         "audit": {
@@ -50763,6 +50887,101 @@
       }
     ],
     "gpt-oss-120b": [
+      {
+        "action_id": "fde21915-b9e5-4a90-8e57-883a7b33cd7d",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "lead_days": 76.69213054258101,
+            "marketable": true,
+            "observed_ask": 0.85,
+            "observed_bid": 0.73,
+            "source": "live_venue_quote",
+            "spread": 0.12,
+            "spread_status": "checked",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.85,
+            "quantity": 0.85
+          },
+          "risk": {
+            "allowed": false,
+            "blocked_category": null,
+            "cash_before": 7468.479986,
+            "cash_required": 211.081975,
+            "concentration_cap": 1164.932854,
+            "cycle_id": "30m:995640",
+            "cycle_spend_after": 211.081975,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 232.518639,
+            "daily_risk_before": 21.436664,
+            "daily_risk_limit": 2329.865709,
+            "drawdown_after": 0.229091,
+            "fee": 1.25894,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 209.823035,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 1,
+            "notional": 209.823035,
+            "open_markets_after": 3,
+            "per_cycle_spend_limit": 1553.243806,
+            "reasons": [
+              "profile_price_ceiling_exceeded",
+              "edge_beyond_credible_range"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.04189,
+            "eligible": true,
+            "horizon": "30d+",
+            "horizon_validated": false,
+            "kelly_fraction": 0.25,
+            "lead_days": 76.7,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.03,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 211.081974,
+            "target_quantity": 246.8506299157501
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995640",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 211.081975,
+          "fee": 1.25894,
+          "netting_payout": 0.0,
+          "notional": 209.823035,
+          "price": 0.85,
+          "quantity": 246.8506299157501,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "will-an-artwork-sell-for-150-million-by-december-31"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "2b9b2ca4f3aea5c6ec8ab7c4ba5bf96613c79af66c6e460e239063d4cc321d38",
+        "recorded_at": "2026-10-16T12:22:20.000960+00:00"
+      },
       {
         "action_id": "2c60f551-2a07-4ed0-8ad4-84f4d6f1fb39",
         "agent_id": "gpt-oss-120b",
@@ -124230,7 +124449,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-16T10:23:28.486757+00:00",
+  "generated_at": "2026-10-16T12:27:00.315903+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
