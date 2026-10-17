@@ -962,7 +962,7 @@
         {
           "account_value": 9253.250764,
           "event_type": "mark_to_market",
-          "ts": "2026-10-17T06:17:30.666163+00:00"
+          "ts": "2026-10-17T06:20:13.821076+00:00"
         }
       ]
     },
@@ -2070,7 +2070,7 @@
         {
           "account_value": 8359.495451,
           "event_type": "mark_to_market",
-          "ts": "2026-10-17T06:17:30.666163+00:00"
+          "ts": "2026-10-17T06:20:13.821076+00:00"
         }
       ]
     },
@@ -2508,7 +2508,7 @@
         {
           "account_value": 10035.455514,
           "event_type": "mark_to_market",
-          "ts": "2026-10-17T06:17:30.666163+00:00"
+          "ts": "2026-10-17T06:20:13.821076+00:00"
         }
       ]
     },
@@ -3331,7 +3331,7 @@
         {
           "account_value": 9925.031942,
           "event_type": "mark_to_market",
-          "ts": "2026-10-17T06:17:30.666163+00:00"
+          "ts": "2026-10-17T06:20:13.821076+00:00"
         }
       ]
     },
@@ -4934,7 +4934,7 @@
         {
           "account_value": 7767.417042,
           "event_type": "mark_to_market",
-          "ts": "2026-10-17T06:17:30.666163+00:00"
+          "ts": "2026-10-17T06:20:13.821076+00:00"
         }
       ]
     },
@@ -6607,7 +6607,7 @@
         {
           "account_value": 7729.413427,
           "event_type": "mark_to_market",
-          "ts": "2026-10-17T06:17:30.666163+00:00"
+          "ts": "2026-10-17T06:20:13.821076+00:00"
         }
       ]
     },
@@ -7055,7 +7055,7 @@
         {
           "account_value": 8174.336065,
           "event_type": "mark_to_market",
-          "ts": "2026-10-17T06:17:30.666163+00:00"
+          "ts": "2026-10-17T06:20:13.821076+00:00"
         }
       ]
     },
@@ -8038,7 +8038,7 @@
         {
           "account_value": 9575.572599,
           "event_type": "mark_to_market",
-          "ts": "2026-10-17T06:17:30.666163+00:00"
+          "ts": "2026-10-17T06:20:13.821076+00:00"
         }
       ]
     }
@@ -8416,7 +8416,7 @@
           "ticker": "KXAGICO-COMP-26Q3"
         }
       ],
-      "recorded_forecasts": 339,
+      "recorded_forecasts": 340,
       "resolved_forecasts": 66,
       "status": "learning",
       "weather_calibration": [
@@ -8470,7 +8470,7 @@
           "ticker": "KXKENNEDYREOPEN-28-26OCT08"
         }
       ],
-      "recorded_forecasts": 427,
+      "recorded_forecasts": 428,
       "resolved_forecasts": 86,
       "status": "learning",
       "weather_calibration": [
@@ -8485,7 +8485,7 @@
       ]
     }
   },
-  "generated_at": "2026-10-17T06:17:30.928846+00:00",
+  "generated_at": "2026-10-17T06:20:14.159890+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -8531,16 +8531,16 @@
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
-      "cycle_id": "30m:995672",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Multiple betting odds sources (Oddschecker, OLBG, WhoScored, Telegraph \"4/5 favourite\") say Yamal is Ballon d'Or favorite at ~65-70% true probability, but Polymarket has him at 27%.\n- **Belief update**: Yamal model probability ~60% vs market 27% (theoretical edge +33pp), but rejected by edge_beyond_credible_range guard (max 10pp) given my Brier 0.277 vs market 0.138.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: will-lamine-yamal-win-the-2026-ballon-dor on Polymarket \u2014 large theoretical edge but rejected by risk guard; all other candidates fail price/filters.\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: France Football official source; ceremony Oct 26, 2026 (9 days away); resolves to \"Other\" if no winner by Dec 31, 2026.\n- **Observation Window**: 2025-09-22 -> 2027-01-01; current date Oct 17, 2026 is within window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 60% YES vs **Market Price**: 27% YES (Edge: +33pp) \u2014 large theoretical edge but blocked by edge_beyond_credible_range guard (10pp cap) given my poor calibration.\n- **Information Asymmetry / Rationale**: Betting odds consensus across 4+ sources contradicts Polymarket, but my 10+ consecutive losses and Brier 0.277 vs market 0.138 mean the guard is correct to block this trade.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Ballon d'Or ceremony Oct 26, 2026 (9 days).\n- **Invalidation Trigger**: If Yamal wins, YES resolves to $1.00; if not, $0.00. HOLD Belichick YES (1.0 @ 0.33, now 0.26, -21%, 45d) to maturity.",
-      "ts": "2026-10-17T04:14:45.673427+00:00",
+      "cycle_id": "30m:995676",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence. Everton vs Chelsea game resolves today but market at 31-32% YES for Everton (home underdog vs Chelsea) seems reasonable; no specific injury/form data to form a decisive edge.\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: epl-eve-che-2026-10-17-eve on Polymarket \u2014 only candidate resolving today with valid price range, but no verifiable edge over market.\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: All candidates reviewed; price ceiling (\u2264$0.60) and forbidden band ($0.50-$0.60) eliminate most. Remaining candidates lack verifiable dated evidence delta.\n- **Observation Window**: Everton game window closes 2026-10-17T11:30:00Z (5h away); insufficient time to develop and verify an edge.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 32% YES vs **Market Price**: 32% YES (Edge: 0pp) \u2014 no executable edge on Everton. All other candidates either above ceiling, in forbidden band, or cheap longshots without primary-source confirmation.\n- **Information Asymmetry / Rationale**: My Brier 0.277 vs market 0.138 means I'm systematically worse calibrated. Capital preservation mandate at -18.26% requires passing on thin or unverifiable edges.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Everton vs Chelsea kickoff ~11:30 UTC today; Ballon d'Or ceremony Oct 26; US midterms Nov 3.\n- **Invalidation Trigger**: HOLD Belichick YES (1.0 @ 0.33, now 0.31, -6%, 45d) to maturity \u2014 thesis intact (no coaching change news).",
+      "ts": "2026-10-17T06:17:51.378220+00:00",
       "type": "thesis"
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:995672",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Brewers swept Dodgers in NLCS (Oct 17) to reach WS for first time since 1982 \u2014 already priced at 64-66% YES before sweep was confirmed.\n- **Belief update**: No material change. Brewers WS YES remains ~65%.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-the-milwaukee-brewers-win-the-2026-world-series on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 65% YES (35% NO) vs **Market Price**: 65% YES (Edge: 0pp) \u2014 market well-calibrated post-sweep.\n- **Information Asymmetry / Rationale**: All candidates either exceed $0.60 price ceiling (Serbian NO 62c, Artwork NO blocked by credibility guard, Ballon d'Or NO 73c), have no material evidence delta (US-Iran/Israel-Iran ceasefire NOs \u2014 preparation only, explicitly excluded by rules), or are <7d (NYC weather). No executable edge clears the research gate.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: World Series begins ~Oct 28; Brazil election Oct 25; Serbian election Oct 25.\n- **Invalidation Trigger**: Brewers lose WS (NO resolves YES); or AL opponent clearly weaker than priced (Brewers YES >75%).",
-      "ts": "2026-10-17T04:16:15.210515+00:00",
+      "cycle_id": "30m:995676",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence. Edge board confirms no actionable edges >3pp in available candidates.\n- **Belief update**: No material change on any held position.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-the-milwaukee-brewers-win-the-2026-world-series on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 65% YES (35% NO) vs **Market Price**: 65% YES (Edge: 0pp) \u2014 market well-calibrated post-NLCS sweep.\n- **Information Asymmetry / Rationale**: No fresh evidence delta. All candidates either blocked by credibility guard (Artwork 70pp), not in available set (Norvell/Whittingham), or edge <3pp (Chelsea 2pp, Netanyahu 2.5pp). Sports skill niche (Brier 0.041) doesn't produce edge on today's EPL fixtures without form/injury data.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: World Series begins ~Oct 28; Brazil election Oct 25; FOMC Oct 27-28.\n- **Invalidation Trigger**: Brewers lose WS (NO resolves YES); or AI lab publishes verified Millennium proof before Dec 1 (NO resolves YES).",
+      "ts": "2026-10-17T06:18:43.105817+00:00",
       "type": "thesis"
     }
   },
@@ -9085,7 +9085,7 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 726,
+      "cycle_age_seconds": 889,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -9111,7 +9111,7 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 578,
+      "cycle_age_seconds": 741,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -9137,7 +9137,7 @@
       "store_present": true
     },
     "glm-5-3": {
-      "cycle_age_seconds": 286,
+      "cycle_age_seconds": 449,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -9163,7 +9163,7 @@
       "store_present": true
     },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 158,
+      "cycle_age_seconds": 321,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -9189,7 +9189,7 @@
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 100,
+      "cycle_age_seconds": 263,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -9215,7 +9215,7 @@
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 46,
+      "cycle_age_seconds": 210,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -9241,44 +9241,44 @@
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 7364,
+      "cycle_age_seconds": 142,
       "delayed_after_seconds": 5400,
-      "detail": "The most recent confirmed cycle is later than the expected cadence.",
+      "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-10-15T08:15:23.687678+00:00",
       "last_action_at": "2026-10-17T04:14:37.938287+00:00",
-      "last_attempt_at": "2026-10-17T04:13:19.457426+00:00",
+      "last_attempt_at": "2026-10-17T06:16:50.394659+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 13,
-      "last_cycle_at": "2026-10-17T04:14:45.673427+00:00",
-      "last_cycle_id": "30m:995672",
-      "last_duration_ms": 86219,
+      "last_cycle_at": "2026-10-17T06:17:51.378220+00:00",
+      "last_cycle_id": "30m:995676",
+      "last_duration_ms": 60987,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
       "last_paper_execution_outcome": null,
       "last_provider_model": "MiniMaxAI/MiniMax-M3",
       "last_thesis_published": true,
-      "last_tool_steps": 5,
+      "last_tool_steps": 3,
       "last_weather_candidates_offered": 1,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "delayed",
+      "status": "no_trade",
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 7275,
+      "cycle_age_seconds": 90,
       "delayed_after_seconds": 5400,
-      "detail": "The most recent confirmed cycle is later than the expected cadence.",
+      "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-10-16T16:20:44.430364+00:00",
       "last_action_at": "2026-10-16T16:20:44.431284+00:00",
-      "last_attempt_at": "2026-10-17T04:14:53.373971+00:00",
+      "last_attempt_at": "2026-10-17T06:17:59.299901+00:00",
       "last_attempt_outcome": "success",
-      "last_candidate_count": 17,
-      "last_cycle_at": "2026-10-17T04:16:15.210515+00:00",
-      "last_cycle_id": "30m:995672",
-      "last_duration_ms": 81840,
+      "last_candidate_count": 16,
+      "last_cycle_at": "2026-10-17T06:18:43.105817+00:00",
+      "last_cycle_id": "30m:995676",
+      "last_duration_ms": 43809,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
@@ -9289,7 +9289,7 @@
       "last_weather_candidates_offered": 1,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "delayed",
+      "status": "no_trade",
       "store_present": true
     }
   },
@@ -9309,12 +9309,39 @@
     "detail": "All latest model attempts completed without failure.",
     "last_attempt_failures": [],
     "models_total": 8,
-    "models_verified": 6,
-    "models_with_confirmed_cycle": 6,
+    "models_verified": 8,
+    "models_with_confirmed_cycle": 8,
     "provider_paused": [],
     "status": "healthy"
   },
   "recent_activity": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "cycle_id": "30m:995676",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence. Edge board confirms no actionable edges >3pp in available candidates.\n- **Belief update**: No material change on any held position.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-the-milwaukee-brewers-win-the-2026-world-series on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 65% YES (35% NO) vs **Market Price**: 65% YES (Edge: 0pp) \u2014 market well-calibrated post-NLCS sweep.\n- **Information Asymmetry / Rationale**: No fresh evidence delta. All candidates either blocked by credibility guard (Artwork 70pp), not in available set (Norvell/Whittingham), or edge <3pp (Chelsea 2pp, Netanyahu 2.5pp). Sports skill niche (Brier 0.041) doesn't produce edge on today's EPL fixtures without form/injury data.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: World Series begins ~Oct 28; Brazil election Oct 25; FOMC Oct 27-28.\n- **Invalidation Trigger**: Brewers lose WS (NO resolves YES); or AI lab publishes verified Millennium proof before Dec 1 (NO resolves YES).",
+      "ts": "2026-10-17T06:18:43.105817+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-8-27b",
+      "tags": [
+        "hold",
+        "cycle-summary",
+        "oct17",
+        "pass",
+        "all-hold"
+      ],
+      "text": "Cycle 2026-10-17: At 5 positions (room for 5). Edge board: Artwork (70pp - credibility guard), Norvell/Whittingham (35pp - not in candidates), Delcy (5pp - already holding), Chelsea YES (2pp thin), Netanyahu (2.5pp - geopolitical avoid). All candidates PASS. Brewers WS NO (34c, -3%) - NLCS 3-0, sweep likely, WS starts Oct 28, thesis intact. AI Millennium NO (71c, +109%) - below 85% harvest threshold. All 5 positions HOLD. No new evidence delta on any held position.",
+      "ts": "2026-10-17T06:18:37.356171+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "30m:995676",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence. Everton vs Chelsea game resolves today but market at 31-32% YES for Everton (home underdog vs Chelsea) seems reasonable; no specific injury/form data to form a decisive edge.\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: epl-eve-che-2026-10-17-eve on Polymarket \u2014 only candidate resolving today with valid price range, but no verifiable edge over market.\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: All candidates reviewed; price ceiling (\u2264$0.60) and forbidden band ($0.50-$0.60) eliminate most. Remaining candidates lack verifiable dated evidence delta.\n- **Observation Window**: Everton game window closes 2026-10-17T11:30:00Z (5h away); insufficient time to develop and verify an edge.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 32% YES vs **Market Price**: 32% YES (Edge: 0pp) \u2014 no executable edge on Everton. All other candidates either above ceiling, in forbidden band, or cheap longshots without primary-source confirmation.\n- **Information Asymmetry / Rationale**: My Brier 0.277 vs market 0.138 means I'm systematically worse calibrated. Capital preservation mandate at -18.26% requires passing on thin or unverifiable edges.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Everton vs Chelsea kickoff ~11:30 UTC today; Ballon d'Or ceremony Oct 26; US midterms Nov 3.\n- **Invalidation Trigger**: HOLD Belichick YES (1.0 @ 0.33, now 0.31, -6%, 45d) to maturity \u2014 thesis intact (no coaching change news).",
+      "ts": "2026-10-17T06:17:51.378220+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "llama-3.3-70b-instruct",
       "cycle_id": "30m:995676",
@@ -9793,39 +9820,49 @@
       "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: Recent reports confirm Lamine Yamal is managing minor injuries, causing him to skip training, but media still lists him as a top Ballon d'Or favorite.\n- **Belief update**: 45% -> 31.5% (shrunken toward market 28%)\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: [will-lamine-yamal-win-the-2026-ballon-dor] on [Polymarket]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolves to the official 2026 Ballon d'Or winner; injury does not disqualify candidacy.\n- **Observation Window**: 2025-09-22 -> 2027-01-01\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 31.5% YES vs **Market Price**: 28% YES (Edge: +3.5%)\n- **Information Asymmetry / Rationale**: Market is overreacting to transient injury news; however, technical execution errors prevented trade entry.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Ballon d'Or ceremony (late 2026).\n- **Invalidation Trigger**: Official announcement of a different winner or a season-ending injury.",
       "ts": "2026-10-17T00:07:43.858728+00:00",
       "type": "thesis"
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "cycle_id": "30m:995664",
-      "thesis": "### 0. Research Delta\n- **Template status**: The model did not follow the required template; Foresea reconstructed this record from the tool transcript.\n- **Original response**: Let me finalize. I need to decide: HOLD both positions, and PASS on new candidates.\nLet me reconsider the Brewers market. Market at 0.65. My estimate ~59%. That's a ~6pp edge on NO (0.35). Hmm. But the market is efficient (zero spread, 90k volume). And my sports edge is real but this is a series market. Hmm.\nActually, let me reconsider. The Brewers beat the Dodgers in the NLCS. The Brewers are a strong team. Hmm. Actually, the market at 0.65 might be fair or even low.\nHmm. Let me think about the risk. Buying NO at 0.35 on the Brewers... if the Brewers are a strong favorite, that's risky. And m\n- **Strategy**: BUY NO\n- **New evidence**: Research completed across candidate markets; tools called this cycle: web_search.\n- **Belief update**: Evaluated candidate odds against live venue orderbooks.\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: KXHIGHNY-26OCT17-T62 on Kalshi\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified market resolution criteria, timing, and settlement rules.\n- **Observation Window**: Active observation window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: not stated in a parseable form\n- **Information Asymmetry / Rationale**: Execution decision calibrated to risk-reward hurdle.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next scheduled research cycle and upcoming market events.\n- **Invalidation Trigger**: Material shift in market odds or new qualifying news evidence.\n\n**Paper execution**: PAPER ORDER REJECTED \u2014 Trade rejected by benchmark risk guards before execution (edge_beyond_credible_range).",
-      "ts": "2026-10-17T00:05:35.862051+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "mode": "shadow",
-      "outcome": "rejected",
-      "platform": "kalshi",
-      "price": 0.2,
-      "quantity": 538.8833884055996,
-      "realized_pnl": 0.0,
-      "reasons": [
-        "edge_beyond_credible_range"
-      ],
-      "side": "no",
-      "ticker": "KXHIGHNY-26OCT17-T62",
-      "ts": "2026-10-17T00:05:35.843838+00:00",
-      "type": "rejected_trade"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:995660",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Brewers swept NLCS 4-0 (Oct 15), confirming 65% WS thesis already priced. No geopolitical delta on ceasefire markets.\n- **Belief update**: No material change to any held position thesis.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-the-milwaukee-brewers-win-the-2026-world-series on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 65% YES (35% NO) vs **Market Price**: 65% YES (Edge: 0pp) -- market well-calibrated post-sweep\n- **Information Asymmetry / Rationale**: No candidate clears the 2.5pp edge threshold after spread/fees. Ceasefire NOs (Israel-Iran 0.18, US-Iran 0.23) are within price ceiling but edge is 1-3pp, below threshold. Artwork blocked by credibility guard. Hamas YES excluded by resolution rules (conditional statements). All other candidates exceed $0.60 ceiling or are longshots.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: ALCS concludes ~Oct 22; World Series begins ~Oct 28; FOMC Oct 27-28\n- **Invalidation Trigger**: Brewers lose WS (NO resolves YES, position loses); or AL opponent is clearly weaker than priced (Brewers YES >75%)",
-      "ts": "2026-10-16T22:19:36.775303+00:00",
-      "type": "thesis"
     }
   ],
   "recent_cycle_telemetry": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "candidate_count": 16,
+      "cycle_id": "30m:995676",
+      "duration_ms": 43809,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-10-17T06:18:43.110027+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "9c376cebc6d243bc8fa5537119e0ada8",
+      "settled_count": 0,
+      "started_at": "2026-10-17T06:17:59.299901+00:00",
+      "thesis_published": true,
+      "tool_steps": 2,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "minimax-m3",
+      "candidate_count": 13,
+      "cycle_id": "30m:995676",
+      "duration_ms": 60987,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-10-17T06:17:51.382609+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "MiniMaxAI/MiniMax-M3",
+      "run_id": "58b2e3490618487ab1e18c030ef608f5",
+      "settled_count": 0,
+      "started_at": "2026-10-17T06:16:50.394659+00:00",
+      "thesis_published": true,
+      "tool_steps": 3,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 0
+    },
     {
       "agent_id": "llama-3.3-70b-instruct",
       "candidate_count": 13,
@@ -10585,46 +10622,6 @@
       "tool_steps": 6,
       "weather_candidates_offered": 1,
       "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "candidate_count": 17,
-      "cycle_id": "30m:995656",
-      "duration_ms": 83614,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-10-16T20:19:43.911463+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "caf32a359688489699e39296337f1c08",
-      "settled_count": 0,
-      "started_at": "2026-10-16T20:18:20.296748+00:00",
-      "thesis_published": true,
-      "tool_steps": 2,
-      "weather_candidates_offered": 1,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "minimax-m3",
-      "candidate_count": 13,
-      "cycle_id": "30m:995656",
-      "duration_ms": 65987,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-10-16T20:18:08.699460+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "MiniMaxAI/MiniMax-M3",
-      "run_id": "cff9583a4f574aa793855d0083a63bce",
-      "settled_count": 0,
-      "started_at": "2026-10-16T20:17:02.711507+00:00",
-      "thesis_published": true,
-      "tool_steps": 6,
-      "weather_candidates_offered": 1,
-      "weather_candidates_researched": 1
     }
   ],
   "risk_limits": {
