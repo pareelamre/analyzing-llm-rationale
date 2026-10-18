@@ -1,0 +1,100 @@
+{
+  "summary": {
+    "any_indicator": {
+      "article_record_hits": 1276,
+      "question_hits": 626,
+      "statement_hits": 1339
+    },
+    "denominators": {
+      "article_records": 4327,
+      "article_records_without_statements": 76,
+      "questions": 1580,
+      "questions_with_articles": 1008,
+      "questions_without_articles": 572,
+      "statements": 5651
+    },
+    "indicators": {
+      "duration_horizon_with_claim_cue": {
+        "article_record_hits": 4,
+        "question_hits": 4,
+        "statement_hits": 4
+      },
+      "support_cue_absent_from_claim": {
+        "article_record_hits": 1188,
+        "question_hits": 611,
+        "statement_hits": 1241
+      },
+      "unspecified_horizon_with_claim_cue": {
+        "article_record_hits": 119,
+        "question_hits": 107,
+        "statement_hits": 121
+      }
+    }
+  },
+  "limitations": [
+    "Hypothesis-driven exploratory lexical census, informed by previously read cases.",
+    "Not semantic error rates, sensitivity/specificity, human agreement or a significance test.",
+    "No historical availability, question-version, unknown-outcome or forecasting-performance verification.",
+    "Empty FRS and no-hit records are not semantic passes; no record is promoted or excluded."
+  ],
+  "human_review": "SKIPPED_BY_USER",
+  "detector_specification": {
+    "canonicalization": "casefold matched text, then collapse all whitespace to one ASCII space",
+    "claim_fields": [
+      "predicted_future_event",
+      "rationale",
+      "conditions[*]",
+      "modality.primary_expression",
+      "modality.expressions[*]"
+    ],
+    "cue_regex": "\\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|tomorrow|tonight|next\\s+week|next\\s+month|next\\s+year|this\\s+week|this\\s+month|this\\s+year)\\b",
+    "duration_grammar": "Digits with optional dot-plus-digits fraction; optional whitespace and ASCII/en dash; fixed unit; stripped fullmatch. Excludes .5, 1., signs, prefixes, suffixes and spelled-out numbers.",
+    "duration_regex": "[0-9]+(?:\\.[0-9]+)?\\s*[-–]?\\s*(?:hours?|days?|weeks?|months?|years?)",
+    "horizon_field": "time_horizon",
+    "interpretation": "Exploratory candidate lexical indicators only; not semantic failures or historical/outcome verification.",
+    "matching": "Scan fields separately; offsets are Python character offsets within the named field. Never join fields.",
+    "previously_seen_identities": [
+      [
+        31771,
+        4
+      ],
+      [
+        35557,
+        0
+      ],
+      [
+        38639,
+        1
+      ],
+      [
+        39684,
+        4
+      ],
+      [
+        39712,
+        8
+      ],
+      [
+        39965,
+        5
+      ],
+      [
+        40283,
+        4
+      ],
+      [
+        40933,
+        3
+      ]
+    ],
+    "regex_flags": "re.IGNORECASE; Python Unicode word boundaries",
+    "rules": {
+      "duration_horizon_with_claim_cue": "stripped duration fullmatch AND a claim cue exists",
+      "support_cue_absent_from_claim": "at least one support cue canonical key absent from all claim and horizon cue keys",
+      "unspecified_horizon_with_claim_cue": "stripped casefolded horizon == unspecified AND a claim cue exists"
+    },
+    "support_fields": "support_quotes[*].quote"
+  },
+  "schema": "public_temporal_placement_summary_v1",
+  "full_private_report_sha256": "0c576bae6551d3279cc58967b2243f4e5eb3facac9d1b68e61cade913c9f966b"
+}

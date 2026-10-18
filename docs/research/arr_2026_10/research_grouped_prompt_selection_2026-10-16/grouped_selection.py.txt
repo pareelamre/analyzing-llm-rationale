@@ -1,0 +1,212 @@
+"""One frozen exact-title-grouped reanalysis of stored prompt forecasts."""
+from __future__ import annotations
+
+import argparse
+import csv
+import hashlib
+import json
+import random
+import sys
+import types
+from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+from statistics import fmean
+
+HERE = Path(__file__).resolve().parent
+DATA_ROOT = Path(r"C:\Users\paree\.codex\worktrees\research-prompt-selection\Foresea")
+SOURCE_PATH = DATA_ROOT / "scripts/prompt_selection_analysis.py"
+SOURCE_SHA = "471352c73fd85c565201ca866549f529daadd579d29d9df8349a3e8083d9a531"
+REFERENCE = HERE.parent / "comment_followup_manifest.json"
+REFERENCE_SHA = "fb507013fd330a9d6c05a406b5026646ecb053935a30cb40d08dae004e1ce908"
+PRIOR = HERE.parent / "research_prompt_selection_2026-10-16/report-verified.json"
+PRIOR_SHA = "a59b6b030d2515156c0abc430d6243654be90a03a43b463c751ceab2fd225748"
+
+
+def digest(payload):
+    return hashlib.sha256(payload).hexdigest()
+
+
+def load_helper(source_path=SOURCE_PATH, expected_sha256=SOURCE_SHA):
+    payload = Path(source_path).read_bytes()
+    if digest(payload) != expected_sha256:
+        raise ValueError("Pinned helper SHA256 mismatch")
+    module = types.ModuleType("pinned_prompt_selection")
+    module.__file__ = str(source_path)
+    exec(compile(payload, str(source_path), "exec"), module.__dict__)
+    module.source_bytes = payload
+    return module
+
+
+def assign_group_folds(titles, n_folds=5, seed=42):
+    if (type(n_folds) is not int or n_folds < 2 or type(seed) is not int
+            or any(type(q) is not int or not isinstance(t, str) or not t for q, t in titles.items())):
+        raise ValueError("Integer IDs/seed, nonempty raw titles and at least two folds required")
+    groups = defaultdict(list)
+    for q, title in titles.items():
+        groups[title].append(q)
+    if len(groups) < n_folds:
+        raise ValueError("Fewer unique titles than folds")
+    ordered = sorted(groups)
+    random.Random(seed).shuffle(ordered)
+    ordered.sort(key=lambda t: -len(groups[t]))
+    loads, folds = [0] * n_folds, {}
+    for title in ordered:
+        fold = min(range(n_folds), key=lambda k: (loads[k], k))
+        folds.update({q: fold for q in groups[title]})
+        loads[fold] += len(groups[title])
+    return folds
+
+
+def strict_evaluate(helper, probabilities, targets, titles, folds, baseline):
+    ids = set(targets)
+    if set(titles) != ids or set(folds) != ids or any(set(p) != ids for p in probabilities.values()):
+        raise ValueError("Every variant, title and fold must preserve the complete benchmark cohort")
+    groups = defaultdict(set)
+    for q in ids:
+        groups[titles[q]].add(folds[q])
+    if any(len(group) != 1 for group in groups.values()):
+        raise ValueError("An exact title spans folds")
+    old = helper.evaluate(probabilities, targets, folds, baseline)
+    result = {k: old[k] for k in ("common_n", "baseline_brier", "selected_brier",
+                                  "selected_minus_baseline", "fold_selections", "predictions")}
+    for prediction in result["predictions"]:
+        del prediction["ensemble_probability"]
+    for selection in result["fold_selections"]:
+        train = sorted(q for q in ids if folds[q] != selection["fold"])
+        test = sorted(ids-set(train))
+        selection.update({"train_ids_sha256": digest(json.dumps(train).encode()),
+                          "test_ids_sha256": digest(json.dumps(test).encode()),
+                          "train_title_n": len({titles[q] for q in train}),
+                          "test_title_n": len({titles[q] for q in test}),
+                          "training_brier": {v: fmean((p[q]-targets[q])**2 for q in train)
+                                             for v, p in sorted(probabilities.items())}})
+    return result
+
+
+def percentile(values, fraction):
+    values = sorted(values)
+    position = (len(values)-1)*fraction
+    low = int(position)
+    high = min(low+1, len(values)-1)
+    return values[low]+(values[high]-values[low])*(position-low)
+
+
+def paired_summary(predictions, titles, samples=2000):
+    groups = defaultdict(list)
+    for row in predictions:
+        baseline = (row["baseline_probability"]-row["target"])**2
+        selected = (row["selected_probability"]-row["target"])**2
+        groups[titles[row["question_id"]]].append((baseline, selected))
+    ordered = sorted(groups)
+    counts = [len(groups[t]) for t in ordered]
+    deltas = [sum(s-b for b, s in groups[t]) for t in ordered]
+    means = [d/n for d, n in zip(deltas, counts)]
+    rng, question_draws, title_draws = random.Random(42), [], []
+    for _ in range(samples):
+        draw = rng.choices(range(len(ordered)), k=len(ordered))
+        question_draws.append(sum(deltas[i] for i in draw)/sum(counts[i] for i in draw))
+        title_draws.append(fmean(means[i] for i in draw))
+    return {"question_weighted_delta": sum(deltas)/sum(counts),
+            "title_weighted_baseline_brier": fmean(fmean(b for b, _ in groups[t]) for t in ordered),
+            "title_weighted_selected_brier": fmean(fmean(s for _, s in groups[t]) for t in ordered),
+            "title_weighted_delta": fmean(means),
+            "question_weighted_interval": [percentile(question_draws, p) for p in (0.025, 0.975)],
+            "title_weighted_interval": [percentile(title_draws, p) for p in (0.025, 0.975)]}
+
+
+def build_report():
+    helper = load_helper()
+    reference_bytes, prior_bytes = REFERENCE.read_bytes(), PRIOR.read_bytes()
+    if digest(reference_bytes) != REFERENCE_SHA or digest(prior_bytes) != PRIOR_SHA:
+        raise ValueError("Pinned reference/prior report SHA256 mismatch")
+    reference = json.loads(reference_bytes.decode("utf-8-sig"), object_pairs_hook=helper.unique_keys)
+    prior = json.loads(prior_bytes.decode("utf-8-sig"), object_pairs_hook=helper.unique_keys)
+    hashes = reference["input_sha256"]
+    dataset = helper.read_verified(DATA_ROOT, helper.BENCHMARK, hashes)
+    targets, titles = {}, {}
+    for row in dataset:
+        q, answer, title = row.get("id"), str(row.get("answer")).strip().lower(), row.get("question")
+        if type(q) is not int or q in targets or answer not in {"yes", "no"}:
+            raise ValueError("Benchmark requires unique integer IDs and binary labels")
+        targets[q], titles[q] = int(answer == "yes"), title
+    if len(targets) != 1580 or any(set(c["common_question_ids"]) != set(targets) for c in prior["conditions"]):
+        raise ValueError("Expected original 1,580 common IDs in every condition")
+    folds = assign_group_folds(titles)
+    inputs, conditions = {helper.BENCHMARK: hashes[helper.BENCHMARK]}, []
+    for model, temperature in helper.MODEL_TEMPERATURE.items():
+        raw, baseline = {}, None
+        for variant in range(9):
+            prefix = f"results/{model}/temperature_{temperature}/results_variant{variant}_"
+            names = [p for p in hashes if p.startswith(prefix) and p.endswith(".json")
+                     and "/" not in p[len(prefix):]]
+            if len(names) != 1:
+                raise ValueError("Expected exactly one original T=0 input per model/variant")
+            relative = names[0]
+            rows = helper.read_verified(DATA_ROOT, relative, hashes)
+            if not isinstance(rows, list):
+                raise ValueError("Forecast input must be a list")
+            name = Path(relative).stem.removeprefix("results_")
+            raw[name] = rows
+            if variant == 0:
+                baseline = name
+            inputs[relative] = hashes[relative]
+        for reading in ("selected", "direct"):
+            probabilities = {v: helper.score_rows(rows, targets, reading) for v, rows in raw.items()}
+            result = strict_evaluate(helper, probabilities, targets, titles, folds, baseline)
+            conditions.append({"model": model, "reading": reading, **result,
+                               **paired_summary(result["predictions"], titles)})
+    groups = [{"title": title, "title_sha256": digest(title.encode()),
+               "ids": sorted(q for q in titles if titles[q] == title),
+               "fold": folds[next(q for q in titles if titles[q] == title)]}
+              for title in sorted(set(titles.values()))]
+    report = {"schema": "exact_title_grouped_prompt_selection_v1", "model_calls": 0,
+              "created_utc": datetime.now(timezone.utc).isoformat(), "python": sys.version,
+              "source_sha256": SOURCE_SHA, "reference_manifest_sha256": REFERENCE_SHA,
+              "prior_report_sha256": PRIOR_SHA, "protocol_sha256": digest((HERE/"protocol.md").read_bytes()),
+              "script_sha256": digest(Path(__file__).read_bytes()), "input_sha256": inputs,
+              "settings": {"group_key": "exact raw question title; no normalization", "folds": 5,
+                           "fold_algorithm": "sorted titles, seed42 shuffle, stable size-descending, greedy min-load/min-index",
+                           "selection": "training-question Brier minimum, variant-name tie break",
+                           "primary": "question-weighted held-out selected minus V0 Brier",
+                           "sensitivity": "equal-title-weighted same selected predictions; no refitting",
+                           "bootstrap": "2000 seed42 title-cluster draws; linear 2.5/97.5 percentiles; fixed OOF predictions"},
+              "limitations": ["exploratory six-condition family; pointwise intervals, no confirmatory pclaims",
+                              "selection not refitted in bootstrap; training dependence not fully quantified",
+                              "exact titles do not separate broader event families or time",
+                              "retrospective evidence and conditional confidence interpretations; one generation per cell"],
+              "question_folds": {str(q): folds[q] for q in sorted(folds)},
+              "title_groups": groups, "conditions": conditions}
+    return report, helper, reference_bytes
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=HERE/"outputs")
+    args = parser.parse_args()
+    output = args.output_dir.resolve()
+    if not output.is_relative_to(HERE) or output.exists():
+        raise ValueError("Output must be a new destination inside this private analysis directory")
+    report, helper, reference_bytes = build_report()
+    output.mkdir()
+    helper.write_report(output/"report.json", report)
+    (output/"pinned_prompt_selection_analysis.py").write_bytes(helper.source_bytes)
+    (output/"reference_manifest.json").write_bytes(reference_bytes)
+    with (output/"fold_map.csv").open("x", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream, lineterminator="\n")
+        writer.writerow(("question_id", "title_sha256", "fold"))
+        for group in report["title_groups"]:
+            for q in group["ids"]:
+                writer.writerow((q, group["title_sha256"], group["fold"]))
+    manifest = {"created_utc": report["created_utc"], "input_sha256": report["input_sha256"],
+                "source_sha256": {p.name: digest(p.read_bytes()) for p in
+                                  (Path(__file__), HERE/"test_grouped_selection.py", HERE/"protocol.md")},
+                "output_sha256": {p.name: digest(p.read_bytes()) for p in sorted(output.iterdir())}}
+    helper.write_report(output/"manifest.json", manifest)
+    print(json.dumps([{k: c[k] for k in ("model", "reading", "baseline_brier", "selected_brier",
+                                        "selected_minus_baseline", "question_weighted_interval",
+                                        "title_weighted_delta")} for c in report["conditions"]], indent=2))
+
+
+if __name__ == "__main__":
+    main()

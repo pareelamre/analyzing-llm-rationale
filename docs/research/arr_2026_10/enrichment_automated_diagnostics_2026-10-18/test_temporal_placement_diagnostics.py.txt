@@ -1,0 +1,219 @@
+"""Behavior contracts for the fixed exploratory lexical census."""
+
+import copy
+import hashlib
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+import temporal_placement_diagnostics as detector
+
+INDICATORS = ('unspecified_horizon_with_claim_cue', 'duration_horizon_with_claim_cue',
+              'support_cue_absent_from_claim')
+PRIVATE = 'EXCLUDED_GOLD_PREDICTION'
+
+
+def statement(horizon='unspecified', rationale='A neutral rationale', quotes=()):
+    return {'chunk_id': 0, 'start': 0, 'end': 100,
+            'predicted_future_event': 'A neutral event', 'time_horizon': horizon,
+            'conditions': [], 'rationale': rationale,
+            'modality': {'polarity': 'asserted', 'primary_expression': 'expects', 'expressions': []},
+            'support_quotes': [{'quote': q, 'start': i * 100, 'end': i * 100 + len(q),
+                                'sentence_id': f'S{i:03d}'} for i, q in enumerate(quotes)]}
+
+
+def article(statements, window='lead30', status='valid', body='Complete saved body'):
+    return {'temporal_window': window, 'frs_status': status, 'text': body,
+            'body_sha256': hashlib.sha256(body.encode()).hexdigest(),
+            'title': 'A title', 'url': 'https://invalid.example', 'source': 'saved-source',
+            'publication_bounds': ['lower', 'upper'], 'publication_metadata': [],
+            'modification_metadata': [], 'body_provenance': 'current_publisher_page',
+            'frs': {'schema': 'saved-schema', 'interpretation': 'Separate statements',
+                    'body_sha256': '0' * 64, 'statements': statements},
+            'model_prediction': PRIVATE}
+
+
+def question(qid, articles):
+    return {'id': qid, 'question': 'A question', 'description': 'A description',
+            'resolution_criteria': 'A criterion', 'created_time': 'unverified',
+            'publish_time': 'unverified', 'answer': PRIVATE, 'model_prediction': PRIVATE,
+            'news_articles': articles}
+
+
+def fixture():
+    first = statement(rationale='Monday', quotes=['Tuesday'])
+    second = statement(horizon='90 days', rationale='Friday', quotes=['Friday'])
+    return [question(1, [article([first, second]),
+                         article([statement()], 'within30', 'partial')]),
+            question(2, [article([], 'within30', 'invalid')]), question(3, [])]
+
+
+class TemporalPlacementTests(unittest.TestCase):
+    def test_exact_vocabulary_boundaries_case_whitespace_and_offsets(self):
+        text = 'MONDAY! tomorrow TONIGHT next\t\n week; THIS   MONTH; next year.'
+        found = detector.matches(text, 'rationale')
+        self.assertEqual([m['cue'] for m in found],
+                         ['monday', 'tomorrow', 'tonight', 'next week', 'this month', 'next year'])
+        self.assertEqual([m['field'] for m in found], ['rationale'] * len(found))
+        for match in found:
+            self.assertEqual(text[match['start']:match['end']], match['text'])
+        self.assertEqual(detector.matches('Mondayish xMonday Mon. yesterday January 2026 next fortnight next weekly', 'x'), [])
+        all_cues = ('Monday Tuesday Wednesday Thursday Friday Saturday Sunday tomorrow tonight '
+                    'next week next month next year this week this month this year')
+        self.assertEqual(len(detector.matches(all_cues, 'x')), 15)
+
+    def test_duration_uses_entire_digits_fraction_and_fixed_units(self):
+        positive = ['0 hours', '0.5 days', '90-day', '90–days', '90 – DAYS', '90days', ' 12 months ', '1year']
+        negative = ['in 90 days', '90 days from now', 'ninety days', '-1 days', '+1 days',
+                    '.5 days', '1. days', '1e2 days', '90-days Monday', '90 minutes', '90—days']
+        for horizon in positive + negative:
+            result = detector.analyze_statement(statement(horizon, 'Monday'))
+            self.assertEqual(INDICATORS[1] in result['indicators'], horizon in positive, horizon)
+
+    def test_unspecified_is_exact_after_strip_and_casefold(self):
+        for horizon, expected in [(' UNSPECIFIED ', True), ('not specified', False),
+                                  ('unspecified horizon', False), ('unspecified.', False)]:
+            result = detector.analyze_statement(statement(horizon, 'Wednesday'))
+            self.assertEqual(INDICATORS[0] in result['indicators'], expected)
+
+    def test_rationale_retention_and_repeated_support_only_matches(self):
+        retained = detector.analyze_statement(statement(rationale='Wednesday', quotes=['Wednesday']))
+        self.assertEqual(retained['indicators'], [INDICATORS[0]])
+        support_only = detector.analyze_statement(statement(quotes=['Monday then Monday']))
+        self.assertEqual(support_only['indicators'], [INDICATORS[2]])
+        self.assertEqual(support_only['missing_support_cues'], ['monday'])
+        self.assertEqual(len(support_only['support_cue_matches']), 2)
+        self.assertTrue(all(m['quote_index'] == 0 for m in support_only['support_cue_matches']))
+        self.assertEqual([m['field'] for m in support_only['support_cue_matches']],
+                         ['support_quotes[0].quote'] * 2)
+
+    def test_all_claim_fields_and_horizon_union_excludes_categorical_polarity(self):
+        for field in ('predicted_future_event', 'rationale', 'time_horizon', 'conditions',
+                      'primary_expression', 'expressions'):
+            item = statement(quotes=['Monday'])
+            if field in ('conditions',):
+                item[field] = ['Monday']
+            elif field == 'expressions':
+                item['modality'][field] = ['Monday']
+            elif field == 'primary_expression':
+                item['modality'][field] = 'Monday'
+            else:
+                item[field] = 'Monday'
+            self.assertNotIn(INDICATORS[2], detector.analyze_statement(item)['indicators'], field)
+        item = statement(quotes=['Monday'])
+        item['modality']['polarity'] = 'Monday'
+        self.assertEqual(detector.analyze_statement(item)['indicators'], [INDICATORS[2]])
+
+    def test_cross_field_next_week_is_not_synthesized(self):
+        item = statement(rationale='Ends with next', quotes=['next week'])
+        item['conditions'] = ['week begins another field']
+        result = detector.analyze_statement(item)
+        self.assertEqual(result['claim_cue_matches'], [])
+        self.assertEqual(result['missing_support_cues'], ['next week'])
+        self.assertEqual(result['indicators'], [INDICATORS[2]])
+
+    def test_different_cues_are_not_assumed_equivalent(self):
+        result = detector.analyze_statement(statement('next week', 'A neutral rationale', ['Monday']))
+        self.assertEqual(result['missing_support_cues'], ['monday'])
+
+    def test_one_statement_cannot_erase_another_and_overlap_is_not_summed(self):
+        data = fixture()
+        report = detector.census(data, (3, 3, 1))
+        summary = report['summary']
+        self.assertEqual(summary['denominators'],
+                         {'questions': 3, 'questions_with_articles': 2, 'questions_without_articles': 1,
+                          'article_records': 3, 'article_records_without_statements': 1, 'statements': 3})
+        self.assertEqual(summary['any_indicator'],
+                         {'statement_hits': 2, 'article_record_hits': 1, 'question_hits': 1})
+        for indicator in INDICATORS:
+            self.assertEqual(summary['indicators'][indicator],
+                             {'statement_hits': 1, 'article_record_hits': 1, 'question_hits': 1})
+        self.assertEqual([r['article_count'] for r in report['questions']], [2, 1, 0])
+        self.assertEqual(len(report['by_window_status']), 6)
+        self.assertEqual(report['records'][2]['statements'], [])
+        same_cue = question(9, [article([statement('Monday', quotes=['Monday']),
+                                        statement(quotes=['Monday'])])])
+        result = detector.census([same_cue], (1, 1, 0))
+        self.assertEqual(result['summary']['indicators'][INDICATORS[2]]['statement_hits'], 1)
+
+    def test_forbidden_trigger_fields_and_gold_do_not_affect_report(self):
+        data = fixture()
+        before = detector.census(data, (3, 3, 1))
+        for q in data:
+            q['answer'] = 'Monday next week'
+            q['model_prediction'] = 'Tuesday tonight'
+            q['question'] = q['description'] = q['resolution_criteria'] = 'Sunday tomorrow'
+            for a in q['news_articles']:
+                a['text'] = a['title'] = 'Friday next month'
+                a['model_prediction'] = 'Saturday this year'
+        self.assertEqual(before, detector.census(data, (3, 3, 1)))
+
+    def test_case_selection_sorted_first_two_deduplicates_and_omits_private_fields(self):
+        data = []
+        for qid in (5, 3, 1, 2, 4):
+            body = 'x' * (8001 if qid == 1 else 8000)
+            item = statement(rationale='Monday', quotes=['Tuesday'])
+            data.append(question(qid, [article([item], body=body)]))
+        report = detector.census(data, (5, 5, 0))
+        cases = detector.select_cases(data, report)
+        self.assertEqual([(r['qid'], r['article_index']) for r in cases['cases']], [(2, 0), (3, 0)])
+        self.assertEqual(len(cases['selected_by_indicator'][INDICATORS[0]]), 2)
+        self.assertEqual(cases['selected_by_indicator'][INDICATORS[1]], [])
+        self.assertEqual(len(cases['selected_by_indicator'][INDICATORS[2]]), 2)
+        for case in cases['cases']:
+            self.assertEqual(case['memberships'], [INDICATORS[0], INDICATORS[2]])
+            original = next(q for q in data if q['id'] == case['qid'])
+            self.assertEqual(case['text'], original['news_articles'][0]['text'])
+            self.assertEqual(case['frs'], original['news_articles'][0]['frs'])
+        self.assertNotIn(PRIVATE, json.dumps(cases))
+        self.assertNotIn('answer', json.dumps(cases))
+        altered = copy.deepcopy(data)
+        next(q for q in altered if q['id'] == 2)['description'] = 'x' * 10001
+        second_report = detector.census(altered, (5, 5, 0))
+        self.assertEqual([r['qid'] for r in detector.select_cases(altered, second_report)['cases']], [3, 4])
+
+    def test_empty_frs_never_gets_a_hit_and_unexpected_types_fail(self):
+        for mutate in (
+            lambda d: d[0].update(id=True),
+            lambda d: d[0].update(id=d[1]['id']),
+            lambda d: d[0]['news_articles'][0].update(temporal_window='other'),
+            lambda d: d[0]['news_articles'][0].update(frs_status='other'),
+            lambda d: d[0]['news_articles'][0]['frs']['statements'][0].update(rationale=None),
+            lambda d: d[0]['news_articles'][0]['frs']['statements'][0].update(conditions='Monday'),
+            lambda d: d[0]['news_articles'][0]['frs']['statements'][0].update(support_quotes=['Monday']),
+        ):
+            data = fixture()
+            mutate(data)
+            with self.assertRaises(ValueError):
+                detector.census(data, (3, 3, 1))
+        empty = detector.census([question(1, [article([])]), question(2, [])], (2, 1, 1))
+        self.assertEqual(empty['summary']['any_indicator'],
+                         {'statement_hits': 0, 'article_record_hits': 0, 'question_hits': 0})
+
+    def test_same_buffer_hash_binding_and_create_only_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            source = base / 'source.json'
+            raw = json.dumps(fixture()).encode()
+            source.write_bytes(raw)
+            protocol = b'fixed synthetic lexical protocol'
+            (base / 'PROTOCOL.md').write_bytes(protocol)
+            args = (source, base, hashlib.sha256(raw).hexdigest(), (3, 3, 1),
+                    hashlib.sha256(protocol).hexdigest())
+            with self.assertRaises(ValueError):
+                detector.run(source, base, '0' * 64, (3, 3, 1), hashlib.sha256(protocol).hexdigest())
+            self.assertFalse((base / 'report.json').exists())
+            detector.run(*args)
+            report = json.loads((base / 'report.json').read_bytes())
+            self.assertEqual(report['provenance']['source_sha256'], hashlib.sha256(raw).hexdigest())
+            self.assertIn('python_version', report['provenance'])
+            (base / 'diagnostic-case-inputs.json').write_bytes(b'edited frozen output')
+            before = {p.name: p.read_bytes() for p in base.iterdir()}
+            with self.assertRaises(FileExistsError):
+                detector.run(*args)
+            self.assertEqual(before, {p.name: p.read_bytes() for p in base.iterdir()})
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -1,0 +1,373 @@
+"""C14: hash-verified, offline Murphy accounting and question-fold calibration."""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+from collections import Counter
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import scipy
+import sklearn
+from scipy.optimize import minimize
+from scipy.special import expit
+from sklearn.isotonic import IsotonicRegression
+from sklearn.metrics import roc_auc_score
+
+MODELS = ["GPT-OSS-120B", "Qwen2.5-7b-instruct", "Qwen3-32B"]
+ZERO = dict(zip(MODELS, ["00", "000", "0"]))
+BENCHMARK = "forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json"
+SEED, N_FOLDS, N_RESAMPLES, N_BINS = 42, 5, 10000, 10
+HERE = Path(__file__).resolve().parent
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def id_sha(ids):
+    return hashlib.sha256(json.dumps(sorted(ids), separators=(",", ":")).encode()).hexdigest()
+
+
+def validate_vectors(probabilities, targets):
+    p, y = np.asarray(probabilities, dtype=float), np.asarray(targets, dtype=float)
+    if p.ndim != 1 or y.shape != p.shape or not p.size:
+        raise ValueError("Nonempty aligned one-dimensional vectors required")
+    if not np.isfinite(p).all() or not np.isfinite(y).all():
+        raise ValueError("Nonfinite probability or outcome")
+    if ((p < 0) | (p > 1)).any() or not np.isin(y, [0, 1]).all():
+        raise ValueError("Probabilities must be in [0,1] and outcomes binary")
+    return p, y
+
+
+def probability_yes(answer, confidence, reading):
+    if reading not in ["selected", "direct"] or answer not in ["yes", "no"]:
+        raise ValueError("Unknown probability reading or answer")
+    return confidence if reading == "direct" or answer == "yes" else 1-confidence
+
+
+def decomposition(probabilities, targets, n_bins=N_BINS):
+    """Exact binned identity; raw correction is within-bin variance minus 2 covariance.
+
+    Each occupied bin is represented by its empirical mean p. Moments use n,
+    not n-1. The bin outcome rate is diagnostic, never a calibrated test forecast.
+    """
+    p, y = validate_vectors(probabilities, targets)
+    if not isinstance(n_bins, int) or n_bins < 1:
+        raise ValueError("Positive integer bin count required")
+    edges = np.linspace(0, 1, n_bins+1)
+    scaled = p*n_bins
+    nearest = np.rint(scaled)
+    near_edge = np.abs(scaled-nearest) <= 8*np.finfo(float).eps*n_bins
+    scaled[near_edge] = nearest[near_edge]
+    groups = np.clip(np.floor(scaled).astype(int), 0, n_bins-1)
+    rate = y.mean()
+    reliability = resolution = variance = covariance = 0.0
+    represented = np.empty_like(p)
+    details = []
+    for group in sorted(set(groups)):
+        mask = groups == group
+        p_bar, y_bar = p[mask].mean(), y[mask].mean()
+        weight = mask.mean()
+        represented[mask] = p_bar
+        reliability += weight*(p_bar-y_bar)**2
+        resolution += weight*(y_bar-rate)**2
+        variance += weight*np.mean((p[mask]-p_bar)**2)
+        covariance += weight*np.mean((p[mask]-p_bar)*(y[mask]-y_bar))
+        details.append({"bin": int(group), "lower": edges[group], "upper": edges[group+1],
+                        "n": int(mask.sum()), "mean_probability": p_bar,
+                        "observed_yes": y_bar, "weight": weight})
+    raw, binned = float(np.mean((p-y)**2)), float(np.mean((represented-y)**2))
+    uncertainty = float(rate*(1-rate))
+    result = {"n": len(p), "observed_yes": float(rate), "raw_brier": raw,
+              "binned_brier": binned, "reliability": float(reliability),
+              "resolution": float(resolution), "uncertainty": uncertainty,
+              "within_probability_variance": float(variance),
+              "within_probability_outcome_covariance": float(covariance),
+              "raw_minus_binned": raw-binned,
+              "identity_error": raw-(reliability-resolution+uncertainty+variance-2*covariance),
+              "binned_identity_error": binned-(reliability-resolution+uncertainty)}
+    if abs(result["identity_error"]) > 1e-12 or abs(result["binned_identity_error"]) > 1e-12:
+        raise ArithmeticError("Brier accounting identity failed")
+    return result, details
+
+
+def assign_question_folds(question_ids, n_splits=N_FOLDS, seed=SEED):
+    """One deterministic, outcome-free assignment shared across all conditions."""
+    ids = sorted(set(question_ids))
+    if n_splits < 2 or len(ids) < n_splits:
+        raise ValueError("At least two nonempty folds required")
+    permutation = np.random.default_rng(seed).permutation(len(ids))
+    return {ids[position]: fold for fold, positions in enumerate(np.array_split(permutation, n_splits))
+            for position in positions}
+
+
+@dataclass
+class SigmoidCalibrator:
+    slope: float
+    intercept: float
+
+    def predict(self, probability):
+        return expit(self.slope*np.asarray(probability)+self.intercept)
+
+
+def fit_sigmoid(probabilities, targets):
+    """Platt-style sigmoid(a*p+b), raw-p score, training-only target smoothing."""
+    p, y = validate_vectors(probabilities, targets)
+    positives, negatives = y.sum(), len(y)-y.sum()
+    if not positives or not negatives:
+        raise ValueError("Sigmoid training fold must contain both outcomes")
+    smoothed = np.where(y == 1, (positives+1)/(positives+2), 1/(negatives+2))
+    x = np.column_stack([p, np.ones(len(p))])
+
+    def objective(parameters):
+        z = x @ parameters
+        return (float(np.mean(np.logaddexp(0, z)-smoothed*z)),
+                x.T @ (expit(z)-smoothed)/len(p))
+
+    initial = [0.0, float(np.log(smoothed.mean()/(1-smoothed.mean())))]
+    fitted = minimize(objective, initial, jac=True, method="L-BFGS-B",
+                      options={"maxiter": 1000, "ftol": 1e-14, "gtol": 1e-9})
+    if not fitted.success or not np.isfinite(fitted.x).all():
+        raise ArithmeticError(f"Sigmoid optimizer failed: {fitted.message}")
+    return SigmoidCalibrator(*map(float, fitted.x))
+
+
+def crossfit(probabilities, targets, question_ids, fold_map, method):
+    p, y = validate_vectors(probabilities, targets)
+    if len(question_ids) != len(p) or len(set(question_ids)) != len(p):
+        raise ValueError("Exactly one forecast per question per condition required")
+    folds = np.array([fold_map[q] for q in question_ids])
+    predictions, records = np.full_like(p, np.nan), []
+    for fold in sorted(set(fold_map.values())):
+        test = folds == fold
+        train = ~test
+        if not test.any() or not train.any():
+            raise ValueError("Empty train/test fold in condition")
+        if method == "sigmoid":
+            fitted = fit_sigmoid(p[train], y[train])
+            parameters = {"slope": fitted.slope, "intercept": fitted.intercept,
+                          "slope_sign": "negative" if fitted.slope < 0 else "positive"
+                          if fitted.slope > 0 else "zero"}
+        elif method == "isotonic":
+            fitted = IsotonicRegression(increasing=True, out_of_bounds="clip", y_min=0, y_max=1)
+            fitted.fit(p[train], y[train])
+            parameters = {"n_thresholds": len(fitted.X_thresholds_)}
+        else:
+            raise ValueError("Unknown calibration method")
+        predictions[test] = fitted.predict(p[test])
+        train_ids = [q for q, keep in zip(question_ids, train) if keep]
+        test_ids = [q for q, keep in zip(question_ids, test) if keep]
+        if set(train_ids) & set(test_ids):
+            raise ArithmeticError("Question leakage across folds")
+        records.append({"method": method, "fold": fold, "n_train": int(train.sum()),
+                        "n_test": int(test.sum()), "train_yes": int(y[train].sum()),
+                        "train_id_sha256": id_sha(train_ids), "test_id_sha256": id_sha(test_ids),
+                        **parameters})
+    validate_vectors(predictions, y)
+    return predictions, records
+
+
+def bootstrap_interval(matrix, n_resamples=N_RESAMPLES, seed=SEED):
+    """Pointwise question-bootstrap intervals conditional on the fitted OOF forecasts."""
+    values = np.asarray(matrix, dtype=float)
+    if values.ndim != 2 or not values.shape[0] or not np.isfinite(values).all():
+        raise ValueError("Nonempty finite question-by-metric matrix required")
+    rng = np.random.default_rng(seed)
+    means = np.empty((n_resamples, values.shape[1]))
+    for start in range(0, n_resamples, 25):
+        stop = min(start+25, n_resamples)
+        indices = rng.integers(0, len(values), size=(stop-start, len(values)))
+        means[start:stop] = values[indices].mean(axis=1)
+    return np.quantile(means, [0.025, 0.975], axis=0)
+
+
+def load_inputs(root, reference_path, inventory_path):
+    reference = json.loads(reference_path.read_text(encoding="utf-8-sig"))
+    hashes, inputs = reference["input_sha256"], {}
+    for path in [inventory_path, reference_path.parent/"data_analysis.py",
+                 reference_path.parent/"comment_followup.py"]:
+        expected = (reference["auxiliary_input_sha256"].get(path.name)
+                    or reference["source_sha256"].get(path.name))
+        if not expected or sha(path) != expected:
+            raise ValueError(f"Reference policy source hash mismatch: {path.name}")
+        inputs[str(path.resolve())] = expected
+    inputs[str(reference_path.resolve())] = sha(reference_path)
+    inventory = pd.read_csv(inventory_path, dtype={"temperature": str})
+    counts = {(r.model, r.temperature, int(r.variant)): int(r.n_valid)
+              for r in inventory.itertuples()}
+    if len(counts) != 162 or len(inventory) != 162:
+        raise ValueError("Expected frozen 162-cell coverage inventory")
+    benchmark = root/BENCHMARK
+    inputs[BENCHMARK] = sha(benchmark)
+    if inputs[BENCHMARK] != hashes[BENCHMARK]:
+        raise ValueError("Benchmark hash mismatch")
+    dataset = json.loads(benchmark.read_text(encoding="utf-8-sig"))
+    targets = {}
+    for row in dataset:
+        answer = str(row.get("answer", "")).strip().lower()
+        if answer not in ["yes", "no"] or row.get("id") in targets:
+            raise ValueError("Invalid/duplicate benchmark label or question ID")
+        targets[row["id"]] = int(answer == "yes")
+    if len(targets) != 1580:
+        raise ValueError("Expected 1,580 benchmark questions")
+    cells, coverage, excluded = {}, [], []
+    for model in MODELS:
+        for variant in range(9):
+            prefix = f"results/{model}/temperature_{ZERO[model]}/results_variant{variant}_"
+            matches = [key for key in hashes if re.fullmatch(re.escape(prefix)+r"[^/]+\.json", key)]
+            if len(matches) != 1:
+                raise ValueError(f"Missing/ambiguous exact archived input: {prefix}")
+            relative = matches[0]
+            path = (root/relative).resolve()
+            if not path.is_relative_to(root):
+                raise ValueError("Manifest input escapes source root")
+            inputs[relative] = sha(path)
+            if inputs[relative] != hashes[relative]:
+                raise ValueError(f"Forecast hash mismatch: {relative}")
+            rows = json.loads(path.read_text(encoding="utf-8-sig"))
+            valid, seen = {}, set()
+            for row in rows:
+                q, answer = row.get("id"), str(row.get("predicted_answer", "")).strip().lower()
+                if q not in targets or q in seen:
+                    raise ValueError(f"Unknown/duplicate forecast question ID: {relative}")
+                seen.add(q)
+                reason, raw = None, row.get("confidence")
+                if answer not in ["yes", "no"]:
+                    reason = "invalid_answer"
+                elif raw is None:
+                    reason = "missing_confidence"
+                else:
+                    try:
+                        confidence = float(raw)
+                    except (ValueError, TypeError):
+                        reason = "nonnumeric_confidence"
+                    else:
+                        if not np.isfinite(confidence) or not 0 <= confidence <= 1:
+                            reason = "nonfinite_or_out_of_range_confidence"
+                if reason:
+                    excluded.append({"model": model, "variant": variant, "id": q, "reason": reason})
+                else:
+                    valid[q] = (answer, confidence)
+            excluded.extend({"model": model, "variant": variant, "id": q, "reason": "missing_record"}
+                            for q in sorted(set(targets)-seen))
+            if len(valid) != counts[model, "00", variant]:
+                raise ValueError(f"Valid count differs from frozen inventory: {relative}")
+            cells[model, variant] = valid
+            coverage.append({"model": model, "variant": variant, "n_valid": len(valid),
+                             "n_excluded": len(targets)-len(valid), "path": relative})
+    return targets, cells, inputs, coverage, excluded
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input-root", type=Path, required=True)
+    parser.add_argument("--reference-manifest", type=Path, default=HERE.parent/"comment_followup_manifest.json")
+    parser.add_argument("--inventory", type=Path, default=HERE.parent/"data_main_inventory.csv")
+    parser.add_argument("--output-dir", type=Path, default=HERE)
+    args = parser.parse_args()
+    started = datetime.now(timezone.utc).isoformat()
+    root, out = args.input_root.resolve(), args.output_dir.resolve()
+    if out.is_relative_to(root):
+        raise ValueError("Output directory must stay outside frozen source root")
+    out.mkdir(parents=True, exist_ok=True)
+    targets, cells, inputs, coverage, excluded = load_inputs(root, args.reference_manifest, args.inventory)
+    folds = assign_question_folds(targets)
+    scores, bins, traces, prediction_rows, paired_rows = [], [], [], [], []
+    predictions = {}
+    for model in MODELS:
+        for reading in ["selected", "direct"]:
+            for variant in range(9):
+                ids = sorted(cells[model, variant])
+                y = np.array([targets[q] for q in ids])
+                p = np.array([probability_yes(*cells[model, variant][q], reading) for q in ids])
+                by_method = {"raw": p}
+                for method in ["sigmoid", "isotonic"]:
+                    by_method[method], records = crossfit(p, y, ids, folds, method)
+                    traces.extend({"model": model, "reading": reading, "variant": variant, **r}
+                                  for r in records)
+                losses = np.column_stack([(by_method[m]-y)**2 for m in by_method])
+                bounds = bootstrap_interval(np.column_stack([losses, losses[:, 1:]-losses[:, :1]]))
+                for i, (method, probability) in enumerate(by_method.items()):
+                    accounting, detail = decomposition(probability, y)
+                    row = {"model": model, "variant": variant, "reading": reading, "method": method,
+                           **accounting, "brier_ci_low": bounds[0, i], "brier_ci_high": bounds[1, i],
+                           "auc": float(roc_auc_score(y, probability)),
+                           "delta_vs_raw": float(np.mean(losses[:, i]-losses[:, 0])),
+                           "delta_ci_low": bounds[0, i+2] if i else 0,
+                           "delta_ci_high": bounds[1, i+2] if i else 0}
+                    scores.append(row)
+                    bins.extend({"model": model, "variant": variant, "reading": reading,
+                                 "method": method, **b} for b in detail)
+                    predictions[model, reading, variant, method] = dict(zip(ids, probability))
+                prediction_rows.extend({"model": model, "variant": variant, "reading": reading,
+                                        "id": q, "target": int(y[j]), "fold": folds[q],
+                                        **{m: float(v[j]) for m, v in by_method.items()}}
+                                       for j, q in enumerate(ids))
+            for variant in range(1, 9):
+                ids = sorted(set(cells[model, 0]) & set(cells[model, variant]))
+                y = np.array([targets[q] for q in ids])
+                differences, pair_metadata = [], []
+                for method in ["raw", "sigmoid", "isotonic"]:
+                    old = np.array([predictions[model, reading, 0, method][q] for q in ids])
+                    new = np.array([predictions[model, reading, variant, method][q] for q in ids])
+                    differences.append((new-y)**2-(old-y)**2)
+                    before, _ = decomposition(old, y)
+                    after, _ = decomposition(new, y)
+                    pair_metadata.append({"model": model, "reading": reading, "variant": variant,
+                                          "method": method, "n_matched": len(ids),
+                                          "v0_brier": before["raw_brier"], "variant_brier": after["raw_brier"],
+                                          **{"delta_"+k: after[k]-before[k] for k in
+                                             ["reliability", "resolution", "uncertainty", "raw_minus_binned"]}})
+                matrix = np.column_stack(differences)
+                bounds = bootstrap_interval(matrix)
+                paired_rows.extend({**r, "brier_delta": float(matrix[:, i].mean()),
+                                    "ci_low": bounds[0, i], "ci_high": bounds[1, i]}
+                                   for i, r in enumerate(pair_metadata))
+            print(f"Completed {model}, {reading}", flush=True)
+    outputs = {"calibration_scores.csv": scores, "calibration_bins.csv": bins,
+               "calibration_fit_folds.csv": traces, "variant_vs_v0.csv": paired_rows,
+               "coverage.csv": coverage, "excluded.csv": excluded,
+               "question_folds.csv": [{"id": q, "fold": folds[q]} for q in sorted(folds)]}
+    for name, rows in outputs.items():
+        columns = ["model", "variant", "id", "reason"] if name == "excluded.csv" else None
+        pd.DataFrame(rows, columns=columns).to_csv(out/name, index=False, float_format="%.16g")
+    pd.DataFrame(prediction_rows).to_csv(out/"oof_predictions.csv.gz", index=False,
+                                       float_format="%.16g", compression={"method": "gzip", "mtime": 0})
+    manifest = {"started_utc": started, "completed_utc": datetime.now(timezone.utc).isoformat(),
+                "command": sys.argv, "input_root": str(root), "input_sha256": inputs,
+                "verified_forecast_files": len(cells), "valid_forecasts": sum(map(len, cells.values())),
+                "exclusion_reasons": dict(Counter(r["reason"] for r in excluded)),
+                "settings": {"models": MODELS, "temperature": 0, "variants": list(range(9)),
+                             "probability_readings": {"selected": "confidence for YES; 1-confidence for NO",
+                                                      "direct": "confidence interpreted directly as P(YES)"},
+                             "folds": N_FOLDS, "fold_seed": SEED,
+                             "assignment": "sorted unique benchmark IDs, NumPy default_rng(42) permutation, array_split into five folds; no outcomes used",
+                             "crossfit": "one fit per method/model/variant/reading/test fold; train only valid rows in the other four folds",
+                             "sigmoid": "expit(a*p+b), raw probability score; training-count Platt target smoothing; unpenalized smoothed cross entropy; L-BFGS-B maxiter=1000 ftol=1e-14 gtol=1e-9; slope unconstrained and reported",
+                             "isotonic": "sklearn IsotonicRegression increasing=True y_min=0 y_max=1 out_of_bounds=clip; interpolation per installed sklearn",
+                             "decomposition": "10 equal-width bins, left inclusive/right exclusive, p=1 in last bin; scaled p within 8*float64_eps*n_bins of an integer edge is snapped to that edge; bin mean original p representative; empirical moments divide by n",
+                             "raw_identity": "BS_raw = REL - RES + UNC + Var_within(p) - 2Cov_within(p,y)",
+                             "bootstraps": N_RESAMPLES, "bootstrap_seed": SEED,
+                             "interval": "95% pointwise percentile question bootstrap; seed reset per condition/pair; all metric columns share draws",
+                             "interval_limitation": "conditional on fixed OOF predictions; calibrators are not refitted in bootstrap; training/fold-selection uncertainty is not fully quantified",
+                             "cohorts": "each score uses that cell's frozen valid IDs; each V/V0 delta uses matched valid IDs; calibrators train on each cell's valid training IDs",
+                             "scope": "exploratory descriptive offline diagnostics; no permutation tests, multiplicity-adjusted tests or new significance claims"},
+                "source_sha256": {p.name: sha(p) for p in
+                                  [Path(__file__), HERE/"test_calibration.py", HERE/"verify_outputs.py"]},
+                "output_sha256": {name: sha(out/name) for name in
+                                  [*outputs, "oof_predictions.csv.gz"]},
+                "environment": {"python": sys.version, "numpy": np.__version__, "pandas": pd.__version__,
+                                "scipy": scipy.__version__, "sklearn": sklearn.__version__}}
+    (out/"manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    print(f"Verified {len(cells)} forecast files; {len(scores)} method summaries saved", flush=True)
+
+
+if __name__ == "__main__":
+    main()

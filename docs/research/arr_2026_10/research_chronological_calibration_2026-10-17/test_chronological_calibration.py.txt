@@ -1,0 +1,82 @@
+"""Synthetic contracts; no performance scoring of the stored study."""
+import unittest
+
+import chronological_calibration as study
+
+
+def row(q, title, timestamp, answer="yes"):
+    return {"id": q, "question": title, "resolve_time": timestamp, "answer": answer}
+
+
+class ChronologicalTests(unittest.TestCase):
+    def test_utc_order_ties_and_exact_title_purge(self):
+        rows = [row(1, "leak", "2025-01-01T00:00:00Z"),
+                row(2, "keep", "2025-01-02T02:00:00+02:00", "no"),
+                row(3, "keep2", "2025-01-03T00:00:00Z"),
+                row(4, "tie", "2025-01-03T01:00:00+01:00", "no"),
+                row(5, "leak", "2025-01-04T00:00:00Z"),
+                row(6, " Leak", "2025-01-05T00:00:00Z")]
+        result = study.partition(rows, rank=3, min_train=2, min_test=1)
+        self.assertEqual(result["cutoff_utc"], "2025-01-03T00:00:00+00:00")
+        self.assertEqual(result["train_candidate_ids"], [1, 2, 3, 4])
+        self.assertEqual(result["train_ids"], [2, 3, 4])
+        self.assertEqual(result["heldout_ids"], [5, 6])
+        self.assertEqual(result["purged"], [{"id": 1, "reason": "exact_raw_title_in_heldout"}])
+        self.assertEqual(len(result["rows"]), len(rows))
+        self.assertEqual(result, study.partition(list(reversed(rows)), rank=3, min_train=2, min_test=1))
+
+    def test_naive_time_duplicate_ids_and_infeasible_partition_reject(self):
+        with self.assertRaises(ValueError):
+            study.utc("2025-01-01T00:00:00")
+        with self.assertRaises(ValueError):
+            study.partition([row(1, "a", "2025-01-01T00:00:00Z"),
+                             row(1, "b", "2025-01-02T00:00:00Z")], rank=1)
+        rows = [row(q, str(q), f"2025-01-0{q}T00:00:00Z") for q in range(1, 5)]
+        with self.assertRaises(ValueError):
+            study.partition(rows, rank=2, min_train=2, min_test=1)  # one training class
+
+    def test_heldout_labels_never_change_training_fit(self):
+        _, helper = study.helpers()
+        values = {1: {"raw": 0.1, "target": 0}, 2: {"raw": 0.3, "target": 1},
+                  3: {"raw": 0.7, "target": 0}, 4: {"raw": 0.9, "target": 1}}
+        fitted = study.fit(values, [1, 2], helper)
+        values[3]["target"], values[4]["target"] = 1, 0
+        other = study.fit(values, [1, 2], helper)
+        self.assertEqual(fitted.X_thresholds_.tolist(), other.X_thresholds_.tolist())
+        self.assertEqual(fitted.y_thresholds_.tolist(), other.y_thresholds_.tolist())
+        self.assertAlmostEqual(float(fitted.predict([0.2])[0]), 0.5)
+        self.assertEqual(fitted.predict([0.0, 1.0]).tolist(), [0.0, 1.0])
+
+    def test_missing_unknown_duplicate_or_invalid_input_fails_closed(self):
+        valid = [{"id": 1, "raw": 0.2, "target": 0, "fold": 0, "isotonic": 0.3},
+                 {"id": 2, "raw": 0.8, "target": 1, "fold": 1, "isotonic": 0.7}]
+        for rows in (valid[:1], valid+[valid[0]], valid+[dict(valid[0], id=3)],
+                     [dict(valid[0], raw=float("nan")), valid[1]]):
+            with self.assertRaises(ValueError):
+                study.strict_rows(rows, {1: 0, 2: 1})
+
+    def test_loss_aggregation_is_not_probability_ensembling(self):
+        predictions = []
+        for variant in range(9):
+            predictions.append({"id": 1, "variant": variant, "target": 1,
+                                "raw": float(variant % 2), "transfer": 0.5, "separate": 1.0})
+        loss = study.question_losses(predictions, [1])
+        self.assertAlmostEqual(loss[1]["raw"], 0.5)
+        self.assertAlmostEqual(loss[1]["transfer"], 0.25)
+        self.assertAlmostEqual(loss[1]["separate"], 0.0)
+        self.assertNotEqual(loss[1]["raw"], 0.25)
+        with self.assertRaises(ValueError):
+            study.question_losses(predictions[:-1], [1])
+
+    def test_cluster_weighting_known_scores(self):
+        loss = {1: {"raw": 1., "transfer": 0., "separate": 0.},
+                2: {"raw": 1., "transfer": 0., "separate": 0.},
+                3: {"raw": 1., "transfer": 1., "separate": 0.}}
+        result = study.summarize(loss, {1: "a", 2: "a", 3: "b"})
+        self.assertAlmostEqual(result["question_weighted"]["transfer_minus_raw"], -2/3)
+        self.assertAlmostEqual(result["title_weighted"]["transfer_minus_raw"], -0.5)
+        self.assertEqual(result["question_weighted"]["primary_interval"], [-1., 0.])
+
+
+if __name__ == "__main__":
+    unittest.main()

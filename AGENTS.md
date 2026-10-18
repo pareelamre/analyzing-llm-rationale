@@ -5,6 +5,26 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-18 — Completed ARR research archive (Codex)
+
+`docs/research/arr_2026_10/README.md` indexes the completed prompt-selection,
+calibration-transfer, grouped/chronological robustness and enrichment diagnostics.
+Numerical reports and historical source snapshots preserve their original bytes
+and hashes. Raw article bodies/HTML/cache dumps, private reviewer comments and
+annotation packets remain outside the public repository. Historical snapshots
+may require the original frozen input layout; the three scripts documented in
+`docs/research/` are opt-in offline tools and change no live caller.
+
+Keep both archived-confidence readings conditional. Exact source quotations are
+not semantic or historical validation; enrichment coverage is not forecast gain.
+The two fixed criterion-anchor development pools have zero matches and unchanged
+order, with no observed reranking benefit. Human review was skipped by the user.
+The 96-question criterion/timing factorial protocol is explicitly NOT RUN: no
+cohort, submission, generation or experiment results exist after reported loss
+of Capella access. Do not relabel the planned protocol as completed results or
+automatically restart old enrichment jobs. The user authorized committing and
+pushing this completed research archive to main; other worktrees stay preserved.
+
 ### 2026-10-13 — Validated horizons are significance-driven, not hardcoded (Copilot)
 
 The published track record's 7-14d horizon crossed into significance
