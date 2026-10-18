@@ -12,6 +12,7 @@ from typing import Any
 
 from opentelemetry import metrics, trace
 
+from ..config import load_yaml
 from ..forecast_ledger import ForecastLedger
 from ..observability import init_observability
 from .account_store import DatastoreAccountSnapshotStore
@@ -1071,6 +1072,30 @@ def _build_dispatcher() -> Any:
     ))
 
 
+def _twin_config_paths(repository_root: Path) -> tuple[Path, Path]:
+    """Select one operator-owned twin config bundle for both worker roles."""
+    configured = os.environ.get("FORESEA_TWIN_CONFIG_DIR")
+    if configured is None:
+        config_dir = repository_root / "configs"
+    else:
+        if not configured.strip():
+            raise ValueError("FORESEA_TWIN_CONFIG_DIR cannot be empty")
+        config_dir = Path(configured)
+        if not config_dir.is_absolute():
+            raise ValueError("FORESEA_TWIN_CONFIG_DIR must be absolute")
+    twin_path = config_dir / "twin.yaml"
+    models_path = config_dir / "models.yaml"
+    if not twin_path.is_file() or not models_path.is_file():
+        raise ValueError(f"twin config directory {config_dir} must contain twin.yaml and models.yaml")
+    if configured is not None:
+        owner = load_yaml(twin_path)
+        baseline = load_yaml(repository_root / "configs" / "twin.yaml")
+        for section in ("strategy", "shadow_trial", "replay"):
+            if owner.get(section) != baseline.get(section):
+                raise ValueError(f"operator twin config must preserve baseline {section}")
+    return twin_path, models_path
+
+
 def create_environment_app():
     """Build a role-specific app from secret-free deployment configuration."""
     _assert_shadow_only()
@@ -1090,12 +1115,15 @@ def create_environment_app():
     )
     worker_id = _runtime_worker_id(role, socket.gethostname())
     repository_root = Path(__file__).resolve().parents[3]
+    twin_config_path, models_config_path = _twin_config_paths(repository_root)
     research_policy = load_research_runtime_policy(
-        repository_root / "configs" / "twin.yaml",
-        repository_root / "configs" / "models.yaml",
+        twin_config_path, models_config_path,
+        required_api_key_env_var=(
+            "FORESEA_TWIN_BYOM_API_KEY" if "FORESEA_TWIN_CONFIG_DIR" in os.environ else None
+        ),
     )
     strategy_policy = load_strategy_policy(
-        repository_root / "configs" / "twin.yaml", shadow_trial=True,
+        twin_config_path, shadow_trial=True,
     )
 
     if role is WorkerRole.MAINTENANCE:

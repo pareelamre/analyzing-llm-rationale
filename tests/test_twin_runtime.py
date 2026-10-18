@@ -2,6 +2,8 @@ import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -41,6 +43,7 @@ from analyzing_llm_rationale.twin.runtime_app import (
     _recover_stale_research_budgets,
     _runtime_worker_id,
     _stage_strategy_continuation,
+    _twin_config_paths,
 )
 from analyzing_llm_rationale.twin.scheduler import ShadowCycleSchedule
 from analyzing_llm_rationale.twin.simulator import ShadowVenue
@@ -114,6 +117,113 @@ class Dispatcher:
 
 
 class PrivateTwinRuntimeTests(unittest.TestCase):
+    def test_operator_byom_config_is_shadow_only_and_requires_own_key(self):
+        root = Path(__file__).resolve().parents[1]
+        with mock.patch.dict("os.environ", {}, clear=True):
+            default_twin, default_models = _twin_config_paths(root)
+        self.assertEqual(default_twin, root / "configs" / "twin.yaml")
+        self.assertEqual(default_models, root / "configs" / "models.yaml")
+
+        byom_dir = root / "deploy" / "byom"
+        with mock.patch.dict("os.environ", {"FORESEA_TWIN_CONFIG_DIR": str(byom_dir)}):
+            twin_path, models_path = _twin_config_paths(root)
+            policy = load_research_runtime_policy(twin_path, models_path)
+            strategy = load_strategy_policy(twin_path, shadow_trial=True)
+            self.assertEqual(policy.model_key, "byom-local")
+            self.assertEqual(policy.model.price, ModelPrice(Decimal("0"), Decimal("0")))
+            self.assertEqual(policy.api_key_env_var, "FORESEA_TWIN_BYOM_API_KEY")
+            self.assertNotEqual(policy.id, replace(policy, api_base_url="https://other.example/v1").id)
+            self.assertNotEqual(policy.id, replace(policy, api_key_env_var="OTHER_KEY").id)
+            self.assertNotEqual(policy.id, replace(
+                policy, budget=BudgetPolicy(Decimal("1"), 30000, 30),
+            ).id)
+            self.assertEqual(strategy.max_research_candidates, 3)
+            with mock.patch.dict("os.environ", {policy.api_key_env_var: ""}):
+                with self.assertRaisesRegex(ValueError, "FORESEA_TWIN_BYOM_API_KEY"):
+                    policy.build_provider()
+            with mock.patch.dict("os.environ", {policy.api_key_env_var: "local-placeholder"}):
+                provider = policy.build_provider()
+            self.assertEqual(provider.model_name, "replace-with-your-model-id")
+            self.assertEqual(provider.api_key, "local-placeholder")
+
+            original = models_path.read_text(encoding="utf-8")
+            with TemporaryDirectory() as directory:
+                invalid_models = Path(directory) / "models.yaml"
+                for bad_url in (
+                    "file:///tmp/model", "https://user:pass@provider.example/v1",
+                    "https://provider.example/v1?key=hidden",
+                    "https://provider.example/v1#fragment", "https:///v1",
+                    "http://provider.example/v1",
+                ):
+                    with self.subTest(bad_url=bad_url):
+                        invalid_models.write_text(
+                            original.replace("http://127.0.0.1:11434/v1", bad_url),
+                            encoding="utf-8",
+                        )
+                        with self.assertRaisesRegex(ValueError, "research model URL"):
+                            load_research_runtime_policy(twin_path, invalid_models)
+                invalid_models.write_text(
+                    original.replace("FORESEA_TWIN_BYOM_API_KEY", "GCP_SECRET"),
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "FORESEA_TWIN_BYOM_API_KEY"):
+                    load_research_runtime_policy(
+                        twin_path, invalid_models,
+                        required_api_key_env_var="FORESEA_TWIN_BYOM_API_KEY",
+                    )
+                invalid_models.write_text(
+                    original.replace(
+                        "local_model_name: replace-with-your-model-id",
+                        "local_model_name: local-unused",
+                    ).replace(
+                        "router_model_name: replace-with-your-model-id",
+                        "router_model_name: route-model",
+                    ), encoding="utf-8",
+                )
+                changed = load_research_runtime_policy(twin_path, invalid_models)
+                self.assertEqual(changed.model.model_id, "route-model")
+                invalid_models.write_text(
+                    original.replace("http://127.0.0.1:11434/v1", "https://provider.example/v1"),
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "zero-price remote"):
+                    load_research_runtime_policy(
+                        twin_path, invalid_models,
+                        required_api_key_env_var="FORESEA_TWIN_BYOM_API_KEY",
+                    )
+                attested = Path(directory) / "twin.yaml"
+                attested.write_text(
+                    twin_path.read_text(encoding="utf-8").replace(
+                        "zero_cost_remote_attested: false", "zero_cost_remote_attested: true",
+                    ), encoding="utf-8",
+                )
+                remote = load_research_runtime_policy(
+                    attested, invalid_models,
+                    required_api_key_env_var="FORESEA_TWIN_BYOM_API_KEY",
+                )
+                self.assertEqual(remote.api_base_url, "https://provider.example/v1")
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory)
+            with mock.patch.dict("os.environ", {"FORESEA_TWIN_CONFIG_DIR": str(path)}):
+                with self.assertRaisesRegex(ValueError, "twin.yaml and models.yaml"):
+                    _twin_config_paths(root)
+            (path / "models.yaml").write_text(models_path.read_text(encoding="utf-8"), encoding="utf-8")
+            (path / "twin.yaml").write_text(
+                twin_path.read_text(encoding="utf-8").replace('max_order_cash: "0"', 'max_order_cash: "1"'),
+                encoding="utf-8",
+            )
+            with mock.patch.dict("os.environ", {"FORESEA_TWIN_CONFIG_DIR": str(path)}):
+                with self.assertRaisesRegex(ValueError, "strategy"):
+                    _twin_config_paths(root)
+
+        with mock.patch.dict("os.environ", {"FORESEA_TWIN_CONFIG_DIR": "relative/path"}):
+            with self.assertRaisesRegex(ValueError, "absolute"):
+                _twin_config_paths(root)
+        with mock.patch.dict("os.environ", {"FORESEA_TWIN_CONFIG_DIR": "  "}):
+            with self.assertRaisesRegex(ValueError, "cannot be empty"):
+                _twin_config_paths(root)
+
     def test_shadow_cycle_persists_one_fenced_simulated_order_across_retries(self):
         from tests.test_twin_strategy import (
             candidate,
