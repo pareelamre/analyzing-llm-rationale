@@ -1,0 +1,138 @@
+"""Independently reconstruct saved grouping, selection, probabilities and scores."""
+import csv
+import hashlib
+import json
+import random
+from collections import Counter, defaultdict
+from pathlib import Path
+from statistics import fmean, quantiles
+
+HERE = Path(__file__).resolve().parent
+ROOT = Path(r"C:\Users\paree\.codex\worktrees\research-prompt-selection\Foresea")
+OUT = HERE/"outputs"
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def close(left, right):
+    if abs(left-right) > 1e-12:
+        raise ValueError(f"Numeric mismatch: {left} != {right}")
+
+
+def main():
+    report = json.loads((OUT/"report.json").read_text(encoding="utf-8"))
+    manifest = json.loads((OUT/"manifest.json").read_text(encoding="utf-8"))
+    for name, expected in manifest["output_sha256"].items():
+        if sha(OUT/name) != expected:
+            raise ValueError(f"Output hash mismatch: {name}")
+    for name, expected in manifest["source_sha256"].items():
+        if sha(HERE/name) != expected:
+            raise ValueError(f"Source/protocol hash mismatch: {name}")
+    for relative, expected in report["input_sha256"].items():
+        if sha(ROOT/relative) != expected:
+            raise ValueError(f"Input hash mismatch: {relative}")
+    benchmark = next(p for p in report["input_sha256"] if not p.startswith("results/"))
+    rows = json.loads((ROOT/benchmark).read_text(encoding="utf-8-sig"))
+    targets = {r["id"]: int(r["answer"].lower() == "yes") for r in rows}
+    title_ids = defaultdict(list)
+    for row in rows:
+        title_ids[row["question"]].append(row["id"])
+    if len(targets) != 1580 or len(title_ids) != 1254:
+        raise ValueError("Original ID/title counts changed")
+    ordered = sorted(title_ids)
+    random.Random(42).shuffle(ordered)
+    ordered = sorted(ordered, key=lambda t: len(title_ids[t]), reverse=True)
+    loads, expected_folds = [0]*5, {}
+    for title in ordered:
+        fold = loads.index(min(loads))
+        expected_folds.update(dict.fromkeys(title_ids[title], fold))
+        loads[fold] += len(title_ids[title])
+    saved_folds = {int(q): f for q, f in report["question_folds"].items()}
+    if saved_folds != expected_folds:
+        raise ValueError("Frozen group-fold algorithm differs")
+    csv_rows = list(csv.DictReader((OUT/"fold_map.csv").open(encoding="utf-8")))
+    if len(csv_rows) != 1580 or {int(r["question_id"]): int(r["fold"]) for r in csv_rows} != saved_folds:
+        raise ValueError("CSV fold map mismatch")
+    expected_groups = {t: (sorted(ids), saved_folds[ids[0]]) for t, ids in title_ids.items()}
+    if {g["title"]: (g["ids"], g["fold"]) for g in report["title_groups"]} != expected_groups:
+        raise ValueError("Exact raw title-group map mismatch")
+    title_hashes = {hashlib.sha256(t.encode()).hexdigest(): t for t in title_ids}
+    for row in csv_rows:
+        if int(row["question_id"]) not in title_ids[title_hashes[row["title_sha256"]]]:
+            raise ValueError("CSV title membership mismatch")
+    if len(report["conditions"]) != 6:
+        raise ValueError("Expected all six conditions")
+    sorted_titles = sorted(title_ids)
+    for condition in report["conditions"]:
+        raw = {}
+        for relative in report["input_sha256"]:
+            if not relative.startswith(f"results/{condition['model']}/"):
+                continue
+            variant = Path(relative).stem.removeprefix("results_")
+            forecasts = json.loads((ROOT/relative).read_text(encoding="utf-8-sig"))
+            raw[variant] = {r["id"]: float(r["confidence"]) if condition["reading"] == "direct"
+                            or r["predicted_answer"].lower() == "yes" else 1-float(r["confidence"])
+                            for r in forecasts}
+        if len(raw) != 9 or any(set(p) != set(targets) for p in raw.values()):
+            raise ValueError("Incomplete source forecast cohort")
+        selections = {}
+        for fold in range(5):
+            train = [q for q in targets if saved_folds[q] != fold]
+            scores = {v: fmean((p[q]-targets[q])**2 for q in train) for v, p in raw.items()}
+            selected = min(scores, key=lambda v: (scores[v], v))
+            record = next(s for s in condition["fold_selections"] if s["fold"] == fold)
+            if record["selected_variant"] != selected:
+                raise ValueError("Prompt is not the training-only minimum")
+            for variant in scores:
+                close(record["training_brier"][variant], scores[variant])
+            selections[fold] = selected
+        baseline = next(v for v in raw if v.startswith("variant0_"))
+        loss = {}
+        if len(condition["predictions"]) != 1580 or len({p["question_id"] for p in condition["predictions"]}) != 1580:
+            raise ValueError("Incomplete or duplicate held-out predictions")
+        for prediction in condition["predictions"]:
+            q = prediction["question_id"]
+            selected = selections[saved_folds[q]]
+            if prediction["fold"] != saved_folds[q] or prediction["target"] != targets[q] or prediction["selected_variant"] != selected:
+                raise ValueError("Held-out row provenance mismatch")
+            close(prediction["baseline_probability"], raw[baseline][q])
+            close(prediction["selected_probability"], raw[selected][q])
+            loss[q] = ((raw[baseline][q]-targets[q])**2, (raw[selected][q]-targets[q])**2)
+        close(condition["baseline_brier"], fmean(b for b, _ in loss.values()))
+        close(condition["selected_brier"], fmean(s for _, s in loss.values()))
+        delta = fmean(s-b for b, s in loss.values())
+        close(condition["selected_minus_baseline"], delta)
+        close(condition["question_weighted_delta"], delta)
+        title_delta = {t: fmean(loss[q][1]-loss[q][0] for q in ids) for t, ids in title_ids.items()}
+        close(condition["title_weighted_delta"], fmean(title_delta.values()))
+        for strategy, position in (("baseline", 0), ("selected", 1)):
+            close(condition[f"title_weighted_{strategy}_brier"],
+                  fmean(fmean(loss[q][position] for q in ids) for ids in title_ids.values()))
+        rng, question_draws, title_draws = random.Random(42), [], []
+        for _ in range(2000):
+            weights = Counter(rng.choices(sorted_titles, k=len(sorted_titles)))
+            title_draws.append(sum(w*title_delta[t] for t, w in weights.items())/len(sorted_titles))
+            question_draws.append(sum(w*sum(loss[q][1]-loss[q][0] for q in title_ids[t])
+                                      for t, w in weights.items())/
+                                  sum(w*len(title_ids[t]) for t, w in weights.items()))
+        for name, draws in (("question", question_draws), ("title", title_draws)):
+            cuts = quantiles(draws, n=40, method="inclusive")
+            for expected, actual in zip((cuts[0], cuts[-1]), condition[f"{name}_weighted_interval"]):
+                close(expected, actual)
+    verification = {"status": "passed", "input_hashes_checked": len(report["input_sha256"]),
+                    "conditions_checked": 6, "questions_per_condition": 1580, "exact_titles": 1254,
+                    "fold_question_counts": loads, "title_spans_multiple_folds": 0,
+                    "heldout_probabilities_reconstructed": 6*1580*2,
+                    "bootstrap_reconstructed": "all 12 endpoints pairs from 2000 title draws per condition",
+                    "report_sha256": sha(OUT/"report.json"), "manifest_sha256": sha(OUT/"manifest.json"),
+                    "verifier_sha256": sha(Path(__file__)), "model_calls": 0}
+    with (HERE/"verification.json").open("x", encoding="utf-8") as stream:
+        json.dump(verification, stream, indent=2, allow_nan=False)
+        stream.write("\n")
+    print(json.dumps(verification, indent=2))
+
+
+if __name__ == "__main__":
+    main()

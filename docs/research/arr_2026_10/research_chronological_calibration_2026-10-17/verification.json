@@ -1,0 +1,75 @@
+{
+  "status": "passed",
+  "model_calls": 0,
+  "train_n": 1265,
+  "heldout_n": 315,
+  "heldout_title_n": 206,
+  "purged_train_n": 0,
+  "cutoff_utc": "2026-01-05T23:45:00+00:00",
+  "archived_raw_predictions_checked": 85320,
+  "original_forecast_hashes_checked": 27,
+  "calibrators_independently_reconstructed": 54,
+  "training_fit_predictions_checked": 68310,
+  "heldout_rows_checked": 17010,
+  "heldout_calibrated_probabilities_checked": 34020,
+  "per_prompt_scores_checked": 54,
+  "intervals_reconstructed": 24,
+  "max_training_fit_error": 5.551115123125783e-17,
+  "max_heldout_calibrated_probability_error": 5.551115123125783e-17,
+  "max_raw_export_error": 5.551115123125783e-17,
+  "report_sha256": "b69d275172a3c4b6faf4a0406e38ab9aa8744e0464a47bcf83e2a2161e96aea9",
+  "output_manifest_sha256": "3dddfd658124c02c0f55ac34b548df6c51cce2aece08e4fbd6768968cb14681f",
+  "partition_sha256": "49ce5ab7b37f083f7371467128d368a9f12e727bba065c76b5e6edbe054c9d2b",
+  "verifier_sha256": "d4553fb4d414bca42c35c77da917e864ea88d0e9e97bc5420946ca08743ea026",
+  "comparison_absolute_tolerance": 1e-12,
+  "archived_raw_export_absolute_tolerance": 1e-14,
+  "verifier_resolution_remediation": {
+    "initial_failure_sha256": "d4938be2e34de70784c48a0b1ad97484d0a906b262bbcdc0a54afd9cdd320fe5",
+    "initial_verifier_sha256": "24b43dae8bbc486494ecfaf9feff40320afb68012eec950dedfb7fd206ec2ff1",
+    "initial_discrepancies": {
+      "initial_verifier_sha256": "24b43dae8bbc486494ecfaf9feff40320afb68012eec950dedfb7fd206ec2ff1",
+      "initial_max_training_curve_error": 0.10690703280578562,
+      "initial_max_heldout_own_prompt_curve_error": 0.10690703280578562,
+      "near_distinct_training_scores_coalesced_across_54_fits": 303,
+      "rule": "new anchor when p-anchor >= float64 decimal resolution1e-15; retain first anchor",
+      "comparison_tolerance": 1e-12,
+      "study_outputs_modified": false
+    },
+    "source_evidence": {
+      "numpy": "2.4.1",
+      "sklearn": "1.7.1",
+      "float64_decimal_resolution": 1e-15,
+      "probe_X": [
+        0.1,
+        0.8
+      ],
+      "probe_y": [
+        0.5,
+        1.0
+      ],
+      "probe_weight": [
+        2.0,
+        1.0
+      ],
+      "native_source_hashes": {
+        "C:\\Users\\paree\\AppData\\Roaming\\Python\\Python313\\site-packages\\sklearn\\isotonic.py": "d156be40805dcf45b6b8538ee33452386fb3b19f363e21ec60b5ea0c14e3d2a5",
+        "C:\\Users\\paree\\AppData\\Roaming\\Python\\Python313\\site-packages\\sklearn\\_isotonic.cp313-win_amd64.pyd": "be62318dc7ead753faa66b3408af3e59ae712410b6cb3a534cb2db3d1847cce6"
+      },
+      "build_y_source": "    def _build_y(self, X, y, sample_weight, trim_duplicates=True):\n        \"\"\"Build the y_ IsotonicRegression.\"\"\"\n        self._check_input_data_shape(X)\n        X = X.reshape(-1)  # use 1d view\n\n        # Determine increasing if auto-determination requested\n        if self.increasing == \"auto\":\n            self.increasing_ = check_increasing(X, y)\n        else:\n            self.increasing_ = self.increasing\n\n        # If sample_weights is passed, removed zero-weight values and clean\n        # order\n        sample_weight = _check_sample_weight(sample_weight, X, dtype=X.dtype)\n        mask = sample_weight > 0\n        X, y, sample_weight = X[mask], y[mask], sample_weight[mask]\n\n        order = np.lexsort((y, X))\n        X, y, sample_weight = [array[order] for array in [X, y, sample_weight]]\n        unique_X, unique_y, unique_sample_weight = _make_unique(X, y, sample_weight)\n\n        X = unique_X\n        y = isotonic_regression(\n            unique_y,\n            sample_weight=unique_sample_weight,\n            y_min=self.y_min,\n            y_max=self.y_max,\n            increasing=self.increasing_,\n        )\n\n        # Handle the left and right bounds on X\n        self.X_min_, self.X_max_ = np.min(X), np.max(X)\n\n        if trim_duplicates:\n            # Remove unnecessary points for faster prediction\n            keep_data = np.ones((len(y),), dtype=bool)\n            # Aside from the 1st and last point, remove points whose y values\n            # are equal to both the point before and the point after it.\n            keep_data[1:-1] = np.logical_or(\n                np.not_equal(y[1:-1], y[:-2]), np.not_equal(y[1:-1], y[2:])\n            )\n            return X[keep_data], y[keep_data]\n        else:\n            # The ability to turn off trim_duplicates is only used to it make\n            # easier to unit test that removing duplicates in y does not have\n            # any impact the resulting interpolation function (besides\n            # prediction speed).\n            return X, y\n"
+    },
+    "resolution_spec": {
+      "source_path": "C:\\Users\\paree\\AppData\\Roaming\\Python\\Python313\\site-packages\\sklearn\\_isotonic.pyx",
+      "source_sha256": "5e5af821d251a87408ba39215bb0cdfedaec5af69f8f26467efbab3803da782d",
+      "snapshot": "sklearn_isotonic_make_unique_source.pyx",
+      "source_lines": [
+        92,
+        96
+      ],
+      "rule": "eps=np.finfo(dtype).resolution; a new anchor starts iff x-current_x >= eps; otherwise targets/weights coalesce at first anchor",
+      "dtype": "float64",
+      "score_coalescing_resolution": 1e-15,
+      "comparison_tolerance_unchanged": 1e-12,
+      "main_analysis_rerun": false
+    }
+  }
+}

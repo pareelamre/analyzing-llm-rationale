@@ -1,0 +1,215 @@
+"""Census three frozen lexical indicators; never infer semantic or historical validity."""
+
+import hashlib
+import json
+import platform
+import re
+from pathlib import Path
+
+BASE = Path(__file__).resolve().parent
+SOURCE = BASE.parent / 'article_enrichment_2026-10-14/v9/retrieved-full-4424300/collected/enriched_questions.json'
+SOURCE_SHA256 = '47fad5b213e4fd87e9ac0625a35c875a578dae30d0958a49dd8a1b22bff1607f'
+PROTOCOL_SHA256 = '1dbf57495ef043ea48f83d67211d11647e3fb559727e36c7afaa5474e7198239'
+INDICATORS = ('unspecified_horizon_with_claim_cue', 'duration_horizon_with_claim_cue',
+              'support_cue_absent_from_claim')
+STRATA = tuple((w, s) for w in ('lead30', 'within30') for s in ('valid', 'partial', 'invalid'))
+CUE_PATTERN = r'\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|tomorrow|tonight|next\s+week|next\s+month|next\s+year|this\s+week|this\s+month|this\s+year)\b'
+DURATION_PATTERN = r'[0-9]+(?:\.[0-9]+)?\s*[-–]?\s*(?:hours?|days?|weeks?|months?|years?)'
+CUE = re.compile(CUE_PATTERN, re.IGNORECASE)
+DURATION = re.compile(DURATION_PATTERN, re.IGNORECASE)
+QUESTION_FIELDS = ('question', 'description', 'resolution_criteria', 'created_time', 'publish_time')
+METADATA_FIELDS = ('title', 'source', 'url', 'resolved_publisher_url', 'publish_date',
+                   'publication_bounds', 'publication_metadata', 'modification_metadata',
+                   'modification_provenance', 'retrieved_at', 'body_provenance')
+PREVIOUSLY_SEEN = frozenset(((40933, 3), (40283, 4), (39965, 5), (31771, 4), (39712, 8),
+                            (38639, 1), (35557, 0), (39684, 4)))
+OUTPUTS = ('report.json', 'diagnostic-case-inputs.json', 'verification.json')
+SPECIFICATION = {
+    'cue_regex': CUE_PATTERN, 'duration_regex': DURATION_PATTERN,
+    'regex_flags': 're.IGNORECASE; Python Unicode word boundaries',
+    'canonicalization': 'casefold matched text, then collapse all whitespace to one ASCII space',
+    'duration_grammar': 'Digits with optional dot-plus-digits fraction; optional whitespace and ASCII/en dash; fixed unit; stripped fullmatch. Excludes .5, 1., signs, prefixes, suffixes and spelled-out numbers.',
+    'claim_fields': ['predicted_future_event', 'rationale', 'conditions[*]',
+                     'modality.primary_expression', 'modality.expressions[*]'],
+    'horizon_field': 'time_horizon', 'support_fields': 'support_quotes[*].quote',
+    'matching': 'Scan fields separately; offsets are Python character offsets within the named field. Never join fields.',
+    'rules': {INDICATORS[0]: 'stripped casefolded horizon == unspecified AND a claim cue exists',
+              INDICATORS[1]: 'stripped duration fullmatch AND a claim cue exists',
+              INDICATORS[2]: 'at least one support cue canonical key absent from all claim and horizon cue keys'},
+    'interpretation': 'Exploratory candidate lexical indicators only; not semantic failures or historical/outcome verification.',
+    'previously_seen_identities': [list(identity) for identity in sorted(PREVIOUSLY_SEEN)],
+}
+
+
+def digest(raw):
+    return hashlib.sha256(raw).hexdigest()
+
+
+def encoded(value):
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode('utf-8')
+
+
+def matches(text, field):
+    if not isinstance(text, str):
+        raise ValueError('Unsupported text field: ' + field)
+    return [{'field': field, 'cue': ' '.join(m.group().casefold().split()),
+             'text': m.group(), 'start': m.start(), 'end': m.end()} for m in CUE.finditer(text)]
+
+
+def analyze_statement(statement):
+    if not isinstance(statement, dict) or type(statement.get('chunk_id')) is not int:
+        raise ValueError('Unexpected statement or chunk identity')
+    fields = []
+    for name in ('predicted_future_event', 'rationale'):
+        fields.append((name, statement.get(name)))
+    conditions, modality = statement.get('conditions'), statement.get('modality')
+    if not isinstance(conditions, list) or not isinstance(modality, dict):
+        raise ValueError('Unsupported conditions or modality container')
+    fields.extend((f'conditions[{i}]', text) for i, text in enumerate(conditions))
+    fields.append(('modality.primary_expression', modality.get('primary_expression')))
+    expressions = modality.get('expressions')
+    if not isinstance(expressions, list):
+        raise ValueError('Unsupported modality expressions')
+    fields.extend((f'modality.expressions[{i}]', text) for i, text in enumerate(expressions))
+    claim = [match for path, text in fields for match in matches(text, path)]
+    horizon = statement.get('time_horizon')
+    horizon_matches = matches(horizon, 'time_horizon')
+    quotes = statement.get('support_quotes')
+    if not isinstance(quotes, list) or any(not isinstance(q, dict) for q in quotes):
+        raise ValueError('Unsupported saved support quotes')
+    support = [{**match, 'quote_index': i} for i, quote in enumerate(quotes)
+               for match in matches(quote.get('quote'), f'support_quotes[{i}].quote')]
+    claim_keys = {m['cue'] for m in claim + horizon_matches}
+    missing = sorted({m['cue'] for m in support} - claim_keys)
+    flags = (horizon.strip().casefold() == 'unspecified' and bool(claim),
+             bool(DURATION.fullmatch(horizon.strip())) and bool(claim), bool(missing))
+    return {'chunk_id': statement['chunk_id'], 'time_horizon': horizon,
+            'claim_cue_matches': claim, 'horizon_cue_matches': horizon_matches,
+            'support_cue_matches': support, 'missing_support_cues': missing,
+            'indicators': [name for name, hit in zip(INDICATORS, flags) if hit]}
+
+
+def summarize(records, total_questions):
+    def hits(indicator=None):
+        selected = [(r, s) for r in records for s in r['statements']
+                    if s['indicators'] if indicator is None or indicator in s['indicators']]
+        return {'statement_hits': len(selected),
+                'article_record_hits': len({(r['qid'], r['article_index']) for r, s in selected}),
+                'question_hits': len({r['qid'] for r, s in selected})}
+    with_articles = len({r['qid'] for r in records})
+    return {'denominators': {'questions': total_questions, 'questions_with_articles': with_articles,
+                             'questions_without_articles': total_questions - with_articles,
+                             'article_records': len(records),
+                             'article_records_without_statements': sum(not r['statements'] for r in records),
+                             'statements': sum(r['statement_count'] for r in records)},
+            'indicators': {name: hits(name) for name in INDICATORS}, 'any_indicator': hits()}
+
+
+def census(questions, expected_counts):
+    if not isinstance(questions, list) or len(questions) != expected_counts[0]:
+        raise ValueError('Unexpected question population')
+    seen, coverage, records = set(), [], []
+    for question in questions:
+        if not isinstance(question, dict):
+            raise ValueError('Unexpected question object')
+        qid = question.get('id')
+        if type(qid) is not int or qid in seen:
+            raise ValueError('Unique integer question IDs required')
+        seen.add(qid)
+        if any(not isinstance(question.get(k), str) for k in QUESTION_FIELDS[:3]):
+            raise ValueError('Unsupported question text used for diagnostic selection')
+        articles = question.get('news_articles')
+        if not isinstance(articles, list):
+            raise ValueError('Unsupported article container')
+        coverage.append({'qid': qid, 'article_count': len(articles)})
+        for index, article in enumerate(articles):
+            if not isinstance(article, dict):
+                raise ValueError('Unsupported article object')
+            cell = article.get('temporal_window'), article.get('frs_status')
+            if cell not in STRATA:
+                raise ValueError('Unexpected saved status/window')
+            if not isinstance(article.get('text'), str) or not isinstance(article.get('body_sha256'), str):
+                raise ValueError('Unsupported saved body or identity hash')
+            frs = article.get('frs')
+            if not isinstance(frs, dict) or not isinstance(frs.get('statements'), list):
+                raise ValueError('Unsupported saved FRS container; never repair')
+            statements = [dict(analyze_statement(s), statement_index=i) for i, s in enumerate(frs['statements'])]
+            indicators = [name for name in INDICATORS if any(name in s['indicators'] for s in statements)]
+            records.append({'qid': qid, 'article_index': index, 'body_sha256': article['body_sha256'],
+                            'temporal_window': cell[0], 'frs_status': cell[1],
+                            'statement_count': len(statements), 'statements': statements, 'indicators': indicators})
+    if (len(records), sum(q['article_count'] == 0 for q in coverage)) != tuple(expected_counts[1:]):
+        raise ValueError('Unexpected article or empty-question denominator')
+    records.sort(key=lambda r: (r['qid'], r['article_index']))
+    by_cell = []
+    for window, status in STRATA:
+        cell_records = [r for r in records if (r['temporal_window'], r['frs_status']) == (window, status)]
+        by_cell.append({'temporal_window': window, 'frs_status': status,
+                        **summarize(cell_records, len({r['qid'] for r in cell_records}))})
+    return {'questions': sorted(coverage, key=lambda q: q['qid']), 'records': records,
+            'summary': summarize(records, len(coverage)), 'by_window_status': by_cell}
+
+
+def select_cases(questions, report):
+    sources = {(q['id'], i): (q, a) for q in questions for i, a in enumerate(q['news_articles'])}
+    selected, by_indicator = set(), {}
+    for indicator in INDICATORS:
+        eligible = []
+        for record in report['records']:
+            identity = record['qid'], record['article_index']
+            question, article = sources[identity]
+            if indicator in record['indicators'] and len(article['text']) <= 8000 and sum(
+                    len(question[k]) for k in QUESTION_FIELDS[:3]) <= 10000:
+                eligible.append(identity)
+        by_indicator[indicator] = sorted(eligible)[:2]
+        selected.update(by_indicator[indicator])
+    records = {(r['qid'], r['article_index']): r for r in report['records']}
+    ids = {identity: f'D{i:03d}' for i, identity in enumerate(sorted(selected), 1)}
+    cases = []
+    for identity in sorted(selected):
+        question, article = sources[identity]
+        cases.append({'diagnostic_id': ids[identity], 'qid': identity[0], 'article_index': identity[1],
+                      'body_sha256': article['body_sha256'], 'memberships': records[identity]['indicators'],
+                      'previously_seen_in_prior_ai_screen': identity in PREVIOUSLY_SEEN,
+                      'question': {k: question[k] for k in QUESTION_FIELDS if k in question},
+                      'text': article['text'], 'frs': article['frs'],
+                      'source_metadata': {k: article[k] for k in METADATA_FIELDS if k in article}})
+    return {'purpose': 'Complete saved inputs for bounded provisional AI reading; no human labels or population semantic inference.',
+            'selection_rule': 'First two eligible article records per indicator, sorted integer qid/original article index; deduplicated.',
+            'selected_by_indicator': {name: [{'diagnostic_id': ids[r], 'qid': r[0], 'article_index': r[1]}
+                                              for r in identities] for name, identities in by_indicator.items()},
+            'cases': cases}
+
+
+def run(source=SOURCE, base=BASE, expected_sha=SOURCE_SHA256, expected_counts=(1580, 4327, 572),
+        expected_protocol_sha=PROTOCOL_SHA256):
+    source, base = Path(source), Path(base)
+    if any((base / name).exists() for name in OUTPUTS):
+        raise FileExistsError('Refusing preexisting outputs; frozen results must not be overwritten')
+    protocol = (base / 'PROTOCOL.md').read_bytes()
+    if digest(protocol) != expected_protocol_sha:
+        raise ValueError('Unexpected frozen protocol hash')
+    raw = source.read_bytes()
+    if digest(raw) != expected_sha:
+        raise ValueError('Unexpected source hash')
+    questions = json.loads(raw)
+    report = census(questions, expected_counts)
+    report.update(provenance={'source_sha256': digest(raw), 'protocol_sha256': digest(protocol),
+                              'code_sha256': digest(Path(__file__).read_bytes()),
+                              'python_version': platform.python_version(), 'python_implementation': platform.python_implementation()},
+                  detector_specification=SPECIFICATION, human_review='SKIPPED_BY_USER',
+                  limitations=['Hypothesis-driven exploratory lexical census, informed by previously read cases.',
+                               'Not semantic error rates, sensitivity/specificity, human agreement or a significance test.',
+                               'No historical availability, question-version, unknown-outcome or forecasting-performance verification.',
+                               'Empty FRS and no-hit records are not semantic passes; no record is promoted or excluded.'])
+    cases = select_cases(questions, report)
+    cases.update(provenance=report['provenance'])
+    for name, value in (('report.json', report), ('diagnostic-case-inputs.json', cases)):
+        with (base / name).open('xb') as stream:
+            stream.write(encoded(value))
+    return report
+
+
+if __name__ == '__main__':
+    result = run()
+    print(json.dumps({'provenance': result['provenance'], 'summary': result['summary']}, indent=2))

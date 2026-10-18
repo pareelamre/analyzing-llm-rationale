@@ -1,0 +1,247 @@
+"""Independent stdlib PAVA, interpolation, partition, loss and interval checks."""
+import bisect
+import csv
+import gzip
+import hashlib
+import io
+import json
+import math
+import random
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+from statistics import fmean, quantiles
+
+HERE = Path(__file__).resolve().parent
+FROZEN, OUTPUT = HERE/"frozen", HERE/"outputs"
+ROOT = Path(r"C:\Users\paree\.codex\worktrees\research-prompt-selection\Foresea")
+MODELS = ("GPT-OSS-120B", "Qwen2.5-7b-instruct", "Qwen3-32B")
+
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def close(actual, expected):
+    require(math.isfinite(actual) and math.isfinite(expected) and abs(actual-expected) <= 1e-12,
+            f"Numeric mismatch: {actual} != {expected}")
+    return abs(actual-expected)
+
+
+def pava(probabilities, targets):
+    """Independent PAVA with sklearn's source-defined float64 score coalescing."""
+    # sklearn/_isotonic.pyx:92,96 uses np.finfo(float64).resolution, not epsilon.
+    # This fixes the input representation; the strict 1e-12 comparison is unchanged.
+    x, counts, totals = [], [], []
+    for score, target in sorted(zip(probabilities, targets)):
+        if not x or score-x[-1] >= 1e-15:
+            x.append(score)
+            counts.append(1)
+            totals.append(target)
+        else:
+            counts[-1] += 1
+            totals[-1] += target
+    blocks = []
+    for index in range(len(x)):
+        blocks.append([index, index, counts[index], totals[index]])
+        while len(blocks) > 1 and blocks[-2][3]/blocks[-2][2] > blocks[-1][3]/blocks[-1][2]:
+            right, left = blocks.pop(), blocks.pop()
+            blocks.append([left[0], right[1], left[2]+right[2], left[3]+right[3]])
+    y = [0.]*len(x)
+    for start, end, count, total in blocks:
+        y[start:end+1] = [total/count]*(end-start+1)
+    return x, y
+
+
+def interpolate(p, x, y):
+    if p <= x[0]:
+        return y[0]
+    if p >= x[-1]:
+        return y[-1]
+    right = bisect.bisect_right(x, p)
+    left = right-1
+    return y[left]+(y[right]-y[left])*(p-x[left])/(x[right]-x[left])
+
+
+def timestamp(text):
+    parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    require(parsed.tzinfo is not None, "Naive benchmark timestamp")
+    return parsed.astimezone(timezone.utc)
+
+
+def main():
+    freeze_manifest = json.loads((FROZEN/"freeze_manifest.json").read_text())
+    report = json.loads((OUTPUT/"report.json").read_text())
+    manifest = json.loads((OUTPUT/"manifest.json").read_text())
+    resolution_spec = json.loads((HERE/"near_tie_resolution_spec.json").read_text())
+    native_evidence = json.loads((HERE/"near_tie_source_evidence.json").read_text())
+    require(sha(HERE/resolution_spec["snapshot"]) == resolution_spec["source_sha256"], "Native rule snapshot hash mismatch")
+    require(native_evidence["numpy"] == report["versions"]["numpy"]
+            and native_evidence["sklearn"] == report["versions"]["sklearn"]
+            and native_evidence["float64_decimal_resolution"] == 1e-15, "Native rule version mismatch")
+    require(report["freeze_manifest_sha256"] == sha(FROZEN/"freeze_manifest.json"), "Freeze manifest changed")
+    require(report["protocol_sha256"] == sha(HERE/"protocol.md"), "Protocol changed")
+    for name, expected in freeze_manifest["frozen_sha256"].items():
+        require(sha(FROZEN/name) == expected, f"Frozen hash mismatch: {name}")
+    for name, expected in freeze_manifest["sources_sha256"].items():
+        require(sha(HERE/name) == expected, f"Analysis/test source changed: {name}")
+    for name, expected in manifest["output_sha256"].items():
+        require(sha(OUTPUT/name) == expected, f"Output hash mismatch: {name}")
+    archive_manifest = json.loads((FROZEN/"manifest.json").read_text())
+    benchmark_name = next(k for k in archive_manifest["input_sha256"] if k.endswith("metaculus_frs_format.json"))
+    require(sha(ROOT/benchmark_name) == report["benchmark_sha256"] == freeze_manifest["benchmark_sha256"], "Benchmark mismatch")
+    metadata = json.loads((ROOT/benchmark_name).read_text(encoding="utf-8-sig"))
+    require(len(metadata) == len({r["id"] for r in metadata}) == 1580, "Full benchmark cohort mismatch")
+    ordered = sorted(metadata, key=lambda r: (timestamp(r["resolve_time"]), r["id"]))
+    cutoff = timestamp(ordered[1263]["resolve_time"])
+    early = [r for r in ordered if timestamp(r["resolve_time"]) <= cutoff]
+    later = [r for r in ordered if timestamp(r["resolve_time"]) > cutoff]
+    later_titles = {r["question"] for r in later}
+    purge = [r["id"] for r in early if r["question"] in later_titles]
+    train = [r["id"] for r in early if r["id"] not in purge]
+    test = [r["id"] for r in later]
+    saved_partition = json.loads((FROZEN/"partition.json").read_text())
+    require(saved_partition["cutoff_utc"] == cutoff.isoformat() == "2026-01-05T23:45:00+00:00", "Wrong cutoff")
+    require(saved_partition["train_ids"] == train and saved_partition["heldout_ids"] == test, "Partition ID mismatch")
+    require(saved_partition["train_candidate_ids"] == [r["id"] for r in early], "Candidate train mismatch")
+    require(saved_partition["purged"] == [{"id": q, "reason": "exact_raw_title_in_heldout"} for q in purge], "Purge provenance mismatch")
+    require((len(train), len(test), len(purge)) == (1265, 315, 0), "Fixed cohort counts changed")
+    expected_rows = [{"id": r["id"], "title": r["question"], "target": int(r["answer"] == "yes"),
+                      "resolve_time_original": r["resolve_time"], "resolve_time_utc": timestamp(r["resolve_time"]).isoformat(),
+                      "partition": "purged_training" if r["id"] in purge else "train" if r["id"] in train else "heldout"}
+                     for r in ordered]
+    require(saved_partition["rows"] == expected_rows, "Full 1,580-row metadata partition mismatch")
+    targets = {r["id"]: int(r["answer"] == "yes") for r in metadata}
+    titles = {r["id"]: r["question"] for r in metadata}
+    require({targets[q] for q in train} == {0, 1}, "Training lacks both labels")
+    require(not ({titles[q] for q in train} & {titles[q] for q in test}), "Exact-title leakage")
+    for name, expected in report["archive_input_sha256"].items():
+        require(sha(FROZEN/name) == expected, "Archive input hash mismatch")
+    archive_rows = csv.DictReader(io.StringIO(gzip.decompress((FROZEN/"oof_predictions.csv.gz").read_bytes()).decode("utf-8-sig")))
+    groups = defaultdict(dict)
+    for row in archive_rows:
+        key, q = (row["model"], row["reading"], int(row["variant"])), int(row["id"])
+        require(q not in groups[key] and q in targets and int(row["target"]) == targets[q], "Archived ID/target mismatch")
+        probability = float(row["raw"])
+        require(math.isfinite(probability) and 0 <= probability <= 1, "Invalid raw archive probability")
+        groups[key][q] = probability
+    family = {(model, reading, variant) for model in MODELS for reading in ("selected", "direct") for variant in range(9)}
+    require(set(groups) == family and all(set(values) == set(targets) for values in groups.values()), "Archive family/cohort incomplete")
+    raw_export_error = 0.
+    for relative, expected in report["original_forecast_sha256"].items():
+        require(sha(ROOT/relative) == expected == archive_manifest["input_sha256"][relative], "Original forecast hash mismatch")
+        model = relative.split("/")[1]
+        variant = int(Path(relative).stem.split("_")[1].removeprefix("variant"))
+        original = json.loads((ROOT/relative).read_text(encoding="utf-8-sig"))
+        require(len(original) == len({r["id"] for r in original}) == 1580, "Original cohort incomplete")
+        for row in original:
+            q, c = row["id"], float(row["confidence"])
+            for reading in ("selected", "direct"):
+                p = c if reading == "direct" or row["predicted_answer"].strip().lower() == "yes" else 1-c
+                raw_export_error = max(raw_export_error, abs(p-groups[model, reading, variant][q]))
+    require(raw_export_error <= 1e-14, "Archived confidence conversion mismatch")
+    fitted, trace = {}, {}
+    for row in report["fitted_calibrators"]:
+        key = row["model"], row["reading"], row["variant"]
+        require(key not in trace and row["train_n"] == len(train), "Duplicate fit or wrong training count")
+        x, y = row["x_thresholds"], row["y_thresholds"]
+        require(len(x) == len(y) > 0 and all(a < b for a, b in zip(x, x[1:]))
+                and all(a <= b for a, b in zip(y, y[1:])), "Invalid increasing threshold trace")
+        trace[key] = (x, y)
+        fitted[key] = pava([groups[key][q] for q in train], [targets[q] for q in train])
+    require(set(trace) == family, "Expected all 54 training fits")
+    fit_error = 0.
+    for key in family:
+        for q in train:
+            p = groups[key][q]
+            fit_error = max(fit_error, close(interpolate(p, *trace[key]), interpolate(p, *fitted[key])))
+    predictions = defaultdict(dict)
+    for row in csv.DictReader(io.StringIO(gzip.decompress((OUTPUT/"predictions.csv.gz").read_bytes()).decode())):
+        key, q = (row["model"], row["reading"], int(row["variant"])), int(row["id"])
+        require(key in family and q in test and q not in predictions[key] and int(row["target"]) == targets[q], "Heldout prediction provenance mismatch")
+        predictions[key][q] = {m: float(row[m]) for m in ("raw", "transfer", "separate")}
+    require(set(predictions) == family and all(set(p) == set(test) for p in predictions.values()), "Heldout predictions incomplete")
+    probability_error, scores = 0., {}
+    for key in family:
+        baseline = key[0], key[1], 0
+        for q in test:
+            p, saved = groups[key][q], predictions[key][q]
+            close(saved["raw"], p)
+            for method, source in (("transfer", baseline), ("separate", key)):
+                probability_error = max(probability_error, close(saved[method], interpolate(p, *fitted[source])))
+                close(saved[method], interpolate(p, *trace[source]))
+        scores[key] = {m+"_brier": sum((predictions[key][q][m]-targets[q])**2 for q in test)/len(test)
+                       for m in ("raw", "transfer", "separate")}
+    for saved_rows in (report["prompt_scores"], list(csv.DictReader((OUTPUT/"per_prompt.csv").open(encoding="utf-8")))):
+        require(len(saved_rows) == 54 and {(r["model"], r["reading"], int(r["variant"])) for r in saved_rows} == family,
+                "Per-prompt score family incomplete")
+        for row in saved_rows:
+            key = row["model"], row["reading"], int(row["variant"])
+            require(int(row["n"]) == len(test), "Per-prompt sample size mismatch")
+            for method in ("raw", "transfer", "separate"):
+                close(float(row[method+"_brier"]), scores[key][method+"_brier"])
+            close(float(row["transfer_minus_raw"]), scores[key]["transfer_brier"]-scores[key]["raw_brier"])
+            close(float(row["transfer_minus_separate"]), scores[key]["transfer_brier"]-scores[key]["separate_brier"])
+    require(len(report["summaries"]) == 6 and {(r["model"], r["reading"]) for r in report["summaries"]}
+            == {(m, r) for m in MODELS for r in ("selected", "direct")}, "Expected six summary conditions")
+    title_ids = {title: [q for q in test if titles[q] == title] for title in sorted({titles[q] for q in test})}
+    for summary in report["summaries"]:
+        model, reading = summary["model"], summary["reading"]
+        losses = {q: {m: sum((predictions[model, reading, v][q][m]-targets[q])**2 for v in range(1, 9))/8
+                      for m in ("raw", "transfer", "separate")} for q in test}
+        close(summary["v0_raw_brier"], scores[model, reading, 0]["raw_brier"])
+        close(summary["v0_calibrated_brier"], scores[model, reading, 0]["transfer_brier"])
+        require(summary["heldout_n"] == 315 and summary["heldout_titles"] == 206, "Summary cohort mismatch")
+        group_delta = {title: [sum(losses[q]["transfer"]-losses[q][comparator] for q in ids)
+                               for comparator in ("raw", "separate")] for title, ids in title_ids.items()}
+        for weighting in ("question", "title"):
+            saved = summary[weighting+"_weighted"]
+            expected = {m: fmean(losses[q][m] for q in test) if weighting == "question"
+                        else fmean(fmean(losses[q][m] for q in ids) for ids in title_ids.values())
+                        for m in ("raw", "transfer", "separate")}
+            for method in expected:
+                close(saved[method+"_brier"], expected[method])
+            for comparator in ("raw", "separate"):
+                close(saved["transfer_minus_"+comparator], expected["transfer"]-expected[comparator])
+        rng = random.Random(42)
+        boot = {(weight, metric): [] for weight in ("question", "title") for metric in ("primary", "diagnostic")}
+        for _ in range(2000):
+            weights = Counter(rng.choices(list(title_ids), k=len(title_ids)))
+            denominator = sum(w*len(title_ids[t]) for t, w in weights.items())
+            for index, metric in enumerate(("primary", "diagnostic")):
+                boot["question", metric].append(sum(w*group_delta[t][index] for t, w in weights.items())/denominator)
+                boot["title", metric].append(sum(w*group_delta[t][index]/len(title_ids[t]) for t, w in weights.items())/len(title_ids))
+        for (weighting, metric), draws in boot.items():
+            cuts = quantiles(draws, n=40, method="inclusive")
+            for actual, expected in zip(summary[weighting+"_weighted"][metric+"_interval"], (cuts[0], cuts[-1])):
+                close(actual, expected)
+    verification = {"status": "passed", "model_calls": 0, "train_n": 1265, "heldout_n": 315,
+                    "heldout_title_n": 206, "purged_train_n": 0, "cutoff_utc": cutoff.isoformat(),
+                    "archived_raw_predictions_checked": 54*1580, "original_forecast_hashes_checked": 27,
+                    "calibrators_independently_reconstructed": 54, "training_fit_predictions_checked": 54*1265,
+                    "heldout_rows_checked": 54*315, "heldout_calibrated_probabilities_checked": 54*315*2,
+                    "per_prompt_scores_checked": 54, "intervals_reconstructed": 24,
+                    "max_training_fit_error": fit_error, "max_heldout_calibrated_probability_error": probability_error,
+                    "max_raw_export_error": raw_export_error, "report_sha256": sha(OUTPUT/"report.json"),
+                    "output_manifest_sha256": sha(OUTPUT/"manifest.json"), "partition_sha256": sha(FROZEN/"partition.json"),
+                    "verifier_sha256": sha(Path(__file__)), "comparison_absolute_tolerance": 1e-12,
+                    "archived_raw_export_absolute_tolerance": 1e-14,
+                    "verifier_resolution_remediation": {
+                        "initial_failure_sha256": sha(HERE/"verification_failure_initial.txt"),
+                        "initial_verifier_sha256": sha(HERE/"verify_chronological_initial.py"),
+                        "initial_discrepancies": json.loads((HERE/"near_tie_diagnostic_initial.json").read_text()),
+                        "source_evidence": json.loads((HERE/"near_tie_source_evidence.json").read_text()),
+                        "resolution_spec": json.loads((HERE/"near_tie_resolution_spec.json").read_text())}}
+    with (HERE/"verification.json").open("x", encoding="utf-8") as stream:
+        json.dump(verification, stream, indent=2, allow_nan=False)
+        stream.write("\n")
+    print(json.dumps(verification, indent=2))
+
+
+if __name__ == "__main__":
+    main()

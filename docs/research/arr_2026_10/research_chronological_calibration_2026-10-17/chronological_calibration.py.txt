@@ -1,0 +1,328 @@
+"""One frozen chronological V0 isotonic-transfer robustness slice."""
+from __future__ import annotations
+
+import argparse
+import csv
+import gzip
+import hashlib
+import io
+import json
+import math
+import random
+import sys
+import types
+from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+from statistics import fmean
+
+HERE = Path(__file__).resolve().parent
+BASE = HERE.parent
+ROOT = Path(r"C:\Users\paree\.codex\worktrees\research-prompt-selection\Foresea")
+BENCHMARK = "forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json"
+BENCHMARK_SHA = "0ab34e631c26d9446dc26931819f4f0ebfd89b663aa7aa1144a0a2cd4aa05cde"
+SOURCES = {
+    "transfer_helper.py": (ROOT/"scripts/calibration_transfer_analysis.py",
+                           "bcf07ebb0cc7677fac0bbace1bc47387ce15b445c27b00d67e75cc5c57776dc4"),
+    "calibration_helper.py": (BASE/"calibration_followup/calibration_analysis.py",
+                              "887d6bd93d823694881fc66ab2f6bdf344eb050669e1f7f7c64cb14e6fb3d5cf"),
+}
+ARCHIVE = {
+    "manifest.json": "4b4533bcf16586a6b92731de54f3728ec66ffc0c777df4afa230a49140ec7f90",
+    "oof_predictions.csv.gz": "8eb9e2d891f92a6f89ef18e6e2a8e95397822c617eba066c7e92e8f365fd6fad",
+    "question_folds.csv": "faf1a78295cf287214281b09a0e2edbd8c5dcd7e61b3144c00b121a630a7fd80",
+}
+
+
+def sha(payload):
+    return hashlib.sha256(payload).hexdigest()
+
+
+def read_pinned(path, expected):
+    payload = Path(path).read_bytes()
+    if sha(payload) != expected:
+        raise ValueError(f"Pinned SHA256 mismatch: {path}")
+    return payload
+
+
+def write_json(path, value):
+    payload = json.dumps(value, indent=2, sort_keys=True, allow_nan=False)+"\n"
+    with Path(path).open("x", encoding="utf-8") as stream:
+        stream.write(payload)
+
+
+def helpers():
+    modules = []
+    for name, (original, expected) in SOURCES.items():
+        path = HERE/"frozen"/name if (HERE/"frozen"/name).exists() else original
+        payload = read_pinned(path, expected)
+        module = types.ModuleType("private_chronological_"+name.removesuffix(".py"))
+        module.__file__ = str(path)
+        sys.modules[module.__name__] = module  # dataclasses resolves its module during execution
+        exec(compile(payload, str(path), "exec"), module.__dict__)
+        modules.append(module)
+    return tuple(modules)
+
+
+def utc(text):
+    if not isinstance(text, str):
+        raise ValueError("Timestamp must be a string")
+    result = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    if result.tzinfo is None or result.utcoffset() is None:
+        raise ValueError("Timestamp must specify a timezone")
+    return result.astimezone(timezone.utc)
+
+
+def partition(rows, rank=1264, min_train=500, min_test=100):
+    ids, prepared = set(), []
+    for row in rows:
+        q, title, answer = row.get("id"), row.get("question"), row.get("answer")
+        if type(q) is not int or q in ids or not isinstance(title, str) or not title or answer not in ("yes", "no"):
+            raise ValueError("Unique integer IDs, exact nonempty titles and Yes/No labels required")
+        ids.add(q)
+        prepared.append((utc(row["resolve_time"]), q, row))
+    prepared.sort(key=lambda r: (r[0], r[1]))
+    if type(rank) is not int or not 1 <= rank <= len(prepared):
+        raise ValueError("Invalid predetermined rank")
+    cutoff = prepared[rank-1][0]
+    late = [r for date, _, r in prepared if date > cutoff]
+    late_titles = {r["question"] for r in late}
+    candidates = [r for date, _, r in prepared if date <= cutoff]
+    purged = [{"id": r["id"], "reason": "exact_raw_title_in_heldout"}
+              for r in candidates if r["question"] in late_titles]
+    purge_ids = {r["id"] for r in purged}
+    train = [r for r in candidates if r["id"] not in purge_ids]
+    if len(train) < min_train or len(late) < min_test or {r["answer"] for r in train} != {"yes", "no"}:
+        raise ValueError("Prespecified split infeasible; no alternative cutoff permitted")
+    return {"cutoff_utc": cutoff.isoformat(), "rank": rank,
+            "train_candidate_ids": [r["id"] for r in candidates], "train_ids": [r["id"] for r in train],
+            "heldout_ids": [r["id"] for r in late], "purged": purged,
+            "train_title_n": len({r["question"] for r in train}), "heldout_title_n": len(late_titles),
+            "train_yes": sum(r["answer"] == "yes" for r in train),
+            "cutoff_tie_n": sum(date == cutoff for date, _, _ in prepared),
+            "rows": [{"id": q, "title": r["question"], "resolve_time_original": r["resolve_time"],
+                      "resolve_time_utc": date.isoformat(), "target": int(r["answer"] == "yes"),
+                      "partition": "purged_training" if q in purge_ids else "train" if date <= cutoff else "heldout"}
+                     for date, q, r in prepared]}
+
+
+def freeze():
+    destination = HERE/"frozen"
+    if destination.exists():
+        raise FileExistsError(destination)
+    benchmark_bytes = read_pinned(ROOT/BENCHMARK, BENCHMARK_SHA)
+    split = partition(json.loads(benchmark_bytes.decode("utf-8-sig")))
+    if (len(split["rows"]), len(split["train_ids"]), len(split["heldout_ids"]), split["cutoff_utc"]) != (
+            1580, 1265, 315, "2026-01-05T23:45:00+00:00") or split["purged"]:
+        raise ValueError("Metadata differs from the fixed protocol")
+    buffers = {name: read_pinned(path, expected) for name, (path, expected) in SOURCES.items()}
+    buffers.update({name: read_pinned(BASE/"calibration_followup"/name, expected)
+                    for name, expected in ARCHIVE.items()})
+    destination.mkdir()
+    for name, payload in buffers.items():
+        with (destination/name).open("xb") as stream:
+            stream.write(payload)
+    write_json(destination/"partition.json", split)
+    manifest = {"created_utc": datetime.now(timezone.utc).isoformat(), "metadata_only": True,
+                "benchmark_sha256": BENCHMARK_SHA, "protocol_sha256": sha((HERE/"protocol.md").read_bytes()),
+                "sources_sha256": {p.name: sha(p.read_bytes()) for p in
+                                   (Path(__file__), HERE/"test_chronological_calibration.py")},
+                "frozen_sha256": {p.name: sha(p.read_bytes()) for p in sorted(destination.iterdir())}}
+    write_json(destination/"freeze_manifest.json", manifest)
+    print(json.dumps({k: v for k, v in split.items() if k not in ("rows", "train_candidate_ids", "train_ids", "heldout_ids")}, indent=2))
+    print("partition_sha256", manifest["frozen_sha256"]["partition.json"])
+
+
+def strict_rows(rows, targets):
+    values = {}
+    for row in rows:
+        q, p, y = row["id"], row["raw"], row["target"]
+        if (type(q) is not int or q in values or q not in targets or type(y) is not int or y != targets[q]
+                or isinstance(p, bool) or not math.isfinite(p) or not 0 <= p <= 1):
+            raise ValueError("Invalid, duplicate, unknown or inconsistent archived forecast")
+        values[q] = row
+    if set(values) != set(targets):
+        raise ValueError("Missing original benchmark IDs; exclusions prohibited")
+    return values
+
+
+def fit(values, train_ids, helper):
+    if len(set(train_ids)) != len(train_ids) or not train_ids or not set(train_ids) <= set(values):
+        raise ValueError("Unique known training IDs required")
+    p = [values[q]["raw"] for q in train_ids]
+    y = [values[q]["target"] for q in train_ids]
+    helper.validate_vectors(p, y)
+    if set(y) != {0, 1}:
+        raise ValueError("Both training outcomes required")
+    fitted = helper.IsotonicRegression(increasing=True, y_min=0, y_max=1, out_of_bounds="clip")
+    return fitted.fit(p, y)
+
+
+def question_losses(predictions, ids):
+    grouped = defaultdict(dict)
+    for row in predictions:
+        q, variant = row["id"], row["variant"]
+        if q not in ids or type(variant) is not int or variant not in range(9) or variant in grouped[q]:
+            raise ValueError("Duplicate/unknown prediction ID or variant")
+        grouped[q][variant] = row
+    if set(grouped) != set(ids) or any(set(v) != set(range(9)) for v in grouped.values()):
+        raise ValueError("Every question requires all nine prompt predictions")
+    return {q: {method: fmean((grouped[q][v][method]-grouped[q][v]["target"])**2 for v in range(1, 9))
+                for method in ("raw", "transfer", "separate")} for q in ids}
+
+
+def percentile(values, fraction):
+    values = sorted(values)
+    position = fraction*(len(values)-1)
+    low, high = int(position), min(int(position)+1, len(values)-1)
+    return values[low]+(values[high]-values[low])*(position-low)
+
+
+def summarize(losses, titles):
+    if set(losses) != set(titles):
+        raise ValueError("Loss/title cohort mismatch")
+    groups = defaultdict(list)
+    for q in losses:
+        groups[titles[q]].append(q)
+    ordered = sorted(groups)
+    counts = [len(groups[t]) for t in ordered]
+    means = [{m: fmean(losses[q][m] for q in groups[t]) for m in ("raw", "transfer", "separate")}
+             for t in ordered]
+    result = {}
+    for weighting in ("question", "title"):
+        scores = {m+"_brier": fmean(losses[q][m] for q in losses) if weighting == "question"
+                  else fmean(r[m] for r in means) for m in ("raw", "transfer", "separate")}
+        result[weighting+"_weighted"] = {**scores, "transfer_minus_raw": scores["transfer_brier"]-scores["raw_brier"],
+                                         "transfer_minus_separate": scores["transfer_brier"]-scores["separate_brier"]}
+    primary = [r["transfer"]-r["raw"] for r in means]
+    diagnostic = [r["transfer"]-r["separate"] for r in means]
+    draws = {k: [] for k in ("question_primary", "question_diagnostic", "title_primary", "title_diagnostic")}
+    rng = random.Random(42)
+    for _ in range(2000):
+        picked = rng.choices(range(len(ordered)), k=len(ordered))
+        denominator = sum(counts[i] for i in picked)
+        for name, values in (("primary", primary), ("diagnostic", diagnostic)):
+            draws["question_"+name].append(sum(values[i]*counts[i] for i in picked)/denominator)
+            draws["title_"+name].append(fmean(values[i] for i in picked))
+    for weighting in ("question", "title"):
+        for name in ("primary", "diagnostic"):
+            result[weighting+"_weighted"][name+"_interval"] = [percentile(draws[weighting+"_"+name], p) for p in (0.025, 0.975)]
+    return result
+
+
+def run():
+    frozen, output = HERE/"frozen", HERE/"outputs"
+    if output.exists():
+        raise FileExistsError(output)
+    manifest = json.loads((frozen/"freeze_manifest.json").read_text())
+    for name, expected in manifest["frozen_sha256"].items():
+        read_pinned(frozen/name, expected)
+    for name, expected in manifest["sources_sha256"].items():
+        read_pinned(HERE/name, expected)
+    read_pinned(HERE/"protocol.md", manifest["protocol_sha256"])
+    read_pinned(ROOT/BENCHMARK, BENCHMARK_SHA)
+    split = json.loads((frozen/"partition.json").read_text())
+    targets = {r["id"]: r["target"] for r in split["rows"]}
+    titles = {r["id"]: r["title"] for r in split["rows"] if r["partition"] == "heldout"}
+    transfer_helper, calibration_helper = helpers()
+    archived, archive_hashes = transfer_helper.read_saved(frozen)
+    groups = {key: strict_rows(rows, targets) for key, rows in archived.items()}
+    original_manifest = json.loads((frozen/"manifest.json").read_text())
+    original_hashes, maximum_raw_error = {}, 0.0
+    for model in transfer_helper.MODELS:
+        for variant in range(9):
+            prefix = f"results/{model}/temperature_{calibration_helper.ZERO[model]}/results_variant{variant}_"
+            matches = [p for p in original_manifest["input_sha256"] if p.startswith(prefix) and p.endswith(".json")
+                       and "/" not in p[len(prefix):]]
+            if len(matches) != 1:
+                raise ValueError("Missing exact original model/variant input")
+            relative = matches[0]
+            expected = original_manifest["input_sha256"][relative]
+            payload = read_pinned(ROOT/relative, expected)
+            rows = json.loads(payload.decode("utf-8-sig"))
+            seen = set()
+            for row in rows:
+                q, answer, confidence = row.get("id"), str(row.get("predicted_answer")).strip().lower(), row.get("confidence")
+                if type(q) is not int or q in seen or q not in targets or isinstance(confidence, bool) or confidence is None:
+                    raise ValueError("Invalid original forecast ID/confidence")
+                seen.add(q)
+                confidence = float(confidence)
+                if answer not in ("yes", "no") or not math.isfinite(confidence) or not 0 <= confidence <= 1:
+                    raise ValueError("Invalid original answer/confidence")
+                for reading in ("selected", "direct"):
+                    error = abs(calibration_helper.probability_yes(answer, confidence, reading)-groups[model, reading, variant][q]["raw"])
+                    maximum_raw_error = max(error, maximum_raw_error)
+                    if error > 1e-14:
+                        raise ValueError("Archived confidence-reading mismatch beyond export tolerance")
+            if seen != set(targets):
+                raise ValueError("Incomplete original forecast cohort")
+            original_hashes[relative] = expected
+    predictions, prompt_scores, fits, summaries = [], [], [], []
+    for model in transfer_helper.MODELS:
+        for reading in ("selected", "direct"):
+            baseline_fit = fit(groups[model, reading, 0], split["train_ids"], calibration_helper)
+            context = []
+            for variant in range(9):
+                values = groups[model, reading, variant]
+                separate_fit = baseline_fit if variant == 0 else fit(values, split["train_ids"], calibration_helper)
+                fits.append({"model": model, "reading": reading, "variant": variant,
+                             "train_n": len(split["train_ids"]), "x_thresholds": separate_fit.X_thresholds_.tolist(),
+                             "y_thresholds": separate_fit.y_thresholds_.tolist()})
+                raw = [values[q]["raw"] for q in split["heldout_ids"]]
+                transfer, separate = baseline_fit.predict(raw), separate_fit.predict(raw)
+                rows = [{"model": model, "reading": reading, "variant": variant, "id": q, "target": targets[q],
+                         "raw": p, "transfer": float(t), "separate": float(s)}
+                        for q, p, t, s in zip(split["heldout_ids"], raw, transfer, separate)]
+                context.extend(rows)
+                scores = {m+"_brier": fmean((r[m]-r["target"])**2 for r in rows) for m in ("raw", "transfer", "separate")}
+                prompt_scores.append({"model": model, "reading": reading, "variant": variant, "n": len(rows), **scores,
+                                      "transfer_minus_raw": scores["transfer_brier"]-scores["raw_brier"],
+                                      "transfer_minus_separate": scores["transfer_brier"]-scores["separate_brier"]})
+            losses = question_losses(context, split["heldout_ids"])
+            v0 = next(r for r in prompt_scores if r["model"] == model and r["reading"] == reading and r["variant"] == 0)
+            summaries.append({"model": model, "reading": reading, "heldout_n": len(titles),
+                              "heldout_titles": len(set(titles.values())), "v0_raw_brier": v0["raw_brier"],
+                              "v0_calibrated_brier": v0["transfer_brier"], **summarize(losses, titles)})
+            predictions.extend(context)
+    import numpy
+    import sklearn
+    report = {"schema": "chronological_isotonic_transfer_v1", "created_utc": datetime.now(timezone.utc).isoformat(),
+              "model_calls": 0, "calibrator_fits": len(fits), "archive_input_sha256": archive_hashes,
+              "original_forecast_sha256": original_hashes, "benchmark_sha256": BENCHMARK_SHA,
+              "freeze_manifest_sha256": sha((frozen/"freeze_manifest.json").read_bytes()),
+              "partition_sha256": sha((frozen/"partition.json").read_bytes()), "protocol_sha256": manifest["protocol_sha256"],
+              "source_sha256": manifest["sources_sha256"], "maximum_raw_export_error": maximum_raw_error,
+              "split": {k: split[k] for k in ("cutoff_utc", "train_ids", "heldout_ids", "purged", "train_title_n", "heldout_title_n", "train_yes", "cutoff_tie_n")},
+              "settings": {"fit": "increasing isotonic; y_min=0 y_max=1 out_of_bounds=clip; original helper class",
+                           "primary": "mean of eight separate V1-V8 losses within ID, then mean across heldout IDs",
+                           "diagnostic": "V0 transfer minus eight separately train-fitted prompt maps",
+                           "bootstrap": "2000 seed42 heldout exact-title-cluster resamples, fixed calibrators, linear percentile",
+                           "interpretations": "selected-answer primary conditional reading; direct-PYES sensitivity"},
+              "limitations": ["retrospective distribution shift only; no ex-ante or model-training-safety claim",
+                              "exact-title separation is a lower bound on event-family dependence",
+                              "fixed training/maps; pointwise six-condition exploratory intervals; no multiplicity correction",
+                              "no confirmatory significance, equivalence, future-gain or historical-semantic-resolution claim"],
+              "versions": {"python": sys.version, "numpy": numpy.__version__, "sklearn": sklearn.__version__},
+              "summaries": summaries, "prompt_scores": prompt_scores, "fitted_calibrators": fits}
+    output.mkdir()
+    write_json(output/"report.json", report)
+    with (output/"per_prompt.csv").open("x", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(prompt_scores[0]), lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(prompt_scores)
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=list(predictions[0]), lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(predictions)
+    with (output/"predictions.csv.gz").open("xb") as stream:
+        stream.write(gzip.compress(buffer.getvalue().encode(), mtime=0))
+    write_json(output/"manifest.json", {"output_sha256": {p.name: sha(p.read_bytes()) for p in sorted(output.iterdir())},
+                                       "freeze_manifest_sha256": report["freeze_manifest_sha256"]})
+    print(json.dumps(summaries, indent=2))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", choices=("freeze", "run"))
+    args = parser.parse_args()
+    freeze() if args.mode == "freeze" else run()
