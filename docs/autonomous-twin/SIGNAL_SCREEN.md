@@ -35,10 +35,11 @@ Domain labels are recomputed using Foresea's existing `tag_question` helper.
 ## Noise controls and decision rule
 
 The primary published summary contains 7,374 daily snapshots across 479 markets.
-`track_record_live._skill_ci` currently treats per-snapshot Brier differences as
-independent. Repeated forecasts on the same market can therefore make its
-intervals too narrow. This screen uses one entry per model/market and reuses
-`market_clustered_brier_skill_interval`; it does not repair the published CI.
+The publisher version that produced this source artifact treated per-snapshot
+Brier differences as independent. Repeated forecasts on the same market can
+therefore make those intervals too narrow. This screen uses one entry per model/market and reuses
+`market_clustered_brier_skill_interval`; it does not itself repair the published
+artifact. The follow-up publisher correction is described below.
 
 The two periods are separated at `2026-09-01T00:00:00+00:00`. Earlier entries
 must both be forecast and resolve before the split; later entries must be
@@ -95,10 +96,14 @@ It establishes that this screen supplies no qualifying evidence.
    sufficient fields for those checks. Existing twin capture, replay, risk and
    execution code should supply them; no new paid research source is needed.
 
-The current sports research prior in PR #687 remains a research-allocation hint;
-it is not upgraded by this report. A production signal gate and correction of
-the publisher's snapshot confidence calculation are follow-up implementation.
-No signal from this screen may authorize a live order.
+The original sports research prior in PR #687 is a research-allocation hint.
+Follow-up implementation on `codex/twin-clustered-signal-gate` corrects publisher
+confidence to market means with within-family comparison adjustment and30-market
+minimum, and rejects legacy confidence in research-priority/horizon consumers.
+Existing bundled reports lacking that metadata qualify no research prior until
+recomputed from raw snapshots. This report's first-entry screen is not the
+publisher's all-snapshot matched-horizon analysis; neither proves event-disjoint
+performance or transferable BYOM returns. No signal here authorizes a live order.
 
 ## Verification and delivery
 
@@ -117,3 +122,11 @@ Implementation base: `e2ebd8753`, draft PR #688. That base passed 2,813 tests
 deployment audit. This document changes no executable behavior. No deployment,
 model call, venue request, collection schedule or R2/GCS operation was performed
 for the screen.
+
+## Local raw-source follow-up
+
+`RAW_SIGNAL_SCREEN.md` separately checks the older local DuckDB source ending
+September 27. Its 42,094 timing-qualified resolved ledger forecasts contain no
+compatible twin model/prompt/cluster provenance. None of its 300 nonempty
+research cohorts passes the adjusted confidence screen. It does not replace
+or recompute the newer October 18 source used above.

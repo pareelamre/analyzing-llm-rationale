@@ -4,9 +4,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from pathlib import Path
+
+from ..entity_tagger import DOMAINS
+from ..forecast_evaluation import has_qualified_market_skill
 
 _MAX_AGE = timedelta(days=7)
 _MAX_BYTES = 16_000_000
@@ -33,8 +35,9 @@ def load_forecast_research_prior(
     """Read a research hint, never a sizing calibration.
 
     Foresea reports skill as market Brier minus model Brier. Its domain CI is
-    an unadjusted per-domain interval, so even positive rows are hypotheses
-    for research allocation, not transferable BYOM performance evidence.
+    a corrected interval over market means. Legacy per-snapshot confidence
+    cannot prioritize research. Positive rows remain research hypotheses,
+    not transferable BYOM performance or executable-return evidence.
     """
     try:
         if path.stat().st_size > _MAX_BYTES:
@@ -52,22 +55,15 @@ def load_forecast_research_prior(
             return None
         domains: set[str] = set()
         for row in rows:
-            if not isinstance(row, dict) or row.get("skill_significant") is not True:
+            if not isinstance(row, dict) or not has_qualified_market_skill(
+                row, minimum_comparisons=max(len(DOMAINS), len(rows)),
+            ):
                 continue
             domain = row.get("domain")
-            count = row.get("n")
             if not isinstance(domain, str) or not domain.strip() or len(domain) > 64:
                 continue
-            if isinstance(count, bool) or not isinstance(count, int) or count < 30:
-                continue
-            try:
-                low = Decimal(str(row.get("skill_ci_low")))
-                skill = Decimal(str(row.get("skill_vs_market")))
-            except (InvalidOperation, TypeError, ValueError):
-                continue
-            if low.is_finite() and skill.is_finite() and low > 0 and skill > 0:
-                domains.add(domain.strip().lower())
+            domains.add(domain.strip().lower())
         prior = ForecastResearchPrior(generated_at, sha256(raw).hexdigest(), frozenset(domains))
         return prior if domains and prior.valid_at(as_of) else None
-    except (OSError, ValueError, TypeError, KeyError, InvalidOperation, RecursionError):
+    except (OSError, ValueError, TypeError, KeyError, RecursionError):
         return None

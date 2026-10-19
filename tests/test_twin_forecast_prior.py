@@ -30,10 +30,28 @@ class ForecastPriorTests(unittest.TestCase):
                 "domain": "sports", "n": 120,
                 "skill_significant": significant,
                 "skill_ci_low": 0.004,
+                "skill_ci_high": 0.016, "skill_ci_mean": 0.01,
+                "n_markets": 60, "skill_ci_comparisons": 10,
+                "skill_ci_method": "market_means_normal_bonferroni_v1",
                 "skill_vs_market": 0.01,
             }],
         }), encoding="utf-8")
         return path
+
+    def test_legacy_or_underpowered_evidence_cannot_prioritize_research(self):
+        with TemporaryDirectory() as directory:
+            for field, value in (
+                ("skill_ci_method", None), ("skill_ci_method", "snapshot_normal"),
+                ("n_markets", 29), ("n_markets", True), ("n_markets", 121),
+                ("skill_ci_comparisons", 1), ("skill_ci_comparisons", "10"),
+                ("skill_ci_mean", -0.01), ("skill_ci_high", float("nan")),
+            ):
+                path = self._artifact(Path(directory), generated_at=NOW - timedelta(hours=1))
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                payload["by_domain"][0][field] = value
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.subTest(field=field, value=value):
+                    self.assertIsNone(load_forecast_research_prior(path, as_of=NOW))
 
     def test_accepts_only_prior_positive_resolved_skill(self):
         with TemporaryDirectory() as directory:
@@ -63,9 +81,18 @@ class ForecastPriorTests(unittest.TestCase):
                 frozenset({"sports"}),
             )
             for count, low, skill in ((29, 0.01, 0.01), (30, 0, 0.01), (30, 0.01, 0)):
-                payload["by_domain"][1].update(n=count, skill_ci_low=low, skill_vs_market=skill)
+                payload["by_domain"][1].update(n=count, skill_ci_low=low, skill_ci_mean=skill)
                 path.write_text(json.dumps(payload), encoding="utf-8")
                 self.assertIsNone(load_forecast_research_prior(path, as_of=NOW))
+
+    def test_market_interval_is_not_vetoed_by_snapshot_weighting(self):
+        with TemporaryDirectory() as directory:
+            path = self._artifact(Path(directory), generated_at=NOW - timedelta(hours=1))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["by_domain"][0]["skill_vs_market"] = -0.2
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertEqual(load_forecast_research_prior(path, as_of=NOW).validated_domains,
+                             frozenset({"sports"}))
             path.write_text("[" * 2000 + "]" * 2000, encoding="utf-8")
             self.assertIsNone(load_forecast_research_prior(path, as_of=NOW))
             for key, value in (

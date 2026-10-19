@@ -576,7 +576,8 @@ def _preview_polymarket(
             f"${_money(max_notional):.2f}."
         )
     order_type_name = str(req.get("time_in_force") or ("FOK" if order_type == "market" else "GTC")).strip().upper()
-    allowed = {"GTC", "GTD"} if order_type == "limit" else {"FOK", "FAK"}
+    order_type_name = "FAK" if order_type_name == "IOC" else order_type_name
+    allowed = {"GTC", "GTD", "FAK", "FOK"} if order_type == "limit" else {"FOK", "FAK"}
     if order_type_name not in allowed:
         raise TradingValidationError(
             f"Polymarket {order_type} orders require time_in_force in {sorted(allowed)}."
@@ -667,7 +668,7 @@ def preview_order(
     ]
     if byo:
         warnings.append("Order signs with the credentials you supplied; they are never stored by Foresea.")
-    if order_type == "market":
+    if order_type == "market" or (platform == "polymarket" and normalized["exchange_order"]["order_type"] in {"FAK", "FOK"}):
         warnings.append("Market/IOC/FOK-style orders require FORESEA_ALLOW_MARKET_ORDERS=true.")
     if platform == "kalshi":
         warnings.append(
@@ -691,7 +692,10 @@ def _require_execution_enabled(normalized: Mapping[str, Any], *, byo: bool = Fal
     gate_var = "FORESEA_ENABLE_BYO_TRADING" if byo else "FORESEA_ENABLE_TRADING"
     if not _env_bool(gate_var, False):
         raise TradingDisabledError(f"Live trading is disabled. Set {gate_var}=true.")
-    if normalized.get("order_type") == "market" and not _env_bool("FORESEA_ALLOW_MARKET_ORDERS", False):
+    immediate = (normalized.get("order_type") == "market" or (
+        normalized.get("platform") == "polymarket"
+        and normalized.get("exchange_order", {}).get("order_type") in {"FAK", "FOK"}))
+    if immediate and not _env_bool("FORESEA_ALLOW_MARKET_ORDERS", False):
         raise TradingDisabledError(
             "Market orders are disabled. Set FORESEA_ALLOW_MARKET_ORDERS=true to allow them."
         )
