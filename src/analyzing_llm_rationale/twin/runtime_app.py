@@ -1037,13 +1037,36 @@ def _research_operation(
     )
 
 
-def _dispatch_secret() -> str | None:
-    """Shared secret for local dispatch, or None on GCP (which uses OIDC)."""
+def _local_secret(name: str) -> str | None:
+    """Role-scoped secret for SQL workers, or None with GCP OIDC."""
     from analyzing_llm_rationale import datastore_backend
 
     if not datastore_backend.is_sql():
         return None
-    return _required("FORESEA_TWIN_DISPATCH_SECRET")
+    secret = os.environ.get(name, "")
+    if len(secret) < 32 or secret != secret.strip():
+        raise ValueError(f"{name} must contain at least 32 non-whitespace characters")
+    return secret
+
+
+def _local_worker_secrets(role: WorkerRole) -> tuple[str | None, str | None, str | None]:
+    """Load only credentials required by this worker and reject role overlap."""
+    from analyzing_llm_rationale import datastore_backend
+
+    if not datastore_backend.is_sql():
+        return None, None, None
+    if role is WorkerRole.RESEARCH and os.environ.get("FORESEA_TWIN_MAINTENANCE_DISPATCH_SECRET"):
+        raise ValueError("research worker must not receive maintenance dispatch secret")
+    maintenance = (
+        _local_secret("FORESEA_TWIN_MAINTENANCE_DISPATCH_SECRET")
+        if role is WorkerRole.MAINTENANCE else None
+    )
+    research_dispatch = _local_secret("FORESEA_TWIN_RESEARCH_DISPATCH_SECRET")
+    research_gateway = _local_secret("FORESEA_TWIN_RESEARCH_GATEWAY_SECRET")
+    values = [value for value in (maintenance, research_dispatch, research_gateway) if value]
+    if len(values) != len(set(values)):
+        raise ValueError("local worker secrets must be pairwise distinct")
+    return maintenance, research_dispatch, research_gateway
 
 
 def _build_dispatcher() -> Any:
@@ -1056,16 +1079,17 @@ def _build_dispatcher() -> Any:
 
     if datastore_backend.is_sql():
         return LocalTaskDispatcher(LocalDispatchConfig(
-            _required("FORESEA_TWIN_MAINTENANCE_URL") + "/internal/twin/maintain",
-            _required("FORESEA_TWIN_RESEARCH_URL") + "/internal/twin/research",
-            _required("FORESEA_TWIN_DISPATCH_SECRET"),
+            _required("FORESEA_TWIN_MAINTENANCE_URL").rstrip("/") + "/internal/twin/maintain",
+            _required("FORESEA_TWIN_RESEARCH_URL").rstrip("/") + "/internal/twin/research",
+            _local_secret("FORESEA_TWIN_MAINTENANCE_DISPATCH_SECRET"),
+            _local_secret("FORESEA_TWIN_RESEARCH_DISPATCH_SECRET"),
         ))
     return CloudTasksDispatcher(CloudTasksConfig(
         _project_id(), _required("FORESEA_TWIN_TASKS_LOCATION"),
         _required("FORESEA_TWIN_MAINTENANCE_QUEUE"),
         _required("FORESEA_TWIN_RESEARCH_QUEUE"),
-        _required("FORESEA_TWIN_MAINTENANCE_URL") + "/internal/twin/maintain",
-        _required("FORESEA_TWIN_RESEARCH_URL") + "/internal/twin/research",
+        _required("FORESEA_TWIN_MAINTENANCE_URL").rstrip("/") + "/internal/twin/maintain",
+        _required("FORESEA_TWIN_RESEARCH_URL").rstrip("/") + "/internal/twin/research",
         _required("FORESEA_TWIN_DISPATCHER_SERVICE_ACCOUNT"),
         _required("FORESEA_TWIN_MAINTENANCE_AUDIENCE"),
         _required("FORESEA_TWIN_RESEARCH_AUDIENCE"),
@@ -1100,12 +1124,18 @@ def create_environment_app():
     """Build a role-specific app from secret-free deployment configuration."""
     _assert_shadow_only()
     role = WorkerRole(_required("FORESEA_TWIN_WORKER_ROLE"))
+    maintenance_secret, research_dispatch_secret, research_gateway_secret = (
+        _local_worker_secrets(role)
+    )
 
     def now() -> datetime:
         return datetime.now(timezone.utc)
-    audience = _required(
-        "FORESEA_TWIN_MAINTENANCE_AUDIENCE"
-        if role is WorkerRole.MAINTENANCE else "FORESEA_TWIN_RESEARCH_AUDIENCE"
+    audience = (
+        f"https://localhost/{role.value}"
+        if research_dispatch_secret is not None else _required(
+            "FORESEA_TWIN_MAINTENANCE_AUDIENCE"
+            if role is WorkerRole.MAINTENANCE else "FORESEA_TWIN_RESEARCH_AUDIENCE"
+        )
     )
     identities = RuntimeIdentityPolicy(
         audience,
@@ -1281,7 +1311,8 @@ def create_environment_app():
                 lambda: _calibration_observations(ledger, as_of=now()),
             ),
             research_gateway=gateway,
-            shared_secret=_dispatch_secret(),
+            shared_secret=maintenance_secret,
+            research_secret=research_gateway_secret,
         )
     else:
         # Startup validates the configured secret, model identity, endpoint,
@@ -1289,7 +1320,10 @@ def create_environment_app():
         provider = research_policy.build_provider()
         gateway = HttpResearchJobGateway(
             _required("FORESEA_TWIN_MAINTENANCE_URL"),
-            audience=_required("FORESEA_TWIN_MAINTENANCE_AUDIENCE"),
+            audience=("" if research_gateway_secret is not None else _required(
+                "FORESEA_TWIN_MAINTENANCE_AUDIENCE"
+            )),
+            local_secret=research_gateway_secret,
         )
         runtime = PrivateTwinRuntime(
             role, identities, now,
@@ -1298,7 +1332,7 @@ def create_environment_app():
                 assignment, research_policy, gateway,
                 provider,
             ),
-            shared_secret=_dispatch_secret(),
+            shared_secret=research_dispatch_secret,
         )
     app = create_private_worker_app(runtime)
     init_observability(app)

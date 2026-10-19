@@ -70,8 +70,8 @@ class _Session:
         self._status = status
         self._raises = raises
 
-    def post(self, url, data=None, headers=None, timeout=None):
-        self.calls.append((url, data, headers, timeout))
+    def post(self, url, data=None, headers=None, timeout=None, allow_redirects=None):
+        self.calls.append((url, data, headers, timeout, allow_redirects))
         if self._raises is not None:
             raise self._raises
         return _Response(self._status)
@@ -80,27 +80,35 @@ class _Session:
 class LocalDispatchConfigTests(unittest.TestCase):
     def test_rejects_empty_secret(self):
         with self.assertRaises(sch.WorkerDispatchError):
-            sch.LocalDispatchConfig("http://a/x", "http://b/y", "   ")
+            sch.LocalDispatchConfig("https://a/x", "https://b/y", "   ", "research")
 
     def test_rejects_relative_url(self):
         with self.assertRaises(sch.WorkerDispatchError):
-            sch.LocalDispatchConfig("/internal/twin/maintain", "http://b/y", "s")
+            sch.LocalDispatchConfig("/internal/twin/maintain", "https://b/y", "maintenance", "research")
 
     def test_rejects_out_of_range_timeout(self):
         with self.assertRaises(sch.WorkerDispatchError):
-            sch.LocalDispatchConfig("http://a/x", "http://b/y", "s", timeout_seconds=0)
+            sch.LocalDispatchConfig("https://a/x", "https://b/y", "maintenance", "research", timeout_seconds=0)
+
+    def test_rejects_remote_cleartext(self):
+        with self.assertRaisesRegex(sch.WorkerDispatchError, "loopback"):
+            sch.LocalDispatchConfig("http://remote/x", "https://b/y", "maintenance", "research")
 
     def test_accepts_https(self):
-        config = sch.LocalDispatchConfig("https://a/x", "https://b/y", "s")
+        config = sch.LocalDispatchConfig("https://a/x", "https://b/y", "maintenance", "research")
         self.assertEqual(config.timeout_seconds, 10.0)
+
+    def test_rejects_reused_role_secret(self):
+        with self.assertRaisesRegex(sch.WorkerDispatchError, "differ"):
+            sch.LocalDispatchConfig("https://a/x", "https://b/y", "same", "same")
 
 
 class LocalTaskDispatcherTests(unittest.TestCase):
     def setUp(self) -> None:
         self.config = sch.LocalDispatchConfig(
-            "http://maintenance/internal/twin/maintain",
-            "http://research/internal/twin/research",
-            "shared-secret",
+            "https://maintenance/internal/twin/maintain",
+            "https://research/internal/twin/research",
+            "maintenance-secret", "research-secret",
         )
 
     def test_body_is_byte_identical_to_cloud_tasks(self):
@@ -108,7 +116,7 @@ class LocalTaskDispatcherTests(unittest.TestCase):
         # separators=(",", ":")). The worker route parses this exact shape.
         session = _Session()
         sch.LocalTaskDispatcher(self.config, session=session).enqueue(_job(WorkerJobKind.RECOVERY))
-        _, data, _, _ = session.calls[0]
+        _, data, _, _, _ = session.calls[0]
         self.assertEqual(data, b'{"job_id":"job-1"}')
 
     def test_maintenance_kinds_route_to_maintenance_url(self):
@@ -118,7 +126,7 @@ class LocalTaskDispatcherTests(unittest.TestCase):
                      WorkerJobKind.STRATEGY):
             dispatcher.enqueue(_job(kind))
         self.assertTrue(all(
-            url == self.config.maintenance_url for url, _, _, _ in session.calls
+            url == self.config.maintenance_url for url, _, _, _, _ in session.calls
         ))
 
     def test_research_routes_to_research_url(self):
@@ -132,8 +140,14 @@ class LocalTaskDispatcherTests(unittest.TestCase):
         session = _Session()
         sch.LocalTaskDispatcher(self.config, session=session).enqueue(_job(WorkerJobKind.RECOVERY))
         headers = session.calls[0][2]
-        self.assertEqual(headers["Authorization"], "Bearer shared-secret")
+        self.assertEqual(headers["Authorization"], "Bearer maintenance-secret")
         self.assertEqual(headers["Content-Type"], "application/json")
+        self.assertFalse(session.calls[0][4])
+
+    def test_research_uses_distinct_bearer_secret(self):
+        session = _Session()
+        sch.LocalTaskDispatcher(self.config, session=session).enqueue(_job(WorkerJobKind.RESEARCH))
+        self.assertEqual(session.calls[0][2]["Authorization"], "Bearer research-secret")
 
     def test_returns_a_stable_task_name(self):
         session = _Session()
@@ -152,6 +166,13 @@ class LocalTaskDispatcherTests(unittest.TestCase):
     def test_http_error_status_is_wrapped(self):
         session = _Session(status=503)
         with self.assertRaises(sch.WorkerDispatchError):
+            sch.LocalTaskDispatcher(self.config, session=session).enqueue(
+                _job(WorkerJobKind.RECOVERY)
+            )
+
+    def test_redirect_is_rejected(self):
+        session = _Session(status=302)
+        with self.assertRaisesRegex(sch.WorkerDispatchError, "dispatch failed"):
             sch.LocalTaskDispatcher(self.config, session=session).enqueue(
                 _job(WorkerJobKind.RECOVERY)
             )
@@ -194,6 +215,35 @@ class SharedSecretAuthTests(unittest.TestCase):
         runtime = self._runtime("s3cret")
         principal = runtime.authenticate(_Request("s3cret"), frozenset({"sa@x"}))
         self.assertEqual(principal, "local-dispatcher")
+
+    def test_maintenance_research_credentials_are_separate(self):
+        from analyzing_llm_rationale.twin.runtime import (
+            PrivateTwinRuntime,
+            RuntimeIdentityPolicy,
+        )
+
+        runtime = PrivateTwinRuntime(
+            role="maintenance",
+            identities=RuntimeIdentityPolicy(
+                audience="https://worker.example",
+                scheduler_accounts=frozenset({"scheduler@x"}),
+                dispatcher_accounts=frozenset({"dispatcher@x"}),
+                research_accounts=frozenset({"research@x"}),
+            ),
+            clock=lambda: _NOW,
+            jobs=object(), dispatcher=object(), maintenance_worker=object(),
+            maintenance_operation=lambda job: {}, research_gateway=object(),
+            shared_secret="maintenance-secret", research_secret="research-secret",
+        )
+        self.assertEqual(runtime.authenticate(
+            _Request("research-secret"), frozenset({"research@x"}), research=True,
+        ), "local-research")
+        with self.assertRaises(WorkerAuthenticationError):
+            runtime.authenticate(_Request("research-secret"), frozenset({"dispatcher@x"}))
+        with self.assertRaises(WorkerAuthenticationError):
+            runtime.authenticate(
+                _Request("maintenance-secret"), frozenset({"research@x"}), research=True,
+            )
 
     def test_wrong_secret_is_rejected(self):
         runtime = self._runtime("s3cret")
