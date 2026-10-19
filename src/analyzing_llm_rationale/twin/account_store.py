@@ -49,6 +49,8 @@ def _json_default(value: Any) -> str:
 
 def _validate_snapshot(snapshot: AccountSnapshot) -> None:
     """Recheck persisted financial invariants before accepting account authority."""
+    if snapshot.account_epoch is not None and (type(snapshot.account_epoch) is not int or snapshot.account_epoch < 1):
+        raise AccountSnapshotStoreError('account snapshot epoch is invalid')
     if snapshot.completeness is not Completeness.COMPLETE:
         raise AccountSnapshotStoreError("only complete account snapshots may be persisted")
     if (
@@ -83,6 +85,7 @@ def _payload(snapshot: AccountSnapshot) -> dict[str, Any]:
     if snapshot.completeness is not Completeness.COMPLETE:
         raise AccountSnapshotStoreError("only complete account snapshots may be persisted")
     return {
+        **({'account_epoch':snapshot.account_epoch} if snapshot.account_epoch is not None else {}),
         "scope_id": snapshot.scope_id,
         "generation": snapshot.generation,
         "received_at": snapshot.received_at.isoformat(),
@@ -158,6 +161,7 @@ def _restore(payload: Mapping[str, Any]) -> AccountSnapshot:
             positions=collections["positions"], orders=collections["orders"], fills=collections["fills"],
             settlements=collections["settlements"], external_activity_ids=tuple(str(item) for item in payload["external_activity_ids"]),
             divergence=bool(payload["divergence"]), drift_reasons=tuple(str(item) for item in payload["drift_reasons"]),
+            account_epoch=payload.get('account_epoch'),
         )
         _validate_snapshot(snapshot)
         return snapshot

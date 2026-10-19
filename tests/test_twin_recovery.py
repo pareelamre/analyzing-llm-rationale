@@ -67,6 +67,7 @@ def lookup(command, intent, *, found, complete=True, fingerprint=None, offset=3)
         account_scope_id=command.scope_id, instrument_id=intent.instrument_id, client_order_id=command.client_order_id,
         request_fingerprint=command.request_fingerprint if fingerprint is None else fingerprint,
         complete=complete, order_found=found if complete else None, observed_at=NOW + timedelta(seconds=offset),
+        account_epoch=intent.account_epoch,
     )
 
 
@@ -83,7 +84,7 @@ def acknowledged():
     recover_submission(
         store, command=command, intent=intent, claim=claim,
         now=NOW + timedelta(seconds=3), lookups=[lookup(command, intent, found=True)],
-    )
+     clock=lambda: NOW + timedelta(seconds=3))
     return store, intent, store.command_for_intent(intent), claim
 
 
@@ -92,7 +93,7 @@ def account_snapshot(command, *, orders=(), fills=(), completeness=Completeness.
         command.scope_id, 1, NOW, completeness,
         Decimal("9"), Decimal("10"), Decimal("1"), Decimal("10"), (),
         Decimal("0"), Decimal("0"), Decimal("10"), (), tuple(orders), tuple(fills), (),
-        (), divergence, ("external activity",) if divergence else (),
+        (), divergence, ("external activity",) if divergence else (), account_epoch=1,
     )
 
 
@@ -115,7 +116,7 @@ class TwinRecoveryTests(unittest.TestCase):
         result = recover_submission(
             store, command=command, intent=intent, claim=claim, now=NOW + timedelta(seconds=3),
             lookups=[lookup(command, intent, found=True)],
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(result.action, RecoveryAction.RECONCILED)
         self.assertEqual(result.command.state, CommandState.ACKNOWLEDGED)
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal("1"))
@@ -144,7 +145,7 @@ class TwinRecoveryTests(unittest.TestCase):
                 lookup(command, intent, found=False, offset=2),
                 lookup(command, intent, found=False, offset=3),
             ],
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(result.action, RecoveryAction.CONFIRMED_ABSENT)
 
     def test_crash_after_acceptance_before_receipt_uses_venue_identity(self):
@@ -153,7 +154,7 @@ class TwinRecoveryTests(unittest.TestCase):
             store, command=command, intent=intent, claim=claim,
             now=NOW + timedelta(seconds=3),
             lookups=[lookup(command, intent, found=True)],
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(result.command.client_order_id, command.client_order_id)
         self.assertEqual(result.command.state, CommandState.ACKNOWLEDGED)
 
@@ -166,21 +167,21 @@ class TwinRecoveryTests(unittest.TestCase):
                     store, command=command, intent=intent, claim=claim,
                     now=NOW + timedelta(seconds=3),
                     lookups=[lookup(command, intent, found=True)],
-                )
+                 clock=lambda: NOW + timedelta(seconds=3))
 
     def test_incomplete_or_identity_mismatch_holds_reservation_for_operator(self):
         store, intent, command, claim = prepared_unknown()
         incomplete = recover_submission(
             store, command=command, intent=intent, claim=claim, now=NOW + timedelta(seconds=3),
             lookups=[lookup(command, intent, found=False, complete=False)],
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(incomplete.action, RecoveryAction.OPERATOR_ATTENTION)
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal("1"))
 
         mismatch = recover_submission(
             store, command=command, intent=intent, claim=claim, now=NOW + timedelta(seconds=3),
             lookups=[lookup(command, intent, found=True, fingerprint="wrong")],
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(mismatch.action, RecoveryAction.OPERATOR_ATTENTION)
         recovered = recover_submission(
             store, command=command, intent=intent, claim=claim,
@@ -189,7 +190,7 @@ class TwinRecoveryTests(unittest.TestCase):
                 lookup(command, intent, found=False, complete=False, offset=3),
                 lookup(command, intent, found=True, offset=4),
             ],
-        )
+         clock=lambda: NOW + timedelta(seconds=4))
         self.assertEqual(recovered.action, RecoveryAction.RECONCILED)
 
 
@@ -198,12 +199,12 @@ class TwinRecoveryTests(unittest.TestCase):
         repeated = recover_submission(
             store, command=command, intent=intent, claim=claim, now=NOW + timedelta(seconds=3),
             lookups=[lookup(command, intent, found=False), lookup(command, intent, found=False)],
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(repeated.action, RecoveryAction.OPERATOR_ATTENTION)
         future = recover_submission(
             store, command=command, intent=intent, claim=claim, now=NOW + timedelta(seconds=3),
             lookups=[lookup(command, intent, found=False, offset=4)],
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(future.action, RecoveryAction.OPERATOR_ATTENTION)
 
     def test_two_complete_absence_observations_release_once_without_new_identity(self):
@@ -211,7 +212,7 @@ class TwinRecoveryTests(unittest.TestCase):
         result = recover_submission(
             store, command=command, intent=intent, claim=claim, now=NOW + timedelta(seconds=3),
             lookups=[lookup(command, intent, found=False, offset=2), lookup(command, intent, found=False, offset=3)],
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(result.action, RecoveryAction.CONFIRMED_ABSENT)
         self.assertTrue(result.reservation_released)
         self.assertEqual(result.command.state, CommandState.REJECTED)
@@ -226,7 +227,7 @@ class TwinRecoveryTests(unittest.TestCase):
                 lookup(command, intent, found=False, offset=3),
                 lookup(command, intent, found=False, offset=8),
             ],
-        )
+         clock=lambda: NOW + timedelta(seconds=14))
         self.assertEqual(too_few.action, RecoveryAction.OPERATOR_ATTENTION)
         result = recover_submission(
             store, command=command, intent=intent, claim=claim,
@@ -236,7 +237,7 @@ class TwinRecoveryTests(unittest.TestCase):
                 lookup(command, intent, found=False, offset=8),
                 lookup(command, intent, found=False, offset=13),
             ],
-        )
+         clock=lambda: NOW + timedelta(seconds=14))
         self.assertEqual(result.action, RecoveryAction.CONFIRMED_ABSENT)
 
     def test_fill_versions_are_idempotent_and_out_of_order_updates_do_not_double_count(self):
@@ -301,7 +302,7 @@ class TwinRecoveryTests(unittest.TestCase):
             lookup=lookup(command, intent, found=True),
             cancel=lambda current: writes.append(current.client_order_id) or {"status": "cancelled"},
             now=NOW + timedelta(seconds=3),
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(response["status"], "cancelled")
         self.assertEqual(store.command_for_intent(intent).state, CommandState.CANCEL_REQUESTED)
         ledger = InMemoryLifecycleStore()
@@ -309,12 +310,14 @@ class TwinRecoveryTests(unittest.TestCase):
             store, ledger, command=command, intent=intent, claim=claim,
             venue_order_id="venue-order-1", fills=[fill(command, intent, "fill-1", "1")],
             order_status="cancelled", observed_at=NOW + timedelta(seconds=3),
+            clock=lambda: NOW + timedelta(seconds=3),
         )
         self.assertEqual(store.command_for_intent(intent).state, CommandState.PARTIALLY_FILLED)
         projection = reconcile_lifecycle(
             store, ledger, command=command, intent=intent, claim=claim,
             venue_order_id="venue-order-1", fills=[fill(command, intent, "fill-2", "1", offset=4)],
             order_status="cancelled", observed_at=NOW + timedelta(seconds=4),
+            clock=lambda: NOW + timedelta(seconds=4),
         )
         self.assertEqual(projection.filled_quantity, Decimal("2"))
         self.assertEqual(writes, [command.client_order_id])
@@ -327,6 +330,7 @@ class TwinRecoveryTests(unittest.TestCase):
             venue_order_id="venue-order-1",
             fills=[fill(command, intent, "fill-1", "1")],
             order_status="partially_filled", observed_at=NOW + timedelta(seconds=3),
+            clock=lambda: NOW + timedelta(seconds=3),
         )
         partial = store.command_for_intent(intent)
         self.assertEqual(partial.state, CommandState.PARTIALLY_FILLED)
@@ -340,6 +344,7 @@ class TwinRecoveryTests(unittest.TestCase):
             venue_order_id="venue-order-1",
             fills=[fill(command, intent, "fill-2", "1", offset=34)],
             order_status="filled", observed_at=NOW + timedelta(seconds=34),
+            clock=lambda: NOW + timedelta(seconds=34),
         )
         self.assertEqual(completed.filled_quantity, Decimal("2"))
         self.assertEqual(store.command_for_intent(intent).state, CommandState.FILLED)
@@ -352,14 +357,14 @@ class TwinRecoveryTests(unittest.TestCase):
                 lookup=lookup(command, intent, found=True),
                 cancel=lambda _: (_ for _ in ()).throw(TimeoutError("lost")),
                 now=NOW + timedelta(seconds=3),
-            )
+             clock=lambda: NOW + timedelta(seconds=3))
         self.assertEqual(store.command_for_intent(intent).state, CommandState.CANCEL_REQUESTED)
         with self.assertRaisesRegex(RecoveryBlocked, "matching live-order"):
             cancel_after_reconciliation(
                 store, command=command, intent=intent, claim=claim,
                 lookup=lookup(command, intent, found=False, offset=4), cancel=lambda _: {},
                 now=NOW + timedelta(seconds=4),
-            )
+             clock=lambda: NOW + timedelta(seconds=4))
 
     def test_cancel_rejects_stale_lookup_and_unconfirmed_response(self):
         store, intent, command, claim = acknowledged()
@@ -368,13 +373,13 @@ class TwinRecoveryTests(unittest.TestCase):
                 store, command=command, intent=intent, claim=claim,
                 lookup=lookup(command, intent, found=True, offset=3), cancel=lambda _: {},
                 now=NOW + timedelta(seconds=9),
-            )
+             clock=lambda: NOW + timedelta(seconds=9))
         with self.assertRaisesRegex(RecoveryBlocked, "unconfirmed"):
             cancel_after_reconciliation(
                 store, command=command, intent=intent, claim=claim,
                 lookup=lookup(command, intent, found=True, offset=4), cancel=lambda _: {},
                 now=NOW + timedelta(seconds=4),
-            )
+             clock=lambda: NOW + timedelta(seconds=4))
 
     def test_provisional_final_and_corrective_settlement_revisions_are_retained(self):
         base = LifecycleProjection(
@@ -385,7 +390,9 @@ class TwinRecoveryTests(unittest.TestCase):
             "settle-1", 1, "venue-order-1", "client-1", base.instrument_id,
             Decimal("1"), False, NOW, NOW,
         )
-        current = apply_lifecycle_observations(base, settlements=[provisional], observed_at=NOW)
+        current = apply_lifecycle_observations(base, settlements=[provisional], observed_at=NOW,
+            fills=[FillObservation('fill-1', 1, 'venue-order-1', 'client-1', base.instrument_id,
+                Decimal('1'), NOW, NOW)])
         self.assertIsNone(current.settled_amount)
         final = SettlementObservation(
             "settle-1", 2, "venue-order-1", "client-1", base.instrument_id,
@@ -424,6 +431,7 @@ class TwinRecoveryTests(unittest.TestCase):
             store, ledger, command=command, intent=intent, claim=claim,
             venue_order_id="venue-order-1", settlements=[provisional],
             order_status="open", observed_at=NOW,
+            clock=lambda: NOW,
         )
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal("1"))
         final = settlement(command, intent, version=2, amount="1", final=True, offset=1)
@@ -431,6 +439,7 @@ class TwinRecoveryTests(unittest.TestCase):
             store, ledger, command=command, intent=intent, claim=claim,
             venue_order_id="venue-order-1", settlements=[final],
             order_status="cancelled", terminal_evidence_complete=True, observed_at=NOW + timedelta(seconds=1),
+            clock=lambda: NOW + timedelta(seconds=1),
         )
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal("0"))
         self.assertEqual(
@@ -445,6 +454,7 @@ class TwinRecoveryTests(unittest.TestCase):
             store, ledger, command=command, intent=intent, claim=claim,
             venue_order_id="venue-order-1", settlements=[correction],
             order_status="cancelled", terminal_evidence_complete=True, observed_at=NOW + timedelta(seconds=2),
+            clock=lambda: NOW + timedelta(seconds=2),
         )
         self.assertEqual(reconciled.settled_amount, Decimal("0.9"))
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal("0"))
@@ -461,12 +471,13 @@ class TwinRecoveryTests(unittest.TestCase):
             store, command=command, intent=intent, claim=claim,
             now=NOW + timedelta(seconds=3),
             lookups=[lookup(command, intent, found=True)],
-        )
+         clock=lambda: NOW + timedelta(seconds=3))
         with self.assertRaisesRegex(RecoveryBlocked, "durable storage"):
             reconcile_lifecycle(
                 store, InMemoryLifecycleStore(), command=command, intent=intent,
                 claim=claim, venue_order_id="venue-order-1", order_status="open",
                 observed_at=NOW + timedelta(seconds=3),
+                clock=lambda: NOW + timedelta(seconds=3),
             )
 
     def test_unsubmitted_reservation_cannot_be_settled(self):
@@ -500,6 +511,7 @@ class TwinRecoveryTests(unittest.TestCase):
                 store, InMemoryLifecycleStore(), command=command, intent=intent,
                 claim=old_claim, venue_order_id="venue-order-1",
                 order_status="open", observed_at=NOW + timedelta(seconds=33),
+                clock=lambda: NOW + timedelta(seconds=33),
             )
 
     def test_startup_never_treats_an_expired_lease_as_no_order(self):

@@ -9,14 +9,16 @@ from __future__ import annotations
 
 import json
 import threading
+from contextlib import nullcontext
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from hashlib import sha256
-from typing import Any, Mapping, Optional, Protocol
+from typing import Any, Callable, Mapping, Optional, Protocol
 
 from opentelemetry import metrics, trace
+from opentelemetry.trace import Status, StatusCode
 
 from .models import (
     AccountScope,
@@ -27,6 +29,12 @@ from .models import (
 )
 from .prepared_requests import open_request, seal
 
+
+def _transaction_scope(client: Any):
+    """Join an enclosing account transaction; SQLite already joins internally."""
+    if getattr(client, 'current_transaction', None) is not None:
+        return nullcontext()
+    return client.transaction()
 
 def _private_request(encoded: str, scope_id: str, intent_hash: str, *, encrypt: bool = False) -> str:
     try:
@@ -62,6 +70,9 @@ class ReservationState(str, Enum):
 
 
 _CLAIMABLE_COMMAND_STATES = frozenset({
+    # Terminal commands remain read-reconcilable for delayed/corrected fills.
+    # begin_dispatch still permits SUBMITTING only, so this cannot resend them.
+    CommandState.REJECTED,
     CommandState.RESERVED,
     CommandState.SUBMITTING,
     CommandState.SUBMISSION_UNKNOWN,
@@ -72,6 +83,7 @@ _CLAIMABLE_COMMAND_STATES = frozenset({
     CommandState.CANCELLED,
 })
 _RECONCILABLE_RESERVATION_STATES = frozenset({
+    ReservationState.RELEASED,
     ReservationState.SUBMITTING,
     ReservationState.SUBMISSION_UNKNOWN,
     ReservationState.SETTLED,
@@ -166,6 +178,27 @@ class ExecutionCommand:
     prepared_request_json: str = field(default="", repr=False)
     dispatch_started: Optional[bool] = False
     dispatch_fence: Optional[int] = None
+
+
+def _command_identity(command: ExecutionCommand) -> tuple[Any, ...]:
+    return tuple(getattr(command, field) for field in (
+        'id', 'scope_id', 'intent_id', 'intent_hash', 'reservation_id', 'client_order_id', 'request_fingerprint'))
+
+
+def _attention_payload(command: ExecutionCommand, reason: str, evidence: Mapping[str, Any]):
+    if not reason or len(reason) > 80 or any(c not in 'abcdefghijklmnopqrstuvwxyz_' for c in reason):
+        raise TwinStoreError('invalid recovery attention reason')
+    allowed = {'fills', 'settlements', 'order_status', 'terminal_evidence_complete', 'observed_at', 'venue_order_id'}
+    if set(evidence)-allowed:
+        raise TwinStoreError('recovery attention evidence has unsupported fields')
+    data = {'schema_version':1, 'command_id':command.id, 'client_order_id':command.client_order_id,
+            'reason':reason, 'evidence':dict(evidence)}
+    encoded = json.dumps(data, sort_keys=True, separators=(',', ':'))
+    digest = sha256(encoded.encode()).hexdigest()
+    if len(encoded.encode()) > 131072:
+        data['evidence'] = {'oversized':True, 'sha256':digest, 'bytes':len(encoded.encode())}
+        encoded = json.dumps(data, sort_keys=True, separators=(',', ':'))
+    return 'lifecycle-'+digest, encoded
 
 
 @dataclass(frozen=True)
@@ -272,6 +305,11 @@ class TwinStore(Protocol):
 
     def settle_reservation(self, scope_id: str, reservation_id: str, *, settlement_ref: str) -> Reservation: ...
 
+    def record_recovery_attention(self, command: ExecutionCommand, intent: TradeIntent, claim: CommandClaim,
+                                  *, reason: str, evidence: Mapping[str, Any], clock: Callable[[], datetime]) -> str: ...
+
+    def recovery_attention(self, scope_id: str) -> tuple[Mapping[str, Any], ...]: ...
+
 
 class InMemoryTwinStore:
     """Thread-safe deterministic store for tests; never valid for live execution."""
@@ -289,6 +327,8 @@ class InMemoryTwinStore:
         self._commands: dict[str, ExecutionCommand] = {}
         self._outbox: dict[str, OutboxMessage] = {}
         self._inbox: set[tuple[str, str]] = set()
+        self._blocked_scopes: set[str] = set()
+        self._attention: dict[tuple[str, str], str] = {}
 
     def register_account(
         self, scope: AccountScope, *, venue_available_cash: Decimal, loss_limit: Decimal
@@ -414,6 +454,8 @@ class InMemoryTwinStore:
         prepared_json = _encode_prepared_request(prepared_request)
         with self._lock:
             projection = self.projection(intent.account_scope_id)
+            if intent.account_scope_id in self._blocked_scopes:
+                raise TwinStoreError('account paused for lifecycle reconciliation')
             authority_keys = {(intent.account_scope_id, str(value)) for value in (authority_id, authority_alias)
                               if value is not None}
             if any(self._request_authorities.get(key, intent.intent_hash) != intent.intent_hash for key in authority_keys):
@@ -510,6 +552,8 @@ class InMemoryTwinStore:
     def begin_dispatch(self, command_id: str, *, worker_id: str, fence: int, now: datetime) -> bool:
         with self._lock:
             command = self._commands[command_id]
+            if command.scope_id in self._blocked_scopes:
+                raise TwinStoreError('account paused for lifecycle reconciliation')
             if command.state not in {CommandState.RESERVED, CommandState.SUBMITTING}:
                 return False
             claim = command.claim
@@ -659,6 +703,29 @@ class InMemoryTwinStore:
                 reserved_max_loss=projection.reserved_max_loss - reservation.max_loss,
             )
             return settled
+
+    @tracer.start_as_current_span('twin.recovery.attention', record_exception=False, set_status_on_exception=False)
+    def record_recovery_attention(self, command: ExecutionCommand, intent: TradeIntent, claim: CommandClaim,
+                                  *, reason: str, evidence: Mapping[str, Any], clock: Callable[[], datetime]) -> str:
+        try:
+            ref, encoded = _attention_payload(command, reason, evidence)
+            with self._lock:
+                current = self.command_for_intent(intent)
+                scope = self.account_scope(command.scope_id)
+                if (_command_identity(current) != _command_identity(command) or current.claim != claim
+                        or scope.account_epoch != intent.account_epoch or claim.lease_expires_at <= clock()):
+                    raise TwinStoreError('stale worker cannot record recovery attention')
+                self._blocked_scopes.add(command.scope_id)
+                self._attention[(command.scope_id, ref)] = encoded
+                trace.get_current_span().set_attribute('outcome', 'paused')
+                return ref
+        except BaseException:  # aqg: top-level boundary -- bounded telemetry only, preserve caller control flow
+            trace.get_current_span().set_status(Status(StatusCode.ERROR, 'attention_unconfirmed'))
+            raise
+
+    def recovery_attention(self, scope_id: str) -> tuple[Mapping[str, Any], ...]:
+        with self._lock:
+            return tuple(json.loads(value) for (scope, _), value in self._attention.items() if scope == scope_id)
 
     def receive_inbox(self, scope_id: str, message_id: str) -> bool:
         """Return true once per delivery; repeated task/event IDs are ignored."""
@@ -875,6 +942,8 @@ class DatastoreTwinStore:
             account = self._client.get(root)
             if account is None:
                 raise TwinStoreError("account scope is not registered")
+            if account.get('recovery_blocked', False) is not False:
+                raise TwinStoreError('account paused for lifecycle reconciliation')
             projection = self._projection(account)
             authority_keys = [self._key(intent.account_scope_id, "TwinRequestAuthority",
                 sha256(str(value).encode()).hexdigest()) for value in sorted({
@@ -1005,6 +1074,9 @@ class DatastoreTwinStore:
         scope_id = self._command_scope(command_id)
         key = self._key(scope_id, "TwinCommand", command_id)
         with self._client.transaction():
+            account = self._client.get(self._key(scope_id))
+            if account is None or account.get('recovery_blocked', False) is not False:
+                raise TwinStoreError('account paused for lifecycle reconciliation')
             entity = self._client.get(key)
             if entity is not None and entity.get("state") not in {
                 CommandState.RESERVED.value, CommandState.SUBMITTING.value,
@@ -1084,7 +1156,7 @@ class DatastoreTwinStore:
                            require_unstarted: bool = False) -> ExecutionCommand:
         scope_id = self._command_scope(command_id)
         command_key = self._key(scope_id, "TwinCommand", command_id)
-        with self._client.transaction():
+        with _transaction_scope(self._client):
             entity = self._client.get(command_key)
             if entity is None:
                 raise TwinStoreError("command was not found")
@@ -1124,7 +1196,9 @@ class DatastoreTwinStore:
                 self._client.put_multi([entity, reservation, account])
             else:
                 self._client.put(entity)
-        return self.command_for_intent_by_id(scope_id, command_id)
+        # Datastore reads inside an outer transaction see its original snapshot.
+        # Return the entity we just mutated rather than re-reading stale state.
+        return self._command_from_entity(scope_id, entity)
 
     def command_for_intent_by_id(self, scope_id: str, command_id: str) -> ExecutionCommand:
         entity = self._client.get(self._key(scope_id, "TwinCommand", command_id))
@@ -1178,7 +1252,7 @@ class DatastoreTwinStore:
         if not settlement_ref.strip():
             raise TwinStoreError("settlement reference is required")
         key = self._key(scope_id, "TwinReservation", reservation_id)
-        with self._client.transaction():
+        with _transaction_scope(self._client):
             reservation = self._client.get(key)
             account = self._client.get(self._key(scope_id))
             if reservation is None or account is None:
@@ -1221,6 +1295,35 @@ class DatastoreTwinStore:
             created_at=entity["created_at"],
             reconciliation_ref=entity.get("reconciliation_ref"),
         )
+
+    @tracer.start_as_current_span('twin.recovery.attention', record_exception=False, set_status_on_exception=False)
+    def record_recovery_attention(self, command: ExecutionCommand, intent: TradeIntent, claim: CommandClaim,
+                                  *, reason: str, evidence: Mapping[str, Any], clock: Callable[[], datetime]) -> str:
+        try:
+            from analyzing_llm_rationale import datastore_backend as datastore
+
+            ref, encoded = _attention_payload(command, reason, evidence)
+            with self._client.transaction():
+                current = self.command_for_intent(intent)
+                root = self._client.get(self._key(command.scope_id))
+                if (root is None or _command_identity(current) != _command_identity(command)
+                        or current.claim != claim or int(root['account_epoch']) != intent.account_epoch
+                        or claim.lease_expires_at <= clock()):
+                    raise TwinStoreError('stale worker cannot record recovery attention')
+                item = datastore.Entity(key=self._key(command.scope_id, 'TwinRecoveryAttention', ref),
+                                        exclude_from_indexes=('payload_json',))
+                item.update({'payload_json':encoded, 'command_id':command.id, 'reason':reason})
+                root['recovery_blocked'] = True
+                self._client.put_multi([root, item])
+            trace.get_current_span().set_attribute('outcome', 'paused')
+            return ref
+        except BaseException:  # aqg: top-level boundary -- bounded telemetry only, preserve caller control flow
+            trace.get_current_span().set_status(Status(StatusCode.ERROR, 'attention_unconfirmed'))
+            raise
+
+    def recovery_attention(self, scope_id: str) -> tuple[Mapping[str, Any], ...]:
+        query = self._client.query(kind='TwinRecoveryAttention', ancestor=self._key(scope_id))
+        return tuple(json.loads(str(row['payload_json'])) for row in query.fetch(limit=200))
 
     def receive_inbox(self, scope_id: str, message_id: str) -> bool:
         """Durably deduplicate a worker delivery under its account root."""

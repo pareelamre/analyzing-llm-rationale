@@ -392,7 +392,7 @@ class NativePolymarketTests(unittest.TestCase):
         self.assertTrue(get.call_args.args[0].endswith(command.client_order_id))
         claim = self.store.claim_command(command.id, worker_id='recovery', now=later)
         result = recover_submission(self.store, command=command, intent=self.trade, claim=claim,
-                                    now=later, lookups=[lookup])
+                                    now=later, lookups=[lookup], clock=lambda: later)
         self.assertEqual(result.action, RecoveryAction.RECONCILED)
         self.assertEqual(self.post.call_count, 1)
 

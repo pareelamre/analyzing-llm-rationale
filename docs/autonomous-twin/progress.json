@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t14_native_manual_opt_in_wired_private_worker_and_lifecycle_pending",
+  "implementation_status": "t15_atomic_fenced_recovery_and_quarantine_verified_native_maintenance_pending",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
-  "next_task": "T14",
+  "next_task": "T15",
   "live_authorized": false,
   "signal_screen": {
     "date": "2026-10-19",
@@ -266,7 +266,8 @@
         "py -m unittest discover -s tests (pass: 2129 tests; 10 skipped)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . (pass)"
+        "py -m graphify update . (pass)",
+        "2026-10-20 supplemental: explicit optional account-epoch capture/persistence; legacy/missing epoch cannot prove recovery absence; current epoch and old-epoch absence controls verified in memory/SQLite/emulator. Runtime native maintenance still tracked under T15."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/account.py",
@@ -542,7 +543,7 @@
         "T14"
       ],
       "status": "in_progress",
-      "substep": "Native manual direct/saved-run preparation wired behind disabled opt-in; concrete lifecycle maintenance and private worker selection pending",
+      "substep": "Canonical epoch/claim-bound atomic lifecycle and submission recovery, bounded cancellation, durable contradictory-evidence quarantine and account pause verified offline; concrete native readers/private maintenance selection remain open",
       "branch": "codex/autonomous-lifecycle-recovery",
       "commit": "ceecca42",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/563",
@@ -555,7 +556,8 @@
         "py -m graphify update . and focused recovery query (pass)",
         "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed.",
         "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence.",
-        "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence."
+        "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence.",
+        "2026-10-20 atomic recovery: full2939/no skips pass260.933s; final focused91 including38 real local emulator cases; both replacement-before-release races abort old commits with valid old clocks; SDK1.2 matrix51; Ruff/release/Graphify/real OTel debug export pass. One deep aud_Y7dTd66krE,13 accepted dispositions adjudicated adj-0bBxfPBuYRlcQ4QQ and locally verified;4 usable voices,1 unusable output,1 fallback. No activation or production proof."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/recovery.py",
@@ -574,7 +576,13 @@
         "tests/test_twin_manual_review.py",
         "tests/test_trading_request_identity.py",
         "docs/autonomous-twin/NATIVE_MANUAL.md",
-        "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md"
+        "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md",
+        "docs/autonomous-twin/LIFECYCLE_ATOMICITY.md",
+        "tests/test_twin_lifecycle_atomic.py",
+        "src/analyzing_llm_rationale/twin/account.py",
+        "src/analyzing_llm_rationale/twin/account_store.py",
+        "tests/test_twin_recovery_review.py",
+        "docs/autonomous-twin/LIFECYCLE_ATOMICITY_REVIEW.md"
       ],
       "blockers": [
         "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
@@ -582,7 +590,7 @@
         "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
         "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
       ],
-      "handoff": "Reuse opt-in native manual/backend and shared root; next integrate concrete lifecycle maintenance/private worker selection offline. Do not rerun unchanged historical screens or enable live defaults."
+      "handoff": "Next wire verified concrete native order/fill/settlement reads and account maintenance, using the same client for financial/lifecycle stores and explicit capture epoch. Preserve pause/quarantine, no resend and default-disabled live gates. Do not rerun unchanged historical signal screens."
     },
     {
       "id": "T16",
@@ -1011,5 +1019,33 @@
       "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
       "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
     ]
+  },
+  "lifecycle_atomicity": {
+    "date": "2026-10-20",
+    "branch": "codex/twin-lifecycle-fencing",
+    "status": "offline_verified_not_activated",
+    "evidence": "docs/autonomous-twin/LIFECYCLE_ATOMICITY.md",
+    "focused_tests_passed": 91,
+    "emulator_tests_passed": 38,
+    "audit_id": "aud_Y7dTd66krE",
+    "live_activated": false,
+    "cloud_writes": false,
+    "remaining": [
+      "Finish native account/order/fill/settlement reader and maintenance selection.",
+      "Production reconciliation, compatible forward evidence and bounded expiring mandate remain required."
+    ],
+    "full_tests_passed": 2939,
+    "full_tests_skipped": 0,
+    "full_duration_seconds": 260.933,
+    "sdk_1_2_tests_passed": 51,
+    "review": "docs/autonomous-twin/LIFECYCLE_ATOMICITY_REVIEW.md",
+    "adjudication_id": "adj-0bBxfPBuYRlcQ4QQ",
+    "review_dispositions": 13,
+    "review_dispositions_accepted": 13,
+    "structured_review_voices": 4,
+    "unusable_review_outputs": 1,
+    "review_fallbacks": 1,
+    "telemetry_debug_export": true,
+    "full_scope_note": "All production changes covered by full2939/no skips; four later test-only cases covered by current91 focused tests; fresh CI still required before merge."
   }
 }
