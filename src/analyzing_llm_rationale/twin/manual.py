@@ -12,7 +12,7 @@ from decimal import Decimal
 from hashlib import sha256
 from typing import Any, Mapping
 
-from .models import AccountScope, ProposalAction, TradeIntent, canonical_instrument_id
+from .models import AccountScope, Instrument, ProposalAction, TradeIntent, canonical_instrument_id
 from .store import CommandClaim, ExecutionCommand, TwinStore, TwinStoreError
 
 
@@ -26,6 +26,7 @@ class ManualCommandClaim:
     intent: TradeIntent
     scope: AccountScope
     claim: CommandClaim
+    native_instrument: Instrument | None = None
 
     @property
     def fence(self) -> int:
@@ -129,6 +130,8 @@ def reserve_confirmed_manual_order(
     store.reserve_intent(
         intent, cash=estimated if is_buy else Decimal("0"), max_loss=estimated if is_buy else Decimal("0"),
         now=now, client_order_id=client_order_id,
+        authority_id=authority_ref,
+        authority_alias=intent.id,
     )
     command = store.command_for_intent(intent)
     worker_id = f"manual-worker-{_digest(authority_ref)[:24]}"
