@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t21_in_progress_worker_recovery_ready_for_review",
+  "implementation_status": "t14_polymarket_native_identity_integration_required",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
-  "next_task": "T21",
+  "next_task": "T14",
   "live_authorized": false,
   "signal_screen": {
     "date": "2026-10-19",
@@ -127,18 +127,21 @@
         "PYTHONPATH=src py -m unittest discover -s tests (pass: 1264 tests in 164.900s)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . (pass)"
+        "py -m graphify update . (pass)",
+        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed."
       ],
       "evidence": [
         "docs/autonomous-twin/VENUE_CAPABILITIES.md",
         "tests/fixtures/twin/venues/kalshi_create_order_v2.json",
         "tests/fixtures/twin/venues/polymarket_market_order_ack.json",
         "tests/test_trading.py",
-        "tests/test_trading_byo.py"
+        "tests/test_trading_byo.py",
+        "tests/test_polymarket_sdk_contract.py",
+        "docs/autonomous-twin/POLYMARKET_SDK_EVIDENCE.md"
       ],
       "blockers": [
-        "Polymarket SDK is declared but not installed in the verified environment; signed order identity and recovery lookup remain unverified.",
-        "Neither venue has dedicated-account demo or production contract evidence for autonomous submission."
+        "Neither venue has dedicated-account demo or production contract evidence for autonomous submission.",
+        "Offline installed SDK1.1.0 CTF signing is verified; exact live dependency/protocol pin, position-ID/domain3 support and production native-identity integration remain outstanding."
       ],
       "handoff": "T02 is ready. Extract the shared execution boundary without changing manual route contracts, and prevent scripts/live_trader_bridge.py from bypassing it."
     },
@@ -484,8 +487,8 @@
         "T09",
         "T13"
       ],
-      "status": "complete",
-      "substep": "manual and autonomous orders share one durable reservation, stable client identity, request fingerprint, lease fence, immediate pre-send authority and budget checks, single venue dispatch, and submission-unknown recovery state",
+      "status": "in_progress",
+      "substep": "Generic authorization, reservations, fences and shadow callbacks verified; production Polymarket native signed-hash binding before dispatch is not wired",
       "branch": "codex/autonomous-durable-submission",
       "commit": "3202f9bf",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/544",
@@ -497,7 +500,8 @@
         "py -m graphify update . (pass; generated graph changes intentionally unstaged)",
         "raw new-order audit: only private Kalshi/Polymarket adapters call venue write methods",
         "PR #544 CI test (pass)",
-        "PR #544 datastore-integration (pass after expired-lease takeover fix)"
+        "PR #544 datastore-integration (pass after expired-lease takeover fix)",
+        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/execution.py",
@@ -506,10 +510,15 @@
         "src/analyzing_llm_rationale/trading.py",
         "src/analyzing_llm_rationale/server.py",
         "tests/test_twin_execution.py",
-        "docs/autonomous-twin/EXECUTION_AUDIT.md"
+        "docs/autonomous-twin/EXECUTION_AUDIT.md",
+        "tests/test_polymarket_sdk_contract.py",
+        "docs/autonomous-twin/POLYMARKET_SDK_EVIDENCE.md"
       ],
-      "blockers": [],
-      "handoff": "T15 can reconcile acknowledgements, partial fills, cancellations, unknown submissions, and settlements using the stable command and venue identities now enforced at every submission path."
+      "blockers": [
+        "Polymarket current helper signs and posts inside one SDK call after the reservation uses a local Foresea ID; native signed-order identity/exact request must be bound durably before sending.",
+        "Wire concrete prepare/persist/post/reconcile through existing execution controls and test real SDK objects under lost-response/restart faults; do not enable live runtime before release gates."
+      ],
+      "handoff": "Implement native Polymarket preparation and durable identity binding using the existing SDK, TwinStore and execution engine; see POLYMARKET_SDK_EVIDENCE.md. Reuse verified local SDK contracts; keep worker shadow defaults and manual confirmation requirements."
     },
     {
       "id": "T15",
@@ -517,8 +526,8 @@
         "T06",
         "T14"
       ],
-      "status": "complete",
-      "substep": "identity-bound submission recovery, venue-specific absence proof, durable versioned fills and settlements, lifecycle re-fencing, fresh confirmed cancellation, late-fill preservation, atomic rejection release, restart classification, and operator runbook are complete",
+      "status": "in_progress",
+      "substep": "Generic identity-bound recovery, fills, settlements and cancellation drills verified; production Polymarket native-ID adapter integration remains dependent on T14",
       "branch": "codex/autonomous-lifecycle-recovery",
       "commit": "ceecca42",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/563",
@@ -528,7 +537,8 @@
         "PYTHONPATH=src py -m unittest discover -s tests (pass)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . and focused recovery query (pass)"
+        "py -m graphify update . and focused recovery query (pass)",
+        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/recovery.py",
@@ -538,8 +548,10 @@
         "tests/test_twin_store_integration.py",
         "docs/autonomous-twin/RECOVERY.md"
       ],
-      "blockers": [],
-      "handoff": "T16 is next. Wire durable ID-only jobs to Datastore and Cloud Tasks, mount private authenticated handlers, and exercise duplicate delivery, lease takeover, maintenance priority, and shutdown recovery."
+      "blockers": [
+        "A local Foresea order ID is not a Polymarket native signed-order hash. Complete native pre-send persistence and exercise lookup/reconciliation for that exact identity before claiming production recovery."
+      ],
+      "handoff": "Retain existing recovery invariants and evidence; finish concrete native Polymarket lookup binding after T14 preparation/persistence is wired. SDK/local SQL compatibility is verified offline, not live acceptance or full recovery."
     },
     {
       "id": "T16",
@@ -900,5 +912,19 @@
       "blockers": [],
       "handoff": null
     }
-  ]
+  ],
+  "venue_sdk_verification": {
+    "date": "2026-10-19",
+    "branch": "codex/twin-polymarket-sdk-contract",
+    "sdk": "py-clob-client-v2",
+    "local_version": "1.1.0",
+    "report": "docs/autonomous-twin/POLYMARKET_SDK_EVIDENCE.md",
+    "test": "tests/test_polymarket_sdk_contract.py",
+    "signed_cases": 24,
+    "scope": "offline CTF token-ID signing, EOA/proxy/Safe, normal/negative-risk, limit/market buy/sell and synthetic lookup/cancel with SQL identity persistence",
+    "production_identity_binding_verified": false,
+    "position_id_v3_verified": false,
+    "live_eligible": false,
+    "verification": "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed."
+  }
 }
