@@ -122,3 +122,11 @@ Implementation base: `e2ebd8753`, draft PR #688. That base passed 2,813 tests
 deployment audit. This document changes no executable behavior. No deployment,
 model call, venue request, collection schedule or R2/GCS operation was performed
 for the screen.
+
+## Local raw-source follow-up
+
+`RAW_SIGNAL_SCREEN.md` separately checks the older local DuckDB source ending
+September 27. Its 42,094 timing-qualified resolved ledger forecasts contain no
+compatible twin model/prompt/cluster provenance. None of its 300 nonempty
+research cohorts passes the adjusted confidence screen. It does not replace
+or recompute the newer October 18 source used above.

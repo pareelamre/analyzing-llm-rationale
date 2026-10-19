@@ -392,7 +392,8 @@ class TwinRecoveryTests(unittest.TestCase):
             Decimal("1"), True, NOW, NOW + timedelta(seconds=1),
         )
         current = apply_lifecycle_observations(
-            current, settlements=[final], observed_at=NOW + timedelta(seconds=1),
+            current, settlements=[final], order_status="filled", terminal_evidence_complete=True,
+            observed_at=NOW + timedelta(seconds=1),
         )
         self.assertEqual(current.settled_amount, Decimal("1"))
         correction = SettlementObservation(
@@ -400,7 +401,8 @@ class TwinRecoveryTests(unittest.TestCase):
             Decimal("0.9"), True, NOW, NOW + timedelta(seconds=2),
         )
         current = apply_lifecycle_observations(
-            current, settlements=[correction], observed_at=NOW + timedelta(seconds=2),
+            current, settlements=[correction], terminal_evidence_complete=True,
+            observed_at=NOW + timedelta(seconds=2),
         )
         self.assertEqual(current.settled_amount, Decimal("0.9"))
 
@@ -428,7 +430,7 @@ class TwinRecoveryTests(unittest.TestCase):
         reconcile_lifecycle(
             store, ledger, command=command, intent=intent, claim=claim,
             venue_order_id="venue-order-1", settlements=[final],
-            order_status="cancelled", observed_at=NOW + timedelta(seconds=1),
+            order_status="cancelled", terminal_evidence_complete=True, observed_at=NOW + timedelta(seconds=1),
         )
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal("0"))
         self.assertEqual(
@@ -442,7 +444,7 @@ class TwinRecoveryTests(unittest.TestCase):
         reconciled = reconcile_lifecycle(
             store, ledger, command=command, intent=intent, claim=claim,
             venue_order_id="venue-order-1", settlements=[correction],
-            order_status="cancelled", observed_at=NOW + timedelta(seconds=2),
+            order_status="cancelled", terminal_evidence_complete=True, observed_at=NOW + timedelta(seconds=2),
         )
         self.assertEqual(reconciled.settled_amount, Decimal("0.9"))
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal("0"))

@@ -240,6 +240,11 @@ class TwinExecutionTests(unittest.TestCase):
         self.assertEqual(submit_authorized_command(active, now=NOW, live_enabled=False, submit=lambda: None), None)
         with self.assertRaises(ExecutionBlocked):
             submit_authorized_command(revoke(active, owner_id="owner"), now=NOW, live_enabled=False, submit=lambda: None)
+        for mandate, enabled in ((active, True), (replace(active, live=True), False)):
+            calls = []
+            with self.assertRaises(ExecutionBlocked):
+                submit_authorized_command(mandate, now=NOW, live_enabled=enabled, submit=lambda sink=calls: sink.append('sent'))
+            self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

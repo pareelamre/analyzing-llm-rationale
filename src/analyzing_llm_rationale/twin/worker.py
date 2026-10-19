@@ -899,6 +899,111 @@ class ResearchJobGateway(Protocol):
     ) -> Mapping[str, Any]: ...
 
 
+class ResearchCompletionStore(Protocol):
+    """Durable transport receipt retained before research finalization."""
+
+    def get(self, job_id: str) -> Optional[ResearchCompletion]: ...
+
+    def record(self, assignment: ResearchAssignment, completion: ResearchCompletion) -> None: ...
+
+    def discard(self, job_id: str) -> None: ...
+
+
+class DatastoreResearchCompletionStore:
+    """Keep a fence-checked receipt bound to job identity until completion."""
+
+    def __init__(self, client: Any, *, max_payload_bytes: int = 900_000) -> None:
+        if max_payload_bytes < 1:
+            raise WorkerJobError("research completion payload limit must be positive")
+        self._client = client
+        self._max_payload_bytes = max_payload_bytes
+
+    def _key(self, job_id: str):
+        return self._client.key(
+            "TwinResearchCompletion", sha256(job_id.encode("utf-8")).hexdigest(),
+        )
+
+    @staticmethod
+    def _decode(entity: Any) -> ResearchCompletion:
+        try:
+            encoded = str(entity["payload_json"])
+            if sha256(encoded.encode("utf-8")).hexdigest() != entity["payload_sha256"]:
+                raise ValueError("completion fingerprint mismatch")
+            return ResearchCompletion(**json.loads(encoded))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise WorkerJobError("durable research completion is malformed") from exc
+
+    def get(self, job_id: str) -> Optional[ResearchCompletion]:
+        entity = self._client.get(self._key(job_id))
+        if entity is None:
+            return None
+        job_entity = self._client.get(self._client.key("TwinWorkerJob", job_id))
+        if job_entity is None:
+            raise WorkerJobError("worker job was not found")
+        job = DatastoreWorkerJobs._from_entity(job_entity)
+        if (
+            entity.get("schema_version") != 1
+            or entity.get("job_id") != job_id
+            or entity.get("account_scope_id") != job.account_scope_id
+            or entity.get("job_identity_hash") != DatastoreWorkerJobs._identity(job)
+        ):
+            raise WorkerJobError("durable research completion job identity changed")
+        return self._decode(entity)
+
+    def record(self, assignment: ResearchAssignment, completion: ResearchCompletion) -> None:
+        from analyzing_llm_rationale import datastore_backend as datastore
+
+        encoded = json.dumps(
+            completion.to_mapping(include_transport=True),
+            sort_keys=True, separators=(",", ":"),
+        )
+        if len(encoded.encode("utf-8")) > self._max_payload_bytes:
+            raise WorkerDegraded("research_completion_too_large")
+        key = self._key(assignment.job_id)
+        with self._client.transaction():
+            job_entity = self._client.get(self._client.key("TwinWorkerJob", assignment.job_id))
+            if job_entity is None:
+                raise WorkerJobError("worker job was not found")
+            job = DatastoreWorkerJobs._from_entity(job_entity)
+            if ResearchAssignment.from_job(job) != assignment:
+                raise WorkerJobError("research completion has a stale assignment")
+            identity = DatastoreWorkerJobs._identity(job)
+            existing = self._client.get(key)
+            if existing is not None:
+                if (
+                    existing.get("job_identity_hash") != identity
+                    or existing.get("payload_json") != encoded
+                ):
+                    raise WorkerJobError("research completion conflicts with durable receipt")
+                self._decode(existing)
+                return
+            entity = datastore.Entity(key=key, exclude_from_indexes=("payload_json",))
+            entity.update({
+                "schema_version": 1, "job_id": assignment.job_id,
+                "account_scope_id": job.account_scope_id,
+                "created_at": datetime.now(timezone.utc),
+                "job_identity_hash": identity, "payload_json": encoded,
+                "payload_sha256": sha256(encoded.encode("utf-8")).hexdigest(),
+            })
+            self._client.put(entity)
+
+    def discard(self, job_id: str) -> None:
+        """Remove a receipt only after the durable job has a terminal result."""
+        with self._client.transaction():
+            job_entity = self._client.get(self._client.key("TwinWorkerJob", job_id))
+            if job_entity is None:
+                raise WorkerJobError("worker job was not found")
+            job = DatastoreWorkerJobs._from_entity(job_entity)
+            if job.completed_result is None:
+                raise WorkerJobError("research completion is not terminal")
+            key = self._key(job_id)
+            entity = self._client.get(key)
+            if entity is not None:
+                # A malformed receipt is quarantined by removing it only after
+                # the fenced job has a durable terminal result.
+                self._client.delete(key)
+
+
 class MaintenanceResearchJobGateway:
     """Maintenance-side adapter; the research process receives only this API over HTTP."""
 
@@ -913,6 +1018,7 @@ class MaintenanceResearchJobGateway:
             Callable[[ResearchAssignment, ResearchCompletion], ResearchCompletion]
         ] = None,
         after_complete: Optional[Callable[[ResearchAssignment, WorkerJob], None]] = None,
+        completion_store: Optional[ResearchCompletionStore] = None,
     ) -> None:
         self._jobs = jobs
         self._authorize_assignment = authorize_assignment
@@ -920,54 +1026,94 @@ class MaintenanceResearchJobGateway:
         self._repair_authorizer = authorize_repair
         self._finalize_result = finalize_result
         self._after_complete = after_complete
+        self._completion_store = completion_store
 
     def completed_result(self, job_id: str) -> Optional[Mapping[str, Any]]:
         job = self._jobs.get(job_id)
         if job.kind is not WorkerJobKind.RESEARCH:
             raise WorkerJobError("job is not a research assignment")
+        if job.completed_result is not None and self._after_complete is not None:
+            self._after_complete(ResearchAssignment.from_job(job), job)
+        if job.completed_result is not None and self._completion_store is not None:
+            self._completion_store.discard(job_id)
         return job.completed_result
 
     def claim(self, job_id: str, *, worker_id: str, now: datetime) -> Optional[ResearchAssignment]:
         current = self._jobs.get(job_id)
         if current.kind is not WorkerJobKind.RESEARCH:
             raise WorkerJobError("job is not a research assignment")
-        claimed = self._jobs.claim(job_id, worker_id=worker_id, now=now)
+        # The private research request is bounded at 120 seconds. A shorter
+        # lease can let a duplicate worker reclaim a still-running model call.
+        claimed = self._jobs.claim(
+            job_id, worker_id=worker_id, now=now, lease_seconds=125,
+        )
         if claimed is None:
             return None
         assignment = ResearchAssignment.from_job(claimed)
         try:
+            if self._completion_store is not None:
+                try:
+                    saved = self._completion_store.get(job_id)
+                except WorkerJobError as exc:
+                    raise WorkerDegraded("research_completion_unreadable") from exc
+                if saved is not None:
+                    self.complete(assignment, saved, now=now)
+                    return None
             self._authorize_assignment(assignment)
         except WorkerDegraded as exc:
+            result = ResearchCompletion("degraded", reason=exc.reason)
+            if self._finalize_result is not None:
+                result = self._finalize_result(assignment, result)
             completed = self._jobs.complete(
                 assignment.job_id, worker_id=assignment.worker_id,
                 fence=assignment.fence,
-                result={"status": "degraded", "reason": exc.reason},
+                result=result.to_mapping(),
                 now=now, degraded=True,
             )
             if self._after_complete is not None:
                 self._after_complete(assignment, completed)
+            if self._completion_store is not None:
+                self._completion_store.discard(assignment.job_id)
             return None
         return assignment
 
     def complete(
         self, assignment: ResearchAssignment, result: ResearchCompletion, *, now: datetime,
     ) -> Mapping[str, Any]:
-        if self._finalize_result is not None:
-            try:
+        current = self._jobs.get(assignment.job_id)
+        if current.completed_result is not None:
+            if ResearchAssignment.from_job(current) != assignment:
+                raise WorkerJobError("research completion has a stale assignment")
+            if self._after_complete is not None:
+                self._after_complete(assignment, current)
+            if self._completion_store is not None:
+                self._completion_store.discard(assignment.job_id)
+            return current.completed_result
+        if ResearchAssignment.from_job(current) != assignment:
+            raise WorkerJobError("research completion has a stale assignment")
+        try:
+            if self._completion_store is not None:
+                self._completion_store.record(assignment, result)
+            if self._finalize_result is not None:
                 result = self._finalize_result(assignment, result)
-            except WorkerDegraded as exc:
-                # Validation failures are terminal, bounded research outcomes.
-                # Feed them through the same finalizer so budget uncertainty and
-                # the strategy continuation are durably recorded.
+        except WorkerDegraded as exc:
+            # Validation failures are terminal, bounded research outcomes.
+            # Feed them through the same finalizer so budget uncertainty and
+            # the strategy continuation are durably recorded.
+            if self._finalize_result is not None:
                 result = self._finalize_result(
                     assignment, ResearchCompletion("degraded", reason=exc.reason),
                 )
+            else:
+                result = ResearchCompletion("degraded", reason=exc.reason)
         completed = self._jobs.complete(
             assignment.job_id, worker_id=assignment.worker_id, fence=assignment.fence,
             result=result.to_mapping(), now=now, degraded=result.status == "degraded",
         )
         if self._after_complete is not None:
             self._after_complete(assignment, completed)
+        if self._completion_store is not None:
+            self._completion_store.discard(assignment.job_id)
         return completed.completed_result or {}
 
     def load_capture(self, assignment: ResearchAssignment) -> Mapping[str, Any]:
