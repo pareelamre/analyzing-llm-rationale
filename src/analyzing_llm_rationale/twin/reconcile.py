@@ -20,6 +20,10 @@ class AccountReadError(RuntimeError):
     """A venue read cannot safely become a complete account generation."""
 
 
+class AccountReadAborted(AccountReadError):
+    """Current processing authority ended; no more provider work may start."""
+
+
 PageFetcher = Callable[[Optional[str]], Mapping[str, Any]]
 GenerationFence = Callable[[], str]
 VenueReader = Callable[..., Mapping[str, Any]]
@@ -71,6 +75,8 @@ def cursor_page_fetcher(
         if item_normalizer is not None and isinstance(items, list):
             try:
                 items = [item_normalizer(item) for item in items]
+            except AccountReadAborted:
+                raise
             except Exception as exc:
                 raise AccountReadError(f"{operation}_normalization_failed") from exc
         return {
@@ -110,6 +116,8 @@ def offset_page_fetcher(
         if item_normalizer is not None:
             try:
                 items = [item_normalizer(item) for item in items]
+            except AccountReadAborted:
+                raise
             except Exception as exc:
                 raise AccountReadError(f"{operation}_normalization_failed") from exc
         return {
@@ -187,6 +195,7 @@ def synchronize_complete_account(
     local_command_ids: set[str],
     previous: Optional[AccountSnapshot] = None,
     generation_fence: Optional[GenerationFence] = None,
+    collection_fingerprint: Callable[[Mapping[str, CompleteCollection]], str] | None = None,
 ) -> AccountSyncResult:
     """Read all required collections before atomically replacing a snapshot.
 
@@ -199,6 +208,8 @@ def synchronize_complete_account(
         raise SchemaValidationError("complete account synchronization needs every collection fetcher")
     try:
         fence_before = generation_fence() if generation_fence is not None else None
+    except AccountReadAborted:
+        raise
     except Exception:
         return AccountSyncResult(previous, previous is not None, ("account_generation_fence_failed",))
     collections: dict[str, CompleteCollection] = {}
@@ -206,6 +217,8 @@ def synchronize_complete_account(
     for name in required:
         try:
             collections[name] = read_complete_collection(name, fetchers[name])
+        except AccountReadAborted:
+            raise
         except AccountReadError as exc:
             issues.append(str(exc))
     if issues:
@@ -213,9 +226,12 @@ def synchronize_complete_account(
     if generation_fence is not None:
         try:
             fence_after = generation_fence()
+        except AccountReadAborted:
+            raise
         except Exception:
             return AccountSyncResult(previous, previous is not None, ("account_generation_fence_failed",))
-        if not fence_before or fence_before != fence_after:
+        middle = collection_fingerprint(collections) if collection_fingerprint is not None else fence_before
+        if not fence_before or fence_before != fence_after or middle != fence_before:
             return AccountSyncResult(previous, previous is not None, ("account_generation_changed",))
     generation_tokens = {
         collection.generation_token for collection in collections.values()
@@ -287,6 +303,7 @@ def synchronize_venue_account(
     scope_id: str,
     *,
     generation: int,
+    account_epoch: Optional[int] = None,
     received_at: datetime,
     read_plan: Any,
     local_command_ids: set[str],
@@ -296,9 +313,11 @@ def synchronize_venue_account(
     return synchronize_complete_account(
         scope_id,
         generation=generation,
+        account_epoch=account_epoch,
         received_at=received_at,
         fetchers=read_plan.fetchers,
         generation_fence=read_plan.generation_fence,
+        collection_fingerprint=getattr(read_plan, 'collection_fingerprint', None),
         local_command_ids=local_command_ids,
         previous=previous,
     )

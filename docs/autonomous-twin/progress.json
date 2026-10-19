@@ -3,7 +3,7 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t15_atomic_fenced_recovery_and_quarantine_verified_native_maintenance_pending",
+  "implementation_status": "native_account_capture_verified_lifecycle_application_and_release_pending",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
   "next_task": "T15",
   "live_authorized": false,
@@ -267,7 +267,8 @@
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
         "py -m graphify update . (pass)",
-        "2026-10-20 supplemental: explicit optional account-epoch capture/persistence; legacy/missing epoch cannot prove recovery absence; current epoch and old-epoch absence controls verified in memory/SQLite/emulator. Runtime native maintenance still tracked under T15."
+        "2026-10-20 supplemental: explicit optional account-epoch capture/persistence; legacy/missing epoch cannot prove recovery absence; current epoch and old-epoch absence controls verified in memory/SQLite/emulator. Runtime native maintenance still tracked under T15.",
+        "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/account.py",
@@ -278,7 +279,11 @@
         "tests/test_twin_account.py",
         "tests/fixtures/twin/kalshi_account_v2.json",
         "tests/fixtures/twin/polymarket_account_v1.json",
-        "docs/autonomous-twin/VENUE_CAPABILITIES.md"
+        "docs/autonomous-twin/VENUE_CAPABILITIES.md",
+        "src/analyzing_llm_rationale/twin/account_maintenance.py",
+        "tests/test_twin_account_maintenance.py",
+        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE.md",
+        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md"
       ],
       "blockers": [],
       "handoff": "T07 is next. Wire approved pricing, timeouts, cancellation and stale-call recovery into the private research worker while keeping maintenance independent and live trading disabled."
@@ -543,7 +548,7 @@
         "T14"
       ],
       "status": "in_progress",
-      "substep": "Canonical epoch/claim-bound atomic lifecycle and submission recovery, bounded cancellation, durable contradictory-evidence quarantine and account pause verified offline; concrete native readers/private maintenance selection remain open",
+      "substep": "Atomic lifecycle recovery merged; native read-only account maintenance verified locally; native per-command lifecycle attribution/application and production connection selection remain open",
       "branch": "codex/autonomous-lifecycle-recovery",
       "commit": "ceecca42",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/563",
@@ -557,7 +562,8 @@
         "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed.",
         "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence.",
         "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence.",
-        "2026-10-20 atomic recovery: full2939/no skips pass260.933s; final focused91 including38 real local emulator cases; both replacement-before-release races abort old commits with valid old clocks; SDK1.2 matrix51; Ruff/release/Graphify/real OTel debug export pass. One deep aud_Y7dTd66krE,13 accepted dispositions adjudicated adj-0bBxfPBuYRlcQ4QQ and locally verified;4 usable voices,1 unusable output,1 fallback. No activation or production proof."
+        "2026-10-20 atomic recovery: full2939/no skips pass260.933s; final focused91 including38 real local emulator cases; both replacement-before-release races abort old commits with valid old clocks; SDK1.2 matrix51; Ruff/release/Graphify/real OTel debug export pass. One deep aud_Y7dTd66krE,13 accepted dispositions adjudicated adj-0bBxfPBuYRlcQ4QQ and locally verified;4 usable voices,1 unusable output,1 fallback. No activation or production proof.",
+        "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/recovery.py",
@@ -582,7 +588,11 @@
         "src/analyzing_llm_rationale/twin/account.py",
         "src/analyzing_llm_rationale/twin/account_store.py",
         "tests/test_twin_recovery_review.py",
-        "docs/autonomous-twin/LIFECYCLE_ATOMICITY_REVIEW.md"
+        "docs/autonomous-twin/LIFECYCLE_ATOMICITY_REVIEW.md",
+        "src/analyzing_llm_rationale/twin/account_maintenance.py",
+        "tests/test_twin_account_maintenance.py",
+        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE.md",
+        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md"
       ],
       "blockers": [
         "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
@@ -590,7 +600,7 @@
         "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
         "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
       ],
-      "handoff": "Next wire verified concrete native order/fill/settlement reads and account maintenance, using the same client for financial/lifecycle stores and explicit capture epoch. Preserve pause/quarantine, no resend and default-disabled live gates. Do not rerun unchanged historical signal screens."
+      "handoff": "Native account capture PR ready after CI; next implement native per-command order/fill/settlement attribution and incremental history, plus owner-bound production connection registration. Preserve verified credential identity, page/liquidation deadlines, private quarantine, no resend and no capital increases. Do not rerun unchanged historical signal screens."
     },
     {
       "id": "T16",
@@ -610,14 +620,19 @@
         "PYTHONPATH=src py -m unittest discover -s tests (pass: 1903 tests; 9 skipped)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . and scoped worker query (pass)"
+        "py -m graphify update . and scoped worker query (pass)",
+        "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/worker.py",
         "src/analyzing_llm_rationale/twin/scheduler.py",
         "tests/test_twin_worker.py",
         "tests/test_twin_store_integration.py",
-        "docs/autonomous-twin/WORKERS.md"
+        "docs/autonomous-twin/WORKERS.md",
+        "src/analyzing_llm_rationale/twin/account_maintenance.py",
+        "tests/test_twin_account_maintenance.py",
+        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE.md",
+        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md"
       ],
       "blockers": [],
       "handoff": "T17 is ready. Mount the private handlers, wire the durable stores and Cloud Tasks dispatcher, then validate the shadow-only IAM boundary in staging."
@@ -1047,5 +1062,53 @@
     "review_fallbacks": 1,
     "telemetry_debug_export": true,
     "full_scope_note": "All production changes covered by full2939/no skips; four later test-only cases covered by current91 focused tests; fresh CI still required before merge."
+  },
+  "native_account_maintenance": {
+    "date": "2026-10-20",
+    "branch": "codex/twin-native-account-maintenance",
+    "status": "offline_verified_not_activated",
+    "native_account_reader_in_private_handler": true,
+    "default_connection_resolver_configured": false,
+    "capital_projection_mutated": false,
+    "venue_writes_performed": false,
+    "cloud_writes_performed": false,
+    "focused_tests_passed": 177,
+    "emulator_integration_tests_passed": 74,
+    "emulator_commit_races": [
+      "kalshi replacement_before_release old_aborted",
+      "polymarket replacement_before_release old_aborted"
+    ],
+    "telemetry_debug_export": true,
+    "audit_id": "aud_jaaYbnRrYE",
+    "audit_status": "terminal_partial",
+    "evidence": [
+      "src/analyzing_llm_rationale/twin/account_maintenance.py",
+      "tests/test_twin_account_maintenance.py",
+      "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE.md",
+      "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md"
+    ],
+    "limitations": [
+      "Server-bound connection resolver registration and IAM verification pending",
+      "Native per-command order/fill/settlement attribution and application pending",
+      "Command history at 200 rows is explicitly degraded pending pagination",
+      "Repeated provider collection hashes are not atomic absence proof",
+      "No activation or production-forward evidence",
+      "Full fill/settlement snapshots cap at900000 bytes; incremental history is release-blocking",
+      "Legacy opaque Kalshi refs require owner-reviewed credential identity mapping; no automatic migration"
+    ],
+    "full_tests_run": 3016,
+    "full_tests_skipped": 0,
+    "full_duration_seconds": 272.725,
+    "structured_review_voices": 4,
+    "failed_review_voices": 1,
+    "review_fallback_attempts": 2,
+    "review_dispositions": 13,
+    "review_accepted": 12,
+    "review_rejected": 1,
+    "adjudication_id": "adj-9va7nNuaGc_XKu55",
+    "review": "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md",
+    "production_database_mode": "PESSIMISTIC",
+    "production_database_mode_read_only": true,
+    "full_scope_note": "Full3016/no skips passed after review fixes; final scoped-signer fallback guard and one subsequent test covered by current177 focused tests. Fresh CI validates final entire tree before merge."
   }
 }

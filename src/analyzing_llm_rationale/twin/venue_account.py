@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Any, Callable, Mapping, Optional
@@ -17,6 +18,7 @@ from .. import market_data
 from .models import SchemaValidationError
 from .reconcile import (
     AccountReadError,
+    CompleteCollection,
     PageFetcher,
     RowNormalizer,
     VenueReader,
@@ -48,6 +50,19 @@ class VenueAccountReadPlan:
     venue: str
     fetchers: Mapping[str, PageFetcher]
     generation_fence: GenerationFence
+    refresh_snapshot: Callable[[], Any] | None = None
+    account_binding: tuple[str, str] | None = None
+    guarded_factory: Callable[[Callable[[], None]], VenueAccountReadPlan] | None = dataclass_field(default=None, repr=False, compare=False)
+
+    def collection_fingerprint(self, collections: Mapping[str, CompleteCollection]) -> str:
+        return _account_fingerprint({name:list(collections[name].items) for name in
+                                     ('balances', 'positions', 'orders', 'fills', 'settlements')})
+
+    def guarded(self, check: Callable[[], None]) -> VenueAccountReadPlan:
+        """Give every page and fresh accounting read the same processing deadline."""
+        if self.guarded_factory is None:
+            raise AccountReadError('native_account_guard_factory_unavailable')
+        return self.guarded_factory(check)
 
 
 KALSHI_ACCOUNT_CAPABILITY = VenueAccountCapability(
@@ -104,9 +119,11 @@ def _finite_decimal(value: Any, label: str, *, signed: bool = False) -> Decimal:
     return result
 
 
-def conservative_bid_liquidation(orderbook: Mapping[str, Any], quantity: Decimal) -> Decimal:
+def conservative_bid_liquidation(orderbook: Mapping[str, Any], quantity: Decimal, *, price_unit: str = 'dollars') -> Decimal:
     """Walk executable bids and value any depth shortfall at zero."""
     remaining = abs(_finite_decimal(quantity, "position_quantity", signed=True))
+    if price_unit not in {'dollars', 'cents'}:
+        raise AccountReadError('position_orderbook_price_unit_invalid')
     levels = orderbook.get("bids")
     if not isinstance(levels, list):
         raise AccountReadError("position_orderbook_unavailable")
@@ -118,11 +135,12 @@ def conservative_bid_liquidation(orderbook: Mapping[str, Any], quantity: Decimal
             price, size = level[0], level[1]
         else:
             raise AccountReadError("position_orderbook_malformed")
-        parsed.append((_finite_decimal(price, "bid_price"), _finite_decimal(size, "bid_size")))
+        price = _finite_decimal(price, 'bid_price') / (100 if price_unit == 'cents' else 1)
+        if price > 1:
+            raise AccountReadError('position_orderbook_bid_price_invalid')
+        parsed.append((price, _finite_decimal(size, "bid_size")))
     value = Decimal("0")
     for price, size in sorted(parsed, reverse=True):
-        if price > 1:
-            price /= Decimal("100")
         take = min(remaining, size)
         value += take * price
         remaining -= take
@@ -137,8 +155,9 @@ def _default_liquidation_reader(venue: str, instrument_id: str, quantity: Decima
             market_data.fetch_polymarket_orderbook(instrument_id), quantity
         )
     book = market_data.fetch_kalshi_orderbook(instrument_id)
-    levels = book.get(f"{side}_dollars") or book.get(side)
-    return conservative_bid_liquidation({"bids": levels}, quantity)
+    dollars = f'{side}_dollars' in book
+    levels = book.get(f'{side}_dollars') if dollars else book.get(side)
+    return conservative_bid_liquidation({'bids':levels}, quantity, price_unit='dollars' if dollars else 'cents')
 
 
 def kalshi_balance_page_fetcher(
@@ -207,13 +226,20 @@ def _kalshi_order(row: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _kalshi_fill(row: Mapping[str, Any]) -> Mapping[str, Any]:
-    return {
+    normalized = {
         "fill_id": row.get("fill_id"),
         "trade_id": row.get("trade_id"),
         "order_id": row.get("order_id"),
         "fee": row.get("fee_cost") if "fee_cost" in row else row.get("fee_cost_dollars"),
         "client_order_id": row.get("client_order_id"),
+        "source_fingerprint": _canonical_hash(row),
     }
+    for field in ('ticker', 'market_ticker', 'count_fp', 'count', 'yes_price_dollars',
+                  'no_price_dollars', 'side', 'action', 'outcome_side', 'book_side',
+                  'created_time', 'ts', 'is_taker', 'subaccount_number'):
+        if field in row:
+            normalized[field] = row[field]
+    return normalized
 
 
 def _kalshi_settlement(row: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -283,12 +309,18 @@ def _polymarket_fill(row: Mapping[str, Any]) -> Mapping[str, Any]:
         if rate != 0:
             raise AccountReadError("fee_enabled_trade_without_actual_fee")
         fee = Decimal("0")
-    return {
+    normalized = {
         "fill_id": row.get("id") or row.get("trade_id"),
         "order_id": row.get("order_id") or row.get("taker_order_id"),
         "fee": fee,
         "client_order_id": row.get("client_order_id"),
+        "source_fingerprint": _canonical_hash(row),
     }
+    for field in ('asset_id', 'market', 'size', 'price', 'side', 'status', 'type',
+                  'match_time', 'last_update', 'trader_side', 'maker_orders', 'transaction_hash'):
+        if field in row:
+            normalized[field] = row[field]
+    return normalized
 
 
 def _polymarket_settlement(row: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -324,12 +356,24 @@ def _snapshot_token(snapshot: Mapping[str, Any]) -> str:
 
 
 def _complete_account_fingerprint(fetchers: Mapping[str, PageFetcher]) -> str:
-    """Fingerprint complete collections so concurrent mutations cannot straddle a read."""
+    """Detect differences between repeated reads; not a venue-atomic snapshot proof."""
     payload = {
         name: list(read_complete_collection(name, fetchers[name]).items)
         for name in ("balances", "positions", "orders", "fills", "settlements")
     }
-    return _canonical_hash(payload)
+    return _account_fingerprint(payload)
+
+
+def _account_fingerprint(payload: Mapping[str, Any]) -> str:
+    # Market marks and capture timestamps are not account mutations. Preserve
+    # them in the snapshot, but compare sorted account economics independently.
+    excluded = {'balances':{'portfolio_value', 'updated_ts'},
+                'positions':{'liquidation_value', 'valuation_time'}}
+    comparable = {}
+    for name, rows in payload.items():
+        values = [{key:value for key, value in row.items() if key not in excluded.get(name, set())} for row in rows]
+        comparable[name] = sorted(values, key=_canonical_hash)
+    return _canonical_hash(comparable)
 
 
 def _cursor_collection(
@@ -422,12 +466,62 @@ def complete_account_read_plan(
     page_limit: int = 1_000,
     accounting_snapshot_reader: Optional[AccountingSnapshotReader] = None,
     liquidation_reader: Optional[LiquidationReader] = None,
+    connection_ref: str | None = None,
+    read_guard: Callable[[], None] | None = None,
 ) -> VenueAccountReadPlan:
     """Build the runtime read boundary and stable before/after generation fence."""
     normalized = str(venue).strip().lower()
+    credentials = dict(creds)
+    original_reader, original_snapshot, original_liquidation = reader, accounting_snapshot_reader, liquidation_reader
+
+    def guarded_factory(check):
+        return complete_account_read_plan(venue, reader=original_reader, creds=credentials,
+            page_limit=page_limit, accounting_snapshot_reader=original_snapshot,
+            liquidation_reader=original_liquidation, connection_ref=connection_ref, read_guard=check)
+
+    def guarded(call):
+        def invoke(*args, **kwargs):
+            if read_guard is not None:
+                read_guard()
+            value = call(*args, **kwargs)
+            if read_guard is not None:
+                read_guard()
+            return value
+        return invoke
+
+    reader = guarded(reader)
+    creds = credentials
+    account_binding = None
+    if connection_ref is not None:
+        from .. import trading
+
+        required = ('kalshi_api_key_id', 'kalshi_private_key') if normalized == 'kalshi' else (
+            'polymarket_private_key', 'polymarket_api_key', 'polymarket_api_secret', 'polymarket_api_passphrase')
+        if not connection_ref or any(not str(credentials.get(key) or '').strip() for key in required):
+            raise AccountReadError('native_account_scoped_credentials_unavailable')
+        if normalized == 'kalshi':
+            trading._connection_url(credentials.get('kalshi_base_url') or
+                'https://external-api.kalshi.com/trade-api/v2', platform='kalshi')
+            identity = 'kalshi-key-'+sha256(str(credentials['kalshi_api_key_id']).encode()).hexdigest()
+        elif normalized == 'polymarket':
+            trading._connection_url(credentials.get('polymarket_clob_host') or
+                                    'https://clob.polymarket.com', platform='polymarket')
+            client = guarded(trading._polymarket_client)(credentials)
+            if client.host != 'https://clob.polymarket.com':
+                raise AccountReadError('native_account_client_host_changed')
+            identity = str(client.builder.funder).lower()
+            # Use the address from the very same credential-scoped client as
+            # the account reads, never a deployment fallback address.
+            expected_maker = credentials.get('polymarket_funder_address') or client.signer.address()
+            if str(expected_maker).lower() != identity:
+                raise AccountReadError('native_account_funder_changed')
+            credentials['polymarket_funder_address'] = identity
+        else:
+            raise AccountReadError('native_account_venue_unsupported')
+        account_binding = (connection_ref, identity)
     if page_limit < 1:
         raise SchemaValidationError("venue account page limit must be positive")
-    liquidate = liquidation_reader or _default_liquidation_reader
+    liquidate = guarded(liquidation_reader or _default_liquidation_reader)
     if normalized == "kalshi":
         params = {"limit": min(page_limit, 1_000)}
         fetchers = {
@@ -452,7 +546,8 @@ def complete_account_read_plan(
         def kalshi_fence() -> str:
             return _complete_account_fingerprint(fetchers)
 
-        return VenueAccountReadPlan("kalshi", fetchers, kalshi_fence)
+        return VenueAccountReadPlan('kalshi', fetchers, kalshi_fence,
+                                   account_binding=account_binding, guarded_factory=guarded_factory)
     if normalized == "polymarket":
         if accounting_snapshot_reader is None:
             from ..venue_api import read_polymarket_accounting_snapshot
@@ -461,6 +556,7 @@ def complete_account_read_plan(
                 return read_polymarket_accounting_snapshot(creds=dict(creds))
 
             accounting_snapshot_reader = default_snapshot_reader
+        accounting_snapshot_reader = guarded(accounting_snapshot_reader)
         current: dict[str, Mapping[str, Any]] = {}
 
         def load_snapshot(*, fresh: bool = False) -> Mapping[str, Any]:
@@ -514,5 +610,6 @@ def complete_account_read_plan(
                 item_normalizer=_polymarket_settlement,
             ),
         }
-        return VenueAccountReadPlan("polymarket", fetchers, snapshot_fence)
+        return VenueAccountReadPlan('polymarket', fetchers, snapshot_fence, lambda:load_snapshot(fresh=True),
+                                   account_binding=account_binding, guarded_factory=guarded_factory)
     raise SchemaValidationError("unsupported venue account adapter")
