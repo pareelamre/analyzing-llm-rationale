@@ -1,6 +1,9 @@
 # Polymarket SDK contract evidence — 2026-10-19
 
-**Offline CTF signing is verified; native durable submission is not wired.**
+**Offline CTF signing and the private native backend are verified; route/worker
+activation is not wired.** See [native execution follow-up](NATIVE_POLYMARKET.md)
+for exact prepared-order persistence, encryption, one-send dispatch and recovery
+tests. The original helper gap described below remains in manual/public routes.
 The local optional dependency is `py-clob-client-v2==1.1.0`, imported as
 `py_clob_client_v2`. The similarly named `py-clob-client` is a different
 distribution: its absence does not establish that Foresea's SDK is absent.
