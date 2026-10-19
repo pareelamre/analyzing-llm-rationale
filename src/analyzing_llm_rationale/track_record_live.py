@@ -29,8 +29,10 @@ from __future__ import annotations
 import hashlib
 import json as _json
 import logging
+import math
 import os
 from datetime import datetime, timezone
+from statistics import NormalDist
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from analyzing_llm_rationale import trackrec_store as _ds
@@ -39,7 +41,12 @@ from analyzing_llm_rationale.accounting import (
     simulate_shadow_mark_to_market_account,
     simulate_validated_kelly_account,
 )
-from analyzing_llm_rationale.entity_tagger import tag_question
+from analyzing_llm_rationale.entity_tagger import DOMAINS, tag_question
+from analyzing_llm_rationale.forecast_evaluation import (
+    FORECAST_HORIZONS,
+    MARKET_SKILL_CI_METHOD,
+    market_mean_skill_interval,
+)
 
 # ── DuckDB SQL helpers ────────────────────────────────────────────────────────
 
@@ -137,14 +144,7 @@ EXPIRY_SLOT_HOURS = 1
 
 # Horizon buckets (days-to-resolution at the moment the forecast was made).
 # Ordered long → short; the long buckets carry the credible skill signal.
-_HORIZONS = [
-    ("30d+", 30.0, float("inf")),
-    ("14-30d", 14.0, 30.0),
-    ("7-14d", 7.0, 14.0),
-    ("3-7d", 3.0, 7.0),
-    ("1-3d", 1.0, 3.0),
-    ("<1d", 0.0, 1.0),
-]
+_HORIZONS = FORECAST_HORIZONS
 
 
 def _now() -> datetime:
@@ -1431,25 +1431,46 @@ def _edge_label(edge: float) -> str:
     return "20pp+" if edge >= 0.20 else "0-5pp"
 
 
-def _skill_ci(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """95% CI on skill-vs-market (mean of per-snapshot market_brier − model_brier).
+def _skill_ci(rows: List[Dict[str, Any]], *, comparisons: int) -> Dict[str, Any]:
+    """Approximate normal interval over market means, corrected within a family.
 
-    ``significant`` is True only when the lower bound clears 0 — i.e. the
-    disagreement beat the market by more than sampling noise. This is the gate
-    that turns "we disagree" into "this disagreement has proven edge".
+    Snapshot averages from _bucket_stats remain descriptive. skill_ci_mean is
+    the separate equal-market estimate centered in this interval. Distinct
+    markets can still share an event: this is not event-disjoint/live evidence.
     """
-    n = len(rows)
-    if n == 0:
-        return {"skill_ci_low": None, "skill_ci_high": None, "skill_significant": False}
-    diffs = [float(r["market_brier"]) - float(r["model_brier"]) for r in rows]
-    mean = sum(diffs) / n
-    if n < 2:
-        return {"skill_ci_low": None, "skill_ci_high": None, "skill_significant": False}
-    var = sum((d - mean) ** 2 for d in diffs) / (n - 1)
-    se = (var / n) ** 0.5
-    low, high = mean - 1.96 * se, mean + 1.96 * se
-    return {"skill_ci_low": round(low, 4), "skill_ci_high": round(high, 4),
-            "skill_significant": low > 0}
+    if type(comparisons) is not int or not 1 <= comparisons <= 10000:
+        raise ValueError("comparisons must be an integer between 1 and 10000")
+    unavailable = {
+        "skill_ci_low": None, "skill_ci_high": None, "skill_ci_mean": None,
+        "skill_significant": False, "n_markets": 0,
+        "skill_ci_method": MARKET_SKILL_CI_METHOD,
+        "skill_ci_comparisons": comparisons,
+    }
+    by_market: Dict[Tuple[str, str], List[float]] = {}
+    for row in rows:
+        platform, ident = row.get("platform"), row.get("ident")
+        if any(not isinstance(v, str) or not v.strip() for v in (platform, ident)):
+            return unavailable
+        try:
+            values = (row["market_brier"], row["model_brier"])
+            if any(isinstance(v, bool) for v in values):
+                return unavailable
+            market, model = map(float, values)
+            if any(not math.isfinite(v) or not 0 <= v <= 1 for v in (market, model)):
+                return unavailable
+        except (KeyError, TypeError, ValueError, OverflowError):
+            return unavailable
+        by_market.setdefault((platform.strip().lower(), ident.strip()), []).append(market - model)
+    z_score = 1.96 if comparisons == 1 else NormalDist().inv_cdf(1 - 0.05 / (2 * comparisons))
+    interval = market_mean_skill_interval(by_market, z_score=z_score)
+    low = None if interval["lower"] is None else round(interval["lower"], 4)
+    high = None if interval["upper"] is None else round(interval["upper"], 4)
+    return {
+        **unavailable, "skill_ci_low": low, "skill_ci_high": high,
+        "skill_ci_mean": None if interval["mean_skill"] is None else round(interval["mean_skill"], 4),
+        "n_markets": interval["n_markets"],
+        "skill_significant": interval["n_markets"] >= 30 and low is not None and low > 0,
+    }
 
 
 def edge_calibration(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1461,7 +1482,7 @@ def edge_calibration(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         stats = _bucket_stats(bucket)
         if stats:
             stats["edge_bucket"] = label
-            stats.update(_skill_ci(bucket))
+            stats.update(_skill_ci(bucket, comparisons=len(_EDGE_BUCKETS)))
             out.append(stats)
     return out
 
@@ -2000,7 +2021,7 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
             stats = _bucket_stats(h_rows)
             if stats:
                 stats["horizon"] = label
-                stats.update(_skill_ci(h_rows))
+                stats.update(_skill_ci(h_rows, comparisons=len(_HORIZONS)))
                 model_by_horizon.append(stats)
         out.append({
             "model": mlabel,
@@ -2886,12 +2907,18 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "lead_bucket": lead_label,
             "close_time": r.get("close_time"),
             "track_record": {
+                **{key: tr.get(key) for key in (
+                    "n_markets", "skill_ci_mean", "skill_ci_high", "skill_ci_method", "skill_ci_comparisons",
+                )},
                 "n": tr.get("n"),
                 "skill_vs_market": tr.get("skill_vs_market"),
                 "skill_ci_low": tr.get("skill_ci_low"),
                 "skill_significant": tr.get("skill_significant"),
             } if tr else None,
             "lead_track_record": {
+                **{key: lead_tr.get(key) for key in (
+                    "n_markets", "skill_ci_mean", "skill_ci_high", "skill_ci_method", "skill_ci_comparisons",
+                )},
                 "horizon": lead_label,
                 "n": lead_tr.get("n"),
                 "accuracy": lead_tr.get("accuracy"),
@@ -3285,7 +3312,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         stats = _bucket_stats([r for r in resolved_skill if r.get("horizon") == label])
         if stats:
             stats["horizon"] = label
-            stats.update(_skill_ci([r for r in resolved_skill if r.get("horizon") == label]))
+            stats.update(_skill_ci([r for r in resolved_skill if r.get("horizon") == label],
+                                   comparisons=len(_HORIZONS)))
             by_horizon.append(stats)
 
     # Compute edge board early so the stat can reflect its actual length.
@@ -3457,7 +3485,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         stats = _bucket_stats(rows)
         if stats:
             stats["domain"] = domain
-            stats.update(_skill_ci(rows))
+            stats.update(_skill_ci(rows, comparisons=max(len(DOMAINS), len(domain_rows))))
             by_domain.append(stats)
     by_domain.sort(key=lambda x: (x.get("skill_significant", False), x.get("skill_vs_market") or 0), reverse=True)
 
@@ -3470,7 +3498,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         stats = _bucket_stats(rows)
         if stats:
             stats["liquidity"] = label
-            stats.update(_skill_ci(rows))
+            stats.update(_skill_ci(rows, comparisons=len(_LIQUIDITY_BUCKETS)))
             by_liquidity.append(stats)
 
     # Open-market entity index: unique entities across all open snapshots
@@ -3499,6 +3527,14 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     active_mtm_models = set(tracked_models or [model, "crowd-follow"])
 
     payload.update({
+        "skill_inference": {
+            "schema_version": 1, "method": MARKET_SKILL_CI_METHOD,
+            "unit": "venue_market_mean", "interval_center_field": "skill_ci_mean",
+            "descriptive_snapshot_mean_field": "skill_vs_market", "minimum_markets": 30,
+            "limitations": ["approximate_normal_not_exact_small_sample",
+                            "shared_event_dependence", "repeated_publication_not_adjusted",
+                            "not_executable_return_or_live_eligibility"],
+        },
         "overall": overall,
         "primary_overall": _bucket_stats(resolved_primary),
         "by_horizon": by_horizon,

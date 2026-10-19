@@ -1,0 +1,88 @@
+# Optional private workers for an existing Linux host, including OCI A1.
+# Explicit --profile twin activation; no scheduler or public application.
+name: foresea-twin
+
+x-worker: &worker
+  image: ${FORESEA_BYOM_IMAGE:-foresea-twin:local}
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+    target: cpu
+  profiles: [twin]
+  network_mode: host
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 256
+  mem_limit: 1g
+  cpus: 1
+  stop_grace_period: 130s
+
+x-environment: &environment
+  FORESEA_DATASTORE_BACKEND: sql
+  FORESEA_TWIN_MODE: shadow
+  FORESEA_TWIN_LIVE_CAPITAL: "0"
+  FORESEA_TWIN_LIVE_MANDATE: ""
+  FORESEA_TWIN_CONFIG_DIR: /opt/twin-config
+  FORESEA_TWIN_MAINTENANCE_URL: http://127.0.0.1:8081
+  FORESEA_TWIN_DISPATCHER_ACCOUNTS: local-dispatcher
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+
+x-config: &config
+  type: bind
+  source: ${FORESEA_BYOM_CONFIG_DIR:?set an absolute private config directory}
+  target: /opt/twin-config
+  read_only: true
+  bind:
+    create_host_path: false
+
+services:
+  maintenance:
+    <<: *worker
+    env_file: ${FORESEA_BYOM_MAINTENANCE_ENV_FILE:?set the private maintenance env file}
+    environment:
+      <<: *environment
+      FORESEA_TWIN_WORKER_ROLE: maintenance
+      FORESEA_DATASTORE_PATH: /data/twin.sqlite3
+      FORESEA_TWIN_RESEARCH_URL: http://127.0.0.1:8082
+      FORESEA_TWIN_SCHEDULER_ACCOUNTS: local-scheduler
+      FORESEA_TWIN_RESEARCH_ACCOUNTS: local-research
+    command: [python, -m, uvicorn, analyzing_llm_rationale.twin.runtime_app:create_environment_app,
+              --factory, --host, 127.0.0.1, --port, "8081", --workers, "1",
+              --timeout-graceful-shutdown, "120", --no-access-log]
+    volumes:
+      - *config
+      - state:/data
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/ready', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  research:
+    <<: *worker
+    env_file: ${FORESEA_BYOM_RESEARCH_ENV_FILE:?set the private research env file}
+    environment:
+      <<: *environment
+      FORESEA_TWIN_WORKER_ROLE: research
+      # No maintenance DB mount or cloud credential is supplied by this package.
+      FORESEA_DATASTORE_PATH: /tmp/research.sqlite3
+    command: [python, -m, uvicorn, analyzing_llm_rationale.twin.runtime_app:create_environment_app,
+              --factory, --host, 127.0.0.1, --port, "8082", --workers, "1",
+              --timeout-graceful-shutdown, "120", --no-access-log]
+    volumes:
+      - *config
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/ready', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  state:

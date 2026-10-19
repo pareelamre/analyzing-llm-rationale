@@ -20,7 +20,7 @@ from opentelemetry import metrics, trace
 
 from .account import AccountSnapshot
 from .models import AccountScope, CommandState, Completeness, TradeIntent
-from .store import CommandClaim, ExecutionCommand, TwinStore, TwinStoreError
+from .store import CommandClaim, ExecutionCommand, TwinStore, TwinStoreError, require_durable_store
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -299,8 +299,11 @@ class LifecycleProjection:
     fills: tuple[FillObservation, ...] = ()
     settlements: tuple[SettlementObservation, ...] = ()
     updated_at: datetime | None = None
+    terminal_evidence_complete: bool = False
 
     def __post_init__(self) -> None:
+        if type(self.terminal_evidence_complete) is not bool:
+            raise RecoveryBlocked("terminal evidence completeness must be boolean")
         if not all(str(getattr(self, name)).strip() for name in (
             "command_id", "scope_id", "venue_order_id", "client_order_id", "instrument_id",
         )):
@@ -338,7 +341,8 @@ class LifecycleProjection:
 
     @property
     def settlement_final(self) -> bool:
-        return bool(self.settlements) and all(item.final for item in self.settlements)
+        return (self.terminal_evidence_complete and self.order_status in {"filled", "cancelled", "rejected"}
+                and bool(self.settlements) and all(item.final for item in self.settlements))
 
     @property
     def settled_amount(self) -> Decimal | None:
@@ -356,6 +360,7 @@ class LifecycleProjection:
             "fills": [item.to_storage() for item in self.fills],
             "settlements": [item.to_storage() for item in self.settlements],
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "terminal_evidence_complete": self.terminal_evidence_complete,
         }
 
     @classmethod
@@ -370,6 +375,7 @@ class LifecycleProjection:
             fills=tuple(FillObservation.from_storage(item) for item in value["fills"]),
             settlements=tuple(SettlementObservation.from_storage(item) for item in value["settlements"]),
             updated_at=(datetime.fromisoformat(str(value["updated_at"]).replace("Z", "+00:00")) if value.get("updated_at") else None),
+            terminal_evidence_complete=value.get("terminal_evidence_complete") is True,
         )
 
 
@@ -388,10 +394,10 @@ def _merge_versioned(current: Sequence[Any], incoming: Sequence[Any], identity: 
 def apply_lifecycle_observations(
     current: LifecycleProjection, *, fills: Sequence[FillObservation] = (),
     settlements: Sequence[SettlementObservation] = (), order_status: str | None = None,
-    observed_at: datetime,
+    observed_at: datetime, terminal_evidence_complete: bool = False,
 ) -> LifecycleProjection:
     """Idempotently reduce complete venue evidence into one order lifecycle."""
-    if observed_at.tzinfo is None:
+    if observed_at.tzinfo is None or type(terminal_evidence_complete) is not bool:
         raise RecoveryBlocked("lifecycle observation time must be timezone-aware")
     for fill in fills:
         if (
@@ -419,6 +425,7 @@ def apply_lifecycle_observations(
     changed = (
         merged_fills != current.fills or merged_settlements != current.settlements
         or status != current.order_status
+        or terminal_evidence_complete != current.terminal_evidence_complete
     )
     return LifecycleProjection(
         current.command_id, current.scope_id, current.venue_order_id,
@@ -426,6 +433,7 @@ def apply_lifecycle_observations(
         revision=current.revision + (1 if changed else 0), order_status=status,
         fills=merged_fills, settlements=merged_settlements,
         updated_at=observed_at if changed else current.updated_at,
+        terminal_evidence_complete=terminal_evidence_complete,
     )
 
 
@@ -528,11 +536,11 @@ def reconcile_lifecycle(
     command: ExecutionCommand, intent: TradeIntent, claim: CommandClaim,
     venue_order_id: str, fills: Sequence[FillObservation] = (),
     settlements: Sequence[SettlementObservation] = (), order_status: str | None = None,
-    observed_at: datetime,
+    observed_at: datetime, terminal_evidence_complete: bool = False,
 ) -> LifecycleProjection:
     """Persist lifecycle evidence once and then advance the fenced command."""
     scope = _require_current_scope(command_store, command, intent)
-    if scope.environment == "live" and not lifecycle_store.durable:
+    if scope.environment == "live" and (not lifecycle_store.durable or not command_store.durable):
         raise RecoveryBlocked("live lifecycle reconciliation requires durable storage")
     current_command = command_store.command_for_intent(intent)
     if current_command.id != command.id or current_command.intent_hash != intent.intent_hash:
@@ -559,6 +567,7 @@ def reconcile_lifecycle(
     updated = apply_lifecycle_observations(
         projection, fills=fills, settlements=settlements,
         order_status=order_status, observed_at=observed_at,
+        terminal_evidence_complete=terminal_evidence_complete,
     )
     lifecycle_store.save(updated, expected_revision=previous_revision)
     target = lifecycle_command_state(updated)
@@ -570,9 +579,11 @@ def reconcile_lifecycle(
             )
         except TwinStoreError as exc:
             raise RecoveryBlocked("lifecycle evidence was saved but command projection needs operator reconciliation") from exc
-    if updated.settlement_final:
+    zero_fill_terminal = (updated.terminal_evidence_complete and updated.order_status in {"cancelled", "rejected"}
+                          and updated.filled_quantity == 0 and not updated.settlements)
+    if updated.settlement_final or zero_fill_terminal:
         settlement_ref = sha256(json.dumps(
-            [item.to_storage() for item in updated.settlements],
+            updated.to_storage(),
             sort_keys=True, separators=(",", ":"),
         ).encode()).hexdigest()
         try:
@@ -614,7 +625,8 @@ def cancel_after_reconciliation(
     now: datetime, max_lookup_age_seconds: int = 5,
 ) -> Mapping[str, Any]:
     """Reconcile the exact identity before each bounded cancellation attempt."""
-    _require_current_scope(store, command, intent)
+    scope = _require_current_scope(store, command, intent)
+    require_durable_store(store, live=scope.environment == "live")
     current = store.command_for_intent(intent)
     if not _matching_lookup(current, intent, lookup) or lookup.order_found is not True:
         raise RecoveryBlocked("cancellation requires a complete matching live-order observation")
@@ -625,6 +637,8 @@ def cancel_after_reconciliation(
         raise RecoveryBlocked("cancellation lookup is stale or from the future")
     if current.claim is None or current.claim != claim:
         raise RecoveryBlocked("cancellation worker no longer owns the command fence")
+    if claim.lease_expires_at <= now:
+        raise RecoveryBlocked("cancellation command lease has expired")
     if current.state not in {
         CommandState.ACKNOWLEDGED, CommandState.PARTIALLY_FILLED,
         CommandState.CANCEL_REQUESTED,
@@ -727,6 +741,10 @@ def recover_submission(
             )
             return _recovery_result(RecoveryAction.RECONCILED, updated)
         if lookup.order_found is False:
+            # An absence is never proof that an in-flight/legacy send cannot
+            # arrive later. Only a positively unstarted command can use this path.
+            if current.dispatch_started is not False or not 0 <= (now-lookup.observed_at).total_seconds() <= 30:
+                return _recovery_result(RecoveryAction.OPERATOR_ATTENTION, current)
             if lookup.observed_at in absence_observation_times:
                 return _recovery_result(RecoveryAction.OPERATOR_ATTENTION, current)
             absence_observation_times.add(lookup.observed_at)
@@ -742,11 +760,8 @@ def recover_submission(
     updated = store.transition_command(
         current.id, target=CommandState.REJECTED, fence=claim.fence, worker_id=claim.worker_id
     )
-    reservation_id = updated.reservation_id
-    if store.durable:
-        reservation_id = f"{updated.scope_id}:{reservation_id}"
     try:
-        store.release_reservation(reservation_id, confirmed_no_order=True)
+        store.release_reservation(updated.scope_id, updated.reservation_id, confirmed_no_order=True)
     except TwinStoreError as exc:
         raise RecoveryBlocked("confirmed absence could not release its reservation") from exc
     return _recovery_result(

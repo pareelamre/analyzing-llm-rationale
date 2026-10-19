@@ -29,6 +29,7 @@ from .execution import (
     SubmissionUnknown,
     submit_claimed_command,
 )
+from .forecast_prior import load_forecast_research_prior
 from .market_capture import (
     CapturedMarket,
     DatastoreMarketCaptureStore,
@@ -88,6 +89,7 @@ from .strategy import (
     load_strategy_policy,
 )
 from .worker import (
+    DatastoreResearchCompletionStore,
     DatastoreWorkerJobs,
     MaintenanceResearchJobGateway,
     ResearchAssignment,
@@ -1120,6 +1122,20 @@ def _twin_config_paths(repository_root: Path) -> tuple[Path, Path]:
     return twin_path, models_path
 
 
+def _market_capture_policy(
+    strategy_policy, repository_root: Path, *, as_of: datetime, use_history: bool = False,
+) -> MarketCapturePolicy:
+    return MarketCapturePolicy(
+        max_candidates=strategy_policy.max_research_candidates,
+        candidates_per_venue=strategy_policy.max_research_candidates,
+        research_prior=(
+            load_forecast_research_prior(
+                repository_root / "static" / "track_record_live.json", as_of=as_of,
+            ) if use_history else None
+        ),
+    )
+
+
 def create_environment_app():
     """Build a role-specific app from secret-free deployment configuration."""
     _assert_shadow_only()
@@ -1164,6 +1180,7 @@ def create_environment_app():
         budget = DatastoreResearchBudget(client)
         captures = DatastoreResearchCaptureStore(client)
         results = DatastoreResearchResultStore(client)
+        completion_store = DatastoreResearchCompletionStore(client)
         strategy_store = DatastoreStrategyStore(client)
         account_snapshot_store = DatastoreAccountSnapshotStore(client)
         twin_store = DatastoreTwinStore(client)
@@ -1273,6 +1290,7 @@ def create_environment_app():
         gateway = MaintenanceResearchJobGateway(
             jobs, authorize_assignment=authorize, capture_loader=load_capture,
             authorize_repair=authorize_repair, finalize_result=finalize_result,
+            completion_store=completion_store,
             after_complete=lambda assignment, _completed: (
                 dispatcher.enqueue(continuation)
                 if (continuation := stage_continuation(assignment)) is not None
@@ -1301,9 +1319,9 @@ def create_environment_app():
             maintenance_operation=lambda job: _maintenance_operation(
                 jobs, budget, job, strategy_store, strategy_run_store,
                 market_capture_store, market_data_gateway,
-                MarketCapturePolicy(
-                    max_candidates=strategy_policy.max_research_candidates,
-                    candidates_per_venue=strategy_policy.max_research_candidates,
+                _market_capture_policy(
+                    strategy_policy, repository_root, as_of=now(),
+                    use_history="FORESEA_TWIN_CONFIG_DIR" in os.environ,
                 ),
                 captures, results, evidence_cache, evidence_gateway,
                 research_policy, dispatcher,
