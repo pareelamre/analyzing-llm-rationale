@@ -36,7 +36,25 @@
         "Semgrep attempted but unavailable: Docker engine and native CLI absent"
       ]
     },
-    "next": "Recompute corrected reports from compatible causal snapshots and complete forward/venue release gates; accepted-result replay is integrated locally, but Brier confidence alone cannot authorize trades"
+    "next": "Recompute corrected reports from compatible causal snapshots and complete forward/venue release gates; accepted-result replay is integrated locally, but Brier confidence alone cannot authorize trades",
+    "raw_source_check": {
+      "date": "2026-10-19",
+      "report": "docs/autonomous-twin/RAW_SIGNAL_SCREEN.md",
+      "summary": "docs/autonomous-twin/RAW_SIGNAL_SCREEN.json",
+      "source_sha256": "7e7ffa476f97bd123fcf968d94b34455e8a90227082a8e6846929b7c9b745a86",
+      "last_snapshot_at": "2026-09-27T21:06:37.868385+00:00",
+      "snapshots": 90546,
+      "resolved_ledger_forecasts": 51132,
+      "audit_grade_resolved": 42094,
+      "compatible_twin_calibration_observations": 0,
+      "comparisons": 340,
+      "nonempty_cohorts": 300,
+      "positive_research_cohorts": 0,
+      "status": "historical_incompatible_with_BYOM_calibration_no_qualifying_research_cohort",
+      "runtime_changes": false,
+      "original_source_unchanged": true,
+      "verification": "2026-10-19 raw historical evidence supplement: read-only source hash unchanged; two final normalized-source analyses byte-identical; 300 nonempty cohorts/340 planned comparisons/107 with30markets/zero positive adjusted lower bounds; full unittest2832 tests/13 skips exit0 in216.120s; Ruff and JSON/report integrity pass; no production code changes."
+    }
   },
   "byom_distribution": {
     "updated_at": "2026-10-19",
@@ -830,7 +848,8 @@
         "2026-10-15 PYTHONPATH=src py -m unittest discover -s tests (exit 0; local only)",
         "2026-10-15 py -m ruff check src tests, git diff --check, Graphify AST update, AQG construction checker and audit adjudication validator (exit 0)",
         "2026-10-15 deep review aud_vzdOFgln4Y (partial panel; two usable reviews, findings adjudicated and accepted fixes applied locally)",
-        "2026-10-19 BYOM recovery integration: full unittest exit0, 2832 tests/13 emulator skips in204.964s; direct/factory three-process SQL recovery, native loopback/auth/restart, Ruff, Graphify, JSON/diff and AQG checks pass. No deployment or external collection."
+        "2026-10-19 BYOM recovery integration: full unittest exit0, 2832 tests/13 emulator skips in204.964s; direct/factory three-process SQL recovery, native loopback/auth/restart, Ruff, Graphify, JSON/diff and AQG checks pass. No deployment or external collection.",
+        "2026-10-19 raw historical evidence supplement: read-only source hash unchanged; two final normalized-source analyses byte-identical; 300 nonempty cohorts/340 planned comparisons/107 with30markets/zero positive adjusted lower bounds; full unittest2832 tests/13 skips exit0 in216.120s; Ruff and JSON/report integrity pass; no production code changes."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -856,7 +875,9 @@
         "src/analyzing_llm_rationale/twin/simulator.py",
         "src/analyzing_llm_rationale/forecast_ledger.py",
         "tests/test_twin_sql_recovery.py",
-        "deploy/byom/README.md"
+        "deploy/byom/README.md",
+        "docs/autonomous-twin/RAW_SIGNAL_SCREEN.md",
+        "docs/autonomous-twin/RAW_SIGNAL_SCREEN.json"
       ],
       "blockers": [
         "Compatible audit-grade calibration observations must accumulate before entry intents can qualify.",
