@@ -10,8 +10,10 @@ import multiprocessing
 import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from threading import Event
 from unittest import mock
 from uuid import uuid4
 
@@ -642,6 +644,138 @@ class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
         outcomes = sorted(result_queue.get(timeout=5) for _ in processes)
         self.assertEqual(outcomes, ["capacity_blocked", "reserved"])
         self.assertEqual(store.projection(scope_id).reserved_cash, Decimal("6"))
+
+
+from tests import test_twin_lifecycle_atomic as atomic_lifecycle  # noqa: E402
+from tests import test_twin_recovery_review as review_lifecycle  # noqa: E402
+
+
+@unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
+class DatastoreAtomicLifecycleTests(atomic_lifecycle.AtomicLifecycleTests):
+    backends = ('kalshi', 'polymarket')
+
+    def pair(self, backend, *, acknowledge=True):
+        from google.cloud import datastore
+
+        client = datastore.Client(project=os.environ.get('GOOGLE_CLOUD_PROJECT', 'foresea-twin-test'),
+                                  namespace='atomic-'+uuid4().hex)
+        self.addCleanup(client.close)
+        store = DatastoreTwinStore(client)
+        ledger = DatastoreLifecycleStore(client)
+        store, intent, command, claim = atomic_lifecycle.prepared_unknown(
+            venue=backend, environment='live', store=store)
+        if acknowledge:
+            atomic_lifecycle.recover_submission(store, command=command, intent=intent, claim=claim,
+                now=atomic_lifecycle.NOW+timedelta(seconds=3),
+                lookups=[atomic_lifecycle.lookup(command, intent, found=True)], clock=lambda: atomic_lifecycle.NOW+timedelta(seconds=3))
+        return store, ledger, intent, store.command_for_intent(intent), claim
+
+    def test_takeover_during_expired_reconciliation_retains_cash_and_identity(self):
+        from google.cloud import datastore
+
+        for venue in self.backends:
+            with self.subTest(venue=venue):
+                values = self.pair(venue)
+                store, ledger, intent, command, old_claim = values
+                client = datastore.Client(project=store._client.project, namespace=store._client.namespace)
+                self.addCleanup(client.close)
+                replacement_store = DatastoreTwinStore(client)
+                saved, release, attempting = Event(), Event(), Event()
+                clock = [atomic_lifecycle.NOW+timedelta(seconds=3)]
+                original = ledger.save
+
+                def hold_after_save(*args, _save=original, _saved=saved, _release=release, **kwargs):
+                    result = _save(*args, **kwargs)
+                    _saved.set()
+                    if not _release.wait(10):
+                        raise AssertionError('test failed to release the held transaction')
+                    return result
+
+                def take_over(_store=replacement_store, _command=command, _attempting=attempting):
+                    _attempting.set()
+                    return _store.claim_command(_command.id, worker_id='new-generation',
+                        now=atomic_lifecycle.NOW+timedelta(seconds=33), lease_seconds=30)
+
+                with mock.patch.object(ledger, 'save', side_effect=hold_after_save):
+                    with ThreadPoolExecutor(2) as pool:
+                        stale = pool.submit(self.run_reconcile, values, at=clock, order_status='open')
+                        try:
+                            self.assertTrue(saved.wait(10))
+                            newer = pool.submit(take_over)
+                            self.assertTrue(attempting.wait(10))
+                            clock[0] = atomic_lifecycle.NOW+timedelta(seconds=33)
+                        finally:
+                            release.set()
+                        with self.assertRaises(RecoveryBlocked):
+                            stale.result(timeout=20)
+                        claim = newer.result(timeout=20)
+                self.assertEqual(claim.fence, old_claim.fence+1)
+                self.assertEqual(store.command_for_intent(intent).claim, claim)
+                self.assertEqual(store.command_for_intent(intent).client_order_id, command.client_order_id)
+                self.assert_held_without_evidence(values)
+
+    def test_concurrent_commit_order_respects_fences_without_expiring_the_old_clock(self):
+        from google.cloud import datastore
+
+        for venue in self.backends:
+            with self.subTest(venue=venue):
+                values = self.pair(venue)
+                store, ledger, intent, command, claim = values
+                client = datastore.Client(project=store._client.project, namespace=store._client.namespace)
+                self.addCleanup(client.close)
+                replacement_store = DatastoreTwinStore(client)
+                saved, release = Event(), Event()
+                original = ledger.save
+
+                def hold(*args, _save=original, _saved=saved, _release=release, **kwargs):
+                    result = _save(*args, **kwargs)
+                    _saved.set()
+                    if not _release.wait(10):
+                        raise AssertionError('test failed to release held transaction')
+                    return result
+
+                with mock.patch.object(ledger, 'save', side_effect=hold):
+                    with ThreadPoolExecutor(2) as pool:
+                        older = pool.submit(self.run_reconcile, values,
+                            fills=[atomic_lifecycle.fill(command,intent,'f','1')])
+                        committed_first = False
+                        try:
+                            self.assertTrue(saved.wait(10))
+                            newer = pool.submit(replacement_store.claim_command, command.id,
+                                worker_id='new-fence', now=atomic_lifecycle.NOW+timedelta(seconds=33))
+                            try:
+                                newer.result(timeout=1)
+                                committed_first = True  # Result returned: replacement actually committed.
+                            except FutureTimeout:
+                                pass
+                        finally:
+                            release.set()
+                        failed = False
+                        try:
+                            result = older.result(timeout=20)
+                        except RecoveryBlocked:
+                            failed = True
+                        replacement = newer.result(timeout=20)
+                self.assertEqual(replacement.fence, claim.fence+1)
+                if committed_first:
+                    self.assertTrue(failed, 'a transaction cannot commit over an already committed newer fence')
+                if failed:
+                    self.assertIsNone(ledger.load(command.scope_id,command.id))
+                    self.assertEqual(store.command_for_intent(intent).state, CommandState.ACKNOWLEDGED)
+                else:
+                    self.assertFalse(committed_first)
+                    self.assertEqual(result.filled_quantity, 1)
+                    self.assertEqual(store.command_for_intent(intent).state, CommandState.PARTIALLY_FILLED)
+                self.assertEqual(store.command_for_intent(intent).claim, replacement)
+                self.assertEqual(store.projection(command.scope_id).reserved_cash, 1)
+                print('fence_commit_order', venue, 'replacement_before_release' if committed_first else 'overlapping_writer',
+                      'old_aborted' if failed else 'old_committed_first')
+
+
+@unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
+class DatastoreLifecycleReviewTests(review_lifecycle.LifecycleReviewTests):
+    backends = ('kalshi', 'polymarket')
+    pair = DatastoreAtomicLifecycleTests.pair
 
 
 if __name__ == "__main__":

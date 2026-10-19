@@ -68,6 +68,8 @@ class AccountSnapshot:
     external_activity_ids: tuple[str, ...]
     divergence: bool
     drift_reasons: tuple[str, ...]
+    # Legacy snapshots remain readable but cannot prove recovery absence.
+    account_epoch: Optional[int] = None
 
     @property
     def blocks_new_exposure(self) -> bool:
@@ -336,6 +338,7 @@ def synchronize_account(
     scope_id: str,
     *,
     generation: int,
+    account_epoch: Optional[int] = None,
     received_at: datetime,
     balances: Sequence[Mapping[str, Any]],
     positions: Sequence[Mapping[str, Any]],
@@ -352,6 +355,8 @@ def synchronize_account(
     """Atomically validate a full venue generation or retain the last one."""
     if not scope_id or generation < 1 or received_at.tzinfo is None:
         raise SchemaValidationError("scope_id, positive generation, and UTC-aware received_at are required")
+    if account_epoch is not None and (type(account_epoch) is not int or account_epoch < 1):
+        raise SchemaValidationError('account epoch must be a positive integer')
     if previous is not None:
         if previous.scope_id != scope_id:
             raise SchemaValidationError("previous snapshot belongs to a different account scope")
@@ -440,6 +445,7 @@ def synchronize_account(
             external.append(command_id)
     snapshot = AccountSnapshot(
         scope_id=scope_id, generation=generation, received_at=received_at, completeness=Completeness.COMPLETE,
+        account_epoch=account_epoch,
         available_cash=available, total_cash=total, reserved_cash=reserved, settled_cash=settled,
         holdings=holdings, position_basis=position_basis, fees_paid=fees_paid,
         conservative_liquidation_value=conservative_liquidation_value, positions=deduped["positions"],

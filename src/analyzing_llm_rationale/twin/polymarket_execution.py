@@ -374,7 +374,7 @@ def lookup_polymarket_command(
     trace.get_current_span().set_attributes({"twin.venue": "polymarket",
                                            "outcome": "found" if complete else "unknown"})
     return VenueOrderLookup(command.scope_id, intent.instrument_id, command.client_order_id,
-                            command.request_fingerprint, complete, True if complete else None, clock())
+                            command.request_fingerprint, complete, True if complete else None, clock(), intent.account_epoch)
 
 
 def cancel_polymarket_command(
@@ -408,4 +408,4 @@ def cancel_polymarket_command(
             raise ExecutionBlocked("native Polymarket cancellation outcome is uncertain") from None
 
     return cancel_after_reconciliation(store, command=command, intent=intent, claim=claim,
-                                       lookup=lookup, cancel=cancel, now=clock())
+                                       lookup=lookup, cancel=cancel, now=clock(), clock=clock)

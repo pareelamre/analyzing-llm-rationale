@@ -181,6 +181,7 @@ def synchronize_complete_account(
     scope_id: str,
     *,
     generation: int,
+    account_epoch: Optional[int] = None,
     received_at: datetime,
     fetchers: Mapping[str, PageFetcher],
     local_command_ids: set[str],
@@ -231,6 +232,7 @@ def synchronize_complete_account(
     return synchronize_account(
         scope_id,
         generation=generation,
+        account_epoch=account_epoch,
         received_at=received_at,
         balances=collections["balances"].account_pages(),
         positions=collections["positions"].account_pages(),
@@ -246,6 +248,7 @@ def synchronize_and_persist_complete_account(
     scope_id: str,
     *,
     generation: int,
+    account_epoch: Optional[int] = None,
     received_at: datetime,
     fetchers: Mapping[str, PageFetcher],
     local_command_ids: set[str],
@@ -262,6 +265,7 @@ def synchronize_and_persist_complete_account(
     result = synchronize_complete_account(
         scope_id,
         generation=generation,
+        account_epoch=account_epoch,
         received_at=received_at,
         fetchers=fetchers,
         local_command_ids=local_command_ids,

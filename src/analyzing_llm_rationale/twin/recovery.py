@@ -9,18 +9,30 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from hashlib import sha256
+from itertools import islice
 from typing import Any, Callable, Iterable, Mapping, Optional, Protocol, Sequence
 
 from opentelemetry import metrics, trace
 
 from .account import AccountSnapshot
-from .models import AccountScope, CommandState, Completeness, TradeIntent
-from .store import CommandClaim, ExecutionCommand, TwinStore, TwinStoreError, require_durable_store
+from .models import AccountScope, CommandState, Completeness, TradeIntent, can_transition_command
+from .store import (
+    CommandClaim,
+    DatastoreTwinStore,
+    ExecutionCommand,
+    InMemoryTwinStore,
+    TwinStore,
+    TwinStoreError,
+    _command_identity,
+    _transaction_scope,
+    require_durable_store,
+)
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -36,6 +48,10 @@ _ORDER_STATUSES = frozenset({
 
 class RecoveryBlocked(RuntimeError):
     """Recovery did not have enough evidence to change durable exposure state."""
+
+
+class LifecycleConflict(RecoveryBlocked):
+    """Bound evidence contradicts terminal accounting and requires operator review."""
 
 
 class RecoveryAction(str, Enum):
@@ -76,8 +92,11 @@ class VenueOrderLookup:
     complete: bool
     order_found: Optional[bool]
     observed_at: datetime
+    account_epoch: int
 
     def __post_init__(self) -> None:
+        if type(self.account_epoch) is not int or self.account_epoch < 1:
+            raise RecoveryBlocked('lookup requires a positive account epoch')
         if type(self.complete) is not bool or (
             self.order_found is not None and type(self.order_found) is not bool
         ):
@@ -124,14 +143,15 @@ def lookup_from_complete_account(
     intent: TradeIntent, observed_at: datetime,
 ) -> VenueOrderLookup:
     """Bind a complete account generation to one prepared order identity."""
-    if snapshot.scope_id != command.scope_id or command.intent_hash != intent.intent_hash:
+    if (type(snapshot.account_epoch) is not int or snapshot.scope_id != command.scope_id or command.intent_hash != intent.intent_hash
+            or snapshot.account_epoch != intent.account_epoch):
         raise RecoveryBlocked("account generation does not match the recovery command")
     if snapshot.received_at != observed_at:
         raise RecoveryBlocked("account observation time does not match its durable generation")
     if snapshot.completeness is not Completeness.COMPLETE or snapshot.blocks_new_exposure:
         return VenueOrderLookup(
             command.scope_id, intent.instrument_id, command.client_order_id,
-            command.request_fingerprint, False, None, snapshot.received_at,
+            command.request_fingerprint, False, None, snapshot.received_at, snapshot.account_epoch,
         )
     candidates = [
         row for row in (*snapshot.orders, *snapshot.fills)
@@ -144,13 +164,13 @@ def lookup_from_complete_account(
         if not identity:
             return VenueOrderLookup(
                 command.scope_id, intent.instrument_id, command.client_order_id,
-                command.request_fingerprint, False, None, observed_at,
+                command.request_fingerprint, False, None, observed_at, snapshot.account_epoch,
             )
         if identity != intent.instrument_id and identity != intent.instrument_id.rsplit(":", 1)[-1]:
             raise RecoveryBlocked("venue evidence reused the client identity for another instrument")
     return VenueOrderLookup(
         command.scope_id, intent.instrument_id, command.client_order_id,
-        command.request_fingerprint, True, bool(candidates), observed_at,
+        command.request_fingerprint, True, bool(candidates), observed_at, snapshot.account_epoch,
     )
 
 
@@ -342,6 +362,7 @@ class LifecycleProjection:
     @property
     def settlement_final(self) -> bool:
         return (self.terminal_evidence_complete and self.order_status in {"filled", "cancelled", "rejected"}
+                and (self.order_status != 'filled' or self.filled_quantity == self.order_quantity)
                 and bool(self.settlements) and all(item.final for item in self.settlements))
 
     @property
@@ -386,8 +407,12 @@ def _merge_versioned(current: Sequence[Any], incoming: Sequence[Any], identity: 
         prior = merged.get(key)
         if prior is None or item.version > prior.version:
             merged[key] = item
-        elif item.version == prior.version and item != prior:
-            raise RecoveryBlocked(f"conflicting {identity} revision")
+        elif item.version == prior.version:
+            before, after = prior.to_storage(), item.to_storage()
+            before.pop('observed_at', None)
+            after.pop('observed_at', None)
+            if before != after:
+                raise LifecycleConflict(f"conflicting_{identity}_revision")
     return tuple(merged[key] for key in sorted(merged))
 
 
@@ -417,11 +442,25 @@ def apply_lifecycle_observations(
             raise RecoveryBlocked("settlement does not match the recovered order identity")
     merged_fills = _merge_versioned(current.fills, fills, "fill_id")
     merged_settlements = _merge_versioned(current.settlements, settlements, "settlement_id")
+    if (current.terminal_evidence_complete and current.order_status in {'filled', 'cancelled', 'rejected'}
+            and merged_fills != current.fills):
+        raise LifecycleConflict('terminal_fill_evidence_changed')
+    if (current.terminal_evidence_complete and current.filled_quantity == 0
+            and not current.settlements and merged_settlements):
+        raise LifecycleConflict('terminal_zero_fill_settlement_changed')
     if sum((item.quantity for item in merged_fills), Decimal("0")) > current.order_quantity:
-        raise RecoveryBlocked("fills exceed the original order quantity")
+        raise LifecycleConflict('fills_exceed_order_quantity')
     status = str(order_status or current.order_status).strip().lower()
     if status not in _ORDER_STATUSES:
         raise RecoveryBlocked("venue order status is unsupported")
+    if current.updated_at is not None and observed_at < current.updated_at:
+        status = current.order_status
+        terminal_evidence_complete = current.terminal_evidence_complete
+    else:
+        if (current.terminal_evidence_complete and current.order_status in {'filled', 'cancelled', 'rejected'}
+                and status != current.order_status):
+            raise LifecycleConflict('terminal_status_changed')
+        terminal_evidence_complete = current.terminal_evidence_complete or terminal_evidence_complete
     changed = (
         merged_fills != current.fills or merged_settlements != current.settlements
         or status != current.order_status
@@ -432,7 +471,7 @@ def apply_lifecycle_observations(
         current.client_order_id, current.instrument_id, current.order_quantity,
         revision=current.revision + (1 if changed else 0), order_status=status,
         fills=merged_fills, settlements=merged_settlements,
-        updated_at=observed_at if changed else current.updated_at,
+        updated_at=max(observed_at, current.updated_at or observed_at) if changed else current.updated_at,
         terminal_evidence_complete=terminal_evidence_complete,
     )
 
@@ -495,7 +534,7 @@ class DatastoreLifecycleStore:
         from analyzing_llm_rationale import datastore_backend as datastore
 
         key = self._key(projection.scope_id, projection.command_id)
-        with self._client.transaction():
+        with _transaction_scope(self._client):
             current = self._client.get(key)
             actual = self._decode(current).revision if current is not None else 0
             if actual != expected_revision:
@@ -520,8 +559,10 @@ def lifecycle_command_state(projection: LifecycleProjection) -> CommandState:
     if projection.filled_quantity > 0:
         return CommandState.PARTIALLY_FILLED
     return {
-        "filled": CommandState.FILLED,
-        "partially_filled": CommandState.PARTIALLY_FILLED,
+        # Status is not fill evidence: only identity-bound observations above
+        # may create inventory or a filled command.
+        "filled": CommandState.ACKNOWLEDGED,
+        "partially_filled": CommandState.ACKNOWLEDGED,
         "cancel_requested": CommandState.CANCEL_REQUESTED,
         "cancelled": CommandState.CANCELLED,
         "rejected": CommandState.REJECTED,
@@ -530,27 +571,106 @@ def lifecycle_command_state(projection: LifecycleProjection) -> CommandState:
     }[projection.order_status]
 
 
-@tracer.start_as_current_span("twin.recovery.lifecycle")
+@contextmanager
+def _atomic_recovery(command_store: TwinStore, lifecycle_store: LifecycleStore | None = None):
+    """Keep evidence, command and held cash in one storage serialization unit."""
+    if isinstance(command_store, InMemoryTwinStore) and (
+            lifecycle_store is None or isinstance(lifecycle_store, InMemoryLifecycleStore)):
+        from contextlib import nullcontext
+        with command_store._lock, (lifecycle_store._lock if lifecycle_store is not None else nullcontext()):
+            backups = tuple(dict(getattr(command_store, name)) for name in
+                            ('_commands', '_reservations', '_projections'))
+            evidence = dict(lifecycle_store._items) if lifecycle_store is not None else None
+            try:
+                yield
+            except BaseException:  # aqg: top-level boundary -- cancellation must also restore local state
+                for name, backup in zip(('_commands', '_reservations', '_projections'), backups):
+                    setattr(command_store, name, backup)
+                if lifecycle_store is not None:
+                    lifecycle_store._items = evidence
+                raise
+    elif (isinstance(command_store, DatastoreTwinStore)
+          and (lifecycle_store is None or (isinstance(lifecycle_store, DatastoreLifecycleStore)
+               and command_store._client is lifecycle_store._client))):
+        with command_store._client.transaction():
+            yield
+    else:
+        raise RecoveryBlocked('lifecycle and command stores must share one coherent account transaction')
+
+
+def _bound_command(command_store, command, intent):
+    _require_current_scope(command_store, command, intent)
+    current = command_store.command_for_intent(intent)
+    if current.intent_hash != intent.intent_hash or _command_identity(current) != _command_identity(command):
+        raise RecoveryBlocked('lifecycle command is not bound to the immutable intent')
+    return current
+
+
+def _check_lifecycle_claim(command_store, command, intent, claim, observed_at, clock):
+    current = _bound_command(command_store, command, intent)
+    if current.claim != claim:
+        raise RecoveryBlocked('lifecycle worker no longer owns the command fence')
+    checked_at = clock() if clock is not None else datetime.now(timezone.utc)
+    if (checked_at.tzinfo is None or checked_at.utcoffset() is None
+            or observed_at.tzinfo is None or observed_at.utcoffset() is None
+            or observed_at > checked_at or claim.lease_expires_at <= checked_at):
+        raise RecoveryBlocked('lifecycle processing lease expired or observation time is invalid')
+    return current
+
+
+@tracer.start_as_current_span("twin.recovery.lifecycle", record_exception=False)
 def reconcile_lifecycle(
     command_store: TwinStore, lifecycle_store: LifecycleStore, *,
     command: ExecutionCommand, intent: TradeIntent, claim: CommandClaim,
     venue_order_id: str, fills: Sequence[FillObservation] = (),
     settlements: Sequence[SettlementObservation] = (), order_status: str | None = None,
     observed_at: datetime, terminal_evidence_complete: bool = False,
+    clock: Callable[[], datetime] | None = None,
 ) -> LifecycleProjection:
-    """Persist lifecycle evidence once and then advance the fenced command."""
+    """Commit lifecycle evidence, command and held cash under one current fence."""
+    try:
+        with _atomic_recovery(command_store, lifecycle_store):
+            updated = _reconcile_lifecycle_atomic(command_store, lifecycle_store,
+                command=command, intent=intent, claim=claim, venue_order_id=venue_order_id,
+                fills=fills, settlements=settlements, order_status=order_status,
+                observed_at=observed_at, terminal_evidence_complete=terminal_evidence_complete,
+                clock=clock)
+    except LifecycleConflict as exc:
+        # The success transaction has rolled back. Preserve bound contradictory
+        # evidence separately and pause new reservations/dispatch for this root.
+        try:
+            command_store.record_recovery_attention(command, intent, claim, reason=str(exc),
+                evidence={'fills':[row.to_storage() for row in fills],
+                    'settlements':[row.to_storage() for row in settlements],
+                    'order_status':order_status, 'terminal_evidence_complete':terminal_evidence_complete,
+                    'observed_at':observed_at.isoformat(), 'venue_order_id':venue_order_id},
+                clock=clock or (lambda: datetime.now(timezone.utc)))
+        except Exception:  # aqg: top-level boundary -- never log private evidence or backend error text
+            recovery_operations.add(1, {'operation':'lifecycle','state':'unconfirmed'})
+            logger.warning('lifecycle attention persistence requires reconciliation')
+            raise RecoveryBlocked('lifecycle attention could not be confirmed; reconcile before new exposure') from None
+        recovery_operations.add(1, {'operation':'lifecycle','state':'operator_attention'})
+        logger.error('lifecycle evidence quarantined; operator reconciliation required command_ref=%s account_ref=%s',
+                     sha256(command.id.encode()).hexdigest()[:16], sha256(command.scope_id.encode()).hexdigest()[:16])
+        raise
+    except RecoveryBlocked:
+        recovery_operations.add(1, {'operation':'lifecycle','state':'blocked'})
+        raise
+    except Exception:  # aqg: top-level boundary -- contention/commit loss is not a successful reconciliation
+        recovery_operations.add(1, {'operation':'lifecycle','state':'unconfirmed'})
+        logger.warning('lifecycle commit requires reconciliation')
+        raise RecoveryBlocked('lifecycle commit unconfirmed; reconcile durable state before retry') from None
+    recovery_operations.add(1, {'operation':'lifecycle','state':lifecycle_command_state(updated).value})
+    return updated
+
+
+def _reconcile_lifecycle_atomic(command_store, lifecycle_store, *, command, intent, claim,
+        venue_order_id, fills, settlements, order_status, observed_at, terminal_evidence_complete, clock):
     scope = _require_current_scope(command_store, command, intent)
     if scope.environment == "live" and (not lifecycle_store.durable or not command_store.durable):
         raise RecoveryBlocked("live lifecycle reconciliation requires durable storage")
-    current_command = command_store.command_for_intent(intent)
-    if current_command.id != command.id or current_command.intent_hash != intent.intent_hash:
-        raise RecoveryBlocked("lifecycle command is not bound to the immutable intent")
-    if (
-        current_command.claim is None
-        or current_command.claim.worker_id != claim.worker_id
-        or current_command.claim.fence != claim.fence
-    ):
-        raise RecoveryBlocked("lifecycle worker no longer owns the command fence")
+    current_command = _check_lifecycle_claim(command_store, command, intent, claim, observed_at, clock)
+    command = current_command
     projection = lifecycle_store.load(command.scope_id, command.id)
     if projection is None:
         projection = LifecycleProjection(
@@ -569,19 +689,31 @@ def reconcile_lifecycle(
         order_status=order_status, observed_at=observed_at,
         terminal_evidence_complete=terminal_evidence_complete,
     )
+    if current_command.state is CommandState.FILLED and updated.filled_quantity < intent.quantity:
+        raise LifecycleConflict('filled_quantity_correction')
+    if (updated.order_status == 'filled' and updated.terminal_evidence_complete
+            and updated.filled_quantity != intent.quantity):
+        raise LifecycleConflict('filled_status_missing_fills')
     lifecycle_store.save(updated, expected_revision=previous_revision)
+    _check_lifecycle_claim(command_store, command, intent, claim, observed_at, clock)
     target = lifecycle_command_state(updated)
-    recovery_operations.add(1, {"operation": "lifecycle", "state": target.value})
+    zero_fill_terminal = (updated.terminal_evidence_complete and updated.order_status in {"cancelled", "rejected"}
+                          and updated.filled_quantity == 0 and not updated.settlements)
+    if target is CommandState.REJECTED and not zero_fill_terminal:
+        raise RecoveryBlocked('rejection requires complete zero-fill terminal evidence')
+    if (target is not current_command.state and current_command.state is not CommandState.FILLED
+            and not can_transition_command(current_command.state, target)):
+        raise LifecycleConflict('command_transition_refused')
     if target is not current_command.state and current_command.state is not CommandState.FILLED:
         try:
             command_store.transition_command(
                 current_command.id, target=target, fence=claim.fence, worker_id=claim.worker_id,
             )
         except TwinStoreError as exc:
-            raise RecoveryBlocked("lifecycle evidence was saved but command projection needs operator reconciliation") from exc
-    zero_fill_terminal = (updated.terminal_evidence_complete and updated.order_status in {"cancelled", "rejected"}
-                          and updated.filled_quantity == 0 and not updated.settlements)
-    if updated.settlement_final or zero_fill_terminal:
+            raise RecoveryBlocked("lifecycle transaction could not advance its command") from exc
+    # A rejection transition already releases its reservation. It must never
+    # be settled a second time, including in Datastore's snapshot-read model.
+    if updated.settlement_final or (zero_fill_terminal and target is not CommandState.REJECTED):
         settlement_ref = sha256(json.dumps(
             updated.to_storage(),
             sort_keys=True, separators=(",", ":"),
@@ -592,6 +724,7 @@ def reconcile_lifecycle(
             )
         except TwinStoreError as exc:
             raise RecoveryBlocked("final settlement could not release the reservation") from exc
+    _check_lifecycle_claim(command_store, command, intent, claim, observed_at, clock)
     return updated
 
 
@@ -618,13 +751,7 @@ def startup_recovery_action(command: ExecutionCommand, *, lease_expired: bool) -
 CancelSubmitter = Callable[[ExecutionCommand], Mapping[str, Any]]
 
 
-@tracer.start_as_current_span("twin.recovery.cancel")
-def cancel_after_reconciliation(
-    store: TwinStore, *, command: ExecutionCommand, intent: TradeIntent,
-    claim: CommandClaim, lookup: VenueOrderLookup, cancel: CancelSubmitter,
-    now: datetime, max_lookup_age_seconds: int = 5,
-) -> Mapping[str, Any]:
-    """Reconcile the exact identity before each bounded cancellation attempt."""
+def _prepare_cancel(store, *, command, intent, claim, lookup, now, max_lookup_age_seconds):
     scope = _require_current_scope(store, command, intent)
     require_durable_store(store, live=scope.environment == "live")
     current = store.command_for_intent(intent)
@@ -649,9 +776,30 @@ def cancel_after_reconciliation(
             current.id, target=CommandState.CANCEL_REQUESTED,
             fence=claim.fence, worker_id=claim.worker_id,
         )
+    return current
+
+
+@tracer.start_as_current_span("twin.recovery.cancel", record_exception=False)
+def cancel_after_reconciliation(
+    store: TwinStore, *, command: ExecutionCommand, intent: TradeIntent,
+    claim: CommandClaim, lookup: VenueOrderLookup, cancel: CancelSubmitter,
+    now: datetime, max_lookup_age_seconds: int = 5,
+    clock: Callable[[], datetime] | None = None,
+) -> Mapping[str, Any]:
+    """Reconcile the exact identity before each bounded cancellation attempt."""
+    with _atomic_recovery(store):
+        current = _check_lifecycle_claim(store, command, intent, claim, now, clock)
+        checked_at = clock() if clock is not None else datetime.now(timezone.utc)
+        current = _prepare_cancel(store, command=current, intent=intent, claim=claim, lookup=lookup,
+            now=checked_at, max_lookup_age_seconds=max_lookup_age_seconds)
+        _check_lifecycle_claim(store, current, intent, claim, now, clock)
+    # No external operation runs under the account transaction. Native adapters
+    # recheck immediately before transport; a late result is never accepted.
+    _check_lifecycle_claim(store, current, intent, claim, now, clock)
     try:
         response = cancel(current)
-    except Exception as exc:
+        _check_lifecycle_claim(store, current, intent, claim, now, clock)
+    except Exception:  # aqg: top-level boundary -- cancellation may have reached the venue
         logger.warning(
             "twin cancellation outcome unknown command_ref=%s account_ref=%s",
             sha256(current.id.encode()).hexdigest()[:16],
@@ -659,7 +807,7 @@ def cancel_after_reconciliation(
         )
         recovery_operations.add(1, {"operation": "cancel", "state": "unknown"})
         ambiguous_submissions.add(1, {"venue": "unknown", "stage": "cancel"})
-        raise RecoveryBlocked("cancellation outcome is unknown; reconcile before another attempt") from exc
+        raise RecoveryBlocked("cancellation outcome is unknown; reconcile before another attempt") from None
     if not isinstance(response, Mapping):
         raise RecoveryBlocked("cancellation response is malformed; reconcile before another attempt")
     envelope = response.get("venue_response", response)
@@ -681,10 +829,11 @@ def _matching_lookup(command: ExecutionCommand, intent: TradeIntent, lookup: Ven
         and lookup.instrument_id == intent.instrument_id
         and lookup.client_order_id == command.client_order_id
         and lookup.request_fingerprint == command.request_fingerprint
+        and lookup.account_epoch == intent.account_epoch
     )
 
 
-@tracer.start_as_current_span("twin.recovery.submission")
+@tracer.start_as_current_span("twin.recovery.submission", record_exception=False)
 def recover_submission(
     store: TwinStore,
     *,
@@ -694,6 +843,37 @@ def recover_submission(
     now: datetime,
     lookups: Iterable[VenueOrderLookup],
     required_absence_observations: int | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> RecoveryResult:
+    """Read bounded venue evidence outside the account transaction, then fence its commit."""
+    current = _bound_command(store, command, intent)
+    if current.state in {CommandState.FILLED, CommandState.CANCELLED, CommandState.REJECTED}:
+        return _recovery_result(RecoveryAction.TERMINAL, current)
+    require_durable_store(store, live=store.account_scope(current.scope_id).environment == 'live')
+    _check_lifecycle_claim(store, current, intent, claim, now, clock)
+    try:
+        evidence = tuple(islice(lookups, 1001))
+    except Exception:  # aqg: top-level boundary -- provider read text may contain account credentials
+        logger.warning('submission recovery evidence read unavailable')
+        raise RecoveryBlocked('submission recovery evidence unavailable; retain the reservation') from None
+    if len(evidence) > 1000:
+        raise RecoveryBlocked('recovery evidence exceeds the bounded read budget')
+    try:
+        with _atomic_recovery(store):
+            current = _check_lifecycle_claim(store, current, intent, claim, now, clock)
+            result = _recover_submission_atomic(store, command=current, intent=intent, claim=claim,
+                now=now, lookups=evidence, required_absence_observations=required_absence_observations)
+            _check_lifecycle_claim(store, current, intent, claim, now, clock)
+    except RecoveryBlocked:
+        raise
+    except Exception:  # aqg: top-level boundary -- an unconfirmed commit must never authorize another send
+        raise RecoveryBlocked('submission recovery commit unconfirmed; reconcile before retry') from None
+    return _recovery_result(result.action, result.command, reservation_released=result.reservation_released)
+
+
+def _recover_submission_atomic(
+    store: TwinStore, *, command: ExecutionCommand, intent: TradeIntent, claim: CommandClaim,
+    now: datetime, lookups: Iterable[VenueOrderLookup], required_absence_observations: int | None,
 ) -> RecoveryResult:
     """Recover a command without resubmitting it.
 
@@ -712,10 +892,10 @@ def recover_submission(
     if current.id != command.id or current.intent_hash != intent.intent_hash:
         raise RecoveryBlocked("recovery command is not bound to the immutable intent")
     if current.state in {CommandState.FILLED, CommandState.CANCELLED, CommandState.REJECTED}:
-        return _recovery_result(RecoveryAction.TERMINAL, current)
+        return RecoveryResult(RecoveryAction.TERMINAL, current)
     if current.state not in {CommandState.SUBMITTING, CommandState.SUBMISSION_UNKNOWN}:
         raise RecoveryBlocked(f"command cannot be recovered from {current.state.value}")
-    if current.claim is None or current.claim.worker_id != claim.worker_id or current.claim.fence != claim.fence:
+    if current.claim != claim:
         raise RecoveryBlocked("recovery worker no longer owns the command fence")
     if current.claim.lease_expires_at <= now:
         raise RecoveryBlocked("recovery claim has expired")
@@ -729,9 +909,10 @@ def recover_submission(
             and lookup.instrument_id == intent.instrument_id
             and lookup.client_order_id == current.client_order_id
             and lookup.request_fingerprint == current.request_fingerprint
+            and lookup.account_epoch == intent.account_epoch
         )
         if lookup.observed_at > now or not identity_matches:
-            return _recovery_result(RecoveryAction.OPERATOR_ATTENTION, current)
+            return RecoveryResult(RecoveryAction.OPERATOR_ATTENTION, current)
         if not lookup.complete:
             saw_incomplete = True
             continue
@@ -739,14 +920,14 @@ def recover_submission(
             updated = store.transition_command(
                 current.id, target=CommandState.ACKNOWLEDGED, fence=claim.fence, worker_id=claim.worker_id
             )
-            return _recovery_result(RecoveryAction.RECONCILED, updated)
+            return RecoveryResult(RecoveryAction.RECONCILED, updated)
         if lookup.order_found is False:
             # An absence is never proof that an in-flight/legacy send cannot
             # arrive later. Only a positively unstarted command can use this path.
             if current.dispatch_started is not False or not 0 <= (now-lookup.observed_at).total_seconds() <= 30:
-                return _recovery_result(RecoveryAction.OPERATOR_ATTENTION, current)
+                return RecoveryResult(RecoveryAction.OPERATOR_ATTENTION, current)
             if lookup.observed_at in absence_observation_times:
-                return _recovery_result(RecoveryAction.OPERATOR_ATTENTION, current)
+                return RecoveryResult(RecoveryAction.OPERATOR_ATTENTION, current)
             absence_observation_times.add(lookup.observed_at)
             complete_absences += 1
 
@@ -756,15 +937,11 @@ def recover_submission(
         for earlier, later in zip(ordered_absences, ordered_absences[1:])
     )
     if saw_incomplete or complete_absences < required or not separated:
-        return _recovery_result(RecoveryAction.OPERATOR_ATTENTION, current)
+        return RecoveryResult(RecoveryAction.OPERATOR_ATTENTION, current)
     updated = store.transition_command(
         current.id, target=CommandState.REJECTED, fence=claim.fence, worker_id=claim.worker_id
     )
-    try:
-        store.release_reservation(updated.scope_id, updated.reservation_id, confirmed_no_order=True)
-    except TwinStoreError as exc:
-        raise RecoveryBlocked("confirmed absence could not release its reservation") from exc
-    return _recovery_result(
+    return RecoveryResult(
         RecoveryAction.CONFIRMED_ABSENT, updated, reservation_released=True,
     )
 

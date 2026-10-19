@@ -416,21 +416,21 @@ class Client:
         a spurious "cannot start a transaction within a transaction".
         """
         with self._lock:
-            outermost = self._tx_depth == 0
-            if outermost:
-                self._conn.execute("BEGIN IMMEDIATE")
-            self._tx_depth += 1
+            previous_depth = self._tx_depth
+            outermost = previous_depth == 0
             try:
+                if outermost:
+                    self._conn.execute("BEGIN IMMEDIATE")
+                self._tx_depth = previous_depth + 1
                 yield self
-            except Exception:
-                self._tx_depth -= 1
+                if outermost:
+                    self._conn.commit()
+            except BaseException:  # aqg: top-level boundary -- rollback cancellation and process interruption
                 if outermost:
                     self._conn.rollback()
                 raise
-            else:
-                self._tx_depth -= 1
-                if outermost:
-                    self._conn.commit()
+            finally:
+                self._tx_depth = previous_depth
 
     def close(self) -> None:
         with self._lock:

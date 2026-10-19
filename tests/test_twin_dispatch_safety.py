@@ -68,7 +68,7 @@ class DispatchSafetyTests(unittest.TestCase):
         result = recover_submission(store, command=command, intent=intent, claim=claim,
             now=NOW+timedelta(seconds=5), lookups=[
                 lookup(command, intent, found=False, offset=3),
-                lookup(command, intent, found=False, offset=5)])
+                lookup(command, intent, found=False, offset=5)], clock=lambda: NOW+timedelta(seconds=5))
         self.assertEqual(result.action, RecoveryAction.OPERATOR_ATTENTION)
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal('1'))
 
@@ -77,7 +77,7 @@ class DispatchSafetyTests(unittest.TestCase):
         result = reconcile_lifecycle(store, InMemoryLifecycleStore(), command=command,
             intent=intent, claim=claim, venue_order_id='venue-order-1',
             settlements=[settlement(command, intent, version=1, amount='1', final=True)],
-            order_status='open', observed_at=NOW)
+            order_status='open', observed_at=NOW, clock=lambda: NOW+timedelta(seconds=3))
         self.assertFalse(result.settlement_final)
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal('1'))
 
@@ -85,10 +85,12 @@ class DispatchSafetyTests(unittest.TestCase):
         store, intent, command, claim = acknowledged()
         ledger = InMemoryLifecycleStore()
         reconcile_lifecycle(store, ledger, command=command, intent=intent, claim=claim,
-            venue_order_id='venue-order-1', order_status='cancelled', observed_at=NOW)
+            venue_order_id='venue-order-1', order_status='cancelled', observed_at=NOW,
+            clock=lambda: NOW+timedelta(seconds=3))
         self.assertEqual(store.projection(command.scope_id).reserved_cash, Decimal('1'))
         reconcile_lifecycle(store, ledger, command=command, intent=intent, claim=claim,
             venue_order_id='venue-order-1', order_status='cancelled',
-            terminal_evidence_complete=True, observed_at=NOW+timedelta(seconds=1))
+            terminal_evidence_complete=True, observed_at=NOW+timedelta(seconds=1),
+            clock=lambda: NOW+timedelta(seconds=3))
         self.assertEqual(store.projection(command.scope_id).reserved_cash, 0)
         self.assertEqual(store.command_for_intent(intent).state, CommandState.CANCELLED)
