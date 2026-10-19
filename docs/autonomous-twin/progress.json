@@ -7,6 +7,29 @@
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
   "next_task": "T21",
   "live_authorized": false,
+  "byom_distribution": {
+    "updated_at": "2026-10-19",
+    "live_activation_status": "pending_bounded_mandate_and_release_gates",
+    "model_config_pr": 685,
+    "local_credentials_pr": 686,
+    "forecast_research_prior_pr": 687,
+    "worker_package_branch": "codex/twin-byom-workers",
+    "worker_package_status": "native_sql_verified_container_host_smoke_pending",
+    "verification": [
+      "54 focused tests pass: native loopback workers, all three credential scopes, 48 concurrent dispatches, overload callback/readiness capacity, abrupt restart and fenced recovery",
+      "Docker Compose schema and rendered service configuration pass",
+      "py -m unittest discover -s tests: 2813 tests, 12 skipped, exit 0",
+      "py -m ruff check src tests: pass; Graphify update: pass",
+      "One deep audit aud_ESayR4knD0: 23 findings addressed in 16 normalized dispositions",
+      "Local focused Semgrep: 3 rules, 3 files, zero findings; SQL backup/integrity and stale fence probes pass"
+    ],
+    "remaining": [
+      "Integrate durable research-completion recovery from PR 683 before collection release; this branch verifies maintenance SQL persistence, not provider-result replay",
+      "Build and smoke the package on the target Linux host with the operator model endpoint",
+      "Complete T21 forward evidence and fault drills, then T22 bounded live pilot gates"
+    ],
+    "cost_boundary": "No deployment, collection schedule, paid provider request, venue order, R2/GCS write or new cloud resource in this delivery"
+  },
   "release_gates": {
     "G0": "pass",
     "G1": "blocked",

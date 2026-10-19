@@ -1,9 +1,11 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Event
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -521,6 +523,34 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
                 headers=self.auth("dispatcher-token"),
             )
             self.assertEqual(response.json(), {"status": "complete"})
+
+    def test_dispatch_overload_keeps_callback_and_readiness_capacity(self):
+        runtime, _ = self.maintenance_runtime()
+        entered, release = Event(), Event()
+
+        class BlockingDispatcher:
+            def enqueue(self, job):
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError("synthetic dispatch was not released")
+                return "synthetic:" + job.id
+
+        runtime.dispatcher = BlockingDispatcher()
+        with TestClient(create_private_worker_app(runtime)) as client, ThreadPoolExecutor(1) as caller:
+            pending = caller.submit(client.post, "/internal/twin/dispatch",
+                                    headers=self.auth("scheduler-token"))
+            try:
+                self.assertTrue(entered.wait(3))
+                overload = client.post("/internal/twin/dispatch", headers=self.auth("scheduler-token"))
+                self.assertEqual(overload.status_code, 503)
+                self.assertEqual(overload.headers["Retry-After"], "1")
+                self.assertEqual(client.get("/ready").status_code, 200)
+                callback = client.post("/internal/twin/maintain", json={"job_id": "maintenance-job"},
+                                       headers=self.auth("dispatcher-token"))
+                self.assertEqual(callback.json(), {"status": "complete"})
+            finally:
+                release.set()
+            self.assertEqual(pending.result(timeout=3).status_code, 200)
 
     def test_environment_runtime_rejects_live_capital_or_authority(self):
         base = {
