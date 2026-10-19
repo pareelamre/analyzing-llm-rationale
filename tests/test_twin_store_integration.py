@@ -64,6 +64,7 @@ from analyzing_llm_rationale.twin.worker import (
     WorkerJobKind,
     WorkerJobStatus,
 )
+from tests import test_twin_account_maintenance as native_account_maintenance
 
 
 def _research_in_process(key, reservation_id, result_queue):
@@ -776,6 +777,61 @@ class DatastoreAtomicLifecycleTests(atomic_lifecycle.AtomicLifecycleTests):
 class DatastoreLifecycleReviewTests(review_lifecycle.LifecycleReviewTests):
     backends = ('kalshi', 'polymarket')
     pair = DatastoreAtomicLifecycleTests.pair
+
+
+@unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
+class DatastoreNativeAccountMaintenanceTests(native_account_maintenance.NativeAccountMaintenanceTests):
+    def make_client(self):
+        from google.cloud import datastore
+
+        self.enterContext(mock.patch.dict(os.environ, {'FORESEA_DATASTORE_BACKEND':'gcp'}))
+        self.namespace = 'native-account-'+uuid4().hex
+        return datastore.Client(project='foresea-twin-test', namespace=self.namespace)
+
+    def test_committed_job_replacement_aborts_nonexpired_snapshot_commit(self):
+        from google.cloud import datastore
+
+        from analyzing_llm_rationale.twin.worker import DatastoreWorkerJobs, WorkerDegraded
+
+        replacement_client = datastore.Client(project='foresea-twin-test', namespace=self.namespace)
+        replacement_jobs = DatastoreWorkerJobs(replacement_client)
+        saved, release = Event(), Event()
+        original = self.snapshots.save
+
+        def held_save(snapshot, *, validate):
+            calls = 0
+            def guard():
+                nonlocal calls
+                validate()
+                calls += 1
+                if calls == 2:
+                    saved.set()
+                    if not release.wait(15):
+                        raise AssertionError('test failed to release snapshot transaction')
+            return original(snapshot, validate=guard)
+
+        with mock.patch.object(self.snapshots, 'save', side_effect=held_save), ThreadPoolExecutor(2) as pool:
+            stale = pool.submit(self.operation(), self.job)
+            try:
+                self.assertTrue(saved.wait(10))
+                newer = pool.submit(replacement_jobs.claim, self.job.id, worker_id='replacement',
+                    now=native_account_maintenance.NOW+timedelta(seconds=121), lease_seconds=40)
+                replacement = newer.result(timeout=10)
+                self.assertIsNotNone(replacement)
+                self.assertEqual(replacement.fence, self.job.fence+1)
+            finally:
+                release.set()
+            with self.assertRaises(WorkerDegraded):
+                stale.result(timeout=15)
+        self.assertIsNone(self.snapshots.load(self.scope.id))
+        self.assertEqual(self.jobs.get(self.job.id), replacement)
+        self.assertEqual(self.store.command_for_intent(self.intent), self.command)
+        print('native_capture_commit_order', self.venue, 'replacement_before_release', 'old_aborted')
+
+
+@unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
+class DatastorePolymarketAccountMaintenanceTests(DatastoreNativeAccountMaintenanceTests):
+    venue = 'polymarket'
 
 
 if __name__ == "__main__":

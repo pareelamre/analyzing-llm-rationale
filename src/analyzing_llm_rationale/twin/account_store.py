@@ -8,7 +8,7 @@ from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
 from hashlib import sha256
-from typing import Any, Mapping, Optional, Protocol
+from typing import Any, Callable, Mapping, Optional, Protocol
 
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
@@ -36,7 +36,7 @@ class AccountSnapshotRepository(Protocol):
 
     def load(self, scope_id: str) -> Optional[AccountSnapshot]: ...
 
-    def save(self, snapshot: AccountSnapshot) -> AccountSnapshot: ...
+    def save(self, snapshot: AccountSnapshot, *, validate: Callable[[], None] | None = None) -> AccountSnapshot: ...
 
 
 def _json_default(value: Any) -> str:
@@ -182,9 +182,11 @@ class InMemoryAccountSnapshotStore:
         with self._lock:
             return self._snapshots.get(scope_id)
 
-    def save(self, snapshot: AccountSnapshot) -> AccountSnapshot:
+    def save(self, snapshot: AccountSnapshot, *, validate: Callable[[], None] | None = None) -> AccountSnapshot:
         _validate_snapshot(snapshot)
         with self._lock:
+            if validate is not None:
+                validate()
             prior = self._snapshots.get(snapshot.scope_id)
             if prior is not None:
                 if prior.generation > snapshot.generation:
@@ -193,6 +195,8 @@ class InMemoryAccountSnapshotStore:
                     if _fingerprint(prior) != _fingerprint(snapshot):
                         raise AccountSnapshotStoreError("same account generation has conflicting economics")
                     return prior
+            if validate is not None:
+                validate()
             self._snapshots[snapshot.scope_id] = snapshot
             return snapshot
 
@@ -225,8 +229,8 @@ class DatastoreAccountSnapshotStore:
         except (KeyError, TypeError, ValueError, AccountSnapshotStoreError) as exc:
             raise AccountSnapshotStoreError("stored account snapshot cannot be read") from exc
 
-    @tracer.start_as_current_span("twin.account_snapshot.persist")
-    def save(self, snapshot: AccountSnapshot) -> AccountSnapshot:
+    @tracer.start_as_current_span("twin.account_snapshot.persist", record_exception=False, set_status_on_exception=False)
+    def save(self, snapshot: AccountSnapshot, *, validate: Callable[[], None] | None = None) -> AccountSnapshot:
         span = trace.get_current_span()
         span.set_attributes({"account.scope_id": snapshot.scope_id, "account.generation": snapshot.generation})
         try:
@@ -236,6 +240,8 @@ class DatastoreAccountSnapshotStore:
             fingerprint = _fingerprint(snapshot)
             key = self._key(snapshot.scope_id)
             with self._client.transaction():
+                if validate is not None:
+                    validate()
                 existing = self._client.get(key)
                 if existing is not None:
                     existing_snapshot = _restore(json.loads(str(existing["payload_json"])))
@@ -258,13 +264,15 @@ class DatastoreAccountSnapshotStore:
                 entity = datastore.Entity(key=key, exclude_from_indexes=("payload_json",))
                 entity.update({"generation": snapshot.generation, "fingerprint": fingerprint, "payload_json": encoded})
                 self._client.put(entity)
+                if validate is not None:
+                    validate()
             snapshot_events.add(1, {"outcome": "stored"})
             span.set_attribute("outcome", "stored")
             logger.info("Stored complete account snapshot generation %s", snapshot.generation)
             return snapshot
-        except Exception as exc:
+        except Exception:  # aqg: top-level boundary -- retain durable state and emit only fixed error text
             snapshot_events.add(1, {"outcome": "error"})
-            span.record_exception(ValueError(type(exc).__name__))
+            span.record_exception(ValueError('account_snapshot_persist_failed'))
             span.set_status(Status(StatusCode.ERROR))
             logger.warning("Could not persist complete account snapshot")
             raise

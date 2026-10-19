@@ -709,6 +709,7 @@ def _maintenance_operation(
     twin_store=None,
     strategy_policy=None,
     calibration_observations=(),
+    account_maintenance=None,
 ) -> dict[str, object]:
     """Safe staging operation until venue/account adapters are configured."""
     if job.kind is WorkerJobKind.RECOVERY:
@@ -720,6 +721,8 @@ def _maintenance_operation(
             "stale_jobs_detected": len(stale),
             "research_budgets_marked_uncertain": uncertain,
         }
+    if job.kind is WorkerJobKind.RECONCILE and account_maintenance is not None:
+        return account_maintenance(job)
     if job.kind in {WorkerJobKind.RECONCILE, WorkerJobKind.EXIT}:
         raise WorkerDegraded("account_maintenance_adapter_unconfigured")
     if job.kind is WorkerJobKind.STRATEGY:
@@ -1136,7 +1139,7 @@ def _market_capture_policy(
     )
 
 
-def create_environment_app():
+def create_environment_app(*, native_account_plan_resolver=None):
     """Build a role-specific app from secret-free deployment configuration."""
     _assert_shadow_only()
     role = WorkerRole(_required("FORESEA_TWIN_WORKER_ROLE"))
@@ -1184,6 +1187,14 @@ def create_environment_app():
         strategy_store = DatastoreStrategyStore(client)
         account_snapshot_store = DatastoreAccountSnapshotStore(client)
         twin_store = DatastoreTwinStore(client)
+        account_maintenance = None
+        if native_account_plan_resolver is not None:
+            from .account_maintenance import NativeAccountMaintenance
+
+            account_maintenance = NativeAccountMaintenance(
+                twin_store, account_snapshot_store, jobs,
+                resolve_plan=native_account_plan_resolver, clock=now,
+            )
         strategy_run_store = DatastoreStrategyRunStore(client)
         market_capture_store = DatastoreMarketCaptureStore(client)
         market_data_gateway = LiveMarketDataGateway()
@@ -1327,6 +1338,7 @@ def create_environment_app():
                 research_policy, dispatcher,
                 account_snapshot_store, twin_store, strategy_policy,
                 lambda: _calibration_observations(ledger, as_of=now()),
+                account_maintenance=account_maintenance,
             ),
             research_gateway=gateway,
             shared_secret=maintenance_secret,
