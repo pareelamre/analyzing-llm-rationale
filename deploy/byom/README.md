@@ -35,10 +35,9 @@ contains no credential. The twin remains in shadow mode with zero live capital.
 Foresea's existing CPU image and app factory, with a persistent maintenance SQL
 volume and separate role credentials. The native SQL subprocess regression
 checks startup, loopback delivery, authorization and restart; a container-host
-smoke and bounded forward shadow trial remain release gates. Durable research
-result replay from PR #683 must also be integrated before a collection release;
-this package's restart test covers maintenance work, not unsaved provider results.
-Live order
+smoke and bounded forward shadow trial remain release gates. Durable accepted-result
+recovery from PR #683 is integrated: receipts use the existing maintenance SQL
+volume, without a research database mount or another cloud service. Live order
 submission remains gated by T21/T22 and an explicit owner mandate; installing
 this config does not grant trading authority.
 
@@ -120,8 +119,19 @@ extensions or subprocesses. Concurrent dispatch is bounded: excess callers
 receive 503 with `Retry-After`, leaving work durable for the next dispatch.
 This proves the native runtime, not a built container or live venue behavior.
 
-Do not start collection until PR #683 is integrated and the target-host smoke,
-host isolation and model pricing checks pass. After those release checks,
+The separate offline test `PYTHONPATH=src python -m unittest
+tests.test_twin_sql_recovery` injects finalizer failure after a synthetic result
+is saved, then retries in two fresh processes using the same SQLite file. It
+verifies direct gateway and BYOM app-factory persistence: one research operation,
+one budget authorization, successful replay and no repeated finalization on a
+terminal duplicate. Business operations and finalization are synthetic; this
+is not an end-to-end provider or forward-trading test. A result lost before
+maintenance durably accepts it is outside this recovery boundary. Such unknown
+usage remains conservatively accounted for; this change does not authorize
+repeating a paid model call.
+
+Do not start collection until the target-host smoke, host isolation and model
+pricing checks pass. After those release checks,
 to collect shadow evidence after reviewing endpoint pricing and pending state,
 use the existing VPS `foresea-cron.sh twin-due-work` command with
 `FORESEA_TWIN_MAINTENANCE_ENV_FILE` pointing at the private maintenance file

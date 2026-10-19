@@ -49,7 +49,11 @@ from analyzing_llm_rationale.twin.store import (
 )
 from analyzing_llm_rationale.twin.strategy import DatastoreStrategyStore, StrategyCycle
 from analyzing_llm_rationale.twin.worker import (
+    DatastoreResearchCompletionStore,
     DatastoreWorkerJobs,
+    MaintenanceResearchJobGateway,
+    ResearchCompletion,
+    TwinResearchWorker,
     WorkerJob,
     WorkerJobError,
     WorkerJobKind,
@@ -94,6 +98,76 @@ def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, resul
 
 @unittest.skipUnless(os.environ.get("DATASTORE_EMULATOR_HOST"), "requires DATASTORE_EMULATOR_HOST")
 class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
+    def test_research_completion_replays_across_datastore_clients(self):
+        from google.cloud import datastore
+
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")
+        now = datetime.now(timezone.utc)
+        job_id = f"research-replay-{uuid4().hex}"
+        client = datastore.Client(project=project)
+        jobs = DatastoreWorkerJobs(client)
+        jobs.add(WorkerJob(
+            job_id, "scope-001", WorkerJobKind.RESEARCH,
+            {
+                "research_assignment_id": f"assignment-{uuid4().hex}",
+                "budget_reservation_id": f"budget-{uuid4().hex}",
+                "market_snapshot_id": "snapshot-001",
+                "evidence_set_id": "evidence-001",
+                "model_config_id": "model-001",
+                "budget_key_id": "budget-key-001",
+                "strategy_cycle_id": "strategy-cycle-001",
+            },
+            now + timedelta(minutes=5),
+        ))
+        model_calls = []
+        finalizations = []
+
+        def research(_assignment):
+            model_calls.append(1)
+            return ResearchCompletion(
+                "completed", result_payload={"schema_version": 1},
+                actual_usd="0", actual_tokens=12,
+            )
+
+        def finalize(_assignment, completion):
+            finalizations.append(completion.actual_tokens)
+            if len(finalizations) == 1:
+                raise TimeoutError("injected finalizer failure")
+            return ResearchCompletion(
+                "completed", research_result_id="result-001",
+                usage_record_id="usage-001",
+            )
+
+        first = TwinResearchWorker(
+            MaintenanceResearchJobGateway(
+                jobs, authorize_assignment=lambda _: None,
+                finalize_result=finalize,
+                completion_store=DatastoreResearchCompletionStore(client),
+            ), worker_id="first-worker",
+        )
+        with self.assertRaisesRegex(TimeoutError, "finalizer failure"):
+            first.handle(job_id, now=now, research=research)
+        self.assertEqual(jobs.get(job_id).status, WorkerJobStatus.RUNNING)
+
+        restarted_client = datastore.Client(project=project)
+        restarted_jobs = DatastoreWorkerJobs(restarted_client)
+        replay = TwinResearchWorker(
+            MaintenanceResearchJobGateway(
+                restarted_jobs,
+                authorize_assignment=lambda _: self.fail("model budget was reclaimed"),
+                finalize_result=finalize,
+                completion_store=DatastoreResearchCompletionStore(restarted_client),
+            ), worker_id="restart-worker",
+        )
+        result = replay.handle(
+            job_id, now=now + timedelta(seconds=126), research=research,
+        )
+        self.assertEqual(result["research_result_id"], "result-001")
+        self.assertEqual(model_calls, [1])
+        self.assertEqual(finalizations, [12, 12])
+        self.assertEqual(restarted_jobs.get(job_id).status, WorkerJobStatus.COMPLETED)
+        self.assertIsNone(DatastoreResearchCompletionStore(restarted_client).get(job_id))
+
     def test_market_capture_survives_restart_and_rejects_conflicting_cycle(self):
         from google.cloud import datastore
 

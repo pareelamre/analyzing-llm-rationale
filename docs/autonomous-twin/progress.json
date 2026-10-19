@@ -25,11 +25,18 @@
       "status": "local_verified_pending_review_and_report_recomputation",
       "method": "market_means_normal_bonferroni_v1",
       "minimum_markets": 30,
-      "consumers": ["BYOM research priority", "significance-driven horizon validation"],
+      "consumers": [
+        "BYOM research priority",
+        "significance-driven horizon validation"
+      ],
       "legacy_transition": "Readable snapshot-only reports qualify no domain or horizon; the existing unreadable-horizon-record fallback remains unchanged",
-      "verification": ["Full unittest suite:2822 tests/12 skipped, exit0; Ruff and Graphify pass; DuckDB publisher-to-consumer integration and replay baseline reproduce", "One deep audit aud_rWEOrIeRch:4 reviewers completed/1 failed;9 findings addressed (8 accepted/1 rejected)", "Semgrep attempted but unavailable: Docker engine and native CLI absent"]
+      "verification": [
+        "Full unittest suite:2822 tests/12 skipped, exit0; Ruff and Graphify pass; DuckDB publisher-to-consumer integration and replay baseline reproduce",
+        "One deep audit aud_rWEOrIeRch:4 reviewers completed/1 failed;9 findings addressed (8 accepted/1 rejected)",
+        "Semgrep attempted but unavailable: Docker engine and native CLI absent"
+      ]
     },
-    "next": "Recompute corrected reports from compatible causal snapshots, integrate durable research replay and complete forward/venue release gates; Brier confidence alone cannot authorize trades"
+    "next": "Recompute corrected reports from compatible causal snapshots and complete forward/venue release gates; accepted-result replay is integrated locally, but Brier confidence alone cannot authorize trades"
   },
   "byom_distribution": {
     "updated_at": "2026-10-19",
@@ -45,14 +52,17 @@
       "py -m unittest discover -s tests: 2813 tests, 12 skipped, exit 0",
       "py -m ruff check src tests: pass; Graphify update: pass",
       "One deep audit aud_ESayR4knD0: 23 findings addressed in 16 normalized dispositions",
-      "Local focused Semgrep: 3 rules, 3 files, zero findings; SQL backup/integrity and stale fence probes pass"
+      "Local focused Semgrep: 3 rules, 3 files, zero findings; SQL backup/integrity and stale fence probes pass",
+      "2026-10-19: direct gateway and real BYOM factory each survive two fresh-process retries over shared SQLite: one synthetic research operation and one budget authorization; finalization replay then terminal duplicate suppression",
+      "2026-10-19 BYOM recovery integration: full unittest exit0, 2832 tests/13 emulator skips in204.964s; direct/factory three-process SQL recovery, native loopback/auth/restart, Ruff, Graphify, JSON/diff and AQG checks pass. No deployment or external collection."
     ],
     "remaining": [
-      "Integrate durable research-completion recovery from PR 683 before collection release; this branch verifies maintenance SQL persistence, not provider-result replay",
       "Build and smoke the package on the target Linux host with the operator model endpoint",
       "Complete T21 forward evidence and fault drills, then T22 bounded live pilot gates"
     ],
-    "cost_boundary": "No deployment, collection schedule, paid provider request, venue order, R2/GCS write or new cloud resource in this delivery"
+    "cost_boundary": "No deployment, collection schedule, paid provider request, venue order, R2/GCS write or new cloud resource in this delivery",
+    "recovery_branch": "codex/twin-byom-recovery",
+    "recovery_status": "accepted_result_sql_restart_verified_no_collection"
   },
   "release_gates": {
     "G0": "pass",
@@ -698,7 +708,7 @@
         "T20"
       ],
       "status": "in_progress",
-      "substep": "production reached research_pending; worker readiness, stale-lease recovery, terminal research degradation, and Cloud Tasks retry signaling are ready for protected review",
+      "substep": "local research-completion restart recovery and receipt quarantine verified; production forward collection remains paused under the no-new-cloud-spend constraint",
       "branch": "codex/twin-readiness-recovery",
       "commit": "2a4fe53bf",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/644",
@@ -810,7 +820,17 @@
         "py -m unittest discover -s tests for worker recovery (pass: 2382 tests; 12 skipped)",
         "py -m ruff check src tests for worker recovery (pass)",
         "py -m graphify update . for worker recovery (pass: 10251 nodes, 26000 edges)",
-        "git diff --check for worker recovery (pass)"
+        "git diff --check for worker recovery (pass)",
+        "2026-10-13 offline verification: PYTHONPATH=src py -m unittest tests.test_twin_trial tests.test_twin_budget tests.test_twin_recovery tests.test_twin_simulator tests.test_twin_worker tests.test_twin_research_gateway tests.test_twin_store tests.test_twin_cycle_runtime (exit 0: 113 tests; no skips)",
+        "2026-10-13 historical report replay from 2026-09-12-runtime-audit.json (exit 0: G1 blocked, G2 collecting; historical evidence only)",
+        "2026-10-13 PYTHONPATH=src py -m unittest discover -s tests (exit 0: 2755 tests in 367.873s; 12 skipped; local only)",
+        "2026-10-13 py -m ruff check src tests (exit 0)",
+        "2026-10-13 git diff --check and AQG construction checker (exit 0; documentation-only increment)",
+        "2026-10-15 local saved-completion restart, corrupt-receipt, size-limit, lost-continuation, stale-fence and research-lease regressions (pass; SQL-backed where durable state matters)",
+        "2026-10-15 PYTHONPATH=src py -m unittest discover -s tests (exit 0; local only)",
+        "2026-10-15 py -m ruff check src tests, git diff --check, Graphify AST update, AQG construction checker and audit adjudication validator (exit 0)",
+        "2026-10-15 deep review aud_vzdOFgln4Y (partial panel; two usable reviews, findings adjudicated and accepted fixes applied locally)",
+        "2026-10-19 BYOM recovery integration: full unittest exit0, 2832 tests/13 emulator skips in204.964s; direct/factory three-process SQL recovery, native loopback/auth/restart, Ruff, Graphify, JSON/diff and AQG checks pass. No deployment or external collection."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/trial.py",
@@ -834,13 +854,15 @@
         "tests/test_twin_worker.py",
         "src/analyzing_llm_rationale/twin/account_store.py",
         "src/analyzing_llm_rationale/twin/simulator.py",
-        "src/analyzing_llm_rationale/forecast_ledger.py"
+        "src/analyzing_llm_rationale/forecast_ledger.py",
+        "tests/test_twin_sql_recovery.py",
+        "deploy/byom/README.md"
       ],
       "blockers": [
         "Compatible audit-grade calibration observations must accumulate before entry intents can qualify.",
         "Seven consecutive collection days and G2 sample thresholds have not elapsed or accumulated."
       ],
-      "handoff": "Merge and deploy worker recovery, verify the expired production research job reaches a terminal continuation, run the four fault drills, then restart the seven-day collection clock."
+      "handoff": "Durable accepted-completion recovery from PR #683 is integrated into codex/twin-byom-recovery with fresh-process SQL and BYOM factory verification. Existing PR #683 Datastore emulator CI is separate evidence; no emulator ran in this local increment. Keep collection paused until the target Linux host smoke, host isolation and model pricing checks pass. Then complete bounded forward evidence and fault drills. Live pilot requires venue evidence and an approved expiring mandate with capital limits. No merge to main while that triggers cloud deployment under the no-new-spend constraint."
     },
     {
       "id": "T22",
