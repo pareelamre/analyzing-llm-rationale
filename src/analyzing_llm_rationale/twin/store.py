@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import threading
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
@@ -25,6 +25,14 @@ from .models import (
     TradeIntent,
     can_transition_command,
 )
+from .prepared_requests import open_request, seal
+
+
+def _private_request(encoded: str, scope_id: str, intent_hash: str, *, encrypt: bool = False) -> str:
+    try:
+        return (seal if encrypt else open_request)(encoded, scope_id, intent_hash)
+    except Exception:  # aqg: top-level boundary -- encryption/key errors must not disclose private material
+        raise TwinStoreError("private prepared request is unavailable or changed") from None
 
 tracer = trace.get_tracer(__name__)
 meter = metrics.get_meter(__name__)
@@ -155,6 +163,9 @@ class ExecutionCommand:
     created_at: datetime
     request_fingerprint: str = ""
     claim: Optional[CommandClaim] = None
+    prepared_request_json: str = field(default="", repr=False)
+    dispatch_started: Optional[bool] = False
+    dispatch_fence: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -195,6 +206,28 @@ def _payload_hash(payload: Mapping[str, Any]) -> str:
     return sha256(encoded).hexdigest()
 
 
+def _encode_prepared_request(payload: Optional[Mapping[str, Any]]) -> str:
+    if payload is None:
+        return ""
+    try:
+        if not isinstance(payload, Mapping):
+            raise ValueError
+        encoded = json.dumps(dict(payload), sort_keys=True, separators=(",", ":"),
+                             ensure_ascii=False, allow_nan=False)
+        if len(encoded.encode("utf-8")) > 64_000:
+            raise ValueError
+        return encoded
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        raise TwinStoreError("prepared request must be a bounded JSON object") from None
+
+
+def command_request_fingerprint(intent: TradeIntent, client_order_id: str, prepared_json: str) -> str:
+    payload = {"intent": intent.identity_payload(), "client_order_id": client_order_id}
+    if prepared_json:
+        payload["prepared_request_sha256"] = sha256(prepared_json.encode("utf-8")).hexdigest()
+    return _payload_hash(payload)
+
+
 class TwinStore(Protocol):
     """Account-serialized persistence API used by manual and twin execution."""
 
@@ -213,9 +246,14 @@ class TwinStore(Protocol):
     def reserve_intent(
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
         client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
+        prepared_request: Optional[Mapping[str, Any]] = None,
     ) -> Reservation: ...
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand: ...
+
+    def find_command_for_intent(self, intent: TradeIntent) -> Optional[ExecutionCommand]: ...
+
+    def begin_dispatch(self, command_id: str, *, worker_id: str, fence: int, now: datetime) -> bool: ...
 
     def commands(self, scope_id: str, *, limit: int = 100) -> tuple[ExecutionCommand, ...]: ...
 
@@ -225,7 +263,7 @@ class TwinStore(Protocol):
 
     def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str) -> ExecutionCommand: ...
 
-    def release_reservation(self, reservation_id: str, *, confirmed_no_order: bool) -> Reservation: ...
+    def release_reservation(self, scope_id: str, reservation_id: str, *, confirmed_no_order: bool) -> Reservation: ...
 
     def settle_reservation(self, scope_id: str, reservation_id: str, *, settlement_ref: str) -> Reservation: ...
 
@@ -349,11 +387,13 @@ class InMemoryTwinStore:
         now: Optional[datetime] = None,
         client_order_id: Optional[str] = None,
         preconditions: Optional[ReservationPreconditions] = None,
+        prepared_request: Optional[Mapping[str, Any]] = None,
     ) -> Reservation:
         """Reserve cash and incremental max loss in one account-scoped transition."""
         reserved_cash = _decimal("cash", cash)
         reserved_loss = _decimal("max_loss", max_loss)
         now = now or _now()
+        prepared_json = _encode_prepared_request(prepared_request)
         with self._lock:
             projection = self.projection(intent.account_scope_id)
             if intent.account_epoch != projection.account_epoch:
@@ -364,6 +404,8 @@ class InMemoryTwinStore:
                 existing_command = self._commands[f"command-{intent.intent_hash[:24]}"]
                 if client_order_id is not None and existing_command.client_order_id != str(client_order_id):
                     raise TwinStoreError("intent already has a different prepared client order identity")
+                if prepared_request is not None and existing_command.prepared_request_json != prepared_json:
+                    raise TwinStoreError("intent already has a different prepared request")
                 reservation_operations.add(1, {"store": "memory", "outcome": "duplicate"})
                 duplicate_suppressions.add(1, {"operation": "reserve", "store": "memory"})
                 return self._reservations[existing_id]
@@ -413,9 +455,8 @@ class InMemoryTwinStore:
                 reservation_id=reservation.id,
                 client_order_id=prepared_client_order_id,
                 created_at=now,
-                request_fingerprint=_payload_hash({
-                    "intent": intent.identity_payload(), "client_order_id": prepared_client_order_id,
-                }),
+                request_fingerprint=command_request_fingerprint(intent, prepared_client_order_id, prepared_json),
+                prepared_request_json=prepared_json,
             )
             self._commands[command.id] = command
             self._outbox[command.id] = OutboxMessage(
@@ -429,12 +470,33 @@ class InMemoryTwinStore:
             return reservation
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand:
+        command = self.find_command_for_intent(intent)
+        if command is None:
+            raise TwinStoreError("intent has no reservation")
+        return command
+
+    def find_command_for_intent(self, intent: TradeIntent) -> Optional[ExecutionCommand]:
         with self._lock:
             reservation_id = self._reservation_by_intent.get((intent.account_scope_id, intent.intent_hash))
             if reservation_id is None:
-                raise TwinStoreError("intent has no reservation")
+                return None
             command_id = f"command-{intent.intent_hash[:24]}"
             return self._commands[command_id]
+
+    def begin_dispatch(self, command_id: str, *, worker_id: str, fence: int, now: datetime) -> bool:
+        with self._lock:
+            command = self._commands[command_id]
+            if command.state not in {CommandState.RESERVED, CommandState.SUBMITTING}:
+                return False
+            claim = command.claim
+            if (command.state is not CommandState.SUBMITTING or claim is None
+                    or claim.worker_id != worker_id or claim.fence != fence
+                    or claim.lease_expires_at <= now):
+                raise TwinStoreError("dispatch claim is not current")
+            if command.dispatch_started is not False:
+                return False
+            self._commands[command_id] = replace(command, dispatch_started=True, dispatch_fence=fence)
+            return True
 
     def commands(self, scope_id: str, *, limit: int = 100) -> tuple[ExecutionCommand, ...]:
         if not 1 <= limit <= 200:
@@ -520,10 +582,12 @@ class InMemoryTwinStore:
             self._commands[command_id] = updated
             return updated
 
-    def release_reservation(self, reservation_id: str, *, confirmed_no_order: bool) -> Reservation:
+    def release_reservation(self, scope_id: str, reservation_id: str, *, confirmed_no_order: bool) -> Reservation:
         """Release only after confirmed no-order/terminal reconciliation evidence."""
         with self._lock:
-            reservation = self._reservations[reservation_id]
+            reservation = self.reservation(scope_id, reservation_id)
+            if reservation.state is ReservationState.SETTLED:
+                raise TwinStoreError("settled reservation cannot be released again")
             if reservation.state in {ReservationState.SUBMITTING, ReservationState.SUBMISSION_UNKNOWN} and not confirmed_no_order:
                 raise TwinStoreError("submitting or unknown reservation cannot be released by expiry cleanup")
             if reservation.state is ReservationState.RELEASED:
@@ -704,6 +768,7 @@ class DatastoreTwinStore:
 
         query = self._client.query(kind=self._KIND)
         query.add_filter(filter=PropertyFilter("owner_id", "=", owner_id))
+        query.order = ["-scope_created_at"]
         scopes = []
         for entity in query.fetch(limit=limit):
             try:
@@ -750,10 +815,12 @@ class DatastoreTwinStore:
     def _reserve_intent_once(
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
         client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
+        prepared_request: Optional[Mapping[str, Any]] = None,
     ) -> Reservation:
         from analyzing_llm_rationale import datastore_backend as datastore
 
         reserved_cash, reserved_loss, now = _decimal("cash", cash), _decimal("max_loss", max_loss), now or _now()
+        prepared_json = _encode_prepared_request(prepared_request)
         root = self._key(intent.account_scope_id)
         reservation_id = f"reservation-{intent.intent_hash[:24]}"
         with self._client.transaction():
@@ -769,6 +836,13 @@ class DatastoreTwinStore:
                 existing_command = self._client.get(self._key(intent.account_scope_id, "TwinCommand", f"{intent.account_scope_id}:command-{intent.intent_hash[:24]}"))
                 if client_order_id is not None and existing_command is not None and str(existing_command["client_order_id"]) != str(client_order_id):
                     raise TwinStoreError("intent already has a different prepared client order identity")
+                if prepared_request is not None and (
+                    existing_command is None or _private_request(
+                        str(existing_command.get("prepared_request_json") or ""), intent.account_scope_id,
+                        intent.intent_hash,
+                    ) != prepared_json
+                ):
+                    raise TwinStoreError("intent already has a different prepared request")
                 reservation_operations.add(1, {"store": "datastore", "outcome": "duplicate"})
                 duplicate_suppressions.add(1, {"operation": "reserve", "store": "datastore"})
                 return Reservation(
@@ -794,11 +868,15 @@ class DatastoreTwinStore:
             prepared_client_order_id = str(client_order_id or f"foresea-{intent.intent_hash[:20]}").strip()
             if not prepared_client_order_id:
                 raise TwinStoreError("client order identity must not be empty")
-            command = datastore.Entity(key=self._key(intent.account_scope_id, "TwinCommand", command_id))
+            command = datastore.Entity(key=self._key(intent.account_scope_id, "TwinCommand", command_id),
+                                       exclude_from_indexes=("prepared_request_json",))
             command.update({
                 "intent_id": intent.id, "intent_hash": intent.intent_hash, "reservation_id": reservation_id,
                 "state": CommandState.RESERVED.value, "client_order_id": prepared_client_order_id, "created_at": now,
-                "request_fingerprint": _payload_hash({"intent": intent.identity_payload(), "client_order_id": prepared_client_order_id}),
+                "request_fingerprint": command_request_fingerprint(intent, prepared_client_order_id, prepared_json),
+                "prepared_request_json": _private_request(prepared_json, intent.account_scope_id, intent.intent_hash,
+                                                          encrypt=True),
+                "dispatch_started": False, "dispatch_fence": None,
                 "fence": 0,
             })
             event = datastore.Entity(key=self._key(intent.account_scope_id, "TwinEvent", f"reserve:{intent.intent_hash}"))
@@ -813,6 +891,7 @@ class DatastoreTwinStore:
     def reserve_intent(
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
         client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
+        prepared_request: Optional[Mapping[str, Any]] = None,
     ) -> Reservation:
         """Retry only Datastore transaction conflicts; never retry venue/model work."""
         from google.api_core.exceptions import Aborted
@@ -823,6 +902,7 @@ class DatastoreTwinStore:
                 return self._reserve_intent_once(
                     intent, cash=cash, max_loss=max_loss, now=now, client_order_id=client_order_id,
                     preconditions=preconditions,
+                    prepared_request=prepared_request,
                 )
             except Aborted as exc:
                 last_error = exc
@@ -830,10 +910,16 @@ class DatastoreTwinStore:
         raise TwinStoreError("Datastore contention exceeded the bounded reservation retry budget") from last_error
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand:
+        command = self.find_command_for_intent(intent)
+        if command is None:
+            raise TwinStoreError("intent has no reservation command")
+        return command
+
+    def find_command_for_intent(self, intent: TradeIntent) -> Optional[ExecutionCommand]:
         command_id = f"{intent.account_scope_id}:command-{intent.intent_hash[:24]}"
         entity = self._client.get(self._key(intent.account_scope_id, "TwinCommand", command_id))
         if entity is None:
-            raise TwinStoreError("intent has no reservation command")
+            return None
         claim = None
         if entity.get("claim_worker_id"):
             claim = CommandClaim(
@@ -845,7 +931,32 @@ class DatastoreTwinStore:
             intent_hash=str(entity["intent_hash"]), state=CommandState(str(entity["state"])),
             reservation_id=str(entity["reservation_id"]), client_order_id=str(entity["client_order_id"]),
             created_at=entity["created_at"], request_fingerprint=str(entity.get("request_fingerprint") or ""), claim=claim,
+            prepared_request_json=_private_request(str(entity.get("prepared_request_json") or ""),
+                                                  intent.account_scope_id, str(entity["intent_hash"])),
+            dispatch_started=entity.get("dispatch_started"),
+            dispatch_fence=entity.get("dispatch_fence"),
         )
+
+    def begin_dispatch(self, command_id: str, *, worker_id: str, fence: int, now: datetime) -> bool:
+        scope_id = self._command_scope(command_id)
+        key = self._key(scope_id, "TwinCommand", command_id)
+        with self._client.transaction():
+            entity = self._client.get(key)
+            if entity is not None and entity.get("state") not in {
+                CommandState.RESERVED.value, CommandState.SUBMITTING.value,
+            }:
+                return False
+            if (entity is None or entity.get("state") != CommandState.SUBMITTING.value
+                    or entity.get("claim_worker_id") != worker_id or entity.get("fence") != fence
+                    or entity.get("lease_expires_at") is None or entity["lease_expires_at"] <= now):
+                raise TwinStoreError("dispatch claim is not current")
+            # A legacy in-flight command with no marker may already have sent.
+            if entity.get("dispatch_started") is not False:
+                return False
+            entity["dispatch_started"] = True
+            entity["dispatch_fence"] = fence
+            self._client.put(entity)
+            return True
 
     def commands(self, scope_id: str, *, limit: int = 100) -> tuple[ExecutionCommand, ...]:
         if not 1 <= limit <= 200:
@@ -853,9 +964,10 @@ class DatastoreTwinStore:
         if self._client.get(self._key(scope_id)) is None:
             raise TwinStoreError("account scope is not registered")
         query = self._client.query(kind="TwinCommand", ancestor=self._key(scope_id))
+        query.order = ["-created_at"]
         commands = []
         for entity in query.fetch(limit=limit):
-            commands.append(self.command_for_intent_by_id(scope_id, str(entity.key.name)))
+            commands.append(self._command_from_entity(scope_id, entity))
         return tuple(sorted(
             commands, key=lambda command: (command.created_at, command.id), reverse=True,
         ))
@@ -884,6 +996,7 @@ class DatastoreTwinStore:
             original_state = state
             if state is CommandState.RESERVED:
                 state = CommandState.SUBMITTING
+                entity.setdefault("dispatch_started", False)
             elif state not in _CLAIMABLE_COMMAND_STATES:
                 return None
             claim = CommandClaim(command_id, worker_id, old_fence + 1, now + timedelta(seconds=lease_seconds))
@@ -950,22 +1063,23 @@ class DatastoreTwinStore:
         entity = self._client.get(self._key(scope_id, "TwinCommand", command_id))
         if entity is None:
             raise TwinStoreError("command was not found")
+        return self._command_from_entity(scope_id, entity)
+
+    def _command_from_entity(self, scope_id: str, entity: Any) -> ExecutionCommand:
+        command_id = str(entity.key.name)
         claim = CommandClaim(command_id, str(entity["claim_worker_id"]), int(entity["fence"]), entity["lease_expires_at"]) if entity.get("claim_worker_id") else None
         return ExecutionCommand(
             command_id, scope_id, str(entity["intent_id"]), str(entity["intent_hash"]),
             CommandState(str(entity["state"])), str(entity["reservation_id"]), str(entity["client_order_id"]),
             entity["created_at"], str(entity.get("request_fingerprint") or ""), claim,
+            _private_request(str(entity.get("prepared_request_json") or ""), scope_id, str(entity["intent_hash"])),
+            entity.get("dispatch_started"),
+            entity.get("dispatch_fence"),
         )
 
-    def release_reservation(self, reservation_id: str, *, confirmed_no_order: bool) -> Reservation:
+    def release_reservation(self, scope_id: str, reservation_id: str, *, confirmed_no_order: bool) -> Reservation:
         """Release a durable hold only after reconciliation proves no order exists."""
-        # Reservation IDs do not encode a scope, so the caller must use the
-        # command's account-scoped identity in normal runtime paths.  This
-        # method accepts only the canonical `scope_id:reservation_id` form to
-        # avoid a global eventually-consistent lookup.
-        scope_id, separator, local_id = reservation_id.partition(":")
-        if not separator or not scope_id or not local_id:
-            raise TwinStoreError("Datastore reservation release requires an account-scoped reservation id")
+        local_id = reservation_id
         key = self._key(scope_id, "TwinReservation", local_id)
         with self._client.transaction():
             reservation = self._client.get(key)
@@ -973,6 +1087,8 @@ class DatastoreTwinStore:
             if reservation is None or account is None:
                 raise TwinStoreError("reservation or account scope was not found")
             state = ReservationState(str(reservation["state"]))
+            if state is ReservationState.SETTLED:
+                raise TwinStoreError("settled reservation cannot be released again")
             if state in {ReservationState.SUBMITTING, ReservationState.SUBMISSION_UNKNOWN} and not confirmed_no_order:
                 raise TwinStoreError("submitting or unknown reservation cannot be released by expiry cleanup")
             if state is ReservationState.RELEASED:
@@ -1077,7 +1193,7 @@ class DatastoreTwinStore:
     def _command_scope(self, command_id: str) -> str:
         # Commands are intentionally addressed under their account root. Callers
         # retain scope context rather than using eventually consistent global lookup.
-        parts = command_id.split(":", 1)
-        if len(parts) == 2:
+        parts = command_id.rsplit(":", 1)
+        if len(parts) == 2 and parts[0] and parts[1].startswith("command-"):
             return parts[0]
         raise TwinStoreError("Datastore command operations require an account-scoped command id")

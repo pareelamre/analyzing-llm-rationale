@@ -126,8 +126,8 @@ class TwinStoreTests(unittest.TestCase):
         claim = self.store.claim_command(command.id, worker_id="worker", now=NOW)
         self.store.transition_command(command.id, target=CommandState.SUBMISSION_UNKNOWN, fence=claim.fence, worker_id="worker")
         with self.assertRaisesRegex(TwinStoreError, "cannot be released"):
-            self.store.release_reservation(reservation.id, confirmed_no_order=False)
-        released = self.store.release_reservation(reservation.id, confirmed_no_order=True)
+            self.store.release_reservation(order.account_scope_id, reservation.id, confirmed_no_order=False)
+        released = self.store.release_reservation(order.account_scope_id, reservation.id, confirmed_no_order=True)
         self.assertEqual(released.state.value, "released")
 
     def test_outbox_inbox_and_projection_rebuild_are_idempotent(self):

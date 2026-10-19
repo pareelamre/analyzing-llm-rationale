@@ -9,8 +9,10 @@ from __future__ import annotations
 import multiprocessing
 import os
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from unittest import mock
 from uuid import uuid4
 
 from analyzing_llm_rationale.twin import AccountScope, CommandState, TradeIntent
@@ -98,6 +100,49 @@ def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, resul
 
 @unittest.skipUnless(os.environ.get("DATASTORE_EMULATOR_HOST"), "requires DATASTORE_EMULATOR_HOST")
 class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
+    def test_prepared_request_and_dispatch_fence_are_atomic_across_clients(self):
+        from google.api_core.exceptions import Aborted
+        from google.cloud import datastore
+
+        now = datetime.now(timezone.utc)
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")
+        scope = AccountScope(f"native-{uuid4().hex}", "fixture-owner", "polymarket",
+                             "fixture-account", "live", "USD", "fixture-connection", 1, now)
+        client = datastore.Client(project=project)
+        store = DatastoreTwinStore(client)
+        store.register_account(scope, venue_available_cash=Decimal("20"), loss_limit=Decimal("20"))
+        intent = TradeIntent("fixture-native", scope.id, 1, "polymarket:live:fixture", "BUY_YES",
+                             Decimal("5"), Decimal(".4"), "IOC", "fixture-forecast", None,
+                             "fixture-policy", "fixture-strategy", "fixture-market", Decimal(".1"),
+                             Decimal(".1"), now+timedelta(minutes=5), now)
+        from tests.test_twin_native_polymarket import TEST_ENCRYPTION_KEY
+        key_patch = mock.patch.dict(os.environ, {"FORESEA_TWIN_ORDER_ENCRYPTION_KEY": TEST_ENCRYPTION_KEY})
+        key_patch.start()
+        self.addCleanup(key_patch.stop)
+        payload = {"schema_version": 1, "signature": "fixture-only-"+"a"*2000}
+        store.reserve_intent(intent, cash=Decimal("2.2"), max_loss=Decimal("2.2"), now=now,
+                             client_order_id="fixture-native-hash", prepared_request=payload)
+        command = store.command_for_intent(intent)
+        entity = client.get(store._key(scope.id, "TwinCommand", command.id))
+        self.assertIn("prepared_request_json", entity.exclude_from_indexes)
+        claim = store.claim_command(command.id, worker_id="fixture", now=now)
+
+        def start_dispatch(_):
+            other = DatastoreTwinStore(datastore.Client(project=project))
+            observed = other.command_for_intent(intent)
+            self.assertEqual(observed.prepared_request_json, command.prepared_request_json)
+            try:
+                return other.begin_dispatch(command.id, worker_id=claim.worker_id,
+                                             fence=claim.fence, now=now)
+            except Aborted:
+                return False  # Contention may reject a writer; it must never send.
+
+        with ThreadPoolExecutor(4) as workers:
+            results = list(workers.map(start_dispatch, range(4)))
+        self.assertEqual(sum(results), 1)
+        self.assertTrue(store.command_for_intent(intent).dispatch_started)
+        self.assertEqual(store.projection(scope.id).reserved_cash, Decimal("2.2"))
+
     def test_research_completion_replays_across_datastore_clients(self):
         from google.cloud import datastore
 

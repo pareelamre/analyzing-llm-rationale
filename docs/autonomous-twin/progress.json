@@ -3,7 +3,7 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t14_polymarket_native_identity_integration_required",
+  "implementation_status": "t14_native_polymarket_backend_verified_manual_worker_wiring_pending",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
   "next_task": "T14",
   "live_authorized": false,
@@ -488,7 +488,7 @@
         "T13"
       ],
       "status": "in_progress",
-      "substep": "Generic authorization, reservations, fences and shadow callbacks verified; production Polymarket native signed-hash binding before dispatch is not wired",
+      "substep": "Native SDK prepared body/hash, encrypted durable reservation, one-send fence and positive-only recovery verified locally; manual/public route and private worker selection remain pending",
       "branch": "codex/autonomous-durable-submission",
       "commit": "3202f9bf",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/544",
@@ -501,7 +501,8 @@
         "raw new-order audit: only private Kalshi/Polymarket adapters call venue write methods",
         "PR #544 CI test (pass)",
         "PR #544 datastore-integration (pass after expired-lease takeover fix)",
-        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed."
+        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed.",
+        "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/execution.py",
@@ -512,13 +513,18 @@
         "tests/test_twin_execution.py",
         "docs/autonomous-twin/EXECUTION_AUDIT.md",
         "tests/test_polymarket_sdk_contract.py",
-        "docs/autonomous-twin/POLYMARKET_SDK_EVIDENCE.md"
+        "docs/autonomous-twin/POLYMARKET_SDK_EVIDENCE.md",
+        "src/analyzing_llm_rationale/twin/polymarket_execution.py",
+        "src/analyzing_llm_rationale/twin/prepared_requests.py",
+        "tests/test_twin_native_polymarket.py",
+        "tests/test_twin_dispatch_safety.py",
+        "docs/autonomous-twin/NATIVE_POLYMARKET.md"
       ],
       "blockers": [
-        "Polymarket current helper signs and posts inside one SDK call after the reservation uses a local Foresea ID; native signed-order identity/exact request must be bound durably before sending.",
-        "Wire concrete prepare/persist/post/reconcile through existing execution controls and test real SDK objects under lost-response/restart faults; do not enable live runtime before release gates."
+        "Wire existing manual confirmation and private worker selection through the prepared native backend; current public helper still signs/posts after local identity reservation.",
+        "Production host/key/index, inventory/fees/approval/venue eligibility, compatible forward evidence and bounded expiring mandate remain unverified."
       ],
-      "handoff": "Implement native Polymarket preparation and durable identity binding using the existing SDK, TwinStore and execution engine; see POLYMARKET_SDK_EVIDENCE.md. Reuse verified local SDK contracts; keep worker shadow defaults and manual confirmation requirements."
+      "handoff": "Reuse the verified native backend; do not duplicate signing/execution or re-run historical screens. Wire manual and private worker selection without enabling live defaults; see NATIVE_POLYMARKET.md."
     },
     {
       "id": "T15",
@@ -527,7 +533,7 @@
         "T14"
       ],
       "status": "in_progress",
-      "substep": "Generic identity-bound recovery, fills, settlements and cancellation drills verified; production Polymarket native-ID adapter integration remains dependent on T14",
+      "substep": "Native SDK prepared body/hash, encrypted durable reservation, one-send fence and positive-only recovery verified locally; manual/public route and private worker selection remain pending",
       "branch": "codex/autonomous-lifecycle-recovery",
       "commit": "ceecca42",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/563",
@@ -538,7 +544,8 @@
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
         "py -m graphify update . and focused recovery query (pass)",
-        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed."
+        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed.",
+        "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/recovery.py",
@@ -546,12 +553,18 @@
         "src/analyzing_llm_rationale/twin/models.py",
         "tests/test_twin_recovery.py",
         "tests/test_twin_store_integration.py",
-        "docs/autonomous-twin/RECOVERY.md"
+        "docs/autonomous-twin/RECOVERY.md",
+        "src/analyzing_llm_rationale/twin/polymarket_execution.py",
+        "src/analyzing_llm_rationale/twin/prepared_requests.py",
+        "tests/test_twin_native_polymarket.py",
+        "tests/test_twin_dispatch_safety.py",
+        "docs/autonomous-twin/NATIVE_POLYMARKET.md"
       ],
       "blockers": [
-        "A local Foresea order ID is not a Polymarket native signed-order hash. Complete native pre-send persistence and exercise lookup/reconciliation for that exact identity before claiming production recovery."
+        "Wire existing manual confirmation and private worker selection through the prepared native backend; current public helper still signs/posts after local identity reservation.",
+        "Production host/key/index, inventory/fees/approval/venue eligibility, compatible forward evidence and bounded expiring mandate remain unverified."
       ],
-      "handoff": "Retain existing recovery invariants and evidence; finish concrete native Polymarket lookup binding after T14 preparation/persistence is wired. SDK/local SQL compatibility is verified offline, not live acceptance or full recovery."
+      "handoff": "Reuse the verified native backend; do not duplicate signing/execution or re-run historical screens. Wire manual and private worker selection without enabling live defaults; see NATIVE_POLYMARKET.md."
     },
     {
       "id": "T16",
@@ -926,5 +939,30 @@
     "position_id_v3_verified": false,
     "live_eligible": false,
     "verification": "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed."
+  },
+  "native_polymarket_execution": {
+    "date": "2026-10-19",
+    "branch": "codex/twin-native-polymarket",
+    "status": "backend_offline_verified_not_selected_by_routes_or_workers",
+    "evidence": "docs/autonomous-twin/NATIVE_POLYMARKET.md",
+    "review": "docs/autonomous-twin/NATIVE_POLYMARKET_REVIEW.md",
+    "sdk_versions": [
+      "1.1.0",
+      "1.2.0"
+    ],
+    "full_tests_passed": 2866,
+    "full_tests_skipped": 0,
+    "emulator_tests_passed": 14,
+    "final_focused_tests_passed": 42,
+    "audit_id": "aud_GCsxMcJAZA",
+    "adjudication_id": "adj-6b2ylb8zcvkY5bRS",
+    "live_activated": false,
+    "cloud_writes": false,
+    "remaining": [
+      "manual/public route preparation integration",
+      "private worker backend selection",
+      "exact deployable SDK/image and private host/key/index readiness",
+      "compatible forward evidence and expiring bounded live mandate"
+    ]
   }
 }
