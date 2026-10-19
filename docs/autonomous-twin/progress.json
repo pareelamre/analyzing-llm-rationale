@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t21_in_progress_worker_recovery_ready_for_review",
+  "implementation_status": "t14_native_manual_opt_in_wired_private_worker_and_lifecycle_pending",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
-  "next_task": "T21",
+  "next_task": "T14",
   "live_authorized": false,
   "signal_screen": {
     "date": "2026-10-19",
@@ -127,18 +127,21 @@
         "PYTHONPATH=src py -m unittest discover -s tests (pass: 1264 tests in 164.900s)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . (pass)"
+        "py -m graphify update . (pass)",
+        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed."
       ],
       "evidence": [
         "docs/autonomous-twin/VENUE_CAPABILITIES.md",
         "tests/fixtures/twin/venues/kalshi_create_order_v2.json",
         "tests/fixtures/twin/venues/polymarket_market_order_ack.json",
         "tests/test_trading.py",
-        "tests/test_trading_byo.py"
+        "tests/test_trading_byo.py",
+        "tests/test_polymarket_sdk_contract.py",
+        "docs/autonomous-twin/POLYMARKET_SDK_EVIDENCE.md"
       ],
       "blockers": [
-        "Polymarket SDK is declared but not installed in the verified environment; signed order identity and recovery lookup remain unverified.",
-        "Neither venue has dedicated-account demo or production contract evidence for autonomous submission."
+        "Neither venue has dedicated-account demo or production contract evidence for autonomous submission.",
+        "Offline installed SDK1.1.0 CTF signing is verified; exact live dependency/protocol pin, position-ID/domain3 support and production native-identity integration remain outstanding."
       ],
       "handoff": "T02 is ready. Extract the shared execution boundary without changing manual route contracts, and prevent scripts/live_trader_bridge.py from bypassing it."
     },
@@ -484,8 +487,8 @@
         "T09",
         "T13"
       ],
-      "status": "complete",
-      "substep": "manual and autonomous orders share one durable reservation, stable client identity, request fingerprint, lease fence, immediate pre-send authority and budget checks, single venue dispatch, and submission-unknown recovery state",
+      "status": "in_progress",
+      "substep": "Native manual direct/saved-run preparation wired behind disabled opt-in; concrete lifecycle maintenance and private worker selection pending",
       "branch": "codex/autonomous-durable-submission",
       "commit": "3202f9bf",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/544",
@@ -497,7 +500,10 @@
         "py -m graphify update . (pass; generated graph changes intentionally unstaged)",
         "raw new-order audit: only private Kalshi/Polymarket adapters call venue write methods",
         "PR #544 CI test (pass)",
-        "PR #544 datastore-integration (pass after expired-lease takeover fix)"
+        "PR #544 datastore-integration (pass after expired-lease takeover fix)",
+        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed.",
+        "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence.",
+        "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/execution.py",
@@ -506,10 +512,28 @@
         "src/analyzing_llm_rationale/trading.py",
         "src/analyzing_llm_rationale/server.py",
         "tests/test_twin_execution.py",
-        "docs/autonomous-twin/EXECUTION_AUDIT.md"
+        "docs/autonomous-twin/EXECUTION_AUDIT.md",
+        "tests/test_polymarket_sdk_contract.py",
+        "docs/autonomous-twin/POLYMARKET_SDK_EVIDENCE.md",
+        "src/analyzing_llm_rationale/twin/polymarket_execution.py",
+        "src/analyzing_llm_rationale/twin/prepared_requests.py",
+        "tests/test_twin_native_polymarket.py",
+        "tests/test_twin_dispatch_safety.py",
+        "docs/autonomous-twin/NATIVE_POLYMARKET.md",
+        "src/analyzing_llm_rationale/twin/polymarket_manual.py",
+        "tests/test_twin_native_capture.py",
+        "tests/test_twin_manual_review.py",
+        "tests/test_trading_request_identity.py",
+        "docs/autonomous-twin/NATIVE_MANUAL.md",
+        "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md"
       ],
-      "blockers": [],
-      "handoff": "T15 can reconcile acknowledgements, partial fills, cancellations, unknown submissions, and settlements using the stable command and venue identities now enforced at every submission path."
+      "blockers": [
+        "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
+        "Private worker backend selection remains shadow-only.",
+        "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
+        "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
+      ],
+      "handoff": "Reuse opt-in native manual/backend and shared root; next integrate concrete lifecycle maintenance/private worker selection offline. Do not rerun unchanged historical screens or enable live defaults."
     },
     {
       "id": "T15",
@@ -517,8 +541,8 @@
         "T06",
         "T14"
       ],
-      "status": "complete",
-      "substep": "identity-bound submission recovery, venue-specific absence proof, durable versioned fills and settlements, lifecycle re-fencing, fresh confirmed cancellation, late-fill preservation, atomic rejection release, restart classification, and operator runbook are complete",
+      "status": "in_progress",
+      "substep": "Native manual direct/saved-run preparation wired behind disabled opt-in; concrete lifecycle maintenance and private worker selection pending",
       "branch": "codex/autonomous-lifecycle-recovery",
       "commit": "ceecca42",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/563",
@@ -528,7 +552,10 @@
         "PYTHONPATH=src py -m unittest discover -s tests (pass)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . and focused recovery query (pass)"
+        "py -m graphify update . and focused recovery query (pass)",
+        "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed.",
+        "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence.",
+        "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/recovery.py",
@@ -536,10 +563,26 @@
         "src/analyzing_llm_rationale/twin/models.py",
         "tests/test_twin_recovery.py",
         "tests/test_twin_store_integration.py",
-        "docs/autonomous-twin/RECOVERY.md"
+        "docs/autonomous-twin/RECOVERY.md",
+        "src/analyzing_llm_rationale/twin/polymarket_execution.py",
+        "src/analyzing_llm_rationale/twin/prepared_requests.py",
+        "tests/test_twin_native_polymarket.py",
+        "tests/test_twin_dispatch_safety.py",
+        "docs/autonomous-twin/NATIVE_POLYMARKET.md",
+        "src/analyzing_llm_rationale/twin/polymarket_manual.py",
+        "tests/test_twin_native_capture.py",
+        "tests/test_twin_manual_review.py",
+        "tests/test_trading_request_identity.py",
+        "docs/autonomous-twin/NATIVE_MANUAL.md",
+        "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md"
       ],
-      "blockers": [],
-      "handoff": "T16 is next. Wire durable ID-only jobs to Datastore and Cloud Tasks, mount private authenticated handlers, and exercise duplicate delivery, lease takeover, maintenance priority, and shutdown recovery."
+      "blockers": [
+        "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
+        "Private worker backend selection remains shadow-only.",
+        "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
+        "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
+      ],
+      "handoff": "Reuse opt-in native manual/backend and shared root; next integrate concrete lifecycle maintenance/private worker selection offline. Do not rerun unchanged historical screens or enable live defaults."
     },
     {
       "id": "T16",
@@ -900,5 +943,73 @@
       "blockers": [],
       "handoff": null
     }
-  ]
+  ],
+  "venue_sdk_verification": {
+    "date": "2026-10-19",
+    "branch": "codex/twin-polymarket-sdk-contract",
+    "sdk": "py-clob-client-v2",
+    "local_version": "1.1.0",
+    "report": "docs/autonomous-twin/POLYMARKET_SDK_EVIDENCE.md",
+    "test": "tests/test_polymarket_sdk_contract.py",
+    "signed_cases": 24,
+    "scope": "offline CTF token-ID signing, EOA/proxy/Safe, normal/negative-risk, limit/market buy/sell and synthetic lookup/cancel with SQL identity persistence",
+    "production_identity_binding_verified": false,
+    "position_id_v3_verified": false,
+    "live_eligible": false,
+    "verification": "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed."
+  },
+  "native_polymarket_execution": {
+    "date": "2026-10-19",
+    "branch": "codex/twin-native-polymarket",
+    "status": "native_manual_opt_in_wired_disabled_worker_lifecycle_pending",
+    "evidence": "docs/autonomous-twin/NATIVE_POLYMARKET.md",
+    "review": "docs/autonomous-twin/NATIVE_POLYMARKET_REVIEW.md",
+    "sdk_versions": [
+      "1.1.0",
+      "1.2.0"
+    ],
+    "full_tests_passed": 2866,
+    "full_tests_skipped": 0,
+    "emulator_tests_passed": 14,
+    "final_focused_tests_passed": 42,
+    "audit_id": "aud_GCsxMcJAZA",
+    "adjudication_id": "adj-6b2ylb8zcvkY5bRS",
+    "live_activated": false,
+    "cloud_writes": false,
+    "remaining": [
+      "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
+      "Private worker backend selection remains shadow-only.",
+      "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
+      "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
+    ]
+  },
+  "native_manual_execution": {
+    "date": "2026-10-19",
+    "branch": "codex/twin-native-manual-wiring",
+    "status": "offline_verified_default_disabled",
+    "evidence": "docs/autonomous-twin/NATIVE_MANUAL.md",
+    "review": "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md",
+    "sdk_versions": [
+      "1.1.0",
+      "1.2.0"
+    ],
+    "full_tests_passed": 2892,
+    "full_tests_skipped": 0,
+    "full_duration_seconds": 211.561,
+    "emulator_tests_passed": 15,
+    "sdk_1_2_tests_passed": 51,
+    "audit_id": "aud_1WCqLzwCI4",
+    "adjudication_id": "adj-Idm7eksZu_R4AcUu",
+    "accepted_dispositions": 13,
+    "rejected_dispositions": 1,
+    "native_manual_flag_default": false,
+    "live_activated": false,
+    "cloud_writes": false,
+    "remaining": [
+      "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
+      "Private worker backend selection remains shadow-only.",
+      "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
+      "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
+    ]
+  }
 }
