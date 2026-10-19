@@ -38,6 +38,23 @@ def intent(
 
 
 class TwinStoreTests(unittest.TestCase):
+    def test_manual_request_authority_cannot_be_rebound_to_a_new_intent(self):
+        from dataclasses import replace
+
+        original = intent()
+        self.store.reserve_intent(original, cash=Decimal('1'), max_loss=Decimal('1'), now=NOW,
+                                  authority_id='one-manual-request', authority_alias='one-client-request')
+        before = self.store.projection(original.account_scope_id)
+        changed = replace(original, forecast_id='different-request')
+        with self.assertRaisesRegex(TwinStoreError, 'request authority'):
+            self.store.reserve_intent(changed, cash=Decimal('1'), max_loss=Decimal('1'), now=NOW,
+                                      authority_id='one-manual-request')
+        self.assertEqual(self.store.projection(original.account_scope_id), before)
+        with self.assertRaisesRegex(TwinStoreError, 'request authority'):
+            self.store.reserve_intent(changed, cash=Decimal('1'), max_loss=Decimal('1'), now=NOW,
+                authority_id='another-run', authority_alias='one-client-request')
+        self.assertEqual(self.store.projection(original.account_scope_id), before)
+
     def setUp(self) -> None:
         self.store = InMemoryTwinStore()
         self.store.register_account(scope(), venue_available_cash=Decimal("10"), loss_limit=Decimal("6"))

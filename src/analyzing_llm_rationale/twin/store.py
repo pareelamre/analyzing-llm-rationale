@@ -236,6 +236,8 @@ class TwinStore(Protocol):
     def register_account(self, scope: AccountScope, *, venue_available_cash: Decimal, loss_limit: Decimal) -> AccountProjection: ...
 
     def account_scope(self, scope_id: str) -> AccountScope: ...
+    def find_account_scope(self, scope_id: str) -> Optional[AccountScope]: ...
+    def has_unresolved_work(self, scope_id: str) -> bool: ...
 
     def account_scopes(self, owner_id: str, *, limit: int = 25) -> tuple[AccountScope, ...]: ...
 
@@ -247,6 +249,8 @@ class TwinStore(Protocol):
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
         client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
         prepared_request: Optional[Mapping[str, Any]] = None,
+        authority_id: Optional[str] = None,
+        authority_alias: Optional[str] = None,
     ) -> Reservation: ...
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand: ...
@@ -261,7 +265,8 @@ class TwinStore(Protocol):
 
     def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30) -> Optional[CommandClaim]: ...
 
-    def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str) -> ExecutionCommand: ...
+    def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str,
+                           require_unstarted: bool = False) -> ExecutionCommand: ...
 
     def release_reservation(self, scope_id: str, reservation_id: str, *, confirmed_no_order: bool) -> Reservation: ...
 
@@ -280,6 +285,7 @@ class InMemoryTwinStore:
         self._events: dict[str, dict[str, TwinEvent]] = {}
         self._reservations: dict[str, Reservation] = {}
         self._reservation_by_intent: dict[tuple[str, str], str] = {}
+        self._request_authorities: dict[tuple[str, str], str] = {}
         self._commands: dict[str, ExecutionCommand] = {}
         self._outbox: dict[str, OutboxMessage] = {}
         self._inbox: set[tuple[str, str]] = set()
@@ -307,6 +313,16 @@ class InMemoryTwinStore:
                 return self._scopes[scope_id]
             except KeyError as exc:
                 raise TwinStoreError("account scope is not registered") from exc
+
+    def find_account_scope(self, scope_id: str) -> Optional[AccountScope]:
+        with self._lock:
+            return self._scopes.get(scope_id)
+
+    def has_unresolved_work(self, scope_id: str) -> bool:
+        with self._lock:
+            return any(reservation.scope_id == scope_id and reservation.state not in {
+                ReservationState.RELEASED, ReservationState.SETTLED,
+            } for reservation in self._reservations.values())
 
     def account_scopes(self, owner_id: str, *, limit: int = 25) -> tuple[AccountScope, ...]:
         if not 1 <= limit <= 100:
@@ -388,6 +404,8 @@ class InMemoryTwinStore:
         client_order_id: Optional[str] = None,
         preconditions: Optional[ReservationPreconditions] = None,
         prepared_request: Optional[Mapping[str, Any]] = None,
+        authority_id: Optional[str] = None,
+        authority_alias: Optional[str] = None,
     ) -> Reservation:
         """Reserve cash and incremental max loss in one account-scoped transition."""
         reserved_cash = _decimal("cash", cash)
@@ -396,6 +414,10 @@ class InMemoryTwinStore:
         prepared_json = _encode_prepared_request(prepared_request)
         with self._lock:
             projection = self.projection(intent.account_scope_id)
+            authority_keys = {(intent.account_scope_id, str(value)) for value in (authority_id, authority_alias)
+                              if value is not None}
+            if any(self._request_authorities.get(key, intent.intent_hash) != intent.intent_hash for key in authority_keys):
+                raise TwinStoreError("request authority already belongs to another immutable intent")
             if intent.account_epoch != projection.account_epoch:
                 raise TwinStoreError("intent account epoch is stale")
             key = (intent.account_scope_id, intent.intent_hash)
@@ -459,6 +481,8 @@ class InMemoryTwinStore:
                 prepared_request_json=prepared_json,
             )
             self._commands[command.id] = command
+            for authority_key in authority_keys:
+                self._request_authorities[authority_key] = intent.intent_hash
             self._outbox[command.id] = OutboxMessage(
                 id=f"outbox-{intent.intent_hash[:24]}",
                 scope_id=intent.account_scope_id,
@@ -551,7 +575,8 @@ class InMemoryTwinStore:
             return claim
 
     def transition_command(
-        self, command_id: str, *, target: CommandState, fence: int, worker_id: str
+        self, command_id: str, *, target: CommandState, fence: int, worker_id: str,
+        require_unstarted: bool = False,
     ) -> ExecutionCommand:
         """Apply a state only from the current fenced worker generation."""
         with self._lock:
@@ -559,6 +584,8 @@ class InMemoryTwinStore:
             claim = command.claim
             if claim is None or claim.worker_id != worker_id or claim.fence != fence:
                 raise TwinStoreError("stale worker fence cannot progress command")
+            if require_unstarted and (target is not CommandState.REJECTED or command.dispatch_started is not False):
+                raise TwinStoreError("only an unstarted command may be rejected by pre-dispatch cleanup")
             if not can_transition_command(command.state, target):
                 raise TwinStoreError(f"invalid command transition {command.state.value}->{target.value}")
             updated = replace(command, state=target)
@@ -748,18 +775,37 @@ class DatastoreTwinStore:
             return projection
 
     def account_scope(self, scope_id: str) -> AccountScope:
+        scope = self.find_account_scope(scope_id)
+        if scope is None:
+            raise TwinStoreError("account scope is not registered")
+        return scope
+
+    def find_account_scope(self, scope_id: str) -> Optional[AccountScope]:
         entity = self._client.get(self._key(scope_id))
+        if entity is None:
+            return None
         required = {
             "owner_id", "venue", "venue_account_ref", "environment",
             "collateral_asset", "connection_ref", "scope_created_at",
         }
-        if entity is None or not required.issubset(entity):
+        if not required.issubset(entity):
             raise TwinStoreError("account scope metadata is unavailable; re-register before granting authority")
         return AccountScope(
             scope_id, str(entity["owner_id"]), str(entity["venue"]), str(entity["venue_account_ref"]),
             str(entity["environment"]), str(entity["collateral_asset"]), str(entity["connection_ref"]),
             int(entity["account_epoch"]), entity["scope_created_at"],
         )
+
+    def has_unresolved_work(self, scope_id: str) -> bool:
+        from analyzing_llm_rationale.datastore_backend import PropertyFilter
+
+        # Ancestor queries are strong and require no full-history scan.
+        for state in (ReservationState.RESERVED, ReservationState.SUBMITTING, ReservationState.SUBMISSION_UNKNOWN):
+            query = self._client.query(kind="TwinReservation", ancestor=self._key(scope_id))
+            query.add_filter(filter=PropertyFilter("state", "=", state.value))
+            if next(iter(query.fetch(limit=1)), None) is not None:
+                return True
+        return False
 
     def account_scopes(self, owner_id: str, *, limit: int = 25) -> tuple[AccountScope, ...]:
         if not 1 <= limit <= 100:
@@ -816,6 +862,8 @@ class DatastoreTwinStore:
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
         client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
         prepared_request: Optional[Mapping[str, Any]] = None,
+        authority_id: Optional[str] = None,
+        authority_alias: Optional[str] = None,
     ) -> Reservation:
         from analyzing_llm_rationale import datastore_backend as datastore
 
@@ -828,6 +876,13 @@ class DatastoreTwinStore:
             if account is None:
                 raise TwinStoreError("account scope is not registered")
             projection = self._projection(account)
+            authority_keys = [self._key(intent.account_scope_id, "TwinRequestAuthority",
+                sha256(str(value).encode()).hexdigest()) for value in sorted({
+                    str(value) for value in (authority_id, authority_alias) if value is not None})]
+            for authority_key in authority_keys:
+                prior_authority = self._client.get(authority_key)
+                if prior_authority is not None and prior_authority.get("intent_hash") != intent.intent_hash:
+                    raise TwinStoreError("request authority already belongs to another immutable intent")
             if intent.account_epoch != projection.account_epoch:
                 raise TwinStoreError("intent account epoch is stale")
             reservation_key = self._key(intent.account_scope_id, "TwinReservation", reservation_id)
@@ -883,7 +938,12 @@ class DatastoreTwinStore:
             event.update({"event_type": "reservation_created", "sequence": updated.revision, "occurred_at": now, "observed_at": now, "payload_hash": _payload_hash({"reservation_id": reservation_id})})
             outbox = datastore.Entity(key=self._key(intent.account_scope_id, "TwinOutbox", command_id))
             outbox.update({"command_id": command_id, "payload_hash": _payload_hash({"command_id": command_id}), "created_at": now, "delivered_at": None})
-            self._client.put_multi([account, entity, command, event, outbox])
+            writes = [account, entity, command, event, outbox]
+            for authority_key in authority_keys:
+                authority = datastore.Entity(key=authority_key)
+                authority.update({"intent_hash": intent.intent_hash, "command_id": command_id})
+                writes.append(authority)
+            self._client.put_multi(writes)
             reservation_operations.add(1, {"store": "datastore", "outcome": "created"})
             return reservation
 
@@ -892,6 +952,8 @@ class DatastoreTwinStore:
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
         client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
         prepared_request: Optional[Mapping[str, Any]] = None,
+        authority_id: Optional[str] = None,
+        authority_alias: Optional[str] = None,
     ) -> Reservation:
         """Retry only Datastore transaction conflicts; never retry venue/model work."""
         from google.api_core.exceptions import Aborted
@@ -903,6 +965,8 @@ class DatastoreTwinStore:
                     intent, cash=cash, max_loss=max_loss, now=now, client_order_id=client_order_id,
                     preconditions=preconditions,
                     prepared_request=prepared_request,
+                    authority_id=authority_id,
+                    authority_alias=authority_alias,
                 )
             except Aborted as exc:
                 last_error = exc
@@ -1016,7 +1080,8 @@ class DatastoreTwinStore:
             self._client.put_multi([entity, reservation])
             return claim
 
-    def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str) -> ExecutionCommand:
+    def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str,
+                           require_unstarted: bool = False) -> ExecutionCommand:
         scope_id = self._command_scope(command_id)
         command_key = self._key(scope_id, "TwinCommand", command_id)
         with self._client.transaction():
@@ -1026,6 +1091,8 @@ class DatastoreTwinStore:
             current = CommandState(str(entity["state"]))
             if str(entity.get("claim_worker_id") or "") != worker_id or int(entity.get("fence", 0)) != fence:
                 raise TwinStoreError("stale worker fence cannot progress command")
+            if require_unstarted and (target is not CommandState.REJECTED or entity.get("dispatch_started") is not False):
+                raise TwinStoreError("only an unstarted command may be rejected by pre-dispatch cleanup")
             if not can_transition_command(current, target):
                 raise TwinStoreError(f"invalid command transition {current.value}->{target.value}")
             entity["state"] = target.value
