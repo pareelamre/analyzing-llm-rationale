@@ -1,9 +1,11 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Event
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -29,6 +31,7 @@ from analyzing_llm_rationale.twin.research_gateway import (
 from analyzing_llm_rationale.twin.runtime import (
     HttpResearchJobGateway,
     PrivateTwinRuntime,
+    RuntimeConfigurationError,
     RuntimeIdentityPolicy,
     create_private_worker_app,
 )
@@ -37,6 +40,7 @@ from analyzing_llm_rationale.twin.runtime_app import (
     _authorize_research_repair,
     _calibration_observations,
     _execute_shadow_cycle,
+    _local_worker_secrets,
     _maintenance_operation,
     _reconcile_shadow_account,
     _reconcile_worker_startup,
@@ -62,6 +66,7 @@ from analyzing_llm_rationale.twin.worker import (
     TwinResearchWorker,
     TwinWorker,
     WorkerJob,
+    WorkerJobError,
     WorkerJobKind,
     WorkerJobStatus,
     WorkerPaused,
@@ -117,6 +122,79 @@ class Dispatcher:
 
 
 class PrivateTwinRuntimeTests(unittest.TestCase):
+    def test_local_worker_secret_matrix_and_research_role_isolation(self):
+        from analyzing_llm_rationale import datastore_backend
+
+        a, b, c = ("a" * 32, "b" * 32, "c" * 32)
+        env = {
+            "FORESEA_TWIN_MAINTENANCE_DISPATCH_SECRET": a,
+            "FORESEA_TWIN_RESEARCH_DISPATCH_SECRET": b,
+            "FORESEA_TWIN_RESEARCH_GATEWAY_SECRET": c,
+        }
+        with mock.patch.object(datastore_backend, "is_sql", return_value=True):
+            with mock.patch.dict("os.environ", env, clear=True):
+                self.assertEqual(_local_worker_secrets(WorkerRole.MAINTENANCE), (a, b, c))
+                with self.assertRaisesRegex(ValueError, "must not receive"):
+                    _local_worker_secrets(WorkerRole.RESEARCH)
+            with mock.patch.dict("os.environ", {
+                "FORESEA_TWIN_RESEARCH_DISPATCH_SECRET": b,
+                "FORESEA_TWIN_RESEARCH_GATEWAY_SECRET": c,
+            }, clear=True):
+                self.assertEqual(_local_worker_secrets(WorkerRole.RESEARCH), (None, b, c))
+            for left, right in ((a, b), (a, c), (b, c)):
+                duplicate = dict(env)
+                duplicate[{
+                    a: "FORESEA_TWIN_MAINTENANCE_DISPATCH_SECRET",
+                    b: "FORESEA_TWIN_RESEARCH_DISPATCH_SECRET",
+                    c: "FORESEA_TWIN_RESEARCH_GATEWAY_SECRET",
+                }[right]] = left
+                with mock.patch.dict("os.environ", duplicate, clear=True):
+                    with self.assertRaisesRegex(ValueError, "pairwise distinct"):
+                        _local_worker_secrets(WorkerRole.MAINTENANCE)
+            for invalid in ("short", " " + b, b + " "):
+                with mock.patch.dict("os.environ", {
+                    **env, "FORESEA_TWIN_RESEARCH_DISPATCH_SECRET": invalid,
+                }, clear=True):
+                    with self.assertRaisesRegex(ValueError, "32 non-whitespace"):
+                        _local_worker_secrets(WorkerRole.MAINTENANCE)
+
+    def test_local_gateway_uses_dedicated_secret_and_rejects_remote_cleartext(self):
+        class Response:
+            status_code = 200
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"status": "running", "completed_result": None}
+
+        class Session:
+            def __init__(self):
+                self.calls = []
+
+            def request(self, method, url, **kwargs):
+                self.calls.append((method, url, kwargs))
+                return Response()
+
+        session = Session()
+        gateway = HttpResearchJobGateway(
+            "http://127.0.0.1:8081", audience="http://127.0.0.1:8081",
+            local_secret="research-only", session=session,
+        )
+        self.assertIsNone(gateway.completed_result("job-1"))
+        self.assertEqual(session.calls[0][2]["headers"]["Authorization"], "Bearer research-only")
+        self.assertFalse(session.calls[0][2]["allow_redirects"])
+        with self.assertRaisesRegex(RuntimeConfigurationError, "loopback"):
+            HttpResearchJobGateway(
+                "http://maintenance:8081", audience="http://maintenance:8081",
+                local_secret="research-only", session=session,
+            )
+        session.request = lambda *args, **kwargs: type(
+            "Redirect", (), {"status_code": 302, "raise_for_status": lambda self: None},
+        )()
+        with self.assertRaisesRegex(WorkerJobError, "request failed"):
+            gateway.completed_result("job-1")
+
     def test_operator_byom_config_is_shadow_only_and_requires_own_key(self):
         root = Path(__file__).resolve().parents[1]
         with mock.patch.dict("os.environ", {}, clear=True):
@@ -445,6 +523,34 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
                 headers=self.auth("dispatcher-token"),
             )
             self.assertEqual(response.json(), {"status": "complete"})
+
+    def test_dispatch_overload_keeps_callback_and_readiness_capacity(self):
+        runtime, _ = self.maintenance_runtime()
+        entered, release = Event(), Event()
+
+        class BlockingDispatcher:
+            def enqueue(self, job):
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError("synthetic dispatch was not released")
+                return "synthetic:" + job.id
+
+        runtime.dispatcher = BlockingDispatcher()
+        with TestClient(create_private_worker_app(runtime)) as client, ThreadPoolExecutor(1) as caller:
+            pending = caller.submit(client.post, "/internal/twin/dispatch",
+                                    headers=self.auth("scheduler-token"))
+            try:
+                self.assertTrue(entered.wait(3))
+                overload = client.post("/internal/twin/dispatch", headers=self.auth("scheduler-token"))
+                self.assertEqual(overload.status_code, 503)
+                self.assertEqual(overload.headers["Retry-After"], "1")
+                self.assertEqual(client.get("/ready").status_code, 200)
+                callback = client.post("/internal/twin/maintain", json={"job_id": "maintenance-job"},
+                                       headers=self.auth("dispatcher-token"))
+                self.assertEqual(callback.json(), {"status": "complete"})
+            finally:
+                release.set()
+            self.assertEqual(pending.result(timeout=3).status_code, 200)
 
     def test_environment_runtime_rejects_live_capital_or_authority(self):
         base = {
@@ -939,6 +1045,44 @@ class PrivateTwinRuntimeTests(unittest.TestCase):
             )
             self.assertEqual(accepted.json(), {"status": "authorized"})
             self.assertEqual(repairs, [(assignment["fence"], "0", 12)])
+
+    def test_local_research_secrets_cannot_call_maintenance_routes(self):
+        jobs = InMemoryWorkerJobs()
+        jobs.add(research_job())
+        runtime = PrivateTwinRuntime(
+            WorkerRole.MAINTENANCE,
+            RuntimeIdentityPolicy(
+                AUDIENCE, frozenset({SCHEDULER}), frozenset({DISPATCHER}),
+                frozenset({RESEARCH}),
+            ),
+            lambda: NOW, jobs=jobs, dispatcher=Dispatcher(),
+            maintenance_worker=TwinWorker(
+                jobs, worker_id="maintenance-worker", reconcile_startup=lambda: True,
+            ),
+            maintenance_operation=lambda _: {"status": "complete"},
+            research_gateway=MaintenanceResearchJobGateway(
+                jobs, authorize_assignment=lambda _: None,
+            ),
+            shared_secret="maintenance-secret", research_secret="gateway-secret",
+        )
+        with TestClient(create_private_worker_app(runtime)) as client:
+            for secret in ("gateway-secret", "research-dispatch-secret"):
+                headers = {"Authorization": f"Bearer {secret}"}
+                self.assertEqual(client.post(
+                    "/internal/twin/maintain", json={"job_id": "research-job"},
+                    headers=headers,
+                ).status_code, 401)
+                self.assertEqual(client.post(
+                    "/internal/twin/dispatch", headers=headers,
+                ).status_code, 401)
+            self.assertEqual(client.get(
+                "/internal/twin/research-jobs/research-job",
+                headers={"Authorization": "Bearer gateway-secret"},
+            ).status_code, 200)
+            self.assertEqual(client.get(
+                "/internal/twin/research-jobs/research-job",
+                headers={"Authorization": "Bearer maintenance-secret"},
+            ).status_code, 401)
 
     def test_research_surface_cannot_reach_maintenance_or_public_routes(self):
         jobs = InMemoryWorkerJobs()

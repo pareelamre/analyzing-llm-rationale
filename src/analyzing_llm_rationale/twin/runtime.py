@@ -1,15 +1,19 @@
 """Role-scoped FastAPI surface for the private autonomous-twin services."""
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from hashlib import sha256
 from typing import Any, Callable, Mapping, Optional
+from urllib.parse import urlsplit
 
+import anyio
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from opentelemetry import metrics, trace
 from pydantic import BaseModel, ConfigDict, Field
 
 from .scheduler import (
@@ -30,6 +34,10 @@ from .worker import (
     WorkerRole,
     verify_google_worker_oidc,
 )
+
+logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
+admissions = metrics.get_meter(__name__).create_counter("twin.worker.admissions", unit="1")
 
 
 class RuntimeConfigurationError(RuntimeError):
@@ -91,14 +99,26 @@ class HttpResearchJobGateway:
     def __init__(
         self, base_url: str, *, audience: str, timeout_seconds: float = 10,
         session: Any = requests, token_fetcher: Optional[TokenFetcher] = None,
+        local_secret: Optional[str] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._audience = audience
         self._timeout = float(timeout_seconds)
         self._session = session
         self._token_fetcher = token_fetcher or self._google_token
-        if not self._base_url.startswith("https://") or not audience.startswith("https://"):
+        self._local_secret = local_secret
+        parsed = urlsplit(self._base_url)
+        if local_secret is not None:
+            if not local_secret.strip() or token_fetcher is not None:
+                raise RuntimeConfigurationError("local research gateway requires a dedicated secret")
+            if parsed.scheme == "http" and parsed.hostname not in {"127.0.0.1", "::1", "localhost"}:
+                raise RuntimeConfigurationError("cleartext research gateway requires loopback")
+            if parsed.scheme not in {"http", "https"}:
+                raise RuntimeConfigurationError("research gateway requires HTTP(S)")
+        elif parsed.scheme != "https" or not audience.startswith("https://"):
             raise RuntimeConfigurationError("research gateway requires HTTPS URLs")
+        if not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise RuntimeConfigurationError("research gateway URL is invalid")
         if not 0 < self._timeout <= 30:
             raise RuntimeConfigurationError("research gateway timeout must be within 30 seconds")
 
@@ -110,14 +130,17 @@ class HttpResearchJobGateway:
         return fetch_id_token(GoogleRequest(), audience)
 
     def _call(self, method: str, path: str, *, body: Optional[Mapping[str, Any]] = None) -> Mapping[str, Any]:
-        token = self._token_fetcher(self._audience)
+        token = self._local_secret or self._token_fetcher(self._audience)
         try:
             response = self._session.request(
                 method, self._base_url + path,
                 headers={"Authorization": f"Bearer {token}"},
                 json=dict(body) if body is not None else None,
                 timeout=self._timeout,
+                allow_redirects=False,
             )
+            if 300 <= getattr(response, "status_code", 200) < 400:
+                raise WorkerJobError("maintenance research gateway redirected")
             response.raise_for_status()
             payload = response.json()
         except Exception as exc:
@@ -195,6 +218,7 @@ class PrivateTwinRuntime:
     research_operation: Optional[Callable[[ResearchAssignment], ResearchCompletion]] = None
     token_verifier: Optional[TokenVerifier] = None
     shared_secret: Optional[str] = None
+    research_secret: Optional[str] = None
 
     def __post_init__(self) -> None:
         self.role = WorkerRole(self.role)
@@ -207,6 +231,11 @@ class PrivateTwinRuntime:
             required = (self.research_worker, self.research_operation)
         if any(value is None for value in required):
             raise RuntimeConfigurationError(f"{self.role.value} runtime bindings are incomplete")
+        if self.research_secret is not None:
+            if self.role is not WorkerRole.MAINTENANCE or not self.shared_secret:
+                raise RuntimeConfigurationError("research secret requires local maintenance runtime")
+            if not self.research_secret.strip() or self.research_secret == self.shared_secret:
+                raise RuntimeConfigurationError("research secret must differ from dispatch secret")
 
     def start(self) -> bool:
         if self.role is WorkerRole.MAINTENANCE:
@@ -233,7 +262,7 @@ class PrivateTwinRuntime:
             )
         return self.ready
 
-    def authenticate(self, request: Request, allowed: frozenset[str]) -> str:
+    def authenticate(self, request: Request, allowed: frozenset[str], *, research: bool = False) -> str:
         header = request.headers.get("authorization", "")
         scheme, separator, token = header.partition(" ")
         if scheme.lower() != "bearer" or not separator or not token.strip():
@@ -248,8 +277,9 @@ class PrivateTwinRuntime:
         if self.shared_secret:
             import hmac
 
-            if hmac.compare_digest(token, self.shared_secret):
-                return "local-dispatcher"
+            expected = self.research_secret if research else self.shared_secret
+            if expected and hmac.compare_digest(token, expected):
+                return "local-research" if research else "local-dispatcher"
             raise WorkerAuthenticationError("private worker shared secret is invalid")
 
         principal = verify_google_worker_oidc(
@@ -285,12 +315,48 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
 
     app = FastAPI(title=f"Foresea twin {runtime.role.value} worker", lifespan=lifespan)
 
+    # Handlers use synchronous stores and HTTP gateways. FastAPI's sync handler
+    # pool leaves the event loop free to receive local dispatch callbacks.
+    # Reject excess callers BEFORE they occupy a pool thread. Separate small
+    # lanes keep initiators from starving their own callbacks in the default
+    # 40-thread pool. A rejected delivery remains in the durable due-job table.
+    limits = {lane: anyio.CapacityLimiter(size) for lane, size in {
+        "dispatch": 1, "maintenance": 4, "research": 1, "gateway": 8, "ready": 1,
+    }.items()}
+
+    @app.middleware("http")
+    async def bound_worker_requests(request: Request, call_next):
+        path = request.url.path
+        lane = {
+            "/internal/twin/dispatch": "dispatch", "/internal/twin/maintain": "maintenance",
+            "/internal/twin/research": "research", "/ready": "ready",
+        }.get(path)
+        if path.startswith("/internal/twin/research-jobs/"):
+            lane = "gateway"
+        if lane is None:
+            return await call_next(request)
+        attributes = {"role": runtime.role.value, "lane": lane}
+        with tracer.start_as_current_span("twin.worker.admission") as span:
+            try:
+                limits[lane].acquire_nowait()
+            except anyio.WouldBlock:
+                span.set_attribute("outcome", "overloaded")
+                admissions.add(1, {**attributes, "outcome": "overloaded"})
+                logger.warning("Twin worker admission rejected (%s/%s)", runtime.role.value, lane)
+                return JSONResponse({"status": "overloaded"}, status_code=503,
+                                    headers={"Retry-After": "1"})
+            try:
+                admissions.add(1, {**attributes, "outcome": "accepted"})
+                return await call_next(request)
+            finally:
+                limits[lane].release()
+
     @app.get("/health")
     async def health():
         return {"status": "ok", "role": runtime.role.value}
 
     @app.get("/ready")
-    async def ready():
+    def ready():
         is_ready = runtime.refresh_readiness()
         payload = {"status": "ready" if is_ready else "unready", "role": runtime.role.value}
         return payload if is_ready else JSONResponse(payload, status_code=503)
@@ -298,7 +364,7 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
     if runtime.role is WorkerRole.MAINTENANCE:
 
         @app.post("/internal/twin/dispatch")
-        async def dispatch(request: Request):
+        def dispatch(request: Request):
             try:
                 runtime.authenticate(request, runtime.identities.scheduler_accounts)
                 dispatch_at = runtime.clock()
@@ -318,7 +384,7 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
                 raise _http_error(exc) from exc
 
         @app.post("/internal/twin/maintain")
-        async def maintain(body: JobRequest, request: Request):
+        def maintain(body: JobRequest, request: Request):
             try:
                 runtime.authenticate(request, runtime.identities.dispatcher_accounts)
                 result = runtime.maintenance_worker.handle(
@@ -331,9 +397,9 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
                 raise _http_error(exc) from exc
 
         @app.get("/internal/twin/research-jobs/{job_id}")
-        async def research_status(job_id: str, request: Request):
+        def research_status(job_id: str, request: Request):
             try:
-                runtime.authenticate(request, runtime.identities.research_accounts)
+                runtime.authenticate(request, runtime.identities.research_accounts, research=True)
                 completed_result = runtime.research_gateway.completed_result(job_id)
                 job = runtime.jobs.get(job_id)
                 return {
@@ -344,9 +410,9 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
                 raise _http_error(exc) from exc
 
         @app.post("/internal/twin/research-jobs/{job_id}/claim")
-        async def research_claim(job_id: str, request: Request):
+        def research_claim(job_id: str, request: Request):
             try:
-                email = runtime.authenticate(request, runtime.identities.research_accounts)
+                email = runtime.authenticate(request, runtime.identities.research_accounts, research=True)
                 assignment = runtime.research_gateway.claim(
                     job_id, worker_id=runtime.research_worker_id(email), now=runtime.clock(),
                 )
@@ -361,9 +427,9 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
                 raise _http_error(exc) from exc
 
         @app.post("/internal/twin/research-jobs/{job_id}/result")
-        async def research_result(job_id: str, body: ResearchResultRequest, request: Request):
+        def research_result(job_id: str, body: ResearchResultRequest, request: Request):
             try:
-                email = runtime.authenticate(request, runtime.identities.research_accounts)
+                email = runtime.authenticate(request, runtime.identities.research_accounts, research=True)
                 job = runtime.jobs.get(job_id)
                 assignment = ResearchAssignment.from_job(job)
                 if assignment.worker_id != runtime.research_worker_id(email):
@@ -387,9 +453,9 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
                 raise _http_error(exc) from exc
 
         @app.post("/internal/twin/research-jobs/{job_id}/repair")
-        async def research_repair(job_id: str, body: ResearchRepairRequest, request: Request):
+        def research_repair(job_id: str, body: ResearchRepairRequest, request: Request):
             try:
-                email = runtime.authenticate(request, runtime.identities.research_accounts)
+                email = runtime.authenticate(request, runtime.identities.research_accounts, research=True)
                 assignment = ResearchAssignment.from_job(runtime.jobs.get(job_id))
                 if assignment.worker_id != runtime.research_worker_id(email):
                     raise WorkerAuthenticationError("research claim belongs to another identity")
@@ -404,9 +470,9 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
                 raise _http_error(exc) from exc
 
         @app.get("/internal/twin/research-jobs/{job_id}/capture")
-        async def research_capture(job_id: str, request: Request):
+        def research_capture(job_id: str, request: Request):
             try:
-                email = runtime.authenticate(request, runtime.identities.research_accounts)
+                email = runtime.authenticate(request, runtime.identities.research_accounts, research=True)
                 assignment = ResearchAssignment.from_job(runtime.jobs.get(job_id))
                 if assignment.worker_id != runtime.research_worker_id(email):
                     raise WorkerAuthenticationError("research claim belongs to another identity")
@@ -418,7 +484,7 @@ def create_private_worker_app(runtime: PrivateTwinRuntime) -> FastAPI:
     else:
 
         @app.post("/internal/twin/research")
-        async def research(body: JobRequest, request: Request):
+        def research(body: JobRequest, request: Request):
             try:
                 runtime.authenticate(request, runtime.identities.dispatcher_accounts)
                 result = runtime.research_worker.handle(

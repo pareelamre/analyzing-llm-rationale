@@ -196,20 +196,29 @@ class CloudTasksDispatcher:
 
 @dataclass(frozen=True)
 class LocalDispatchConfig:
-    """Targets and shared secret for in-process worker dispatch."""
+    """Targets and role-specific secrets for local worker dispatch."""
 
     maintenance_url: str
     research_url: str
-    shared_secret: str
+    maintenance_secret: str
+    research_secret: str
     timeout_seconds: float = 10.0
 
     def __post_init__(self) -> None:
-        if not self.maintenance_url.startswith("https://") and not self.maintenance_url.startswith("http://"):
-            raise WorkerDispatchError("worker targets must be absolute URLs")
-        if not self.research_url.startswith("https://") and not self.research_url.startswith("http://"):
-            raise WorkerDispatchError("worker targets must be absolute URLs")
-        if not self.shared_secret.strip():
-            raise WorkerDispatchError("local dispatch requires a shared secret")
+        from urllib.parse import urlsplit
+
+        for url in (self.maintenance_url, self.research_url):
+            parsed = urlsplit(url)
+            if not parsed.hostname or parsed.scheme not in {"http", "https"}:
+                raise WorkerDispatchError("worker targets must be absolute URLs")
+            if parsed.scheme == "http" and parsed.hostname not in {"127.0.0.1", "::1", "localhost"}:
+                raise WorkerDispatchError("cleartext worker targets require loopback")
+            if parsed.username or parsed.password or parsed.query or parsed.fragment:
+                raise WorkerDispatchError("worker target URL is invalid")
+        if not self.maintenance_secret.strip() or not self.research_secret.strip():
+            raise WorkerDispatchError("local dispatch requires both role secrets")
+        if self.maintenance_secret == self.research_secret:
+            raise WorkerDispatchError("local dispatch role secrets must differ")
         if not 0 < self.timeout_seconds <= 30:
             raise WorkerDispatchError("local dispatch timeout must be within 30 seconds")
 
@@ -222,7 +231,7 @@ class LocalTaskDispatcher:
     ``TwinWorkerJob`` table -- jobs are persisted before dispatch and claimed
     with a fence, so a lost or duplicated HTTP call is recovered by the next
     ``dispatch_due_jobs`` pass. That leaves this dispatcher responsible only
-    for delivering the job id over HTTP with a shared secret.
+    for delivering the job id over HTTP with role-specific secrets.
 
     The body is byte-identical to the Cloud Tasks body (``{"job_id": ...}``),
     so the worker route needs no change to accept it.
@@ -248,10 +257,13 @@ class LocalTaskDispatcher:
                 data=body,
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self.config.shared_secret}",
+                    "Authorization": f"Bearer {self.config.research_secret if research else self.config.maintenance_secret}",
                 },
                 timeout=self.config.timeout_seconds,
+                allow_redirects=False,
             )
+            if 300 <= getattr(response, "status_code", 200) < 400:
+                raise WorkerDispatchError("local worker dispatch redirected")
             response.raise_for_status()
         except Exception as exc:
             dispatch_operations.add(1, {"queue_role": role, "outcome": "error"})

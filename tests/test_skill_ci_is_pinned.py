@@ -33,14 +33,16 @@ from analyzing_llm_rationale.track_record_live import _skill_ci  # noqa: E402
 
 def _rows(diffs):
     """Snapshots whose market_brier - model_brier equals each diff."""
-    return [{"model_brier": 0.2000, "market_brier": round(0.2000 + d, 6)} for d in diffs]
+    return [{"platform": "kalshi", "ident": f"m{i}",
+             "model_brier": 0.2000, "market_brier": round(0.2000 + d, 6)}
+            for i, d in enumerate(diffs)]
 
 
 class BesselsCorrectionTests(unittest.TestCase):
     def test_a_small_sample_is_not_called_significant(self):
         """The case that separates n-1 from n. Without the correction this
         reports proven edge on three snapshots."""
-        result = _skill_ci(_rows([0.0343, 0.004, 0.0116]))
+        result = _skill_ci(_rows([0.0343, 0.004, 0.0116]), comparisons=1)
         self.assertFalse(result["skill_significant"])
         self.assertLess(result["skill_ci_low"], 0.0)
 
@@ -50,7 +52,7 @@ class BesselsCorrectionTests(unittest.TestCase):
         mean = sum(diffs) / n
         var = sum((d - mean) ** 2 for d in diffs) / (n - 1)
         se = (var / n) ** 0.5
-        result = _skill_ci(_rows(diffs))
+        result = _skill_ci(_rows(diffs), comparisons=1)
         self.assertAlmostEqual(result["skill_ci_low"], round(mean - 1.96 * se, 4), places=4)
         self.assertAlmostEqual(result["skill_ci_high"], round(mean + 1.96 * se, 4), places=4)
 
@@ -66,19 +68,19 @@ class BesselsCorrectionTests(unittest.TestCase):
 
 class SignificanceGateTests(unittest.TestCase):
     def test_significance_requires_the_lower_bound_above_zero(self):
-        beat = _skill_ci(_rows([0.05] * 30))
+        beat = _skill_ci(_rows([0.05] * 30), comparisons=1)
         self.assertGreater(beat["skill_ci_low"], 0.0)
         self.assertTrue(beat["skill_significant"])
 
     def test_losing_to_the_market_is_never_significant(self):
         """One-sided by construction: a confidently worse model is not
         'significant', it is bad."""
-        lost = _skill_ci(_rows([-0.05] * 30))
+        lost = _skill_ci(_rows([-0.05] * 30), comparisons=1)
         self.assertLess(lost["skill_ci_high"], 0.0)
         self.assertFalse(lost["skill_significant"])
 
     def test_straddling_zero_is_not_significant(self):
-        straddle = _skill_ci(_rows([0.05, -0.05] * 15))
+        straddle = _skill_ci(_rows([0.05, -0.05] * 15), comparisons=1)
         self.assertLess(straddle["skill_ci_low"], 0.0)
         self.assertFalse(straddle["skill_significant"])
 
@@ -88,20 +90,60 @@ class SignificanceGateTests(unittest.TestCase):
         mean = sum(diffs) / n
         var = sum((d - mean) ** 2 for d in diffs) / (n - 1)
         se = (var / n) ** 0.5
-        result = _skill_ci(_rows(diffs))
+        result = _skill_ci(_rows(diffs), comparisons=1)
         self.assertAlmostEqual(result["skill_ci_high"] - result["skill_ci_low"],
                                round(2 * 1.96 * se, 4), places=3)
 
 
 class TooFewRowsTests(unittest.TestCase):
     def test_no_rows_gives_no_interval(self):
-        result = _skill_ci([])
+        result = _skill_ci([], comparisons=1)
         self.assertIsNone(result["skill_ci_low"])
         self.assertFalse(result["skill_significant"])
 
+
+class MarketSignalGateTests(unittest.TestCase):
+    def test_one_market_cannot_become_significant_by_repetition(self):
+        rows = _rows([0.05]) * 1000
+        result = _skill_ci(rows, comparisons=1)
+        self.assertEqual(result["n_markets"], 1)
+        self.assertIsNone(result["skill_ci_low"])
+        self.assertFalse(result["skill_significant"])
+
+    def test_replication_of_one_market_does_not_change_the_interval(self):
+        rows = _rows([0.15, -0.05] * 15)
+        initial = _skill_ci(rows, comparisons=1)
+        repeated = _skill_ci(rows + [rows[0]] * 1000, comparisons=1)
+        self.assertEqual(initial, repeated)
+        self.assertTrue(initial["skill_significant"])
+        self.assertEqual(initial["n_markets"], 30)
+
+    def test_family_correction_rejects_a_borderline_signal(self):
+        rows = _rows([0.15, -0.05] * 15)
+        self.assertTrue(_skill_ci(rows, comparisons=1)["skill_significant"])
+        adjusted = _skill_ci(rows, comparisons=10)
+        self.assertFalse(adjusted["skill_significant"])
+        self.assertLess(adjusted["skill_ci_low"], 0)
+        self.assertEqual(adjusted["skill_ci_comparisons"], 10)
+
+    def test_less_than_thirty_markets_is_descriptive_only(self):
+        result = _skill_ci(_rows([0.05] * 29), comparisons=1)
+        self.assertGreater(result["skill_ci_low"], 0)
+        self.assertFalse(result["skill_significant"])
+
+    def test_missing_identity_and_invalid_errors_do_not_publish_confidence(self):
+        for override in ({"ident": None}, {"platform": ""}, {"market_brier": float("nan")},
+                         {"model_brier": -1}, {"market_brier": True}):
+            rows = _rows([0.05] * 30)
+            rows[0].update(override)
+            with self.subTest(override=override):
+                result = _skill_ci(rows, comparisons=1)
+                self.assertFalse(result["skill_significant"])
+                self.assertIsNone(result["skill_ci_low"])
+
     def test_a_single_row_gives_no_interval(self):
         """One observation has no sample variance; n-1 would divide by zero."""
-        result = _skill_ci(_rows([0.05]))
+        result = _skill_ci(_rows([0.05]), comparisons=1)
         self.assertIsNone(result["skill_ci_low"])
         self.assertIsNone(result["skill_ci_high"])
         self.assertFalse(result["skill_significant"])

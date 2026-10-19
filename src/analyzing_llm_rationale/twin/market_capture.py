@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from dataclasses import dataclass
 from datetime import datetime
@@ -11,7 +12,9 @@ from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
 
 from opentelemetry import metrics, trace
 
+from ..entity_tagger import tag_question
 from ..market_data import MarketDataError
+from .forecast_prior import ForecastResearchPrior
 from .market import normalize_market
 from .models import Instrument, MarketSnapshot, SchemaValidationError
 
@@ -19,6 +22,10 @@ tracer = trace.get_tracer(__name__)
 market_capture_attempts = metrics.get_meter(__name__).create_counter(
     "twin.market.capture_attempts", unit="1",
 )
+prior_selections = metrics.get_meter(__name__).create_counter(
+    "twin.market.research_prior_selections", unit="1",
+)
+logger = logging.getLogger(__name__)
 
 
 class MarketCaptureError(RuntimeError):
@@ -31,6 +38,7 @@ class MarketCapturePolicy:
     candidates_per_venue: int = 3
     min_close_days: float = 1.0
     max_close_days: float = 30.0
+    research_prior: ForecastResearchPrior | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.max_candidates <= 6:
@@ -39,6 +47,10 @@ class MarketCapturePolicy:
             raise MarketCaptureError("market discovery limit is invalid")
         if not 0 <= self.min_close_days < self.max_close_days <= 365:
             raise MarketCaptureError("market capture horizon is invalid")
+        if self.research_prior is not None and not isinstance(
+            self.research_prior, ForecastResearchPrior
+        ):
+            raise MarketCaptureError("market research prior is invalid")
 
 
 @dataclass(frozen=True)
@@ -192,16 +204,23 @@ class MarketCaptureBatch:
     observed_at: datetime
     markets: tuple[CapturedMarket, ...]
     rejections: tuple[MarketCaptureRejection, ...]
+    selection_prior_hash: str | None = None
 
     def __post_init__(self) -> None:
         if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
             raise MarketCaptureError("market capture time must be timezone-aware")
         if len({item.instrument.id for item in self.markets}) != len(self.markets):
             raise MarketCaptureError("market capture contains duplicate instruments")
+        if self.selection_prior_hash is not None and (
+            not isinstance(self.selection_prior_hash, str)
+            or len(self.selection_prior_hash) != 64
+            or any(char not in "0123456789abcdef" for char in self.selection_prior_hash)
+        ):
+            raise MarketCaptureError("market selection prior hash is invalid")
 
     def to_storage(self) -> dict[str, Any]:
-        return {
-            "schema_version": 2,
+        payload = {
+            "schema_version": 3 if self.selection_prior_hash is not None else 2,
             "observed_at": self.observed_at.isoformat(),
             "markets": [item.to_storage() for item in self.markets],
             "rejections": [
@@ -209,12 +228,18 @@ class MarketCaptureBatch:
                 for item in self.rejections
             ],
         }
+        if self.selection_prior_hash is not None:
+            payload["selection_prior_hash"] = self.selection_prior_hash
+        return payload
 
     @classmethod
     def from_storage(cls, payload: Any) -> "MarketCaptureBatch":
-        if not isinstance(payload, Mapping) or set(payload) != {
-            "schema_version", "observed_at", "markets", "rejections",
-        } or payload.get("schema_version") not in {1, 2}:
+        if not isinstance(payload, Mapping) or payload.get("schema_version") not in {1, 2, 3}:
+            raise MarketCaptureError("stored market capture schema is invalid")
+        expected = {"schema_version", "observed_at", "markets", "rejections"}
+        if payload["schema_version"] == 3:
+            expected.add("selection_prior_hash")
+        if set(payload) != expected:
             raise MarketCaptureError("stored market capture schema is invalid")
         if not isinstance(payload["markets"], list) or not isinstance(payload["rejections"], list):
             raise MarketCaptureError("stored market capture collections are invalid")
@@ -232,6 +257,7 @@ class MarketCaptureBatch:
                 datetime.fromisoformat(str(payload["observed_at"])),
                 tuple(CapturedMarket.from_storage(item) for item in payload["markets"]),
                 rejections,
+                payload.get("selection_prior_hash"),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise MarketCaptureError("stored market capture is malformed") from exc
@@ -568,6 +594,10 @@ def capture_markets(
         raise MarketCaptureError("market capture clock or sequence is invalid")
     policy = policy or MarketCapturePolicy()
     discovered: dict[str, list[str]] = {"kalshi": [], "polymarket": []}
+    prior = policy.research_prior
+    if prior is not None and not prior.valid_at(now):
+        prior = None
+    prior_reordered = False
     rejections: list[MarketCaptureRejection] = []
     for venue in discovered:
         try:
@@ -579,6 +609,18 @@ def capture_markets(
         except MarketDataError:
             rejections.append(MarketCaptureRejection(venue, "discovery", "data_unavailable"))
             continue
+        if prior is not None:
+            ranked = sorted(
+                rows,
+                key=lambda row: (
+                    0 if tag_question(
+                        str(row.get("question") or ""),
+                        str(row.get("category") or ""),
+                    )["domain"] in prior.validated_domains else 1
+                ),
+            )
+            prior_reordered = prior_reordered or list(ranked) != list(rows)
+            rows = ranked
         for row in rows:
             identifier = str(row.get("market_id") or row.get("ident") or "").strip()
             if identifier and identifier not in discovered[venue]:
@@ -644,4 +686,16 @@ def capture_markets(
             _settlement_rules(venue, market), trading_cost, depth[2], depth[3],
         ))
         market_capture_attempts.add(1, {"venue": venue, "outcome": "captured"})
-    return MarketCaptureBatch(observed_at, tuple(markets), tuple(rejections))
+    prior_outcome = (
+        "applied" if prior_reordered else
+        "stale" if policy.research_prior is not None and prior is None else
+        "no_match" if prior is not None else "baseline"
+    )
+    prior_selections.add(1, {"outcome": prior_outcome})
+    trace.get_current_span().set_attribute("twin.research_prior.outcome", prior_outcome)
+    if prior_reordered:
+        logger.info("twin research prior changed market discovery order")
+    return MarketCaptureBatch(
+        observed_at, tuple(markets), tuple(rejections),
+        prior.artifact_hash if prior_reordered and prior is not None else None,
+    )

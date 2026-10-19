@@ -53,6 +53,10 @@ class SubmissionUnknown(RuntimeError):
     """The venue may have accepted a request whose outcome was not persisted."""
 
 
+class PreDispatchBlocked(ExecutionBlocked):
+    """Trusted adapter proves its transport was never called for this dispatch."""
+
+
 class SubmissionDisposition(str, Enum):
     ACKNOWLEDGED = "acknowledged"
     REJECTED = "rejected"
@@ -122,6 +126,19 @@ def _assert_authorized(
         raise ExecutionBlocked("execution claim is no longer current")
     if command.claim.lease_expires_at <= now:
         raise ExecutionBlocked("execution claim has expired")
+    assert_intent_authority(
+        intent, context, now=now, cash=reservation.cash, max_loss=reservation.max_loss,
+    )
+
+
+def assert_intent_authority(
+    intent: TradeIntent, context: ExecutionContext, *, now: datetime,
+    cash: Decimal, max_loss: Decimal,
+) -> None:
+    """The same server-derived authority checks before preparation and sending."""
+    if (now.tzinfo is None or not cash.is_finite() or not max_loss.is_finite()
+            or cash < 0 or max_loss < 0):
+        raise ExecutionBlocked("execution time or reservation amount is invalid")
     if intent.expires_at <= now:
         raise ExecutionBlocked("trade intent has expired")
     try:
@@ -136,7 +153,7 @@ def _assert_authorized(
 
     if intent.action.value.startswith("BUY_"):
         required = intent.quantity * intent.limit_price + intent.fee_allowance + intent.slippage_allowance
-        if reservation.cash < required or reservation.max_loss < required:
+        if cash < required or max_loss < required:
             raise ExecutionBlocked("reservation does not cover notional, fees, and slippage")
 
     mandate = context.mandate
@@ -158,15 +175,17 @@ def _assert_authorized(
             raise ExecutionBlocked(str(exc)) from exc
         if mandate.account_scope_id != context.scope.id or mandate.account_epoch != context.scope.account_epoch:
             raise ExecutionBlocked("mandate account binding is stale")
+        if mandate.owner_id != context.scope.owner_id or mandate.venue != context.scope.venue:
+            raise ExecutionBlocked("mandate owner or venue binding is stale")
         if mandate.strategy_version != intent.strategy_version:
             raise ExecutionBlocked("mandate strategy version is stale")
         if intent.action.value not in mandate.allowed_actions:
             raise ExecutionBlocked("mandate does not allow this trade action")
         if not context.readiness_hash or context.readiness_hash != mandate.readiness_hash:
             raise ExecutionBlocked("autonomous strategy readiness is missing or stale")
-        if reservation.cash > Decimal(mandate.max_capital):
+        if cash > Decimal(mandate.max_capital):
             raise ExecutionBlocked("reservation exceeds mandate capital budget")
-        if reservation.max_loss > Decimal(mandate.max_loss):
+        if max_loss > Decimal(mandate.max_loss):
             raise ExecutionBlocked("reservation exceeds mandate loss budget")
     elif mandate is not None:
         # A manual confirmation may carry an audit mandate reference, but it
@@ -257,8 +276,42 @@ def submit_claimed_command(
         span.record_exception(ValueError(type(exc).__name__))
         submission_operations.add(1, {"outcome": "blocked", "venue": venue})
         raise
+    if not store.begin_dispatch(current.id, worker_id=claim.worker_id, fence=claim.fence, now=now):
+        current = store.command_for_intent(intent)
+        if (current.state is CommandState.SUBMITTING and current.claim == claim
+                and type(current.dispatch_fence) is int and current.dispatch_fence == claim.fence):
+            # A duplicate of the active sender must not poison its reservation
+            # while it is restoring/signing or waiting for its acknowledgement.
+            duplicate_suppressions.add(1, {"operation": "submit", "venue": venue})
+            span.set_attribute("outcome", "duplicate")
+            return SubmissionResult(current, SubmissionDisposition.ALREADY_PROCESSED)
+        if current.state is CommandState.SUBMITTING:
+            try:
+                current = store.transition_command(
+                    current.id, target=CommandState.SUBMISSION_UNKNOWN,
+                    fence=claim.fence, worker_id=claim.worker_id,
+                )
+            except TwinStoreError:
+                # A concurrent acknowledgement/fence may have advanced it.
+                current = store.command_for_intent(intent)
+        duplicate_suppressions.add(1, {"operation": "submit", "venue": venue})
+        disposition = (SubmissionDisposition.UNKNOWN if current.state in {
+            CommandState.SUBMITTING, CommandState.SUBMISSION_UNKNOWN,
+        } else SubmissionDisposition.ALREADY_PROCESSED)
+        span.set_attribute("outcome", "ambiguous" if disposition is SubmissionDisposition.UNKNOWN else "duplicate")
+        submission_operations.add(1, {"outcome": disposition.value, "venue": venue})
+        if disposition is SubmissionDisposition.UNKNOWN:
+            ambiguous_submissions.add(1, {"venue": venue, "stage": "dispatch_already_started"})
+        return SubmissionResult(current, disposition)
     try:
         response = submit(current)
+    except PreDispatchBlocked:
+        updated = store.transition_command(
+            current.id, target=CommandState.REJECTED, fence=claim.fence, worker_id=claim.worker_id,
+        )
+        span.set_attribute("outcome", "blocked_before_transport")
+        submission_operations.add(1, {"outcome": "blocked_before_transport", "venue": venue})
+        return SubmissionResult(updated, SubmissionDisposition.REJECTED)
     except Exception as exc:
         try:
             updated = store.transition_command(
@@ -313,6 +366,6 @@ def submit_authorized_command(
     """
     if not mandate.active(now=now):
         raise ExecutionBlocked("mandate is inactive")
-    if mandate.live and not live_enabled:
-        raise ExecutionBlocked("live execution remains disabled")
+    if mandate.live or live_enabled:
+        raise ExecutionBlocked("legacy submission is shadow-only; use fenced live execution")
     return submit()

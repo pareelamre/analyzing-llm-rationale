@@ -139,17 +139,42 @@ FORESEA_ENABLE_BYO_TRADING=true
 EOF
 ```
 
-If you are also moving the twin runtime, add its dispatch settings. The
-secret is shared between the dispatcher and the worker, so generate it once:
+If you are also moving the twin runtime, generate three independent secrets in
+separate, mode-600 role files. Never append them to the shared `.env`: Compose
+loads that file into the public app. The research worker must receive only the
+research dispatch and gateway secrets. These loopback URLs require the cron
+process and both workers to share the host network namespace; separate
+containers on separate network namespaces need HTTPS with verified certificates.
+The public-app Compose stack does not start twin workers. Use the opt-in,
+loopback-only [BYOM worker package](../byom/README.md) on an existing Linux host;
+the role files below can be supplied through that package's private env paths:
 
 ```bash
-cat >> .env <<EOF
-FORESEA_TWIN_DISPATCH_SECRET=$(openssl rand -hex 32)
-FORESEA_TWIN_MAINTENANCE_URL=http://app:8000
-FORESEA_TWIN_RESEARCH_URL=http://app:8000
-GH_DISPATCH_TOKEN=<a GitHub token with actions:write>
+umask 077
+maintenance_secret=$(openssl rand -hex 32)
+research_dispatch_secret=$(openssl rand -hex 32)
+research_gateway_secret=$(openssl rand -hex 32)
+cat > .env.twin-maintenance <<EOF
+FORESEA_TWIN_MAINTENANCE_DISPATCH_SECRET=$maintenance_secret
+FORESEA_TWIN_RESEARCH_DISPATCH_SECRET=$research_dispatch_secret
+FORESEA_TWIN_RESEARCH_GATEWAY_SECRET=$research_gateway_secret
+FORESEA_TWIN_MAINTENANCE_URL=http://127.0.0.1:8081
+FORESEA_TWIN_RESEARCH_URL=http://127.0.0.1:8082
 EOF
+cat > .env.twin-research <<EOF
+FORESEA_TWIN_RESEARCH_DISPATCH_SECRET=$research_dispatch_secret
+FORESEA_TWIN_RESEARCH_GATEWAY_SECRET=$research_gateway_secret
+FORESEA_TWIN_MAINTENANCE_URL=http://127.0.0.1:8081
+EOF
+unset maintenance_secret research_dispatch_secret research_gateway_secret
 ```
+
+Put `GH_DISPATCH_TOKEN` in the existing cron `.env` separately if the GitHub
+workflow jobs are enabled. Migrate an older `FORESEA_TWIN_DISPATCH_SECRET`
+installation by writing both role files and updating cron and both worker
+processes together; remove the old variable before restart. A partially
+migrated worker fails closed. Local mode supports one research-worker identity;
+multiple independent workers need separate credentials and fencing first.
 
 Then place the database where the compose file expects it:
 
@@ -334,11 +359,12 @@ two-layer firewall that is the usual cause of "server up but unreachable".
    `SESSION_SECRET_KEY` deliberately and back it up.
 3. **Google OAuth stays.** Sign-in uses Google/GitHub OAuth, which is not a
    GCP-hosted dependency and works unchanged off GCP.
-4. **The shared secret is weaker than OIDC.** `LocalTaskDispatcher` and the
-   worker share `FORESEA_TWIN_DISPATCH_SECRET`; the comparison is constant-time
-   and fails closed, but it authenticates the caller rather than a Google
-   identity. Keep the worker port off the public internet (the compose file
-   only exposes Caddy).
+4. **Local secrets are weaker than OIDC.** The three role-specific bearer
+   secrets are compared in constant time and fail closed, but authenticate
+   the caller rather than a Google identity. Keep worker ports off the public
+   internet. Plain HTTP is accepted only for loopback URLs in the same network
+   namespace; use HTTPS for separate hosts. The compose stack does not yet
+   start twin workers.
 
 ## Verifying the shim
 
