@@ -19,7 +19,17 @@
     "cohorts_examined": 86,
     "qualifying_cohorts": 0,
     "runtime_filter_changed": false,
-    "next": "Correct snapshot-level confidence for correlated market forecasts and implement a versioned signal gate using compatible causal data; historical paper entries alone cannot authorize trades"
+    "confidence_gate": {
+      "branch": "codex/twin-clustered-signal-gate",
+      "runtime_consumers_changed": true,
+      "status": "local_verified_pending_review_and_report_recomputation",
+      "method": "market_means_normal_bonferroni_v1",
+      "minimum_markets": 30,
+      "consumers": ["BYOM research priority", "significance-driven horizon validation"],
+      "legacy_transition": "Readable snapshot-only reports qualify no domain or horizon; the existing unreadable-horizon-record fallback remains unchanged",
+      "verification": ["Full unittest suite:2822 tests/12 skipped, exit0; Ruff and Graphify pass; DuckDB publisher-to-consumer integration and replay baseline reproduce", "One deep audit aud_rWEOrIeRch:4 reviewers completed/1 failed;9 findings addressed (8 accepted/1 rejected)", "Semgrep attempted but unavailable: Docker engine and native CLI absent"]
+    },
+    "next": "Recompute corrected reports from compatible causal snapshots, integrate durable research replay and complete forward/venue release gates; Brier confidence alone cannot authorize trades"
   },
   "byom_distribution": {
     "updated_at": "2026-10-19",

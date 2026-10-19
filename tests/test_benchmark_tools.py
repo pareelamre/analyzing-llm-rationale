@@ -13,6 +13,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 
 
+def _qualified_horizon(horizon, *, n):
+    return {"horizon": horizon, "n": n, "n_markets": min(n, 60), "skill_significant": True,
+            "skill_ci_method": "market_means_normal_bonferroni_v1", "skill_ci_comparisons": 6,
+            "skill_ci_low": 0.001, "skill_ci_mean": 0.01, "skill_ci_high": 0.02,
+            "skill_vs_market": 0.01}
+
+
 def setUpModule():
     # Kelly sizing reads the published track record's edge calibration. Left
     # alone, these tests would read the live, bot-published
@@ -66,6 +73,9 @@ def _fetch_kalshi_quotes(quotes):
 
 class BenchmarkToolTests(unittest.TestCase):
     def setUp(self):
+        # Every sizing test starts with the same frozen outage fallback;
+        # horizon-evidence tests replace it explicitly. No test reads live data.
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = None
         # place_trade's shadow path checks live Kalshi quotes (see
         # _resolve_shadow_marketability) and no longer fills an order with no
         # live quote at all -- default to "no quote available" so a test that
@@ -891,8 +901,8 @@ class BenchmarkToolTests(unittest.TestCase):
         """
         record = [
             {"horizon": "30d+", "n": 1303, "skill_significant": False},
-            {"horizon": "14-30d", "n": 772, "skill_significant": True},
-            {"horizon": "7-14d", "n": 1529, "skill_significant": True},
+            _qualified_horizon("14-30d", n=772),
+            _qualified_horizon("7-14d", n=1529),
             {"horizon": "3-7d", "n": 901, "skill_significant": False},
         ]
         benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = record
@@ -912,7 +922,7 @@ class BenchmarkToolTests(unittest.TestCase):
 
     def test_a_horizon_losing_significance_loses_validation(self):
         record = [
-            {"horizon": "14-30d", "n": 772, "skill_significant": True},
+            _qualified_horizon("14-30d", n=772),
             {"horizon": "7-14d", "n": 1529, "skill_significant": False},
         ]
         benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = record
@@ -930,8 +940,8 @@ class BenchmarkToolTests(unittest.TestCase):
 
     def test_a_small_sample_horizon_is_never_validated(self):
         record = [
-            {"horizon": "14-30d", "n": 772, "skill_significant": True},
-            {"horizon": "7-14d", "n": 12, "skill_significant": True},
+            _qualified_horizon("14-30d", n=772),
+            _qualified_horizon("7-14d", n=12),
         ]
         benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = record
         try:
@@ -961,6 +971,20 @@ class BenchmarkToolTests(unittest.TestCase):
             )
             self.assertFalse(plan["horizon_validated"])
             self.assertGreaterEqual(plan["market_shrinkage"], 0.15)
+        finally:
+            benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
+
+    def test_snapshot_significance_cannot_validate_a_horizon(self):
+        row = {"horizon": "7-14d", "n": 1000, "skill_significant": True}
+        benchmark_tools._HORIZON_CALIBRATION_CACHE["rows"] = [row]
+        try:
+            self.assertEqual(benchmark_tools._validated_horizons(), set())
+            row.update(n_markets=30, skill_ci_method="market_means_normal_bonferroni_v1",
+                       skill_ci_comparisons=6, skill_ci_low=0.001, skill_ci_high=0.02,
+                       skill_ci_mean=0.01, skill_vs_market=0.01)
+            self.assertEqual(benchmark_tools._validated_horizons(), {"7-14d"})
+            row["n_markets"] = 29
+            self.assertEqual(benchmark_tools._validated_horizons(), set())
         finally:
             benchmark_tools._HORIZON_CALIBRATION_CACHE.clear()
 

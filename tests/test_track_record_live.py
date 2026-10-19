@@ -951,6 +951,54 @@ class FileStoreTests(unittest.TestCase):
             self.assertEqual(readback["overall"]["accuracy"], 1.0)
             self.assertEqual(readback["by_horizon"][0]["horizon"], "7-14d")
 
+    def test_duckdb_publisher_output_qualifies_corrected_runtime_consumers(self):
+        import json
+
+        from analyzing_llm_rationale import benchmark_tools
+        from analyzing_llm_rationale.twin.forecast_prior import load_forecast_research_prior
+
+        published_at = datetime(2026, 10, 18, 23, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as td:
+            store = DuckDBStore(Path(td) / "track.duckdb")
+            try:
+                for i in range(30):
+                    for day in (1, 2):
+                        snap = Entity(store.key(trl.SNAPSHOT_KIND, f"m{i}-{day}"))
+                        snap.update(
+                            platform="Kalshi", ident=f"m{i}", model="m",
+                            question=f"Will NBA team {i} win?", domain="sports",
+                            market_url=f"https://kalshi.com/markets/m{i}",
+                            snapshot_ts=datetime(2026, 10, day, tzinfo=timezone.utc),
+                            snapshot_date=f"2026-10-0{day}", close_time=datetime(2026, 10, 17, tzinfo=timezone.utc),
+                            model_probability=0.8, market_probability=0.5, market_volume=500,
+                            lead_time_days=16.0, horizon="14-30d", resolved=True, outcome=1,
+                            resolved_ts=datetime(2026, 10, 18, tzinfo=timezone.utc),
+                            model_brier=0.04, market_brier=0.25, model_correct=True,
+                        )
+                        store.put(snap)
+                identities = store._con.execute("SELECT platform, ident FROM forecast_snapshot").fetchall()
+                self.assertEqual(len(identities), 60)
+                self.assertTrue(all(platform and ident for platform, ident in identities))
+                with mock.patch.object(trl, "_now", return_value=published_at):
+                    report = trl.aggregate(store, model="m", variant="v", temperature=0.0)
+            finally:
+                store.close()
+            for key, comparisons in (("by_domain", len(trl.DOMAINS)), ("by_horizon", len(trl._HORIZONS)),
+                                     ("by_edge", len(trl._EDGE_BUCKETS)),
+                                     ("by_liquidity", len(trl._LIQUIDITY_BUCKETS))):
+                self.assertEqual(len(report[key]), 1)
+                row = report[key][0]
+                self.assertEqual((row["n"], row["n_markets"]), (60, 30))
+                self.assertEqual(row["skill_ci_comparisons"], comparisons)
+                self.assertTrue(row["skill_significant"])
+            path = Path(td) / "track_record_live.json"
+            path.write_text(json.dumps(report), encoding="utf-8")
+            prior = load_forecast_research_prior(path, as_of=published_at + timedelta(minutes=1))
+            self.assertEqual(prior.validated_domains, frozenset({"sports"}))
+            with mock.patch.dict(benchmark_tools._HORIZON_CALIBRATION_CACHE,
+                                 {"rows": report["by_horizon"]}, clear=True):
+                self.assertEqual(benchmark_tools._validated_horizons(), {"14-30d"})
+
     def test_aggregate_headline_counts_comparable_llm_cohort_not_all_duplicates(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "store.json"
@@ -1194,12 +1242,15 @@ class EdgeAnalyticsTests(unittest.TestCase):
                 "model_correct": (model_p >= 0.5) == (outcome == 1)}
 
     def test_edge_calibration_significant_when_disagreement_pays(self):
-        # 20 forecasts disagreeing by 30pp and resolving in the model's favour.
-        resolved = [self._res(0.8, 0.5, 1) for _ in range(20)]
+        # Thirty distinct markets, not repeated observations of one contract.
+        resolved = [{**self._res(0.8, 0.5, 1), "platform": "kalshi", "ident": f"m{i}"}
+                    for i in range(30)]
         buckets = {b["edge_bucket"]: b for b in trl.edge_calibration(resolved)}
         self.assertIn("20pp+", buckets)
         b = buckets["20pp+"]
-        self.assertEqual(b["n"], 20)
+        self.assertEqual(b["n"], 30)
+        self.assertEqual(b["n_markets"], 30)
+        self.assertEqual(b["skill_ci_comparisons"], len(trl._EDGE_BUCKETS))
         self.assertGreater(b["skill_vs_market"], 0)
         self.assertTrue(b["skill_significant"])          # CI lower bound clears 0
 

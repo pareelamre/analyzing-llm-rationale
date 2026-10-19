@@ -159,8 +159,11 @@ exported snapshot after its destination/credentials are configured separately.
 
 The operator-configured shadow worker reads Foresea's bundled, dated
 `static/track_record_live.json`
-to prioritize already discovered markets from domains whose published skill
-interval has a positive lower bound. It uses the same question-domain tagger as
+to prioritize already discovered markets from domains whose corrected published
+skill interval has a positive lower bound over at least 30 distinct markets.
+The method must be `market_means_normal_bonferroni_v1`, with a comparison count
+covering the domain family. Legacy snapshot-only reports do not prioritize
+research. It uses the same question-domain tagger as
 the published track record. The report's declared generation time must predate
 the decision and be at most seven days old; otherwise discovery order is unchanged. A changed order
 stores the artifact hash with the market capture. The hash identifies the
@@ -169,11 +172,31 @@ bundled report requires a new build. This is a research-allocation prior,
 not proof that the BYOM model is calibrated: live sizing still requires the
 twin's own prospective, audit-grade resolved forecasts. The selected domain
 mix can affect later evaluation, so compare calibration within domain and
-selection cohort before promoting any live strategy. The publisher's domain
-intervals are not corrected for comparing multiple domains; treat this as a
-cheap search heuristic, not evidence of transferable edge. The bundled file
+selection cohort before promoting any live strategy. The publisher's new normal
+intervals average within each venue/market before computing uncertainty and
+apply a Bonferroni multiplier within each displayed bucket family. Snapshot
+averages remain descriptive; `skill_ci_mean` is the separate market-mean
+estimate. Markets may still share an event, and normal intervals are approximate.
+Malformed identity/error data makes a bucket's inference unavailable
+(`n_markets=0`, null interval) even when descriptive snapshot `n` is positive.
+No executable-return/cost or BYOM-version claim follows from Brier skill.
+At small market counts and with skewed data, normal intervals can be too narrow;
+the within-family adjustment also does not cover repeated report publications
+or selecting among different models/families. These approximate research
+intervals are not a substitute for frozen, event-disjoint forward validation.
+This remains a cheap research heuristic. The bundled file
 is trusted as part of the operator-owned code image; a signed or otherwise
 attested report is still needed before using the prior in a live release.
+
+The shadow benchmark's horizon reader keeps its historical 14–30 day fallback
+when the report is unreadable, as required by the existing compatibility policy.
+That fallback is not statistical evidence and can allow more shadow sizing than
+a readable legacy report, which now validates no horizon. It must not satisfy a
+live-release evidence gate. The twin's own live risk/calibration gates remain
+separate. Recompute reports from raw snapshots; never add method labels to an
+old interval to make it pass. Changing shared evaluation source also invalidates
+replay code hashes: the checked-in synthetic `REPLAY_BASELINE.json` is regenerated
+by its documented fixture command, without granting live eligibility.
 
 If the two worker roles load different model or budget settings, the stored
 research configuration ID differs and the research operation degrades before
