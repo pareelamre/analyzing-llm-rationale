@@ -144,9 +144,10 @@ separate, mode-600 role files. Never append them to the shared `.env`: Compose
 loads that file into the public app. The research worker must receive only the
 research dispatch and gateway secrets. These loopback URLs require the cron
 process and both workers to share the host network namespace; separate
-containers need HTTPS with verified certificates. The current Compose stack
-does not start twin workers, so this is preparatory configuration, not a
-working deployment:
+containers on separate network namespaces need HTTPS with verified certificates.
+The public-app Compose stack does not start twin workers. Use the opt-in,
+loopback-only [BYOM worker package](../byom/README.md) on an existing Linux host;
+the role files below can be supplied through that package's private env paths:
 
 ```bash
 umask 077

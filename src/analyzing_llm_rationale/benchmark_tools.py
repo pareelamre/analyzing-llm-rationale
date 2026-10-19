@@ -788,9 +788,13 @@ def _validated_horizons() -> set:
 
     A horizon is validated when its skill-vs-market lower CI bound clears
     zero (the record's own significance gate) with at least
-    _MIN_CALIBRATION_N resolved snapshots. Only an *unreadable* record falls
-    back to {"14-30d"} — the historical default — so a data outage never
-    silently widens sizing. A readable record with no qualifying horizon
+    _MIN_CALIBRATION_N distinct markets under the corrected within-family
+    interval method. Readable legacy snapshot-only reports qualify nothing.
+    An *unreadable* record retains the historical {"14-30d"} fallback for
+    compatibility with the shadow benchmark policy. This is NOT statistical
+    validation: during the legacy-report transition it can give more sizing
+    latitude than a readable unqualified report. Live release must not use
+    that fallback as evidence. A readable record with no qualifying horizon
     returns an empty set: no horizon is validated, and every horizon keeps
     its policy shrinkage. That is the honest reading of a record that no
     longer proves any window.
@@ -798,12 +802,17 @@ def _validated_horizons() -> set:
     rows = _published_horizon_calibration()
     if rows is None:
         return {"14-30d"}
+    from analyzing_llm_rationale.forecast_evaluation import (
+        FORECAST_HORIZONS,
+        has_qualified_market_skill,
+    )
+
     validated = set()
     for row in rows:
-        if not row.get("skill_significant"):
-            continue
-        n = int(_as_float(row.get("n")) or 0)
-        if n >= _MIN_CALIBRATION_N:
+        if has_qualified_market_skill(
+            row, minimum_comparisons=max(len(FORECAST_HORIZONS), len(rows)),
+            minimum_markets=_MIN_CALIBRATION_N,
+        ):
             validated.add(str(row.get("horizon")))
     return validated
 

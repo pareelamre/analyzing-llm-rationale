@@ -6,6 +6,37 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Sequence
 
+MARKET_SKILL_CI_METHOD = "market_means_normal_bonferroni_v1"
+FORECAST_HORIZONS = (
+    ("30d+", 30.0, float("inf")), ("14-30d", 14.0, 30.0),
+    ("7-14d", 7.0, 14.0), ("3-7d", 3.0, 7.0),
+    ("1-3d", 1.0, 3.0), ("<1d", 0.0, 1.0),
+)
+
+
+def has_qualified_market_skill(
+    row: Mapping[str, Any], *, minimum_comparisons: int, minimum_markets: int = 30,
+) -> bool:
+    """Check published inference metadata, never authorize an order or model transfer."""
+    if row.get("skill_significant") is not True or row.get("skill_ci_method") != MARKET_SKILL_CI_METHOD:
+        return False
+    markets, snapshots, comparisons = (row.get(k) for k in ("n_markets", "n", "skill_ci_comparisons"))
+    if any(type(v) is not int for v in (markets, snapshots, comparisons)):
+        return False
+    if not minimum_markets <= markets <= snapshots or not minimum_comparisons <= comparisons <= 10000:
+        return False
+    try:
+        raw = [row[k] for k in ("skill_ci_low", "skill_ci_mean", "skill_ci_high", "skill_vs_market")]
+        if any(isinstance(v, bool) for v in raw):
+            return False
+        low, center, high, descriptive = map(float, raw)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+    return (
+        all(math.isfinite(v) for v in (low, center, high, descriptive))
+        and 0 < low <= center <= high and center <= 1 and -1 <= descriptive <= 1
+    )
+
 
 def _as_utc(value: datetime | str, *, field: str) -> datetime:
     if isinstance(value, str):
@@ -129,9 +160,6 @@ def market_clustered_brier_skill_interval(
     z_score: float = 1.96,
 ) -> dict[str, Any]:
     """Estimate Brier skill uncertainty with markets as independent units."""
-    if z_score <= 0.0:
-        raise ValueError("z_score must be positive")
-
     by_market: dict[tuple[str, str], list[float]] = {}
     for row in forecasts:
         model_error = (row.model_probability - row.outcome) ** 2
@@ -139,6 +167,19 @@ def market_clustered_brier_skill_interval(
         by_market.setdefault((row.platform, row.market_id), []).append(
             market_error - model_error
         )
+
+    return market_mean_skill_interval(by_market, z_score=z_score)
+
+
+def market_mean_skill_interval(
+    by_market: Mapping[tuple[str, str], Sequence[float]], *, z_score: float = 1.96,
+) -> dict[str, Any]:
+    """Shared arithmetic for intervals over venue/market mean paired errors."""
+    if not math.isfinite(z_score) or z_score <= 0.0:
+        raise ValueError("z_score must be finite and positive")
+    if any(not values or any(not math.isfinite(v) for v in values)
+           for values in by_market.values()):
+        raise ValueError("market skill samples must be nonempty and finite")
 
     market_skill = [
         sum(values) / len(values)
@@ -158,7 +199,7 @@ def market_clustered_brier_skill_interval(
         upper = mean_skill + z_score * standard_error
 
     return {
-        "n_forecasts": len(forecasts),
+        "n_forecasts": sum(len(values) for values in by_market.values()),
         "n_markets": n_markets,
         "mean_skill": mean_skill,
         "standard_error": standard_error,
