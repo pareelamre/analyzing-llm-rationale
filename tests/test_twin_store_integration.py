@@ -48,6 +48,7 @@ from analyzing_llm_rationale.twin.store import (
     DatastoreTwinStore,
     InsufficientReservationCapacity,
     ReservationState,
+    TwinStoreError,
 )
 from analyzing_llm_rationale.twin.strategy import DatastoreStrategyStore, StrategyCycle
 from analyzing_llm_rationale.twin.worker import (
@@ -100,6 +101,43 @@ def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, resul
 
 @unittest.skipUnless(os.environ.get("DATASTORE_EMULATOR_HOST"), "requires DATASTORE_EMULATOR_HOST")
 class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
+    def test_one_manual_authority_cannot_bind_multiple_intents_concurrently(self):
+        from google.cloud import datastore
+
+        project = os.environ.get('GOOGLE_CLOUD_PROJECT', 'foresea-twin-test')
+        now = datetime.now(timezone.utc)
+        scope = AccountScope('authority-'+uuid4().hex, 'owner', 'kalshi', 'account', 'live',
+                             'USD', 'connection', 1, now)
+        store = DatastoreTwinStore(datastore.Client(project=project))
+        store.register_account(scope, venue_available_cash=Decimal('10'), loss_limit=Decimal('10'))
+
+        def reserve(index):
+            other = DatastoreTwinStore(datastore.Client(project=project))
+            intent = TradeIntent('intent-'+str(index), scope.id, 1, 'kalshi:live:TEST'+str(index),
+                'BUY_YES', Decimal('1'), Decimal('.5'), 'IOC', 'forecast', None, 'policy',
+                'strategy', 'market', Decimal('0'), Decimal('0'), now+timedelta(minutes=5), now)
+            try:
+                other.reserve_intent(intent, cash=Decimal('1'), max_loss=Decimal('1'), now=now,
+                                     authority_id='one-confirmed-request', authority_alias='client-'+str(index))
+                return 'reserved'
+            except TwinStoreError:
+                return 'blocked'
+
+        with ThreadPoolExecutor(4) as workers:
+            outcomes = list(workers.map(reserve, range(4)))
+        self.assertEqual(outcomes.count('reserved'), 1)
+        self.assertEqual(store.projection(scope.id).reserved_cash, Decimal('1'))
+        self.assertEqual(len(store.commands(scope.id)), 1)
+        query = store._client.query(kind='TwinRequestAuthority', ancestor=store._key(scope.id))
+        self.assertEqual(len(list(query.fetch())), 2)  # Losing aliases were rolled back.
+        command = store.commands(scope.id)[0]
+        claim = store.claim_command(command.id, worker_id='dispatch', now=now)
+        self.assertTrue(store.begin_dispatch(command.id, worker_id=claim.worker_id, fence=claim.fence, now=now))
+        with self.assertRaisesRegex(TwinStoreError, 'unstarted'):
+            store.transition_command(command.id, target=CommandState.REJECTED,
+                worker_id=claim.worker_id, fence=claim.fence, require_unstarted=True)
+        self.assertEqual(store.projection(scope.id).reserved_cash, Decimal('1'))
+
     def test_prepared_request_and_dispatch_fence_are_atomic_across_clients(self):
         from google.api_core.exceptions import Aborted
         from google.cloud import datastore

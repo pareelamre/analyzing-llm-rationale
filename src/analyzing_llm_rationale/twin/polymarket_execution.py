@@ -9,6 +9,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
+from hashlib import sha256
 from importlib.metadata import version
 from typing import Any, Callable, Mapping
 
@@ -40,6 +41,7 @@ logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 operations = metrics.get_meter(__name__).create_counter("twin.native_orders", unit="1")
 _SDK_VERSIONS = frozenset({"1.1.0", "1.2.0"})
+_CTF_CAPABILITIES = frozenset({"ctf-v2", "polymarket-clob-limit"})
 _EXCHANGES = {
     False: "0xE111180000d2663C0091e4f400237545B87B996B",
     True: "0xe2222d279d744050d28e00520010520000310F59",
@@ -60,6 +62,8 @@ def _fresh(received: datetime, age: int, now: datetime) -> None:
 
 
 def _budget_scope(store: TwinStore, intent: TradeIntent, context: ExecutionContext) -> None:
+    if not context.autonomous:
+        return  # Confirmed manual requests use the account-root server policy.
     if context.mandate is None:
         raise ExecutionBlocked("native order mandate is unavailable")
     ceiling = min(Decimal(context.mandate.max_capital), Decimal(context.mandate.max_loss))
@@ -80,13 +84,16 @@ def _restore(
 
     expected_keys = {"schema_version", "sdk_version", "protocol", "chain_id", "neg_risk",
                      "intent_hash", "market_version", "market_received_at", "stale_after_seconds",
-                     "condition_id", "order_type", "order"}
+                     "condition_id", "venue_instrument_id", "authority_mode", "post_only", "order_type", "order",
+                     "fee_version", "tick_size", "min_quantity", "authority_ref_hash"}
     installed = version("py-clob-client-v2")
     if (set(payload) != expected_keys or type(payload["schema_version"]) is not int
-            or payload["schema_version"] != 1 or installed not in _SDK_VERSIONS
+            or payload["schema_version"] != 2 or installed not in _SDK_VERSIONS
             or payload["sdk_version"] not in _SDK_VERSIONS
             or (for_submission and payload["sdk_version"] != installed)
             or payload["protocol"] != "ctf_v2"
+            or payload["authority_mode"] not in {"autonomous", "manual"}
+            or type(payload["post_only"]) is not bool
             or payload["chain_id"] != 137 or client.signer.get_chain_id() != 137
             or client.host != "https://clob.polymarket.com"
             or type(payload["neg_risk"]) is not bool
@@ -94,15 +101,22 @@ def _restore(
             or payload["market_version"] != intent.market_version
             or not isinstance(payload["condition_id"], str) or not payload["condition_id"]):
         raise ExecutionBlocked("native prepared context does not match")
+    if payload["authority_mode"] == "manual" and (
+            not isinstance(payload["authority_ref_hash"], str) or len(payload["authority_ref_hash"]) != 64
+            or intent.exit_reason != "manual-confirmation-"+payload["authority_ref_hash"][:24]):
+        raise ExecutionBlocked("native manual authority binding changed")
     if intent.instrument_id != canonical_instrument_id(
-        venue="polymarket", environment="live", venue_instrument_id=payload["condition_id"],
+        venue="polymarket", environment="live", venue_instrument_id=payload["venue_instrument_id"],
         condition_id=payload["condition_id"],
     ):
         raise ExecutionBlocked("native condition does not match intent instrument")
     if for_submission:
         _fresh(datetime.fromisoformat(payload["market_received_at"]), payload["stale_after_seconds"], now)
     tif = "FAK" if intent.time_in_force.upper() == "IOC" else intent.time_in_force.upper()
-    if tif not in {"FAK", "FOK"} or payload["order_type"] != tif:
+    allowed_tif = {"FAK", "FOK"}
+    if not for_submission and payload["authority_mode"] == "manual":
+        allowed_tif.add("GTC")  # Read/cancel old packets without authorizing a new resting order.
+    if tif not in allowed_tif or payload["order_type"] != tif or (payload["post_only"] and tif != "GTC"):
         raise ExecutionBlocked("native order must be bounded immediate execution")
     wire = dict(payload["order"])
     expected_side = "BUY" if intent.action.value.startswith("BUY_") else "SELL"
@@ -145,6 +159,8 @@ def reserve_polymarket_intent(
     book: Mapping[str, Any], client: Any, context: ExecutionContext, now: datetime,
     cash: Decimal, max_loss: Decimal, preconditions: ReservationPreconditions,
     clock: Callable[[], datetime] | None = None,
+    post_only: bool = False,
+    manual_authority_ref: str | None = None,
 ) -> ExecutionCommand:
     """Sign once outside transactions, then atomically reserve the exact body."""
     from py_clob_client_v2.client import order_to_json_v2
@@ -160,16 +176,20 @@ def reserve_polymarket_intent(
         if max_loss < cash:
             raise ExecutionBlocked("native loss hold must cover the full cash reservation")
         stage = "instrument"
-        if (not context.autonomous or context.simulation or context.scope.environment != "live"
+        if (context.simulation or context.scope.environment != "live"
                 or context.scope.venue != "polymarket" or context.scope.collateral_asset != "USD"
                 or instrument.venue != "polymarket"
-                or instrument.capability_version != "ctf-v2"
+                or instrument.capability_version not in _CTF_CAPABILITIES
                 or instrument.environment != "live" or instrument.id != intent.instrument_id
                 or snapshot.instrument_id != instrument.id or snapshot.id != intent.market_version
                 or snapshot.complete is not Completeness.COMPLETE
                 or snapshot.fee_version != instrument.fee_version or instrument.close_at <= now
                 or instrument.status not in {"active", "open", "live", "trading"}):
             raise ExecutionBlocked("native order instrument or context is ineligible")
+        if not context.autonomous and (intent.strategy_version != "manual-confirmed-v1"
+                or intent.policy_version != "manual-guardrails-v1" or not manual_authority_ref
+                or intent.exit_reason != "manual-confirmation-"+sha256(manual_authority_ref.encode()).hexdigest()[:24]):
+            raise ExecutionBlocked("native manual context requires confirmed manual intent")
         stage = "account"
         if (store.account_scope(context.scope.id) != context.scope
                 or context.scope.venue_account_ref.lower() != client.builder.funder.lower()):
@@ -204,7 +224,8 @@ def reserve_polymarket_intent(
         if installed not in _SDK_VERSIONS or client.host != "https://clob.polymarket.com":
             raise ExecutionBlocked("native SDK version has not been verified")
         tif = "FAK" if intent.time_in_force.upper() == "IOC" else intent.time_in_force.upper()
-        if tif not in {"FAK", "FOK"}:
+        allowed_tif = {"FAK", "FOK"}
+        if tif not in allowed_tif or type(post_only) is not bool or (post_only and tif != "GTC"):
             raise ExecutionBlocked("native order must be immediate")
         signed = client.create_order(
             OrderArgs(token_id=token, price=float(intent.limit_price), size=float(intent.quantity),
@@ -213,11 +234,16 @@ def reserve_polymarket_intent(
         )
         # Do not persist owner/API-key credentials from the HTTP envelope.
         payload = {
-            "schema_version": 1, "sdk_version": installed, "protocol": "ctf_v2", "chain_id": 137,
+            "schema_version": 2, "sdk_version": installed, "protocol": "ctf_v2", "chain_id": 137,
             "neg_risk": book["neg_risk"], "intent_hash": intent.intent_hash,
             "market_version": snapshot.id, "market_received_at": snapshot.received_at.isoformat(),
             "stale_after_seconds": snapshot.stale_after_seconds, "order_type": tif,
             "condition_id": instrument.condition_id,
+            "venue_instrument_id": instrument.venue_instrument_id,
+            "fee_version": instrument.fee_version, "tick_size": str(instrument.tick_size),
+            "min_quantity": str(instrument.min_quantity),
+            "authority_mode": "autonomous" if context.autonomous else "manual", "post_only": post_only,
+            "authority_ref_hash": sha256(manual_authority_ref.encode()).hexdigest() if manual_authority_ref else None,
             "order": order_to_json_v2(signed, "", tif)["order"],
         }
         completed_at = clock()
@@ -229,7 +255,8 @@ def reserve_polymarket_intent(
         stage = "persistence"
         store.reserve_intent(intent, cash=cash, max_loss=max_loss, now=completed_at,
                              client_order_id=order_hash, prepared_request=payload,
-                             preconditions=preconditions)
+                             preconditions=preconditions, authority_id=None if context.autonomous else manual_authority_ref,
+                             authority_alias=None if context.autonomous else intent.id)
         command = store.command_for_intent(intent)
         operations.add(1, {"operation": "prepare", "outcome": "reserved"})
         span.set_attribute("outcome", "reserved")
@@ -256,12 +283,17 @@ def submit_polymarket_command(
             instrument = load_instrument()
             token = instrument.yes_token_id if intent.action.value.endswith("_YES") else instrument.no_token_id
             if (instrument.id != intent.instrument_id or instrument.condition_id != payload["condition_id"]
-                    or instrument.capability_version != "ctf-v2" or payload["order"]["tokenId"] != token):
+                    or instrument.fee_version != payload["fee_version"]
+                    or instrument.tick_size != Decimal(payload["tick_size"])
+                    or instrument.min_quantity != Decimal(payload["min_quantity"])
+                    or instrument.close_at <= clock() or instrument.status not in {"active", "open", "live", "trading"}
+                    or instrument.capability_version not in _CTF_CAPABILITIES or payload["order"]["tokenId"] != token):
                 raise ExecutionBlocked("native request no longer matches authoritative instrument")
             # Refresh authority after restoration and immediately before I/O.
             fresh = store.command_for_intent(intent)
             context = load_context()
-            if (context.scope.venue != "polymarket" or not context.autonomous or context.simulation
+            if (context.scope.venue != "polymarket" or context.simulation
+                    or payload["authority_mode"] != ("autonomous" if context.autonomous else "manual")
                     or context.scope.environment != "live" or store.account_scope(context.scope.id) != context.scope
                     or context.scope.venue_account_ref.lower() != client.builder.funder.lower()):
                 raise ExecutionBlocked("native dispatch context is ineligible")
@@ -269,9 +301,10 @@ def submit_polymarket_command(
                                reservation=store.reservation(fresh.scope_id, fresh.reservation_id),
                                context=context, now=clock())
             _budget_scope(store, intent, context)
+            _fresh(datetime.fromisoformat(payload["market_received_at"]), payload["stale_after_seconds"], clock())
             transport_started = True
             response = _require_bounded_acknowledgement(
-                client.post_order(signed, payload["order_type"], post_only=False, defer_exec=False),
+                client.post_order(signed, payload["order_type"], post_only=payload["post_only"], defer_exec=False),
                 venue="Polymarket",
             )
             if "success" in response and "ok" in response and response["success"] != response["ok"]:

@@ -3,7 +3,10 @@
 The private backend now prepares a real SDK CTF order, persists its native hash
 and exact encrypted body with the existing reservation, and posts that same body
 through the shared fenced execution engine. Manual/public routes and the private
-worker factory have **not** been switched to this backend. T14/T15 remain open.
+worker factory are **not activated** on this backend. The subsequent
+[opt-in manual wiring](NATIVE_MANUAL.md) connects the two manual HTTP paths, with
+new native execution disabled by default. The private factory stays shadow-only.
+T14/T15 remain open.
 
 ## Behavior
 

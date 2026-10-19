@@ -3,7 +3,7 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t14_native_polymarket_backend_verified_manual_worker_wiring_pending",
+  "implementation_status": "t14_native_manual_opt_in_wired_private_worker_and_lifecycle_pending",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
   "next_task": "T14",
   "live_authorized": false,
@@ -488,7 +488,7 @@
         "T13"
       ],
       "status": "in_progress",
-      "substep": "Native SDK prepared body/hash, encrypted durable reservation, one-send fence and positive-only recovery verified locally; manual/public route and private worker selection remain pending",
+      "substep": "Native manual direct/saved-run preparation wired behind disabled opt-in; concrete lifecycle maintenance and private worker selection pending",
       "branch": "codex/autonomous-durable-submission",
       "commit": "3202f9bf",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/544",
@@ -502,7 +502,8 @@
         "PR #544 CI test (pass)",
         "PR #544 datastore-integration (pass after expired-lease takeover fix)",
         "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed.",
-        "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence."
+        "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence.",
+        "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/execution.py",
@@ -518,13 +519,21 @@
         "src/analyzing_llm_rationale/twin/prepared_requests.py",
         "tests/test_twin_native_polymarket.py",
         "tests/test_twin_dispatch_safety.py",
-        "docs/autonomous-twin/NATIVE_POLYMARKET.md"
+        "docs/autonomous-twin/NATIVE_POLYMARKET.md",
+        "src/analyzing_llm_rationale/twin/polymarket_manual.py",
+        "tests/test_twin_native_capture.py",
+        "tests/test_twin_manual_review.py",
+        "tests/test_trading_request_identity.py",
+        "docs/autonomous-twin/NATIVE_MANUAL.md",
+        "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md"
       ],
       "blockers": [
-        "Wire existing manual confirmation and private worker selection through the prepared native backend; current public helper still signs/posts after local identity reservation.",
-        "Production host/key/index, inventory/fees/approval/venue eligibility, compatible forward evidence and bounded expiring mandate remain unverified."
+        "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
+        "Private worker backend selection remains shadow-only.",
+        "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
+        "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
       ],
-      "handoff": "Reuse the verified native backend; do not duplicate signing/execution or re-run historical screens. Wire manual and private worker selection without enabling live defaults; see NATIVE_POLYMARKET.md."
+      "handoff": "Reuse opt-in native manual/backend and shared root; next integrate concrete lifecycle maintenance/private worker selection offline. Do not rerun unchanged historical screens or enable live defaults."
     },
     {
       "id": "T15",
@@ -533,7 +542,7 @@
         "T14"
       ],
       "status": "in_progress",
-      "substep": "Native SDK prepared body/hash, encrypted durable reservation, one-send fence and positive-only recovery verified locally; manual/public route and private worker selection remain pending",
+      "substep": "Native manual direct/saved-run preparation wired behind disabled opt-in; concrete lifecycle maintenance and private worker selection pending",
       "branch": "codex/autonomous-lifecycle-recovery",
       "commit": "ceecca42",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/563",
@@ -545,7 +554,8 @@
         "git diff --check (pass)",
         "py -m graphify update . and focused recovery query (pass)",
         "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed.",
-        "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence."
+        "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence.",
+        "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/recovery.py",
@@ -558,13 +568,21 @@
         "src/analyzing_llm_rationale/twin/prepared_requests.py",
         "tests/test_twin_native_polymarket.py",
         "tests/test_twin_dispatch_safety.py",
-        "docs/autonomous-twin/NATIVE_POLYMARKET.md"
+        "docs/autonomous-twin/NATIVE_POLYMARKET.md",
+        "src/analyzing_llm_rationale/twin/polymarket_manual.py",
+        "tests/test_twin_native_capture.py",
+        "tests/test_twin_manual_review.py",
+        "tests/test_trading_request_identity.py",
+        "docs/autonomous-twin/NATIVE_MANUAL.md",
+        "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md"
       ],
       "blockers": [
-        "Wire existing manual confirmation and private worker selection through the prepared native backend; current public helper still signs/posts after local identity reservation.",
-        "Production host/key/index, inventory/fees/approval/venue eligibility, compatible forward evidence and bounded expiring mandate remain unverified."
+        "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
+        "Private worker backend selection remains shadow-only.",
+        "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
+        "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
       ],
-      "handoff": "Reuse the verified native backend; do not duplicate signing/execution or re-run historical screens. Wire manual and private worker selection without enabling live defaults; see NATIVE_POLYMARKET.md."
+      "handoff": "Reuse opt-in native manual/backend and shared root; next integrate concrete lifecycle maintenance/private worker selection offline. Do not rerun unchanged historical screens or enable live defaults."
     },
     {
       "id": "T16",
@@ -943,7 +961,7 @@
   "native_polymarket_execution": {
     "date": "2026-10-19",
     "branch": "codex/twin-native-polymarket",
-    "status": "backend_offline_verified_not_selected_by_routes_or_workers",
+    "status": "native_manual_opt_in_wired_disabled_worker_lifecycle_pending",
     "evidence": "docs/autonomous-twin/NATIVE_POLYMARKET.md",
     "review": "docs/autonomous-twin/NATIVE_POLYMARKET_REVIEW.md",
     "sdk_versions": [
@@ -959,10 +977,39 @@
     "live_activated": false,
     "cloud_writes": false,
     "remaining": [
-      "manual/public route preparation integration",
-      "private worker backend selection",
-      "exact deployable SDK/image and private host/key/index readiness",
-      "compatible forward evidence and expiring bounded live mandate"
+      "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
+      "Private worker backend selection remains shadow-only.",
+      "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
+      "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
+    ]
+  },
+  "native_manual_execution": {
+    "date": "2026-10-19",
+    "branch": "codex/twin-native-manual-wiring",
+    "status": "offline_verified_default_disabled",
+    "evidence": "docs/autonomous-twin/NATIVE_MANUAL.md",
+    "review": "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md",
+    "sdk_versions": [
+      "1.1.0",
+      "1.2.0"
+    ],
+    "full_tests_passed": 2892,
+    "full_tests_skipped": 0,
+    "full_duration_seconds": 211.561,
+    "emulator_tests_passed": 15,
+    "sdk_1_2_tests_passed": 51,
+    "audit_id": "aud_1WCqLzwCI4",
+    "adjudication_id": "adj-Idm7eksZu_R4AcUu",
+    "accepted_dispositions": 13,
+    "rejected_dispositions": 1,
+    "native_manual_flag_default": false,
+    "live_activated": false,
+    "cloud_writes": false,
+    "remaining": [
+      "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
+      "Private worker backend selection remains shadow-only.",
+      "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
+      "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
     ]
   }
 }
