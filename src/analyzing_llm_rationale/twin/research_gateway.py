@@ -16,8 +16,10 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Any, Callable, Protocol
+from urllib.parse import urlsplit
 
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
@@ -463,7 +465,17 @@ class ResearchRuntimePolicy:
 
     @property
     def id(self) -> str:
-        return "model-config-" + _hash(asdict(self.model))[:24]
+        return "model-config-" + _hash({
+            "model": asdict(self.model),
+            "model_key": self.model_key,
+            "api_base_url": self.api_base_url,
+            "api_key_env_var": self.api_key_env_var,
+            "budget": asdict(self.budget),
+            "fanout": (
+                self.candidates_per_cycle, self.tool_calls_per_candidate,
+                self.schema_repairs_per_candidate,
+            ),
+        })[:24]
 
     def build_provider(self) -> OpenAICompatibleProvider:
         api_key = os.environ.get(self.api_key_env_var, "").strip()
@@ -480,6 +492,8 @@ class ResearchRuntimePolicy:
 def load_research_runtime_policy(
     twin_config_path: Path,
     models_config_path: Path,
+    *,
+    required_api_key_env_var: str | None = None,
 ) -> ResearchRuntimePolicy:
     """Load the only model allowed to consume the autonomous research budget."""
     raw = load_yaml(twin_config_path)
@@ -498,6 +512,21 @@ def load_research_runtime_policy(
         or not provider.api_key_env_var
     ):
         raise ValueError("twin research requires one bounded OpenAI-compatible provider")
+    if required_api_key_env_var is not None and provider.api_key_env_var != required_api_key_env_var:
+        raise ValueError(f"twin research requires {required_api_key_env_var} as its key source")
+    endpoint = urlsplit(provider.api_base_url)
+    if (
+        endpoint.scheme not in ("http", "https") or not endpoint.hostname
+        or endpoint.username is not None or endpoint.password is not None
+        or endpoint.query or endpoint.fragment
+    ):
+        raise ValueError("research model URL must be HTTP(S) without embedded credentials or query")
+    try:
+        loopback = ip_address(endpoint.hostname).is_loopback
+    except ValueError:
+        loopback = endpoint.hostname == "localhost"
+    if endpoint.scheme == "http" and not loopback:
+        raise ValueError("research model URL requires HTTPS outside loopback")
 
     def positive_int(name: str) -> int:
         value = research.get(name)
@@ -538,6 +567,12 @@ def load_research_runtime_policy(
         strategy_hash=_hash(strategy),
         max_request_seconds=timeout,
     )
+    if (
+        required_api_key_env_var is not None and not loopback
+        and model.price == ModelPrice(Decimal("0"), Decimal("0"))
+        and research.get("zero_cost_remote_attested") is not True
+    ):
+        raise ValueError("zero-price remote BYOM requires explicit cost attestation")
     budget = BudgetPolicy(
         Decimal(str(research.get("usd_limit_per_account_day"))),
         positive_int("token_limit_per_account_day"),

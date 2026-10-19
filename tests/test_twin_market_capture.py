@@ -10,7 +10,8 @@ from analyzing_llm_rationale.twin.market_capture import (
     capture_markets,
 )
 
-NOW = datetime.now(timezone.utc)
+# Snapshot validators compare received_at to the wall clock; keep fixture time safely in the past.
+NOW = datetime.now(timezone.utc) - timedelta(seconds=5)
 
 
 def kalshi_market():

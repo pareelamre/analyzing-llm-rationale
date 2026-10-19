@@ -1,0 +1,81 @@
+# Operator-owned local-model research. Missing prices block research;
+# zero-metered local capacity is declared explicitly and still token-limited.
+research:
+  model: byom-local
+  provider_id: owner-openai-compatible
+  candidates_per_cycle: 3
+  tool_calls_per_candidate: 8
+  schema_repairs_per_candidate: 1
+  max_input_tokens: 16000
+  max_output_tokens: 1000
+  request_timeout_seconds: 60
+  price_valid_until: "2027-01-01T00:00:00+00:00"
+  usd_limit_per_account_day: "0"
+  zero_cost_remote_attested: false
+  token_limit_per_account_day: 30000
+  request_limit_per_account_day: 30
+  model_prices_usd_per_million:
+    byom-local:
+      # Local capacity has no metered API charge. Missing
+      # or unknown prices still fail closed.
+      input: "0"
+      output: "0"
+
+strategy:
+  config_version: foresea-edge-shadow-v1
+  mode: shadow
+  live_enabled: false
+  max_new_positions_per_cycle: 1
+  max_open_instruments: 5
+  max_research_candidates: 3
+  net_edge_floor: "0.05"
+  maximum_holding_seconds: 604800
+  candidate_cooldown_seconds: 3600
+  material_price_change: "0.01"
+  cycle_bucket_seconds: 300
+  intent_ttl_seconds: 60
+  account_max_age_seconds: 60
+  risk:
+    kelly_fraction: "0.10"
+    # Absolute owner limits remain zero until a later shadow or live mandate
+    # explicitly allocates capital. Zero therefore produces a safe PASS.
+    max_order_cash: "0"
+    max_market_loss: "0"
+    max_cluster_loss: "0"
+    max_total_loss: "0"
+    max_trailing_additions: "0"
+    max_daily_realized_loss: "0"
+    max_drawdown: "0.10"
+
+# Simulation dollars are an evaluation fixture. They grant no venue authority
+# and are loaded only after the private runtime proves shadow mode, zero live
+# capital, and no mandate. The base strategy limits above remain fail closed.
+shadow_trial:
+  config_version: foresea-edge-shadow-trial-v1
+  mode: shadow
+  live_enabled: false
+  risk:
+    kelly_fraction: "0.10"
+    max_order_cash: "10"
+    max_market_loss: "10"
+    max_cluster_loss: "25"
+    max_total_loss: "50"
+    max_trailing_additions: "1"
+    max_daily_realized_loss: "10"
+    max_drawdown: "0.10"
+
+# A replay run freezes these timestamps into its config hash. Move them only
+# when intentionally producing a new out-of-sample evaluation cohort.
+replay:
+  split_at: "2026-08-01T00:00:00+00:00"
+  evaluation_as_of: "2026-09-07T00:00:00+00:00"
+  min_calibration_records: 30
+  min_test_records: 30
+  min_edge: 0.05
+  requested_fraction: 0.02
+  fee_fraction: 0.01
+  slippage: 0.01
+  max_total_exposure: 0.25
+  max_drawdown: 0.20
+  fixed_probability: 0.50
+  max_artifact_age_seconds: 604800

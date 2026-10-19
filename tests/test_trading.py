@@ -57,6 +57,18 @@ class FakeResponse:
 
 
 class TradingTests(unittest.TestCase):
+    def test_price_limited_polymarket_ioc_uses_the_existing_immediate_order_switch(self):
+        with mock.patch.dict(os.environ, {'FORESEA_ENABLE_BYO_TRADING':'true',
+                                         'FORESEA_ALLOW_MARKET_ORDERS':'false'}):
+            preview = trading.preview_order({'platform':'polymarket','token_id':'123',
+                'price':'.42','quantity':'10','order_type':'limit','time_in_force':'IOC'},
+                {'fixture':'scoped'})
+            self.assertEqual(preview['normalized_order']['exchange_order']['order_type'], 'FAK')
+            with self.assertRaises(trading.TradingDisabledError):
+                trading.require_execution_enabled(preview, {'fixture':'scoped'})
+            with mock.patch.dict(os.environ, {'FORESEA_ALLOW_MARKET_ORDERS':'true'}):
+                trading.require_execution_enabled(preview, {'fixture':'scoped'})
+
     def setUp(self):
         self._saved_env = {name: os.environ.get(name) for name in _TRADING_ENV}
         for name in _TRADING_ENV:

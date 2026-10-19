@@ -1,0 +1,15 @@
+# Operator-owned twin model. Replace the model ID and URL before use.
+# Keep credentials in the worker environment, never in this file.
+models:
+  byom-local:
+    result_label: Owner local model
+    provider: openai-compatible
+    local_model_name: replace-with-your-model-id
+    router_model_name: replace-with-your-model-id
+    api_base_url: http://127.0.0.1:11434/v1
+    api_key_env_var: FORESEA_TWIN_BYOM_API_KEY
+    access: self-hosted
+    forecasting_enabled: false
+    chat_interface_enabled: false
+    agent_trading_enabled: false
+    track_record_enabled: false
