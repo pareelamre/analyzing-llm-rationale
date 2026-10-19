@@ -23,7 +23,6 @@ from analyzing_llm_rationale.twin.worker import (
     WorkerJob,
     WorkerJobError,
     WorkerJobKind,
-    WorkerJobStatus,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -137,15 +136,21 @@ class ByomPackageTests(unittest.TestCase):
             })
             finished_research = jobs.add(WorkerJob(
                 "offline-research", "shadow-offline", WorkerJobKind.RESEARCH,
+                # This standalone transport fixture has no strategy run. Use
+                # the supported legacy payload rather than inventing a cycle
+                # whose continuation would correctly fail closed on replay.
                 {field: "offline-fixture" for field in (
                     "research_assignment_id", "budget_reservation_id", "market_snapshot_id",
-                    "evidence_set_id", "model_config_id", "budget_key_id", "strategy_cycle_id",
+                    "evidence_set_id", "model_config_id", "budget_key_id",
                 )},
-                now + timedelta(minutes=30),
-                completed_result={"status": "completed", "research_result_id": "offline-result",
-                                  "usage_record_id": "offline-usage"},
-                status=WorkerJobStatus.COMPLETED, created_at=now, completed_at=now,
+                now + timedelta(minutes=30), created_at=now,
             ))
+            research_claim = jobs.claim(finished_research.id, worker_id="fixture", now=now)
+            finished_research = jobs.complete(
+                finished_research.id, worker_id="fixture", fence=research_claim.fence,
+                result={"status": "completed", "research_result_id": "offline-result",
+                        "usage_record_id": "offline-usage"}, now=now,
+            )
             role_envs = {
                 "maintenance": {**env, "FORESEA_TWIN_WORKER_ROLE": "maintenance",
                     "FORESEA_DATASTORE_PATH": str(state),
@@ -206,7 +211,8 @@ class ByomPackageTests(unittest.TestCase):
                         result = session.post(research_url + "/internal/twin/research",
                             json={"job_id": finished_research.id},
                             headers={"Authorization": f"Bearer {secret}"}, timeout=3)
-                        self.assertEqual(result.status_code, 200 if secret == dispatch_secret else 401)
+                        self.assertEqual(result.status_code, 200 if secret == dispatch_secret else 401,
+                                         result.text)
                         if result.status_code == 200:
                             self.assertEqual(result.json(), finished_research.completed_result)
                     self.assertEqual(session.post(research_url + "/internal/twin/maintain",

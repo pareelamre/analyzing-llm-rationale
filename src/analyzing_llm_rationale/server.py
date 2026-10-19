@@ -11246,8 +11246,12 @@ def _reserve_confirmed_manual_order(
     preview: Dict[str, Any],
     guardrails: Dict[str, Any],
     authority_ref: str,
+    credentials: Optional[Dict[str, Any]] = None,
+    confirmation: str = "",
+    native_capture: Any = None,
 ) -> Any:
     """Create the shared manual/twin reservation and claim before venue I/O."""
+    from analyzing_llm_rationale.twin.execution import ExecutionBlocked
     from analyzing_llm_rationale.twin.manual import (
         ManualReservationConflict,
         reserve_confirmed_manual_order,
@@ -11258,6 +11262,30 @@ def _reserve_confirmed_manual_order(
     )
 
     try:
+        if venue == "polymarket":
+            from analyzing_llm_rationale.twin.polymarket_manual import (
+                capture_manual_polymarket,
+                manual_polymarket_client,
+                prepare_confirmed_polymarket_order,
+                require_native_manual_preview,
+            )
+
+            if confirmation != "PLACE REAL ORDER" or not credentials:
+                raise ExecutionBlocked("native manual confirmation or scoped connection is missing")
+            require_native_manual_preview(dict(preview.get("normalized_order") or {}))
+            from analyzing_llm_rationale import trading
+
+            trading.require_execution_enabled(preview, credentials)
+            def clock():
+                return datetime.now(timezone.utc)
+            client = manual_polymarket_client(credentials)
+            market, books, received = native_capture or capture_manual_polymarket(payload, clock=clock)
+            return prepare_confirmed_polymarket_order(
+                _confirmed_manual_twin_store(), user_id=user_id, payload=payload,
+                confirmation=confirmation, credentials=credentials, client=client,
+                normalized=dict(preview.get("normalized_order") or {}), guardrails=guardrails,
+                market=market, books=books, authority_ref=authority_ref, now=received, clock=clock,
+            )
         return reserve_confirmed_manual_order(
             _confirmed_manual_twin_store(),
             user_id=user_id,
@@ -11267,6 +11295,8 @@ def _reserve_confirmed_manual_order(
             guardrails=guardrails,
             authority_ref=authority_ref,
         )
+    except ExecutionBlocked as exc:
+        raise TradingGuardrailError("native_manual_blocked", str(exc)) from exc
     except ManualReservationConflict as exc:
         raise TradingGuardrailError("execution_claim_conflict", str(exc)) from exc
     except InsufficientReservationCapacity as exc:
@@ -11282,11 +11312,29 @@ def _submit_confirmed_manual_command(
     """Route a confirmed manual order through the shared fenced dispatcher."""
     from analyzing_llm_rationale import trading
     from analyzing_llm_rationale.twin.execution import (
+        ExecutionBlocked,
         ExecutionContext,
         SubmissionDisposition,
         SubmissionUnknown,
         submit_claimed_command,
     )
+
+    if getattr(command_claim, "native_instrument", None) is not None:
+        from analyzing_llm_rationale.twin.polymarket_manual import submit_confirmed_polymarket_order
+
+        fresh_credentials = execution_service.resolve_credentials(user_id=user_id, venue="polymarket")
+        try:
+            return submit_confirmed_polymarket_order(
+                _confirmed_manual_twin_store(), command_claim=command_claim, payload=payload,
+                user_id=user_id, credentials=fresh_credentials, confirmation=confirmation,
+                load_policy=lambda: _effective_trading_guardrails(user_id),
+                load_credentials=lambda: execution_service.resolve_credentials(user_id=user_id, venue="polymarket"),
+                clock=lambda: datetime.now(timezone.utc),
+            )
+        except ExecutionBlocked as exc:
+            raise TradingGuardrailError("native_manual_blocked", str(exc)) from exc
+        except SubmissionUnknown as exc:
+            raise trading.TradingExecutionError(str(exc)) from exc
 
     context = ExecutionContext(
         scope=command_claim.scope,
@@ -12055,6 +12103,21 @@ async def execute_trading_run(
             if credentials is None:
                 raise HTTPException(status_code=409, detail=f"Connect a {venue} account before executing this run.")
 
+            native_capture = None
+            if venue == "polymarket":
+                from analyzing_llm_rationale.twin.execution import ExecutionBlocked
+                from analyzing_llm_rationale.twin.polymarket_manual import (
+                    capture_manual_polymarket,
+                    normalized_manual_capture,
+                    require_native_manual_enabled,
+                    require_native_manual_preview,
+                )
+
+                try:
+                    require_native_manual_enabled()
+                except ExecutionBlocked as exc:
+                    raise TradingGuardrailError("native_manual_blocked", str(exc)) from exc
+
             # Revalidate guardrails immediately before the user-approved request,
             # then atomically claim the run before touching the exchange.  A
             # second browser tab or Cloud Run instance will receive a conflict
@@ -12069,6 +12132,13 @@ async def execute_trading_run(
                 trade_run_id=run_id,
             )
             preview["guardrails"] = guardrail_snapshot
+            if venue == "polymarket":
+                try:
+                    require_native_manual_preview(preview["normalized_order"])
+                    native_capture = capture_manual_polymarket(payload, clock=lambda: datetime.now(timezone.utc))
+                    normalized_manual_capture(native_capture[0], native_capture[1], now=native_capture[2])
+                except ExecutionBlocked as exc:
+                    raise TradingGuardrailError("native_manual_blocked", str(exc)) from exc
             run, claimed_for_execution = _claim_trading_run_for_execution(
                 claims["sub"], run_id, preview
             )
@@ -12087,6 +12157,9 @@ async def execute_trading_run(
                 preview=preview,
                 guardrails=guardrail_snapshot,
                 authority_ref=f"saved-run-{run_id}",
+                credentials=credentials,
+                confirmation=req.confirmation,
+                native_capture=native_capture,
             )
             result = _submit_confirmed_manual_command(
                 command_claim,
@@ -12195,6 +12268,8 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
     with _tracer.start_as_current_span("trading.order.submit") as span:
         span.set_attribute("trading.venue", venue)
         try:
+            if not req.execute:
+                raise HTTPException(status_code=422, detail="Set execute=true to submit a live order.")
             from analyzing_llm_rationale.trading_control import ConfirmedManualOrderService
 
             execution_service = ConfirmedManualOrderService(
@@ -12208,6 +12283,8 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
                 )
             creds = execution_service.resolve_credentials(user_id=claims["sub"], venue=venue)
             payload = req.model_dump(exclude_none=True, exclude={"venue_credentials"})
+            if venue == "polymarket" and not str(payload.get("client_order_id") or "").strip():
+                raise HTTPException(status_code=422, detail="Polymarket execution requires a stable client_order_id for safe retries.")
             # The same opaque identity is passed to the venue and the account
             # command.  A browser retry can provide one explicitly; otherwise
             # this request receives a unique server-generated identity.
@@ -12226,6 +12303,8 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
                 preview=preview,
                 guardrails=guardrail_snapshot,
                 authority_ref=f"direct-{payload['client_order_id']}",
+                credentials=creds,
+                confirmation=str(payload.get("confirmation") or ""),
             )
             result = _submit_confirmed_manual_command(
                 command_claim,

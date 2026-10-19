@@ -10658,6 +10658,24 @@ function _trResetPreview() {
   document.getElementById('trConfirmRow').hidden = true;
   const c = document.getElementById('trConfirm'); if (c) c.value = '';
 }
+function _trRequestKey(body) {
+  const draft = { ...body };
+  delete draft.execute; delete draft.confirmation; delete draft.client_order_id;
+  return 'foresea_pending_trade:' + JSON.stringify(draft);
+}
+function _trRequestId(body) {
+  const key = _trRequestKey(body);
+  let requestId = sessionStorage.getItem(key);
+  if (!requestId) {
+    requestId = 'foresea-manual-' + crypto.randomUUID();
+    sessionStorage.setItem(key, requestId);
+  }
+  return requestId;
+}
+function _trCompleteRequest(body) {
+  try { sessionStorage.removeItem(_trRequestKey(body)); } catch (_) { /* Retaining an ID is safe. */ }
+}
+let _trSubmitInFlight = false;
 function _tradeBody() {
   const platform = document.getElementById('trPlatform').value;
   const body = {
@@ -10673,6 +10691,7 @@ function _tradeBody() {
   } else {
     const id = document.getElementById('trPolyToken').value.trim();
     if (/^\d+$/.test(id)) body.token_id = id; else body.slug = id;
+    body.time_in_force = 'FAK';
   }
   return body;
 }
@@ -10690,6 +10709,7 @@ async function previewTrade() {
   const body = _tradeBody();
   if (!_validTradeInputs(body)) return;
   try {
+    body.client_order_id = _trRequestId(body);
     const r = await fetch('/trading/preview', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -10713,6 +10733,7 @@ async function previewTrade() {
 }
 
 async function submitTrade() {
+  if (_trSubmitInFlight) return;
   _trError('');
   const confirmation = document.getElementById('trConfirm').value;
   if (confirmation !== 'PLACE REAL ORDER') { _trError('Type PLACE REAL ORDER exactly to confirm.'); return; }
@@ -10720,7 +10741,9 @@ async function submitTrade() {
   if (!_validTradeInputs(body)) return;
   body.execute = true;
   body.confirmation = confirmation;
+  _trSubmitInFlight = true;
   try {
+    body.client_order_id = _trRequestId(body);
     const r = await fetch('/trading/orders', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -10728,11 +10751,24 @@ async function submitTrade() {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { _trError(d.detail || 'Order failed.'); return; }
+    const ack = d.venue_response?.acknowledgement;
+    if (ack?.acknowledged !== true && ack?.confirmed_rejection !== true) {
+      _trError('Order outcome is unknown. Check your orders before retrying.');
+      return;
+    }
+    _trCompleteRequest(body);
+    document.getElementById('trConfirm').value = '';
+    if (d.venue_response?.acknowledgement?.confirmed_rejection === true) {
+      _trError('The venue rejected this order. No accepted order was confirmed.');
+      return;
+    }
     document.getElementById('trPreview').innerHTML =
       `<div class="ui-icon-label" style="padding:8px 10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;color:#15803d">Order submitted ${uiIcon('check')}</div>`;
     document.getElementById('trConfirmRow').hidden = true;
   } catch (e) {
     _trError('Could not reach Foresea: ' + e.message);
+  } finally {
+    _trSubmitInFlight = false;
   }
 }
 
