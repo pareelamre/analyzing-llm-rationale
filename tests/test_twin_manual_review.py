@@ -1,4 +1,5 @@
 """Review regressions for native manual authority, migration and cleanup."""
+import importlib.util
 import os
 import socket
 import unittest
@@ -23,6 +24,7 @@ from tests import test_twin_native_capture as fixtures
 NOW = fixtures.NOW
 
 
+@unittest.skipUnless(importlib.util.find_spec('py_clob_client_v2'), 'optional trading SDK absent')
 class ManualReviewTests(unittest.TestCase):
     def setUp(self):
         self.real_connect = socket.socket.connect
