@@ -32,13 +32,31 @@ contains no credential. The twin remains in shadow mode with zero live capital.
    an isolated environment before any shadow collection.
 
 The existing private worker can load this bundle, but this directory is **not
-yet a standalone distributable twin**. The current research-to-maintenance
-HTTP client still requires HTTPS and Google-issued identity, and the VPS
-Compose stack does not start the private twin roles. A self-hosted release
-needs a local authenticated gateway, worker packaging, durable SQL restart
-tests, and a bounded shadow trial. No deployment or model request is part of
-this change. Live order submission remains gated by T21/T22 and an explicit
-owner mandate; installing this config does not grant trading authority.
+yet a standalone distributable twin**. Local worker transport uses separate
+maintenance, research-dispatch, and research-gateway secrets over loopback or
+HTTPS; see the VPS runbook. The VPS Compose stack does not start the private
+twin roles. A self-hosted release still needs worker packaging, durable SQL
+restart tests, and a bounded shadow trial. No deployment or model request is
+part of this change. Live order submission remains gated by T21/T22 and an
+explicit owner mandate; installing this config does not grant trading authority.
+
+The operator-configured shadow worker reads Foresea's bundled, dated
+`static/track_record_live.json`
+to prioritize already discovered markets from domains whose published skill
+interval has a positive lower bound. It uses the same question-domain tagger as
+the published track record. The report's declared generation time must predate
+the decision and be at most seven days old; otherwise discovery order is unchanged. A changed order
+stores the artifact hash with the market capture. The hash identifies the
+bytes used; it is not a producer signature or an archive. Updating this
+bundled report requires a new build. This is a research-allocation prior,
+not proof that the BYOM model is calibrated: live sizing still requires the
+twin's own prospective, audit-grade resolved forecasts. The selected domain
+mix can affect later evaluation, so compare calibration within domain and
+selection cohort before promoting any live strategy. The publisher's domain
+intervals are not corrected for comparing multiple domains; treat this as a
+cheap search heuristic, not evidence of transferable edge. The bundled file
+is trusted as part of the operator-owned code image; a signed or otherwise
+attested report is still needed before using the prior in a live release.
 
 If the two worker roles load different model or budget settings, the stored
 research configuration ID differs and the research operation degrades before
