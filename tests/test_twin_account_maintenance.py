@@ -109,7 +109,8 @@ class NativeAccountMaintenanceTests(unittest.TestCase):
         result = _maintenance_operation(self.jobs, None, self.job, account_maintenance=self.operation())
         snapshot = self.snapshots.load(self.scope.id)
         self.assertEqual(result, {'status':'complete', 'account_generation':1, 'account_epoch':1,
-                                 'blocks_new_exposure':False, 'orders_observed':1, 'fills_observed':1})
+                                 'blocks_new_exposure':True, 'ledger_reconciled':False,
+                                 'orders_observed':1, 'fills_observed':1})
         self.assertEqual(snapshot.account_epoch, 1)
         self.assertEqual(snapshot.available_cash, Decimal('9'))
         self.assertEqual(self.store.projection(self.scope.id), before)

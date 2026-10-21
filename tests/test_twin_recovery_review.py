@@ -232,12 +232,24 @@ class AccountEpochAndSQLiteTests(unittest.TestCase):
             pass
 
     def test_snapshot_epoch_is_explicit_and_legacy_rows_remain_unbound(self):
+        from analyzing_llm_rationale.twin.account_journal import (
+            DatastoreAccountJournal,
+            JournalOpening,
+        )
+        from analyzing_llm_rationale.twin.store import DatastoreTwinStore
+
         case = atomic.AtomicLifecycleTests(methodName='runTest')
         self.addCleanup(case.doCleanups)
-        _, _, intent, command, _ = case.pair('memory')
+        memory_store, _, intent, command, _ = case.pair('memory')
         current = account_snapshot(command)
         client = Client(':memory:')
         self.addCleanup(client.close)
+        scope = memory_store.account_scope(command.scope_id)
+        registered = DatastoreTwinStore(client)
+        registered.register_account(scope, venue_available_cash=Decimal('9'), loss_limit=Decimal('10'))
+        journal = DatastoreAccountJournal(registered, clock=lambda: NOW).initialize(
+            JournalOpening(scope, NOW, Decimal('10'), (), Decimal('0'), '1'*64))
+        current = replace(current, journal_revision=journal.revision, journal_fingerprint=journal.fingerprint)
         for repo in (InMemoryAccountSnapshotStore(), DatastoreAccountSnapshotStore(client)):
             repo.save(current)
             restored = repo.load(command.scope_id)

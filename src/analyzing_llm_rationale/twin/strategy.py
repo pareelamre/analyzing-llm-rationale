@@ -577,6 +577,7 @@ class ForeseaEdgeStrategy:
             state.account_snapshot.scope_id != scope.id
             or state.account_projection.scope_id != scope.id
             or state.account_projection.account_epoch != scope.account_epoch
+            or scope.environment == 'live' and state.account_snapshot.account_epoch != scope.account_epoch
         ):
             steps.append(StrategyStep("reconcile", "hold", "account_scope_mismatch"))
             return self._finish_with_scope(scope.id, key, "HOLD", "account_scope_mismatch", steps, now, span)

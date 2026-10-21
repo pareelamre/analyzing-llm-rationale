@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime
 from decimal import Decimal
 from hashlib import sha256
@@ -16,6 +17,7 @@ from opentelemetry.trace import Status, StatusCode
 from .account import (
     AccountHolding,
     AccountSnapshot,
+    _account_sum,
     _fees_paid,
     _position_holdings,
     _settlements_are_final,
@@ -49,6 +51,12 @@ def _json_default(value: Any) -> str:
 
 def _validate_snapshot(snapshot: AccountSnapshot) -> None:
     """Recheck persisted financial invariants before accepting account authority."""
+    if (snapshot.journal_revision is not None or snapshot.journal_fingerprint is not None) and (
+        type(snapshot.journal_revision) is not int or snapshot.journal_revision < 1
+        or not isinstance(snapshot.journal_fingerprint, str)
+        or re.fullmatch('[0-9a-f]{64}', snapshot.journal_fingerprint) is None
+    ):
+        raise AccountSnapshotStoreError('account snapshot journal provenance is invalid')
     if snapshot.account_epoch is not None and (type(snapshot.account_epoch) is not int or snapshot.account_epoch < 1):
         raise AccountSnapshotStoreError('account snapshot epoch is invalid')
     if snapshot.completeness is not Completeness.COMPLETE:
@@ -73,8 +81,8 @@ def _validate_snapshot(snapshot: AccountSnapshot) -> None:
     if error or fee_error or _settlements_are_final(snapshot.settlements):
         raise AccountSnapshotStoreError("account snapshot source economics are invalid")
     if (holdings != snapshot.holdings or fees != snapshot.fees_paid
-            or sum((h.basis for h in holdings), Decimal("0")) != snapshot.position_basis
-            or snapshot.settled_cash + sum((h.liquidation_value for h in holdings), Decimal("0"))
+            or _account_sum(h.basis for h in holdings) != snapshot.position_basis
+            or _account_sum((snapshot.settled_cash, _account_sum(h.liquidation_value for h in holdings)))
             != snapshot.conservative_liquidation_value
             or bool(snapshot.external_activity_ids or snapshot.drift_reasons) != snapshot.divergence):
         raise AccountSnapshotStoreError("account snapshot derived economics are inconsistent")
@@ -86,6 +94,8 @@ def _payload(snapshot: AccountSnapshot) -> dict[str, Any]:
         raise AccountSnapshotStoreError("only complete account snapshots may be persisted")
     return {
         **({'account_epoch':snapshot.account_epoch} if snapshot.account_epoch is not None else {}),
+        **({'journal_revision': snapshot.journal_revision, 'journal_fingerprint': snapshot.journal_fingerprint}
+           if snapshot.journal_revision is not None else {}),
         "scope_id": snapshot.scope_id,
         "generation": snapshot.generation,
         "received_at": snapshot.received_at.isoformat(),
@@ -162,6 +172,8 @@ def _restore(payload: Mapping[str, Any]) -> AccountSnapshot:
             settlements=collections["settlements"], external_activity_ids=tuple(str(item) for item in payload["external_activity_ids"]),
             divergence=bool(payload["divergence"]), drift_reasons=tuple(str(item) for item in payload["drift_reasons"]),
             account_epoch=payload.get('account_epoch'),
+            journal_revision=payload.get('journal_revision'),
+            journal_fingerprint=payload.get('journal_fingerprint'),
         )
         _validate_snapshot(snapshot)
         return snapshot
@@ -225,9 +237,31 @@ class DatastoreAccountSnapshotStore:
                 raise AccountSnapshotStoreError("stored snapshot identity or fingerprint mismatch")
             if entity.get("generation") != snapshot.generation:
                 raise AccountSnapshotStoreError("stored snapshot generation mismatch")
-            return snapshot
+            return self._current_journal_view(snapshot)
         except (KeyError, TypeError, ValueError, AccountSnapshotStoreError) as exc:
             raise AccountSnapshotStoreError("stored account snapshot cannot be read") from exc
+
+    def _current_journal_view(self, snapshot: AccountSnapshot) -> AccountSnapshot:
+        if snapshot.journal_revision is None:
+            return snapshot  # Legacy remains readable, but blocks_new_exposure is true.
+        try:
+            from .account_journal import DatastoreAccountJournal, compare_journal_snapshot
+            from .store import DatastoreTwinStore
+
+            store = DatastoreTwinStore(self._client)
+            scope = store.account_scope(snapshot.scope_id)
+            if scope.environment == 'shadow' and scope.venue == 'shadow':
+                return snapshot  # Simulator's own economic event digest, never native authority.
+            journal = DatastoreAccountJournal(store).load(scope)
+            if (journal is not None and snapshot.account_epoch == scope.account_epoch
+                    and journal.revision == snapshot.journal_revision
+                    and journal.fingerprint == snapshot.journal_fingerprint):
+                return compare_journal_snapshot(snapshot, journal)
+        # aqg: top-level boundary -- private journal errors only produce a fixed blocking view
+        except Exception:
+            pass
+        return replace(snapshot, divergence=True,
+            drift_reasons=tuple(sorted(set((*snapshot.drift_reasons, 'journal_authority_changed')))))
 
     @tracer.start_as_current_span("twin.account_snapshot.persist", record_exception=False, set_status_on_exception=False)
     def save(self, snapshot: AccountSnapshot, *, validate: Callable[[], None] | None = None) -> AccountSnapshot:

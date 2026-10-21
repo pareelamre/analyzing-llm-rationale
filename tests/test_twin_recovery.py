@@ -94,6 +94,7 @@ def account_snapshot(command, *, orders=(), fills=(), completeness=Completeness.
         Decimal("9"), Decimal("10"), Decimal("1"), Decimal("10"), (),
         Decimal("0"), Decimal("0"), Decimal("10"), (), tuple(orders), tuple(fills), (),
         (), divergence, ("external activity",) if divergence else (), account_epoch=1,
+        journal_revision=1, journal_fingerprint='0'*64,
     )
 
 
