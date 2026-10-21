@@ -88,7 +88,7 @@ def account_snapshot(*, cash: Decimal = Decimal("100"), at: datetime = NOW) -> A
     return AccountSnapshot(
         scope().id, 1, at - timedelta(seconds=1), Completeness.COMPLETE,
         cash, cash, Decimal("0"), cash, (), Decimal("0"), Decimal("0"), cash,
-        (), (), (), (), (), False, (),
+        (), (), (), (), (), False, (), journal_revision=1, journal_fingerprint='0'*64,
     )
 
 

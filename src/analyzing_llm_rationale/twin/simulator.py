@@ -544,6 +544,12 @@ class ShadowVenue:
             conservative_liquidation_value=self._cash + sum((item.liquidation_value for item in holdings), _ZERO),
             positions=positions, orders=orders, fills=tuple(self._fills), settlements=tuple(self._settlements),
             external_activity_ids=(), divergence=False, drift_reasons=(),
+            # This digest attests only this network-free simulator's economic state.
+            journal_revision=self._generation_base + len(self._events) + 1,
+            journal_fingerprint=sha256(json.dumps(
+                {'cash':str(self._cash), 'positions':positions, 'orders':orders,
+                 'fills':self._fills, 'settlements':self._settlements},
+                sort_keys=True, default=str, separators=(',', ':')).encode()).hexdigest(),
         )
 
     def events(self) -> tuple[ShadowEvent, ...]:

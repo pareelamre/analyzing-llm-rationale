@@ -6,9 +6,10 @@ that inventory is empty.  It retains the previous complete generation instead.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, localcontext
 from typing import Any, Mapping, Optional, Sequence
 
 from opentelemetry import metrics, trace
@@ -70,11 +71,22 @@ class AccountSnapshot:
     drift_reasons: tuple[str, ...]
     # Legacy snapshots remain readable but cannot prove recovery absence.
     account_epoch: Optional[int] = None
+    journal_revision: Optional[int] = None
+    journal_fingerprint: Optional[str] = None
 
     @property
     def blocks_new_exposure(self) -> bool:
         """A reconciler must pause entries until any discrepancy is explained."""
-        return self.divergence
+        return (self.divergence or type(self.journal_revision) is not int or self.journal_revision < 1
+                or not isinstance(self.journal_fingerprint, str)
+                or re.fullmatch('[0-9a-f]{64}', self.journal_fingerprint) is None)
+
+
+def _account_sum(values) -> Decimal:
+    """Keep supported fixed-point venue/journal aggregates out of global context rounding."""
+    with localcontext() as context:
+        context.prec = 80
+        return sum(values, Decimal('0'))
 
 
 @dataclass(frozen=True)
@@ -155,7 +167,9 @@ def _position_holdings(
         basis = _first_decimal(row, ("basis", "cost_basis", "cost_basis_dollars"))
         if basis is None and quantity is not None:
             price = _first_decimal(row, ("average_price", "avg_price", "avgPrice"))
-            basis = abs(quantity) * price if price is not None else None
+            with localcontext() as context:
+                context.prec = 80
+                basis = abs(quantity) * price if price is not None else None
         liquidation = _first_decimal(
             row,
             ("conservative_liquidation_value", "liquidation_value", "bid_value"),
@@ -175,7 +189,7 @@ def _fees_paid(
             fee = _first_decimal(row, ("fee", "fee_cost", "fee_cost_dollars", "fees_paid"))
             if fee is None:
                 return None, f"{label}_fee_unavailable"
-            fees += fee
+            fees = _account_sum((fees, fee))
     return fees, None
 
 
@@ -417,10 +431,9 @@ def synchronize_account(
         local_holdings=local_holdings,
         tolerance=comparison_tolerance,
     )
-    position_basis = sum((holding.basis for holding in holdings), Decimal("0"))
-    conservative_liquidation_value = settled + sum(
-        (holding.liquidation_value for holding in holdings), Decimal("0")
-    )
+    position_basis = _account_sum(holding.basis for holding in holdings)
+    conservative_liquidation_value = _account_sum((settled, _account_sum(
+        holding.liquidation_value for holding in holdings)))
 
     external: list[str] = []
     for order in deduped["orders"]:

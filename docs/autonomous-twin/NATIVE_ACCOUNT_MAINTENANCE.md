@@ -72,6 +72,74 @@ Native OTel is reused without a new exporter, connector or paid service.
 
 ## Verification and remaining work
 
+### Economic journal comparison
+
+Native capture now compares against `DatastoreAccountJournal` under the same
+account root/client. An immutable, explicitly supplied `JournalOpening` pins the
+registered scope/epoch, opening cash, inventory/basis, cumulative fees and a private
+source digest. Captured balances never bootstrap or repair the journal. Until a
+trusted source procedure initializes it, captures persist `journal_uninitialized`
+drift and block new exposure.
+
+Canonical `JournalFact` records carry exact cash and per-instrument quantity/basis
+deltas, actual fees and a source digest. Imports append every source revision,
+require contiguous versions and reject conflicting duplicate versions. Replay uses
+only the latest version, so a correction replaces a payout rather than crediting
+it twice. Provisional settlements retain cash/inventory and block exposure. External
+cash flows are explicit facts and are excluded from realized strategy P&L. Facts
+cannot predate the approved opening or be later than the capture being compared.
+Negative cash, invalid basis, malformed decimals and invalid settlement consumption
+fail closed. No balancing event is synthesized from an observed discrepancy.
+
+Complete captures compare total cash (including venue-held cash), inventory,
+per-instrument basis and cumulative fees. The snapshot records the exact journal
+revision and fingerprint even when it reports drift. Missing journals, pending
+settlements or mismatches block exposure. Journal reads participate in the snapshot
+transaction's authority checks, including initialization/import during a capture.
+Reserved cash is a spending restriction rather than an expense. Journal imports
+advance the account revision to invalidate already evaluated risk preconditions;
+cash amounts, reservation totals, orders and loss limits remain unchanged.
+Snapshot reads recheck the current native journal revision/fingerprint and economics;
+changed, missing or corrupt journal authority produces a blocking view even for a
+previously reconciled snapshot. Legacy snapshots remain readable but cannot authorize
+exposure without journal provenance. The network-free shadow simulator supplies its
+own economic-event digest, accepted only within the existing shadow account scope;
+it is not native receipt or live-account authority.
+
+Facts use a stable source sequence to disambiguate equal timestamps; ambiguous
+ordering is rejected. Corrections preserve their source time and sequence. A higher
+version may explicitly void a fact with zero economics, preserving its history.
+Rebate/reward income is a separate verified cash fact included in strategy P&L,
+not an external capital contribution. Standalone fee facts are restricted to actual
+fees represented by the venue's captured fill/settlement fee totals; other fee
+collections require a source adapter before reconciliation can succeed. Imports
+reject future source timestamps against an injected trusted server clock, with no
+implicit clock-skew allowance. If capture time regresses behind a journal fact,
+the captured snapshot persists blocking drift rather than advertising readiness.
+
+This is an independent economic comparison, **not** a native receipt verifier:
+a SHA256 source reference alone proves neither an upstream receipt nor owner approval.
+Only trusted server source adapters/operator procedures may initialize or import
+verified facts. No public endpoint, tool or worker task accepts them. Native source
+adapters still need to verify full receipts, cash flows, maker legs, actual fees,
+settlement finality/corrections and venue-specific netting before posting facts.
+No aggregate settlement is assigned to a command. Automatic reservation release
+and capacity refresh remain separate financial integration work.
+Source adapters must explicitly verify that opening and captured cumulative fee
+totals cover the same full history, that basis deltas use the venue's accounting
+method, and that source times match the declared server clock bounds. The journal
+reconciles cash flow and inventory, not the allocation between available/reserved
+or pending/settled cash. Complete native order/balance reads preserve that split;
+the existing risk gate rejects a projection whose available cash differs from the
+snapshot, and this operation never refreshes capacity. Full order/collateral and
+execution integration remain release requirements.
+
+The journal retains at most4096 source versions and900,000 encoded bytes per epoch;
+reaching either bound pauses import rather than pruning unaccounted history. Exact
+Decimal comparisons are used until venue precision is explicitly verified. These
+bounds and source-adapter requirements are release gates, not production scalability
+or live-readiness claims. Private journal bodies must never be public artifacts.
+
 The SQLite-backed worker/capture regressions cover both venues, epoch changes,
 expired/refenced jobs, scope/connection mismatch, local capacity changes, retained
 prior snapshots, middle-read economic changes, capture deadlines, truncated local

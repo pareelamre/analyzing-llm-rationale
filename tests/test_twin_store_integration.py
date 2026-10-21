@@ -64,6 +64,7 @@ from analyzing_llm_rationale.twin.worker import (
     WorkerJobKind,
     WorkerJobStatus,
 )
+from tests import test_twin_account_journal as account_journal
 from tests import test_twin_account_maintenance as native_account_maintenance
 from tests import test_twin_native_lifecycle as native_lifecycle
 from tests import test_twin_native_pause as native_pause
@@ -925,6 +926,57 @@ class DatastorePolymarketNativeLifecycleTests(
 @unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
 class DatastoreNativeRecoveryPauseTests(native_pause.NativeRecoveryPauseTests):
     fixture_type = DatastoreNativeLifecycleTests
+
+
+@unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
+class DatastoreAccountJournalTests(account_journal.AccountJournalTests):
+    fixture_type = DatastoreNativeAccountMaintenanceTests
+
+    def test_committed_journal_replacement_aborts_snapshot_commit(self):
+        from google.cloud import datastore
+
+        from analyzing_llm_rationale.twin.account_journal import DatastoreAccountJournal
+        from analyzing_llm_rationale.twin.worker import WorkerDegraded
+
+        journal = self.seed_matching_native_journal()
+        other_client = datastore.Client(project='foresea-twin-test', namespace=self._case.namespace)
+        other = DatastoreAccountJournal(DatastoreTwinStore(other_client))
+        saved, release = Event(), Event()
+        original = self.snapshots.save
+
+        def held_save(snapshot, *, validate):
+            calls = 0
+            def guard():
+                nonlocal calls
+                validate()
+                calls += 1
+                if calls == 2:
+                    saved.set()
+                    if not release.wait(15):
+                        raise AssertionError('journal race did not release snapshot transaction')
+            return original(snapshot, validate=guard)
+
+        with mock.patch.object(self.snapshots, 'save', side_effect=held_save), ThreadPoolExecutor(2) as pool:
+            stale = pool.submit(self.operation(), self.job)
+            try:
+                self.assertTrue(saved.wait(10))
+                newer = pool.submit(other.append, self.scope,
+                    (self.fact('fee', kind='fee', cash_delta=Decimal('-.01'), positions=(), fee=Decimal('.01')),),
+                    expected_revision=journal.revision)
+                replacement = newer.result(timeout=10)
+                self.assertEqual(replacement.revision, journal.revision+1)
+            finally:
+                release.set()
+            with self.assertRaises(WorkerDegraded):
+                stale.result(timeout=15)
+        self.assertIsNone(self.snapshots.load(self.scope.id))
+        self.assertEqual(self.journal.load(self.scope), replacement)
+        print('account_journal_commit_order', self._case.venue, 'replacement_before_release', 'old_aborted')
+
+
+@unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
+class DatastorePolymarketAccountJournalTests(DatastoreAccountJournalTests):
+    fixture_type = DatastorePolymarketAccountMaintenanceTests
 
 
 if __name__ == "__main__":

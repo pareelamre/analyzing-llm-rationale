@@ -15,6 +15,7 @@ from typing import Callable
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
 
+from .account_journal import DatastoreAccountJournal, compare_journal_snapshot
 from .account_store import DatastoreAccountSnapshotStore
 from .models import AccountScope
 from .reconcile import AccountReadAborted, synchronize_venue_account
@@ -57,6 +58,7 @@ class NativeAccountMaintenance:
         self.store, self.snapshots, self.jobs = store, snapshots, jobs
         self.resolve_plan, self.clock = resolve_plan, clock
         self.max_capture_seconds = max_capture_seconds
+        self.journals = DatastoreAccountJournal(store, clock=clock)
 
     @tracer.start_as_current_span('twin.account.maintenance', record_exception=False, set_status_on_exception=False)
     def __call__(self, job: WorkerJob) -> dict[str, object]:
@@ -79,6 +81,7 @@ class NativeAccountMaintenance:
             if len(commands) >= 200:
                 raise WorkerDegraded('native_account_command_history_truncated')
             prior = self.snapshots.load(scope.id)
+            journal = self.journals.load(scope)
             generation = 1 if prior is None else prior.generation+1
             deadline = min(job.deadline, started+timedelta(seconds=self.max_capture_seconds))
 
@@ -95,6 +98,7 @@ class NativeAccountMaintenance:
                 check_processing()
                 if (self.store.account_scope(scope.id) != scope
                         or self.store.projection(scope.id) != projection
+                        or self.journals.load(scope) != journal
                         or self.store.commands(scope.id, limit=200) != commands):
                     raise WorkerDegraded('native_account_authority_changed')
 
@@ -124,12 +128,14 @@ class NativeAccountMaintenance:
                 raise WorkerDegraded('native_account_read_incomplete')
             # This callback runs before and after the write inside the snapshot
             # transaction. Its reads participate in Google commit conflict checks.
-            persisted = self.snapshots.save(result.snapshot, validate=validate)
-            if persisted != result.snapshot:
+            compared = compare_journal_snapshot(result.snapshot, journal)
+            persisted = self.snapshots.save(compared, validate=validate)
+            if persisted != compared:
                 raise WorkerDegraded('native_account_generation_superseded')
             response = {'status':'complete', 'account_generation':persisted.generation,
                         'account_epoch':persisted.account_epoch,
                         'blocks_new_exposure':persisted.blocks_new_exposure,
+                        'ledger_reconciled':journal is not None and not persisted.blocks_new_exposure,
                         'orders_observed':len(persisted.orders), 'fills_observed':len(persisted.fills)}
             outcome = 'drift' if persisted.blocks_new_exposure else 'complete'
             operations.add(1, {'venue':scope.venue, 'outcome':outcome})

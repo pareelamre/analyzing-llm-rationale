@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "native_order_fill_recovery_merged_settlement_account_ledger_and_release_pending",
+  "implementation_status": "native_recovery_merged_account_journal_reviewed_native_sources_and_release_pending",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
-  "next_task": "T15",
+  "next_task": "T06",
   "live_authorized": false,
   "signal_screen": {
     "date": "2026-10-19",
@@ -256,8 +256,8 @@
         "T04",
         "T05"
       ],
-      "status": "complete",
-      "substep": "complete paginated Kalshi and Polymarket account reads, stable generation fences, cash reservations, executable liquidation, settlement correction identity, and fail-closed durable snapshot retention are implemented",
+      "status": "in_progress",
+      "substep": "Complete account captures and canonical economic-journal comparison implemented; trusted native receipt/cash-flow imports and complete collateral/capacity integration remain",
       "branch": "codex/autonomous-twin-t06-final",
       "commit": "d0cf0a80c",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/600",
@@ -268,7 +268,8 @@
         "git diff --check (pass)",
         "py -m graphify update . (pass)",
         "2026-10-20 supplemental: explicit optional account-epoch capture/persistence; legacy/missing epoch cannot prove recovery absence; current epoch and old-epoch absence controls verified in memory/SQLite/emulator. Runtime native maintenance still tracked under T15.",
-        "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking."
+        "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking.",
+        "2026-10-21 task reopened against its local-projection comparison requirement: durable canonical economic replay now exists and native captures compare cash, inventory, basis and fees; source verification/import and owner opening registration are still absent. Initial full3249 pass, post-review focused203 pass, emulator54 pass; final full/CI pending. No balancing entries, money changes, activation or cloud/R2 writes."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/account.py",
@@ -494,7 +495,7 @@
         "T13"
       ],
       "status": "in_progress",
-      "substep": "Native manual direct/saved-run preparation wired behind disabled opt-in; concrete lifecycle maintenance and private worker selection pending",
+      "substep": "Native direct/saved-run preparation and order/fill recovery source merged; current native account proof, trusted source imports, settlement/capacity and default worker resolver/send integration remain behind disabled live opt-in",
       "branch": "codex/autonomous-durable-submission",
       "commit": "3202f9bf",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/544",
@@ -557,7 +558,7 @@
         "T14"
       ],
       "status": "in_progress",
-      "substep": "PR698 merged; explicit durable native recovery pause locally verified; native settlement/full account-ledger reconciliation remains",
+      "substep": "Canonical account journal and native economic comparison locally verified/reviewed; PR delivery pending; native receipt/source imports and settlement remain",
       "branch": "codex/autonomous-lifecycle-recovery",
       "commit": "ceecca42",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/563",
@@ -580,7 +581,8 @@
         "2026-10-21 native history: scoped8-page/job checkpoints resume25-page captures across jobs/restarts;1000 associated Polymarket trades use10 batched market reads. The existing authenticated fills operation and required funder filter are reused. Both history-fence races pass on the real Datastore emulator (initial234 tests). Rejected complete cohorts refresh; unlisted owned trades cannot release cancellation cash. Multi-maker notional and explicit-fee regressions pass.119 focused tests/Ruff pass after economics checks; final full suite pending. No venue/cloud write or activation.",
         "2026-10-21 final native recovery software verification:3169 tests pass, no skips; Ruff src/tests, source release verifier and expanded private-history OTel export pass. History continuation and batch-read review findings addressed; actual owner venue record agreement remains an explicit production gate. PR delivery pending; no deployment or live activation, no new cloud resources, existing R2 configuration unchanged.",
         "2026-10-21 PR698 merged as fa0259f05df45c131f27bff11acfa343bd1bc1f9 after CI39526241633 green (unit3169 run/196 skips; emulator143 pass). Local3169 pass with no skips. All19 changed blobs match tested0382651a1; published data preserved. Merge contains [skip ci], no main-merge workflows attached, Cloud Run created/ready revision00961-jnh unchanged. Owned emulator12016/46812 stopped. No activation, resource creation or venue order; existing R2 configuration unchanged.",
-        "2026-10-21 native recovery runtime maps absent/degraded/malformed adapters and exhausted follow-ups to durable PAUSED, retaining holds and duplicate suppression. SQL and actual Datastore emulator boundary tests pass; full3183 pass with no skips, Ruff and source release contract pass. No cloud, R2 or venue writes."
+        "2026-10-21 native recovery runtime maps absent/degraded/malformed adapters and exhausted follow-ups to durable PAUSED, retaining holds and duplicate suppression. SQL and actual Datastore emulator boundary tests pass; full3183 pass with no skips, Ruff and source release contract pass. No cloud, R2 or venue writes.",
+        "2026-10-21 PR699 merged as96aa4bbef with [skip ci]; CI39603862956 passed (unit3183 run/203 skipped, emulator150 pass); all6 blobs match tested head, published data preserved, Cloud Run00961-jnh unchanged and PR queue empty."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/recovery.py",
@@ -621,7 +623,7 @@
         "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
         "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
       ],
-      "handoff": "Deliver the native pause follow-up PR after CI and merge with [skip ci]. Then implement native settlement/full account ledger and account-wide history, remaining worker/execution integration. Never assign aggregate redemption to an arbitrary order. Reuse account normalization and lifecycle reducers. Use a NEW construction ledger and one audit for that next logical financial change. PR698 is delivered: do not repeat its audit or CI. Actual owner venue data, production connection/IAM/cadence, forward evidence and finite mandate remain release gates. No new spend/deployment, no live orders; existing R2 configuration unchanged."
+      "handoff": "Finish delivery of the account journal change, then execute T06 native source imports and verified opening registration before T15 settlement allocation/capacity. Reuse native lifecycle fill validation and private history. Source hashes are not receipt verification or owner approval; do not bootstrap or balance from observed cash. Preserve all root revision fences and blockers. PR698/699 delivered, aud_Aniijv3HB0 completed with 13 disposition rows; do not repeat the same audit. No new spend/deployment/live orders; R2 unchanged. Actual owner data, production wiring/IAM/cadence, forward evidence and finite expiring mandate remain release gates."
     },
     {
       "id": "T16",
@@ -1234,7 +1236,7 @@
   "native_recovery_pause": {
     "date": "2026-10-21",
     "branch": "codex/twin-native-ledger",
-    "status": "local_verified_pr_delivery_pending",
+    "status": "merged",
     "audit_id": "aud_c81nwJMleH",
     "audit_scope": "Same logical native recovery V4/f6 finite-outcome follow-up; no new panel",
     "full_tests_passed": 3183,
@@ -1252,6 +1254,75 @@
       "tests/test_twin_native_pause.py",
       "tests/test_twin_store_integration.py",
       "docs/autonomous-twin/NATIVE_LIFECYCLE.md"
-    ]
+    ],
+    "pr": 699,
+    "merged_commit": "96aa4bbefe37158473171cf750e098c5ab1b1d77",
+    "delivered_head": "c86b2188d16142f70d74bf30cd8cfc77e0c748d3",
+    "ci_run_id": 39603862956,
+    "ci_unit_tests_run": 3183,
+    "ci_unit_tests_skipped": 203,
+    "ci_emulator_tests_passed": 150,
+    "published_data_preserved": true,
+    "matching_merged_blobs": 6,
+    "main_push_workflows_skipped": true,
+    "cloud_run_revision": "analyzing-llm-rationale-00961-jnh"
+  },
+  "account_journal": {
+    "date": "2026-10-21",
+    "branch": "codex/twin-native-settlement",
+    "status": "locally_verified_review_remediated_pr_delivery_pending",
+    "source_reference_is_receipt_verification": false,
+    "immutable_explicit_opening": true,
+    "epoch_bound_private_storage": true,
+    "corrective_source_versions_retained": true,
+    "pending_settlement_credits_cash": false,
+    "native_missing_journal_blocks_exposure": true,
+    "cash_quantity_basis_and_fee_comparison": true,
+    "native_snapshot_commit_fences_journal_revision": true,
+    "focused_tests_passed": 76,
+    "emulator_tests_passed": 34,
+    "two_client_commit_races_passed": [
+      "kalshi",
+      "polymarket"
+    ],
+    "production_commit_order_proven": false,
+    "native_source_importers_implemented": false,
+    "capacity_or_reservation_writes_added": false,
+    "venue_or_cloud_writes_performed": false,
+    "evidence": [
+      "src/analyzing_llm_rationale/twin/account_journal.py",
+      "tests/test_twin_account_journal.py",
+      "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE.md"
+    ],
+    "audit_id": "aud_Aniijv3HB0",
+    "audit_status": "completed",
+    "audit_usable_voices": 5,
+    "audit_vendors": 4,
+    "audit_findings": 15,
+    "consolidated_findings": 13,
+    "findings_accepted": 11,
+    "findings_rejected": 2,
+    "review_table": "docs/autonomous-twin/ACCOUNT_JOURNAL_REVIEW.md",
+    "initial_full_tests_passed": 3249,
+    "focused_post_review_tests_passed": 203,
+    "epoch_fixture_tests_passed": 15,
+    "targeted_emulator_post_review_tests_passed": 54,
+    "legacy_missing_provenance_blocks_exposure": true,
+    "snapshot_reads_check_current_native_journal": true,
+    "journal_writes_advance_account_revision": true,
+    "journal_writes_change_cash_loss_or_reservation_amounts": false,
+    "equal_timestamp_facts_require_stable_source_sequence": true,
+    "voided_corrective_versions_supported": true,
+    "strategy_income_is_not_external_capital": true,
+    "future_import_rejected_by_trusted_clock": true,
+    "real_debug_otel_export_verified": true,
+    "source_hash_is_receipt_or_owner_approval": false,
+    "full_collateral_capacity_reconciliation_complete": false,
+    "full_tests_passed": 3293,
+    "full_test_skips": 0,
+    "ruff": "pass",
+    "repository_release_contract": "pass",
+    "audit_adjudication_status": "code_findings_addressed_source_and_production_gates_open",
+    "release_ready": false
   }
 }

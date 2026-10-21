@@ -39,6 +39,7 @@ def account(*, divergence: bool = False, received_at: datetime | None = None) ->
         conservative_liquidation_value=Decimal("100"), positions=(), orders=(), fills=(), settlements=(),
         external_activity_ids=("manual-order",) if divergence else (), divergence=divergence,
         drift_reasons=("external_activity",) if divergence else (),
+        journal_revision=1, journal_fingerprint='0'*64,
     )
 
 
