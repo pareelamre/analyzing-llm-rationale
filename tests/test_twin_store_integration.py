@@ -66,6 +66,7 @@ from analyzing_llm_rationale.twin.worker import (
 )
 from tests import test_twin_account_maintenance as native_account_maintenance
 from tests import test_twin_native_lifecycle as native_lifecycle
+from tests import test_twin_native_pause as native_pause
 
 
 def _research_in_process(key, reservation_id, result_queue):
@@ -919,6 +920,11 @@ class DatastorePolymarketNativeLifecycleTests(
     DatastoreNativeLifecycleTests, native_lifecycle.PolymarketNativeLifecycleTests,
 ):
     venue = 'polymarket'
+
+
+@unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
+class DatastoreNativeRecoveryPauseTests(native_pause.NativeRecoveryPauseTests):
+    fixture_type = DatastoreNativeLifecycleTests
 
 
 if __name__ == "__main__":

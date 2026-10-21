@@ -101,6 +101,21 @@ most 16 follow-ups per recovery root. Exhausted time/poll budgets return
 `reconciliation_required` with `followup_budget_exhausted=true` and retain exposure.
 Neither a successful read nor an exhausted budget means an open order is complete.
 
+The private maintenance boundary maps unconfigured, degraded, malformed or
+budget-exhausted native recovery to the existing `WorkerPaused` protocol. The
+durable job is `PAUSED`, and duplicate delivery returns that saved outcome without
+rerunning the adapter. Fixed reason identifiers keep private adapter errors out
+of responses. Completed work and pending work with an automatic follow-up retain
+their normal completion semantics; unrelated account/research degradation is not
+remapped. This changes job outcomes, not capital, commands or held exposure.
+
+After correcting the connection/data issue, a trusted maintenance operator can
+enqueue a new bounded recovery job for the same command and authorized epoch.
+Redelivering the paused job does not resume it. Never mint a new order identity,
+change an epoch to force eligibility, clear a financial hold, or repeat order
+submission merely to resume read-only recovery. Reconnected accounts with old
+unresolved authority need the existing owner-reviewed reconciliation procedure.
+
 The existing WorkerJob queue now persists an optional, identity-bound `not_before`
 timestamp. Claim and due scans refuse early delivery. Cloud Tasks receives that
 timestamp as schedule_time; local dispatch leaves future work queued for the next
