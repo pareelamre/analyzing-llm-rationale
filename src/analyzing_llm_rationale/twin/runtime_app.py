@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import socket
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
@@ -715,8 +716,18 @@ def _maintenance_operation(
     """Safe staging operation until venue/account adapters are configured."""
     if job.kind is WorkerJobKind.RECOVERY and 'command_id' in job.payload:
         if native_lifecycle is None:
-            raise WorkerDegraded('native_lifecycle_adapter_unconfigured')
-        return native_lifecycle(job)
+            raise WorkerPaused('native_lifecycle_adapter_unconfigured')
+        try:
+            result = native_lifecycle(job)
+        except WorkerDegraded:
+            raise WorkerPaused('native_lifecycle_unconfirmed') from None
+        if not isinstance(result, Mapping) or result.get('status') not in (
+            'complete', 'pending', 'reconciliation_required',
+        ):
+            raise WorkerPaused('native_lifecycle_result_unconfirmed')
+        if result['status'] == 'reconciliation_required':
+            raise WorkerPaused('native_lifecycle_requires_reconciliation')
+        return dict(result)
     if job.kind is WorkerJobKind.RECOVERY:
         now = datetime.now(timezone.utc)
         stale = jobs.stale(now=now)
