@@ -2,7 +2,8 @@
 
 Only trusted source adapters/operator procedures may initialize/import facts.
 This module does not attest that a source digest is a verified venue receipt.
-There is intentionally no route, tool, task-payload import or snapshot bootstrap.
+No route, tool or task accepts raw journal facts. The separate owner review flow
+may attest a first baseline; there is no automatic snapshot bootstrap.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from typing import Callable
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
 
-from .account import AccountSnapshot, _account_sum
+from .account import AccountSnapshot, _account_sum, external_activity_refs
 from .models import AccountScope
 from .store import DatastoreTwinStore, _transaction_scope
 
@@ -46,6 +47,7 @@ class JournalOpening:
     positions: tuple[JournalPosition, ...]
     fees_paid: Decimal
     source_ref: str
+    adopted_activity: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -130,6 +132,15 @@ def _opening(value):
     _decimal(value.fees_paid, nonnegative=True)
     _positions(value.positions, opening=True)
     _source(value.source_ref)
+    if not isinstance(value.adopted_activity, tuple) or len(value.adopted_activity) > 4096:
+        raise AccountJournalError('journal_opening_activity_invalid')
+    identities = set()
+    for item in value.adopted_activity:
+        if (not isinstance(item, tuple) or len(item) != 2 or not isinstance(item[0], str)
+                or not item[0].strip() or len(item[0]) > 256 or item[0] in identities):
+            raise AccountJournalError('journal_opening_activity_invalid')
+        identities.add(item[0])
+        _source(item[1])
 
 
 def _fact(value, opening):
@@ -264,7 +275,11 @@ def _encode(journal):
         if isinstance(value, datetime):
             return value.isoformat()
         raise TypeError('unsupported journal value')
-    return json.dumps(asdict(journal), default=encode, sort_keys=True, separators=(',', ':'))
+    payload = asdict(journal)
+    # Empty adoption must retain the fingerprints of already persisted journals.
+    if not journal.opening.adopted_activity:
+        payload['opening'].pop('adopted_activity')
+    return json.dumps(payload, default=encode, sort_keys=True, separators=(',', ':'))
 
 
 def _restore(raw):
@@ -275,7 +290,8 @@ def _restore(raw):
     scope = dict(opening['scope'])
     scope['created_at'] = datetime.fromisoformat(scope['created_at'])
     opened = JournalOpening(AccountScope(**scope), datetime.fromisoformat(opening['observed_at']),
-        Decimal(opening['cash']), positions(opening['positions']), Decimal(opening['fees_paid']), opening['source_ref'])
+        Decimal(opening['cash']), positions(opening['positions']), Decimal(opening['fees_paid']), opening['source_ref'],
+        tuple(tuple(row) for row in opening.get('adopted_activity', ())))
     facts = tuple(JournalFact(row['id'], row['version'], row['kind'], datetime.fromisoformat(row['occurred_at']),
         Decimal(row['cash_delta']), positions(row['positions']), Decimal(row['fee']), row['source_ref'],
         Decimal(row['external_cash_flow']), row['final'], row['sequence'], row['voided']) for row in value['facts'])
@@ -313,8 +329,10 @@ def compare_journal_snapshot(snapshot: AccountSnapshot, journal: AccountJournal 
         reasons.append('journal_holdings_mismatch')
     if {key: value[1] for key, value in observed.items()} != {key: value[1] for key, value in wanted.items()}:
         reasons.append('journal_basis_mismatch')
+    adopted = dict(journal.opening.adopted_activity)
+    unexplained = tuple(identity for identity, ref in external_activity_refs(snapshot) if adopted.get(identity) != ref)
     return replace(snapshot, journal_revision=journal.revision, journal_fingerprint=journal.fingerprint,
-                   divergence=bool(snapshot.external_activity_ids or reasons),
+                   external_activity_ids=unexplained, divergence=bool(unexplained or reasons),
                    drift_reasons=tuple(sorted(set(reasons))))
 
 

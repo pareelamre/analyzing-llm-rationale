@@ -17089,6 +17089,7 @@ def _twin_operator_readiness(owner_id: str, scope):
     }
 
 
+from analyzing_llm_rationale.twin import opening as _twin_opening  # noqa: E402
 from analyzing_llm_rationale.twin import routes as _twin_routes  # noqa: E402
 
 _twin_mandate_service = _twin_routes.MandateService(
@@ -17106,4 +17107,16 @@ _twin_operator_service = _twin_routes.OperatorService(
 
 app.include_router(_twin_routes.create_mandate_router(_twin_mandate_service, resolve_owner=_twin_mandate_owner))
 app.include_router(_twin_routes.create_operator_router(_twin_operator_service, resolve_owner=_twin_mandate_owner))
+
+def _twin_opening_service():
+    from analyzing_llm_rationale.twin.account_store import DatastoreAccountSnapshotStore
+
+    store = _confirmed_manual_twin_store()
+    return _twin_opening.AccountOpeningService(
+        store, DatastoreAccountSnapshotStore(store._client),
+        clock=lambda: datetime.now(timezone.utc),
+    )
+
+
+app.include_router(_twin_opening.create_opening_router(_twin_opening_service, resolve_owner=_twin_mandate_owner))
 app.include_router(venue_router)

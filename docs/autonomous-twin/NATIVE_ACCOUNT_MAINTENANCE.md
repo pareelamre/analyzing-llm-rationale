@@ -120,7 +120,7 @@ the captured snapshot persists blocking drift rather than advertising readiness.
 This is an independent economic comparison, **not** a native receipt verifier:
 a SHA256 source reference alone proves neither an upstream receipt nor owner approval.
 Only trusted server source adapters/operator procedures may initialize or import
-verified facts. No public endpoint, tool or worker task accepts them. Native source
+verified facts. No public endpoint, tool or worker task accepts raw facts. Native source
 adapters still need to verify full receipts, cash flows, maker legs, actual fees,
 settlement finality/corrections and venue-specific netting before posting facts.
 No aggregate settlement is assigned to a command. Automatic reservation release
@@ -160,3 +160,87 @@ fill/settlement attribution, automatic maintenance scheduling/connection selecti
 production reconciliation and forward-performance release evidence remain open.
 No deployment, storage migration, live activation or new cloud service is included.
 Private object storage remains the existing R2 destination.
+
+## Owner-reviewed first opening
+
+The authenticated owner can use `GET /twin/accounts/{scope_id}/opening` to review
+the first baseline of an existing native live scope. The response binds the full
+scope identity, epoch, snapshot generation/time/content, account revision, cash,
+holdings/basis, cumulative fees and observed external activity. The owner-only
+response includes the actual `scope` and complete normalized `snapshot` as well
+as their hashes. Both references are reproducible as SHA256 over UTF-8 JSON with
+sorted keys and separators `(',', ':')`; numeric amounts remain decimal strings.
+These private source bodies must not be posted as public issue/PR artifacts.
+This GET never
+initializes anything. Refresh the complete native capture if it is more than
+120 seconds old. The operation uses the existing session owner resolver and the
+existing transactional store; there is no new service or storage destination.
+
+After independently checking the displayed totals and retaining private source
+evidence, the owner sends the same route a POST with exactly:
+
+```json
+{
+  "review_hash": "<64 lowercase hex characters from GET>",
+  "evidence_ref": "<SHA256 of the privately retained baseline evidence>",
+  "confirmation": "REGISTER ACCOUNT OPENING"
+}
+```
+
+`evidence_ref` is an owner attestation/reference, not a cryptographic verification
+of venue history. The opening adopts a starting point; earlier activity remains
+outside prospective strategy P&L. Neither a hash nor a model instruction is owner
+authentication. The server derives ownership from the signed-in session and does
+not accept replacement cash, position, owner, connection or epoch fields in POST.
+This API does not create account scopes or choose a trading connection. The scope
+must already be registered through the existing trusted runtime setup. Operator
+desk UI integration remains separate; this is an authenticated API flow.
+
+Registration refuses any existing local command, held cash/loss reservation,
+unconfirmed/active venue order, pending Polymarket fill, other account drift or
+existing journal without a matching approval. This first-baseline flow is for an
+epoch that has not yet submitted local twin commands. Historical venue activity
+is visible in the review and explicitly adopted by the owner; it is not assigned
+to an old strategy order. The opening retains identity-to-source hashes for the
+adopted order/fill groups. Subsequent reconciliation explains only exactly matching
+groups: a changed row, a new identity or even another fill under the same old client
+identity remains external drift. Raw source rows remain in the snapshot; adopted
+identities are removed only from its unexplained-activity projection. Existing
+journals are never reset to observed balances. Terminal Polymarket `FAILED` rows
+can be recorded as historical evidence only with zero fee; pending and unknown
+statuses still block. Zero-quantity holdings must have zero basis and are excluded
+consistently from the reviewed and journal inventory.
+
+Approval and the immutable journal opening commit in one account transaction.
+Source/root changes conflict with the commit, and expiry during initialization
+rolls back all writes. A retry of the same approval returns the original result,
+including after later journal imports; a different evidence/review pair conflicts.
+The approval JSON is private and excluded from indexes. It is not a public repo
+artifact. Actual balances, capital/loss limits, reservations and mandates remain
+unchanged. Previously captured snapshots remain blocking until a subsequent
+complete native reconciliation records the new journal proof. Baseline approval
+does not authorize live trading or attest future netting/cash-flow receipts.
+
+The current restriction checks the whole account scope's local command history,
+including earlier epochs. A previously traded/reconnected scope needs the existing
+trusted scope-transition/reconciliation procedure; deleting commands or inventing
+an empty history is not a remedy. No new epoch or scope is created by this API.
+
+Refresh is an operator maintenance action, independent of models. On an already
+configured runtime with its verified native reader resolver, add one existing
+`WorkerJobKind.RECONCILE` job with the scope ID, payload
+`{"account_epoch_id": "<current epoch>"}`, a unique job ID and a three-minute
+deadline, then pass it to the existing dispatcher's `enqueue(job)`. Wait for that
+job to complete before GET/review/POST. This uses the existing maintenance queue;
+it does not provision a queue, start a collector or approve a trade. Native reader
+configuration and production IAM remain release requirements; the default runtime
+still refuses unconfigured native reads. Prepare the independent evidence before
+requesting refresh. If scheduled capture replaces the snapshot during review, the
+POST deliberately conflicts and the owner must review the new result. The API
+does not extend its freshness window or automatically confirm a replacement hash.
+
+Opening race tests exercise the local emulator's optimistic concurrency, including
+snapshot replacement, distinct competing approvals and duplicate retries. The
+production database was read-only checked as `PESSIMISTIC` on 2026-10-21: its locks
+may serialize writers in a different order. No production race/IAM drill is claimed.
+Synchronous route handlers use FastAPI's worker threadpool for database operations.

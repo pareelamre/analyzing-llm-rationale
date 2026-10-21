@@ -68,6 +68,7 @@ from tests import test_twin_account_journal as account_journal
 from tests import test_twin_account_maintenance as native_account_maintenance
 from tests import test_twin_native_lifecycle as native_lifecycle
 from tests import test_twin_native_pause as native_pause
+from tests import test_twin_opening as opening
 
 
 def _research_in_process(key, reservation_id, result_queue):
@@ -977,6 +978,112 @@ class DatastoreAccountJournalTests(account_journal.AccountJournalTests):
 @unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
 class DatastorePolymarketAccountJournalTests(DatastoreAccountJournalTests):
     fixture_type = DatastorePolymarketAccountMaintenanceTests
+
+
+@unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
+class DatastoreAccountOpeningTests(opening.AccountOpeningTests):
+    def make_client(self):
+        from google.cloud import datastore
+
+        self.enterContext(mock.patch.dict(os.environ, {'FORESEA_DATASTORE_BACKEND': 'gcp'}))
+        if not hasattr(self, 'namespace'):
+            self.namespace = 'owner-opening-' + uuid4().hex
+        client = datastore.Client(project='foresea-twin-test', namespace=self.namespace)
+        self.addCleanup(client.close)
+        return client
+
+    def test_concurrently_replaced_snapshot_aborts_opening_commit(self):
+        from google.api_core.exceptions import Aborted, Conflict
+
+        from analyzing_llm_rationale.twin.account_journal import DatastoreAccountJournal
+        from analyzing_llm_rationale.twin.account_store import DatastoreAccountSnapshotStore
+        from analyzing_llm_rationale.twin.opening import OpeningConfirmation
+
+        body = OpeningConfirmation(**self.body())
+        other = DatastoreAccountSnapshotStore(self.make_client())
+        staged, release = Event(), Event()
+        original = self.client.put
+        def hold_approval(entity):
+            result = original(entity)
+            if entity.key.kind == 'TwinAccountOpeningApproval':
+                staged.set()
+                if not release.wait(15):
+                    raise AssertionError('opening race did not release the transaction')
+            return result
+        with mock.patch.object(self.client, 'put', side_effect=hold_approval), ThreadPoolExecutor(2) as pool:
+            stale = pool.submit(self.service.confirm, 'owner', self.scope.id, body)
+            try:
+                self.assertTrue(staged.wait(10))
+                replacement = pool.submit(other.save, self.make_snapshot(generation=2))
+                self.assertEqual(replacement.result(timeout=10).generation, 2)
+            finally:
+                release.set()
+            with self.assertRaises((Aborted, Conflict)):
+                stale.result(timeout=15)
+        self.assertIsNone(DatastoreAccountJournal(self.store).load(self.scope))
+        self.assertIsNone(self.client.get(self.service._key(self.scope)))
+        self.assertEqual(self.snapshots.load(self.scope.id).generation, 2)
+
+    def _race_opening_confirmations(self, *, duplicate):
+        import json
+
+        from google.api_core.exceptions import Aborted, Conflict
+
+        from analyzing_llm_rationale.twin.account_journal import DatastoreAccountJournal
+        from analyzing_llm_rationale.twin.account_store import DatastoreAccountSnapshotStore
+        from analyzing_llm_rationale.twin.opening import (
+            AccountOpeningService,
+            OpeningConfirmation,
+            OpeningConflict,
+        )
+
+        body = OpeningConfirmation(**self.body())
+        competing = body if duplicate else body.model_copy(update={'evidence_ref': 'f' * 64})
+        other_client = self.make_client()
+        other = AccountOpeningService(DatastoreTwinStore(other_client), DatastoreAccountSnapshotStore(other_client),
+                                      clock=lambda: self.time)
+        before = self.store.projection(self.scope.id)
+        staged, release = Event(), Event()
+        original = self.client.put
+        def hold_approval(entity):
+            result = original(entity)
+            if entity.key.kind == 'TwinAccountOpeningApproval':
+                staged.set()
+                if not release.wait(15):
+                    raise AssertionError('competing opening confirmation did not release')
+            return result
+        with mock.patch.object(self.client, 'put', side_effect=hold_approval), ThreadPoolExecutor(2) as pool:
+            stale = pool.submit(self.service.confirm, 'owner', self.scope.id, body)
+            try:
+                self.assertTrue(staged.wait(10))
+                winner = pool.submit(other.confirm, 'owner', self.scope.id, competing).result(timeout=10)
+            finally:
+                release.set()
+            with self.assertRaises((Aborted, Conflict)):
+                stale.result(timeout=15)
+        journal = DatastoreAccountJournal(self.store).load(self.scope)
+        record = json.loads(self.client.get(self.service._key(self.scope))['payload_json'])
+        self.assertEqual(record['evidence_ref'], competing.evidence_ref)
+        self.assertEqual(journal.opening.source_ref, winner['opening_ref'])
+        self.assertEqual((journal.revision, journal.facts), (1, ()))
+        self.assertEqual(self.store.projection(self.scope.id).revision, before.revision + 1)
+        self.assertEqual(other.confirm('owner', self.scope.id, competing), winner)
+        if duplicate:
+            self.assertEqual(self.service.confirm('owner', self.scope.id, body), winner)
+        else:
+            with self.assertRaises(OpeningConflict):
+                self.service.confirm('owner', self.scope.id, body)
+
+    def test_competing_distinct_confirmations_create_one_opening(self):
+        self._race_opening_confirmations(duplicate=False)
+
+    def test_concurrent_duplicate_confirmation_has_safe_retry(self):
+        self._race_opening_confirmations(duplicate=True)
+
+
+@unittest.skipUnless(os.environ.get('DATASTORE_EMULATOR_HOST'), 'local Datastore emulator required')
+class DatastorePolymarketAccountOpeningTests(DatastoreAccountOpeningTests):
+    venue = 'polymarket'
 
 
 if __name__ == "__main__":
