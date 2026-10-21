@@ -3,7 +3,7 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "native_recovery_merged_account_journal_reviewed_native_sources_and_release_pending",
+  "implementation_status": "native_recovery_journal_and_owner_opening_implemented_native_sources_and_release_pending",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
   "next_task": "T06",
   "live_authorized": false,
@@ -257,7 +257,7 @@
         "T05"
       ],
       "status": "in_progress",
-      "substep": "Complete account captures and canonical economic-journal comparison implemented; trusted native receipt/cash-flow imports and complete collateral/capacity integration remain",
+      "substep": "Account capture, economic journal and authenticated owner opening implemented; verified native receipts/cash-flow imports and complete collateral/capacity integration remain",
       "branch": "codex/autonomous-twin-t06-final",
       "commit": "d0cf0a80c",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/600",
@@ -269,7 +269,9 @@
         "py -m graphify update . (pass)",
         "2026-10-20 supplemental: explicit optional account-epoch capture/persistence; legacy/missing epoch cannot prove recovery absence; current epoch and old-epoch absence controls verified in memory/SQLite/emulator. Runtime native maintenance still tracked under T15.",
         "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking.",
-        "2026-10-21 task reopened against its local-projection comparison requirement: durable canonical economic replay now exists and native captures compare cash, inventory, basis and fees; source verification/import and owner opening registration are still absent. Initial full3249 pass, post-review focused203 pass, emulator54 pass; final full/CI pending. No balancing entries, money changes, activation or cloud/R2 writes."
+        "2026-10-21 task reopened against its local-projection comparison requirement: durable canonical economic replay now exists and native captures compare cash, inventory, basis and fees; source verification/import and owner opening registration are still absent. Initial full3249 pass, post-review focused203 pass, emulator54 pass; final full/CI pending. No balancing entries, money changes, activation or cloud/R2 writes.",
+        "2026-10-21 PR700 delivery verified:16 blobs match merged head, full3293/no skips local, CI3293 run/259 unit skips plus206 emulator pass. Owner opening API implementation and local race/privacy/auth checks now under one deep audit; no activation or native source import claim.",
+        "2026-10-21 owner opening API: full3411/no skips; focused228 including both storage backends and venue types; one deep audit aud_WMIHLEfdAB completed,15 dispositions12 accepted/addressed3 rejected. Reviewed historical source adoption reconciles unchanged groups and blocks changed/new rows. No real approval, capital change or activation."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/account.py",
@@ -287,7 +289,7 @@
         "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md"
       ],
       "blockers": [],
-      "handoff": "T07 is next. Wire approved pricing, timeouts, cancellation and stale-call recovery into the private research worker while keeping maintenance independent and live trading disabled."
+      "handoff": "Continue T06: verified native cash-flow/fill/settlement imports and complete collateral/capacity integration. Opening API is implemented; operator desk UI and production owner records are not. Kalshi current account netting settings do not prove historical event eligibility; Polymarket fee-rate and collateral fields need exact source contracts. Reuse native lifecycle/history and journal, never synthesize balancing facts. T21 production/forward evidence and T22 bounded owner mandate remain release gates."
     },
     {
       "id": "T07",
@@ -1270,7 +1272,7 @@
   "account_journal": {
     "date": "2026-10-21",
     "branch": "codex/twin-native-settlement",
-    "status": "locally_verified_review_remediated_pr_delivery_pending",
+    "status": "merged",
     "source_reference_is_receipt_verification": false,
     "immutable_explicit_opening": true,
     "epoch_bound_private_storage": true,
@@ -1323,6 +1325,65 @@
     "ruff": "pass",
     "repository_release_contract": "pass",
     "audit_adjudication_status": "code_findings_addressed_source_and_production_gates_open",
-    "release_ready": false
+    "release_ready": false,
+    "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/700",
+    "merge_commit": "31c18185c71a99beea851135228fc1bd366cd260",
+    "ci_head": "9313730600ef6714609614261f01109e5defffd6",
+    "ci_run": 39614142578,
+    "ci_unit_tests_run": 3293,
+    "ci_unit_tests_skipped": 259,
+    "ci_emulator_tests_passed": 206,
+    "merged_blobs_verified": 16
+  },
+  "owner_account_opening": {
+    "date": "2026-10-21",
+    "branch": "codex/twin-owner-opening",
+    "status": "implemented_verified_native_receipts_and_release_pending",
+    "review_route": "GET /twin/accounts/{scope_id}/opening",
+    "confirmation_route": "POST /twin/accounts/{scope_id}/opening",
+    "authenticated_owner_required": true,
+    "first_immutable_opening_only": true,
+    "requires_fresh_epoch_and_snapshot_review": true,
+    "owner_evidence_digest_is_native_receipt_verification": false,
+    "capital_loss_reservation_or_mandate_changes": false,
+    "existing_snapshot_becomes_ready_automatically": false,
+    "native_receipt_import_or_netting_complete": false,
+    "operator_desk_ui_integrated": false,
+    "production_iam_or_commit_order_proven": false,
+    "audit_id": "aud_WMIHLEfdAB",
+    "audit_status": "completed",
+    "verification": [
+      "Final full unittest discovery:3411 pass/no skips in302.488s using actual local Datastore emulator",
+      "Focused228 pass: both venues, SQLite/emulator, competing and duplicate approvals, stale-source abort, historical adoption and changed-row rejection",
+      "Actual application owner resolver/store wiring tested with synthetic session; anonymous401 preserved",
+      "Native OTel console export/counter verifies private evidence/backend text absent; Ruff, Graphify, release and diff checks pass",
+      "One completed deep audit aud_WMIHLEfdAB;15 validated dispositions,12 accepted/addressed and3 rejected with evidence; no second audit",
+      "Native Semgrep unavailable; no SAST pass claimed; production IAM/concurrency drill and live release not proven"
+    ],
+    "boundaries": "No real baseline approved, venue request/order, deployment, cloud resource, storage mutation or collector activation",
+    "evidence": [
+      "src/analyzing_llm_rationale/twin/opening.py",
+      "tests/test_twin_opening.py",
+      "tests/test_twin_store_integration.py",
+      "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE.md"
+    ],
+    "audit_usable_voices": 5,
+    "audit_vendors": 4,
+    "audit_model_fallbacks": 1,
+    "audit_findings": 19,
+    "consolidated_findings": 15,
+    "findings_accepted": 12,
+    "findings_rejected": 3,
+    "review_table": "docs/autonomous-twin/OWNER_OPENING_REVIEW.md",
+    "full_tests_passed": 3411,
+    "full_test_skips": 0,
+    "full_test_seconds": 302.488,
+    "focused_tests_passed": 228,
+    "exact_source_adoption_reconciliation": true,
+    "raw_source_reviewable_by_owner": true,
+    "legacy_empty_adoption_fingerprints_preserved": true,
+    "production_concurrency_mode_read_only": "PESSIMISTIC",
+    "real_debug_otel_export_verified": true,
+    "no_real_baseline_or_mandate_approved": true
   }
 }

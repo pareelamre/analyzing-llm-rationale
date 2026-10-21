@@ -112,6 +112,22 @@ class AccountJournalTests(unittest.TestCase):
         with self.assertRaises(AccountJournalError):
             self.journal.load(replace(self.scope, account_epoch=2))
 
+    def test_empty_adoption_retains_the_legacy_journal_fingerprint(self):
+        import json
+
+        from analyzing_llm_rationale.twin.account_journal import _encode, _restore
+
+        original = self.journal.initialize(self.opening())
+        encoded = _encode(original)
+        self.assertNotIn('adopted_activity', json.loads(encoded)['opening'])
+        self.assertEqual(_restore(encoded).fingerprint, sha256(encoded.encode()).hexdigest())
+
+    def test_adopted_source_references_are_bounded_and_unique(self):
+        for adopted in ((('activity', REF), ('activity', REF)), (('activity', 'not-a-digest'),),
+                        (('activity', REF, 'extra'),), [('activity', REF)]):
+            with self.subTest(adopted=adopted), self.assertRaises(AccountJournalError):
+                self.journal.initialize(self.opening(adopted_activity=adopted))
+
     def test_invalid_history_cannot_balance_away_drift(self):
         original = self.journal.initialize(self.opening())
         for bad in (replace(self.fact(), version=True), replace(self.fact(), cash_delta=D('NaN')),

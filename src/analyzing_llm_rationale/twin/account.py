@@ -6,10 +6,12 @@ that inventory is empty.  It retains the previous complete generation instead.
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, localcontext
+from hashlib import sha256
 from typing import Any, Mapping, Optional, Sequence
 
 from opentelemetry import metrics, trace
@@ -87,6 +89,34 @@ def _account_sum(values) -> Decimal:
     with localcontext() as context:
         context.prec = 80
         return sum(values, Decimal('0'))
+
+
+def external_activity_refs(snapshot: AccountSnapshot) -> tuple[tuple[str, str], ...]:
+    """Bind adopted external identities to their exact normalized source rows.
+
+    One client identity can cover several orders/fills. New or changed rows under
+    that same identity must remain unexplained, rather than inherit its adoption.
+    """
+    grouped: dict[str, list] = {}
+    order_commands = {}
+    for row in snapshot.orders:
+        order_id = str(row.get('order_id') or row.get('id'))
+        command = str(row.get('client_order_id') or row.get('command_id') or '').strip()
+        order_commands[order_id] = command
+        identity = command or 'unattributed_order:' + order_id
+        grouped.setdefault(identity, []).append(['order', dict(row)])
+    for row in snapshot.fills:
+        command = str(row.get('client_order_id') or row.get('command_id') or '').strip()
+        command = command or order_commands.get(str(row.get('order_id') or ''), '')
+        identity = command or 'unattributed_fill:' + str(row.get('fill_id') or row.get('trade_id') or row.get('id'))
+        grouped.setdefault(identity, []).append(['fill', dict(row)])
+    if set(snapshot.external_activity_ids) - set(grouped):
+        raise SchemaValidationError('external account activity has no source rows')
+    result = []
+    for identity in sorted(snapshot.external_activity_ids):
+        rows = sorted(json.dumps(row, sort_keys=True, separators=(',', ':'), default=str) for row in grouped[identity])
+        result.append((identity, sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()))
+    return tuple(result)
 
 
 @dataclass(frozen=True)
