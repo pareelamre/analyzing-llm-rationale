@@ -3,7 +3,7 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "native_account_capture_verified_lifecycle_application_and_release_pending",
+  "implementation_status": "native_order_fill_recovery_in_review_not_release_ready",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
   "next_task": "T15",
   "live_authorized": false,
@@ -509,7 +509,11 @@
         "PR #544 datastore-integration (pass after expired-lease takeover fix)",
         "2026-10-19 native SDK1.1.0 contracts:24 CTF signed cases, SQL hash persistence and synthetic lookup/cancel verified;47 focused tests pass; full unittest2833 tests/13 skips exit0 in228.830s; Ruff, Graphify, tracker/capability and diff/AQG checks pass. No production adapter wiring or live capability claimed.",
         "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence.",
-        "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence."
+        "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence.",
+        "2026-10-21 native recovery: canonical intent payload stored with new reservations; positive native order/fill readers for both venues, confirmed maker/taker attribution, actual price/fee and budget conflict quarantine. Focused133 including real Datastore job-replacement commit races pass. Full suite and one deep aud_c81nwJMleH running; native OTel success/pending/quarantine/SDK-failure debug export excludes private text. No activation or market-level settlement allocation.",
+        "2026-10-21 audit remediation: 296 focused native/account/recovery/venue tests pass, including real Datastore-emulator command/job replacement races; final native47 and Ruff pass. Fixed pending cancellation, taker wallet attribution, never-dispatched command claims, nonterminal result status, primary subaccounts, demo/live binding, legacy absence classifier, shared signed trade reads and missing-cursor handling. One deep audit is terminal_partial (4 usable voices, 1 failed); no re-audit. Durable history/follow-up scheduling and final adjudication remain open; no PR/commit/deploy.",
+        "2026-10-21 native history: scoped8-page/job checkpoints resume25-page captures across jobs/restarts;1000 associated Polymarket trades use10 batched market reads. The existing authenticated fills operation and required funder filter are reused. Both history-fence races pass on the real Datastore emulator (initial234 tests). Rejected complete cohorts refresh; unlisted owned trades cannot release cancellation cash. Multi-maker notional and explicit-fee regressions pass.119 focused tests/Ruff pass after economics checks; final full suite pending. No venue/cloud write or activation.",
+        "2026-10-21 final native recovery software verification:3169 tests pass, no skips; Ruff src/tests, source release verifier and expanded private-history OTel export pass. History continuation and batch-read review findings addressed; actual owner venue record agreement remains an explicit production gate. PR delivery pending; no deployment or live activation, no new cloud resources, existing R2 configuration unchanged."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/execution.py",
@@ -531,7 +535,11 @@
         "tests/test_twin_manual_review.py",
         "tests/test_trading_request_identity.py",
         "docs/autonomous-twin/NATIVE_MANUAL.md",
-        "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md"
+        "docs/autonomous-twin/NATIVE_MANUAL_REVIEW.md",
+        "src/analyzing_llm_rationale/twin/native_lifecycle.py",
+        "tests/test_twin_native_lifecycle.py",
+        "tests/test_twin_intent_store.py",
+        "docs/autonomous-twin/NATIVE_LIFECYCLE.md"
       ],
       "blockers": [
         "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
@@ -548,7 +556,7 @@
         "T14"
       ],
       "status": "in_progress",
-      "substep": "Atomic lifecycle recovery merged; native read-only account maintenance verified locally; native per-command lifecycle attribution/application and production connection selection remain open",
+      "substep": "Native order/fill recovery, durable history and follow-ups verified locally; PR delivery next; settlement/full ledger and production gates remain",
       "branch": "codex/autonomous-lifecycle-recovery",
       "commit": "ceecca42",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/563",
@@ -563,7 +571,13 @@
         "2026-10-19 native backend: full unittest2866/no skips exit0 with local emulator;14 emulator tests;42 final native/authority/safety tests; SDK1.2 native28 + direct24-case offline probe; Ruff and Graphify pass; aud_GCsxMcJAZA reviewed/adjudicated. No route/worker activation or live evidence.",
         "2026-10-19 native manual: full emulator-enabled unittest2892/no skips exit0 in211.561s;15 emulator tests;51 tests against isolated SDK1.2; final wallet/authority/browser regressions; aud_1WCqLzwCI4, adjudication adj-Idm7eksZu_R4AcUu. Native manual flag defaults false; no activation or production evidence.",
         "2026-10-20 atomic recovery: full2939/no skips pass260.933s; final focused91 including38 real local emulator cases; both replacement-before-release races abort old commits with valid old clocks; SDK1.2 matrix51; Ruff/release/Graphify/real OTel debug export pass. One deep aud_Y7dTd66krE,13 accepted dispositions adjudicated adj-0bBxfPBuYRlcQ4QQ and locally verified;4 usable voices,1 unusable output,1 fallback. No activation or production proof.",
-        "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking."
+        "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking.",
+        "2026-10-21 native recovery: canonical intent payload stored with new reservations; positive native order/fill readers for both venues, confirmed maker/taker attribution, actual price/fee and budget conflict quarantine. Focused133 including real Datastore job-replacement commit races pass. Full suite and one deep aud_c81nwJMleH running; native OTel success/pending/quarantine/SDK-failure debug export excludes private text. No activation or market-level settlement allocation.",
+        "2026-10-21 audit remediation: 296 focused native/account/recovery/venue tests pass, including real Datastore-emulator command/job replacement races; final native47 and Ruff pass. Fixed pending cancellation, taker wallet attribution, never-dispatched command claims, nonterminal result status, primary subaccounts, demo/live binding, legacy absence classifier, shared signed trade reads and missing-cursor handling. One deep audit is terminal_partial (4 usable voices, 1 failed); no re-audit. Durable history/follow-up scheduling and final adjudication remain open; no PR/commit/deploy.",
+        "2026-10-21 durable native follow-ups: pending lifecycle and one delayed child commit atomically. Restart/duplicate/lost-dispatch/rollback, original-deadline and16-follow-up bounds verified;297 focused tests include real Datastore emulator races,146 worker/runtime/scheduling tests pass and Ruff passes. No activation/deployment; dispatch cadence compatibility remains a production gate. Incremental history and final audit adjudication remain open.",
+        "2026-10-21 full follow-up verification:3134 tests pass, no skips; Ruff, source release-contract verifier, native OTel debug export and AST graph update pass. Audit table records all19 findings in16 rows; history continuation, per-trade read scaling and economic field-evidence work remain open. No commit, PR, deployment or venue write.",
+        "2026-10-21 native history: scoped8-page/job checkpoints resume25-page captures across jobs/restarts;1000 associated Polymarket trades use10 batched market reads. The existing authenticated fills operation and required funder filter are reused. Both history-fence races pass on the real Datastore emulator (initial234 tests). Rejected complete cohorts refresh; unlisted owned trades cannot release cancellation cash. Multi-maker notional and explicit-fee regressions pass.119 focused tests/Ruff pass after economics checks; final full suite pending. No venue/cloud write or activation.",
+        "2026-10-21 final native recovery software verification:3169 tests pass, no skips; Ruff src/tests, source release verifier and expanded private-history OTel export pass. History continuation and batch-read review findings addressed; actual owner venue record agreement remains an explicit production gate. PR delivery pending; no deployment or live activation, no new cloud resources, existing R2 configuration unchanged."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/recovery.py",
@@ -592,7 +606,11 @@
         "src/analyzing_llm_rationale/twin/account_maintenance.py",
         "tests/test_twin_account_maintenance.py",
         "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE.md",
-        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md"
+        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md",
+        "src/analyzing_llm_rationale/twin/native_lifecycle.py",
+        "tests/test_twin_native_lifecycle.py",
+        "tests/test_twin_intent_store.py",
+        "docs/autonomous-twin/NATIVE_LIFECYCLE.md"
       ],
       "blockers": [
         "Concrete native account/order/fill/settlement maintenance and operator recovery for the same roots/hashes.",
@@ -600,7 +618,7 @@
         "Quiesce legacy writers/drain old revisions; exact SDK/image, host/key/index, inventory/fees/approvals/venue eligibility remain unverified.",
         "Compatible forward evidence and bounded expiring capital/loss mandate remain required."
       ],
-      "handoff": "Native account capture PR ready after CI; next implement native per-command order/fill/settlement attribution and incremental history, plus owner-bound production connection registration. Preserve verified credential identity, page/liquidation deadlines, private quarantine, no resend and no capital increases. Do not rerun unchanged historical signal screens."
+      "handoff": "Deliver native recovery PR with3169 full tests passing and aud_c81nwJMleH adjudication recorded. Merge only after fresh CI passes, using [skip ci] on the final main squash commit to avoid deployment. Then implement native market settlement and complete account-ledger reconciliation, account-wide incremental history and remaining worker/execution wiring. Production registration/IAM/cadence, actual owner venue records, forward evidence and finite mandate remain gates. Preserve R2 and no new spend."
     },
     {
       "id": "T16",
@@ -621,7 +639,13 @@
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
         "py -m graphify update . and scoped worker query (pass)",
-        "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking."
+        "2026-10-20 native account review: one terminal-partial aud_jaaYbnRrYE,4 usable voices/1 failed,2 fallback attempts;13 dispositions (12 accepted/1 rejected), adj-9va7nNuaGc_XKu55. Credential-derived binding, per-request deadlines, stable economic hashes, fixed reason allowlist and query amplification controls verified. Final focused177 (including74 emulator), full3016/no skips272.725s; final small scoped-signer guard covered by focused177 and required fresh CI. Ruff/release/Graphify/debug export pass. No activation or live proof; incremental history remains release-blocking.",
+        "2026-10-21 native recovery: canonical intent payload stored with new reservations; positive native order/fill readers for both venues, confirmed maker/taker attribution, actual price/fee and budget conflict quarantine. Focused133 including real Datastore job-replacement commit races pass. Full suite and one deep aud_c81nwJMleH running; native OTel success/pending/quarantine/SDK-failure debug export excludes private text. No activation or market-level settlement allocation.",
+        "2026-10-21 audit remediation: 296 focused native/account/recovery/venue tests pass, including real Datastore-emulator command/job replacement races; final native47 and Ruff pass. Fixed pending cancellation, taker wallet attribution, never-dispatched command claims, nonterminal result status, primary subaccounts, demo/live binding, legacy absence classifier, shared signed trade reads and missing-cursor handling. One deep audit is terminal_partial (4 usable voices, 1 failed); no re-audit. Durable history/follow-up scheduling and final adjudication remain open; no PR/commit/deploy.",
+        "2026-10-21 durable native follow-ups: pending lifecycle and one delayed child commit atomically. Restart/duplicate/lost-dispatch/rollback, original-deadline and16-follow-up bounds verified;297 focused tests include real Datastore emulator races,146 worker/runtime/scheduling tests pass and Ruff passes. No activation/deployment; dispatch cadence compatibility remains a production gate. Incremental history and final audit adjudication remain open.",
+        "2026-10-21 full follow-up verification:3134 tests pass, no skips; Ruff, source release-contract verifier, native OTel debug export and AST graph update pass. Audit table records all19 findings in16 rows; history continuation, per-trade read scaling and economic field-evidence work remain open. No commit, PR, deployment or venue write.",
+        "2026-10-21 native history: scoped8-page/job checkpoints resume25-page captures across jobs/restarts;1000 associated Polymarket trades use10 batched market reads. The existing authenticated fills operation and required funder filter are reused. Both history-fence races pass on the real Datastore emulator (initial234 tests). Rejected complete cohorts refresh; unlisted owned trades cannot release cancellation cash. Multi-maker notional and explicit-fee regressions pass.119 focused tests/Ruff pass after economics checks; final full suite pending. No venue/cloud write or activation.",
+        "2026-10-21 final native recovery software verification:3169 tests pass, no skips; Ruff src/tests, source release verifier and expanded private-history OTel export pass. History continuation and batch-read review findings addressed; actual owner venue record agreement remains an explicit production gate. PR delivery pending; no deployment or live activation, no new cloud resources, existing R2 configuration unchanged."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/worker.py",
@@ -632,7 +656,11 @@
         "src/analyzing_llm_rationale/twin/account_maintenance.py",
         "tests/test_twin_account_maintenance.py",
         "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE.md",
-        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md"
+        "docs/autonomous-twin/NATIVE_ACCOUNT_MAINTENANCE_REVIEW.md",
+        "src/analyzing_llm_rationale/twin/native_lifecycle.py",
+        "tests/test_twin_native_lifecycle.py",
+        "tests/test_twin_intent_store.py",
+        "docs/autonomous-twin/NATIVE_LIFECYCLE.md"
       ],
       "blockers": [],
       "handoff": "T17 is ready. Mount the private handlers, wire the durable stores and Cloud Tasks dispatcher, then validate the shadow-only IAM boundary in staging."
@@ -659,7 +687,11 @@
         "research identity direct Datastore and KMS decrypt probes rejected with HTTP 403",
         "stable Cloud Tasks duplicate name suppressed; durable recovery completed exactly once",
         "budgeted research reservation claimed exactly once and fail-closed adapter result persisted",
-        "maintenance dispatch returned HTTP 200 during 20 concurrent research requests"
+        "maintenance dispatch returned HTTP 200 during 20 concurrent research requests",
+        "2026-10-21 durable native follow-ups: pending lifecycle and one delayed child commit atomically. Restart/duplicate/lost-dispatch/rollback, original-deadline and16-follow-up bounds verified;297 focused tests include real Datastore emulator races,146 worker/runtime/scheduling tests pass and Ruff passes. No activation/deployment; dispatch cadence compatibility remains a production gate. Incremental history and final audit adjudication remain open.",
+        "2026-10-21 full follow-up verification:3134 tests pass, no skips; Ruff, source release-contract verifier, native OTel debug export and AST graph update pass. Audit table records all19 findings in16 rows; history continuation, per-trade read scaling and economic field-evidence work remain open. No commit, PR, deployment or venue write.",
+        "2026-10-21 native history: scoped8-page/job checkpoints resume25-page captures across jobs/restarts;1000 associated Polymarket trades use10 batched market reads. The existing authenticated fills operation and required funder filter are reused. Both history-fence races pass on the real Datastore emulator (initial234 tests). Rejected complete cohorts refresh; unlisted owned trades cannot release cancellation cash. Multi-maker notional and explicit-fee regressions pass.119 focused tests/Ruff pass after economics checks; final full suite pending. No venue/cloud write or activation.",
+        "2026-10-21 final native recovery software verification:3169 tests pass, no skips; Ruff src/tests, source release verifier and expanded private-history OTel export pass. History continuation and batch-read review findings addressed; actual owner venue record agreement remains an explicit production gate. PR delivery pending; no deployment or live activation, no new cloud resources, existing R2 configuration unchanged."
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/runtime.py",
@@ -1110,5 +1142,77 @@
     "production_database_mode": "PESSIMISTIC",
     "production_database_mode_read_only": true,
     "full_scope_note": "Full3016/no skips passed after review fixes; final scoped-signer fallback guard and one subsequent test covered by current177 focused tests. Fresh CI validates final entire tree before merge."
+  },
+  "native_lifecycle": {
+    "date": "2026-10-21",
+    "branch": "codex/twin-native-lifecycle",
+    "status": "verified_ready_for_pr",
+    "audit_id": "aud_c81nwJMleH",
+    "audit_status": "terminal_partial",
+    "immutable_intent_persisted_with_new_reservation": true,
+    "legacy_intents_auto_backfilled": false,
+    "native_order_and_fill_recovery_handler": true,
+    "actual_price_and_fee_preserved": true,
+    "aggregate_market_settlement_allocated": false,
+    "default_reader_resolver_configured": false,
+    "focused_tests_passed": 296,
+    "real_datastore_emulator": true,
+    "venue_writes_performed": false,
+    "cloud_writes_performed": false,
+    "live_activated": false,
+    "evidence": [
+      "src/analyzing_llm_rationale/twin/native_lifecycle.py",
+      "tests/test_twin_native_lifecycle.py",
+      "tests/test_twin_intent_store.py",
+      "docs/autonomous-twin/NATIVE_LIFECYCLE.md",
+      "docs/autonomous-twin/NATIVE_LIFECYCLE_REVIEW.md"
+    ],
+    "remaining": [
+      "Native market settlement allocation and full account-ledger reconciliation",
+      "Authoritative nonzero Polymarket fee source where upstream trade rows omit actual fee",
+      "Incremental history and account/command pagination release work",
+      "Production owner/connection registration, IAM and native worker scheduling",
+      "Remaining native submission wiring, forward evidence and finite expiring owner mandate"
+    ],
+    "audit_usable_voices": 4,
+    "audit_failed_voices": 1,
+    "post_format_native_tests_passed": 47,
+    "full_suite_after_remediation": "passed",
+    "release_ready": false,
+    "audit_remediation_verified": [
+      "Pending cancellation remains nonterminal until associated trades confirm",
+      "Taker identity uses the owned taker order; maker legs still require the owned wallet",
+      "Recovery refuses never-dispatched commands before claim or provider reads",
+      "Open and partially-filled orders report pending, preserving cash holds",
+      "Primary-subaccount history queries and strict integer-zero response binding",
+      "Demo Kalshi credentials cannot bind a native live account",
+      "Legacy negative order lookup is not absence proof",
+      "Polymarket exact trade reads use the existing signed contract catalog",
+      "Missing, repeated and malformed pagination cannot publish complete inventory",
+      "Real signed-read contract tests cover both venues, including historical parameters"
+    ],
+    "audit_remediation_remaining": [
+      "Actual private venue/account economics acceptance remains a production release gate"
+    ],
+    "durable_followup_scheduling": true,
+    "native_followup_focused_tests_passed": 146,
+    "native_followup_emulator_tests_passed": 297,
+    "native_followup_limit": 16,
+    "not_before_is_durable": true,
+    "original_recovery_deadline_extended": false,
+    "full_tests_passed": 3169,
+    "full_test_skips": 0,
+    "review_table": "docs/autonomous-twin/NATIVE_LIFECYCLE_REVIEW.md",
+    "audit_adjudication_status": "code_findings_addressed_private_venue_validation_pending",
+    "native_history_continuation": true,
+    "polymarket_trade_batching": true,
+    "history_pages_per_job": 8,
+    "history_collection_page_limit": 4096,
+    "history_relevant_row_limit": 4096,
+    "history_entity_max_bytes": 900000,
+    "history_scope_epoch_command_and_order_frame_bound": true,
+    "history_cleared_with_lifecycle_commit": true,
+    "native_history_focused_tests_passed": 119,
+    "native_history_initial_emulator_tests_passed": 234
   }
 }

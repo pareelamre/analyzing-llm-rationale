@@ -177,6 +177,12 @@ class CloudTasksDispatcher:
                 },
             },
         }
+        if job.not_before is not None:
+            from google.protobuf.timestamp_pb2 import Timestamp
+
+            scheduled = Timestamp()
+            scheduled.FromDatetime(job.not_before)
+            request["task"]["schedule_time"] = scheduled
         try:
             response = self._client.create_task(
                 request=request, timeout=self.config.create_timeout_seconds,
@@ -248,6 +254,9 @@ class LocalTaskDispatcher:
     @tracer.start_as_current_span("twin.worker.dispatch")
     def enqueue(self, job: WorkerJob) -> str:
         research = job.kind is WorkerJobKind.RESEARCH
+        if job.not_before is not None and job.not_before > datetime.now(timezone.utc):
+            dispatch_operations.add(1, {"queue_role": "research" if research else "maintenance", "outcome": "delayed"})
+            return job.id
         url = self.config.research_url if research else self.config.maintenance_url
         role = "research" if research else "maintenance"
         body = json.dumps({"job_id": job.id}, sort_keys=True, separators=(",", ":")).encode()

@@ -261,6 +261,27 @@ def command_request_fingerprint(intent: TradeIntent, client_order_id: str, prepa
     return _payload_hash(payload)
 
 
+def _encode_intent(intent: TradeIntent) -> tuple[str, str]:
+    encoded = json.dumps(intent.to_storage(), sort_keys=True, separators=(',', ':'), allow_nan=False)
+    if len(encoded.encode('utf-8')) > 64_000:
+        raise TwinStoreError('immutable intent payload exceeds its private storage limit')
+    return encoded, sha256(encoded.encode('utf-8')).hexdigest()
+
+
+def _restore_intent(payload: str, fingerprint: str, *, scope_id: str, command: ExecutionCommand) -> TradeIntent:
+    try:
+        if (len(payload.encode('utf-8')) > 64_000
+                or sha256(payload.encode('utf-8')).hexdigest() != fingerprint):
+            raise TwinStoreError('immutable intent payload integrity mismatch')
+        intent = TradeIntent.from_storage(json.loads(payload))
+        if (intent.account_scope_id != scope_id or command.scope_id != scope_id
+                or intent.id != command.intent_id or intent.intent_hash != command.intent_hash):
+            raise TwinStoreError('immutable intent belongs to another command')
+        return intent
+    except (KeyError, TypeError, ValueError) as exc:
+        raise TwinStoreError('immutable intent cannot be restored') from exc
+
+
 class TwinStore(Protocol):
     """Account-serialized persistence API used by manual and twin execution."""
 
@@ -288,6 +309,8 @@ class TwinStore(Protocol):
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand: ...
 
+    def intent_for_command(self, scope_id: str, command_id: str) -> TradeIntent: ...
+
     def find_command_for_intent(self, intent: TradeIntent) -> Optional[ExecutionCommand]: ...
 
     def begin_dispatch(self, command_id: str, *, worker_id: str, fence: int, now: datetime) -> bool: ...
@@ -296,7 +319,8 @@ class TwinStore(Protocol):
 
     def reservation(self, scope_id: str, reservation_id: str) -> Reservation: ...
 
-    def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30) -> Optional[CommandClaim]: ...
+    def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30,
+                      validate: Callable[[], None] | None = None) -> Optional[CommandClaim]: ...
 
     def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str,
                            require_unstarted: bool = False) -> ExecutionCommand: ...
@@ -306,7 +330,8 @@ class TwinStore(Protocol):
     def settle_reservation(self, scope_id: str, reservation_id: str, *, settlement_ref: str) -> Reservation: ...
 
     def record_recovery_attention(self, command: ExecutionCommand, intent: TradeIntent, claim: CommandClaim,
-                                  *, reason: str, evidence: Mapping[str, Any], clock: Callable[[], datetime]) -> str: ...
+                                  *, reason: str, evidence: Mapping[str, Any], clock: Callable[[], datetime],
+                                  validate: Callable[[], None] | None = None) -> str: ...
 
     def recovery_attention(self, scope_id: str) -> tuple[Mapping[str, Any], ...]: ...
 
@@ -319,6 +344,7 @@ class InMemoryTwinStore:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._scopes: dict[str, AccountScope] = {}
+        self._intents: dict[str, tuple[str, str]] = {}
         self._projections: dict[str, AccountProjection] = {}
         self._events: dict[str, dict[str, TwinEvent]] = {}
         self._reservations: dict[str, Reservation] = {}
@@ -448,6 +474,7 @@ class InMemoryTwinStore:
         authority_alias: Optional[str] = None,
     ) -> Reservation:
         """Reserve cash and incremental max loss in one account-scoped transition."""
+        intent_payload = _encode_intent(intent)
         reserved_cash = _decimal("cash", cash)
         reserved_loss = _decimal("max_loss", max_loss)
         now = now or _now()
@@ -523,6 +550,7 @@ class InMemoryTwinStore:
                 prepared_request_json=prepared_json,
             )
             self._commands[command.id] = command
+            self._intents[command.id] = intent_payload
             for authority_key in authority_keys:
                 self._request_authorities[authority_key] = intent.intent_hash
             self._outbox[command.id] = OutboxMessage(
@@ -534,6 +562,14 @@ class InMemoryTwinStore:
             )
             reservation_operations.add(1, {"store": "memory", "outcome": "created"})
             return reservation
+
+    def intent_for_command(self, scope_id: str, command_id: str) -> TradeIntent:
+        with self._lock:
+            command = self._commands.get(command_id)
+            payload = self._intents.get(command_id)
+            if command is None or payload is None:
+                raise TwinStoreError('immutable command intent is unavailable; retain exposure')
+            return _restore_intent(*payload, scope_id=scope_id, command=command)
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand:
         command = self.find_command_for_intent(intent)
@@ -588,7 +624,8 @@ class InMemoryTwinStore:
             return reservation
 
     def claim_command(
-        self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30
+        self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30,
+        validate: Callable[[], None] | None = None,
     ) -> Optional[CommandClaim]:
         now = now or _now()
         if lease_seconds <= 0:
@@ -596,6 +633,8 @@ class InMemoryTwinStore:
         with self._lock:
             command = self._commands[command_id]
             old_claim = command.claim
+            if validate is not None:
+                validate()
             if old_claim is not None and old_claim.lease_expires_at > now:
                 return None
             if command.state not in _CLAIMABLE_COMMAND_STATES:
@@ -614,6 +653,8 @@ class InMemoryTwinStore:
                 raise TwinStoreError("command reservation is not claimable")
             else:
                 updated_reservation = reservation
+            if validate is not None:
+                validate()
             self._commands[command_id] = replace(command, state=state, claim=claim)
             self._reservations[reservation.id] = updated_reservation
             return claim
@@ -706,7 +747,8 @@ class InMemoryTwinStore:
 
     @tracer.start_as_current_span('twin.recovery.attention', record_exception=False, set_status_on_exception=False)
     def record_recovery_attention(self, command: ExecutionCommand, intent: TradeIntent, claim: CommandClaim,
-                                  *, reason: str, evidence: Mapping[str, Any], clock: Callable[[], datetime]) -> str:
+                                  *, reason: str, evidence: Mapping[str, Any], clock: Callable[[], datetime],
+                                  validate: Callable[[], None] | None = None) -> str:
         try:
             ref, encoded = _attention_payload(command, reason, evidence)
             with self._lock:
@@ -715,6 +757,8 @@ class InMemoryTwinStore:
                 if (_command_identity(current) != _command_identity(command) or current.claim != claim
                         or scope.account_epoch != intent.account_epoch or claim.lease_expires_at <= clock()):
                     raise TwinStoreError('stale worker cannot record recovery attention')
+                if validate is not None:
+                    validate()
                 self._blocked_scopes.add(command.scope_id)
                 self._attention[(command.scope_id, ref)] = encoded
                 trace.get_current_span().set_attribute('outcome', 'paused')
@@ -935,6 +979,7 @@ class DatastoreTwinStore:
         from analyzing_llm_rationale import datastore_backend as datastore
 
         reserved_cash, reserved_loss, now = _decimal("cash", cash), _decimal("max_loss", max_loss), now or _now()
+        intent_json, intent_fingerprint = _encode_intent(intent)
         prepared_json = _encode_prepared_request(prepared_request)
         root = self._key(intent.account_scope_id)
         reservation_id = f"reservation-{intent.intent_hash[:24]}"
@@ -1007,7 +1052,10 @@ class DatastoreTwinStore:
             event.update({"event_type": "reservation_created", "sequence": updated.revision, "occurred_at": now, "observed_at": now, "payload_hash": _payload_hash({"reservation_id": reservation_id})})
             outbox = datastore.Entity(key=self._key(intent.account_scope_id, "TwinOutbox", command_id))
             outbox.update({"command_id": command_id, "payload_hash": _payload_hash({"command_id": command_id}), "created_at": now, "delivered_at": None})
-            writes = [account, entity, command, event, outbox]
+            immutable_intent = datastore.Entity(key=self._key(intent.account_scope_id, 'TwinIntent', intent.intent_hash),
+                                                exclude_from_indexes=('payload_json',))
+            immutable_intent.update({'payload_json':intent_json, 'payload_hash':intent_fingerprint})
+            writes = [account, entity, command, event, outbox, immutable_intent]
             for authority_key in authority_keys:
                 authority = datastore.Entity(key=authority_key)
                 authority.update({"intent_hash": intent.intent_hash, "command_id": command_id})
@@ -1114,13 +1162,16 @@ class DatastoreTwinStore:
             raise TwinStoreError("reservation was not found")
         return self._reservation_from_entity(scope_id, reservation_id, entity)
 
-    def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30) -> Optional[CommandClaim]:
+    def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30,
+                      validate: Callable[[], None] | None = None) -> Optional[CommandClaim]:
         if lease_seconds <= 0:
             raise TwinStoreError("lease_seconds must be positive")
         now = now or _now()
         scope_id = self._command_scope(command_id)
         key = self._key(scope_id, "TwinCommand", command_id)
         with self._client.transaction():
+            if validate is not None:
+                validate()
             entity = self._client.get(key)
             if entity is None:
                 raise TwinStoreError("command was not found")
@@ -1150,6 +1201,8 @@ class DatastoreTwinStore:
             elif reservation_state not in _RECONCILABLE_RESERVATION_STATES:
                 raise TwinStoreError("command reservation is not claimable")
             self._client.put_multi([entity, reservation])
+            if validate is not None:
+                validate()
             return claim
 
     def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str,
@@ -1205,6 +1258,14 @@ class DatastoreTwinStore:
         if entity is None:
             raise TwinStoreError("command was not found")
         return self._command_from_entity(scope_id, entity)
+
+    def intent_for_command(self, scope_id: str, command_id: str) -> TradeIntent:
+        command = self.command_for_intent_by_id(scope_id, command_id)
+        entity = self._client.get(self._key(scope_id, 'TwinIntent', command.intent_hash))
+        if entity is None:
+            raise TwinStoreError('immutable command intent is unavailable; retain exposure')
+        return _restore_intent(str(entity.get('payload_json', '')), str(entity.get('payload_hash', '')),
+                               scope_id=scope_id, command=command)
 
     def _command_from_entity(self, scope_id: str, entity: Any) -> ExecutionCommand:
         command_id = str(entity.key.name)
@@ -1298,12 +1359,15 @@ class DatastoreTwinStore:
 
     @tracer.start_as_current_span('twin.recovery.attention', record_exception=False, set_status_on_exception=False)
     def record_recovery_attention(self, command: ExecutionCommand, intent: TradeIntent, claim: CommandClaim,
-                                  *, reason: str, evidence: Mapping[str, Any], clock: Callable[[], datetime]) -> str:
+                                  *, reason: str, evidence: Mapping[str, Any], clock: Callable[[], datetime],
+                                  validate: Callable[[], None] | None = None) -> str:
         try:
             from analyzing_llm_rationale import datastore_backend as datastore
 
             ref, encoded = _attention_payload(command, reason, evidence)
             with self._client.transaction():
+                if validate is not None:
+                    validate()
                 current = self.command_for_intent(intent)
                 root = self._client.get(self._key(command.scope_id))
                 if (root is None or _command_identity(current) != _command_identity(command)
@@ -1315,6 +1379,8 @@ class DatastoreTwinStore:
                 item.update({'payload_json':encoded, 'command_id':command.id, 'reason':reason})
                 root['recovery_blocked'] = True
                 self._client.put_multi([root, item])
+                if validate is not None:
+                    validate()
             trace.get_current_span().set_attribute('outcome', 'paused')
             return ref
         except BaseException:  # aqg: top-level boundary -- bounded telemetry only, preserve caller control flow

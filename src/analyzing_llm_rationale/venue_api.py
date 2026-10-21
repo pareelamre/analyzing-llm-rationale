@@ -18,6 +18,7 @@ from urllib.parse import quote
 import requests
 from jsonschema import Draft7Validator
 from opentelemetry import metrics, trace
+from opentelemetry.trace import Status, StatusCode
 
 from . import market_data, trading
 
@@ -144,7 +145,7 @@ def _public_request(spec: dict, path: str, query: dict, body: Any) -> Any:
         raise market_data.MarketDataError("Venue batch request failed") from exc
 
 
-@tracer.start_as_current_span("venue.read")
+@tracer.start_as_current_span("venue.read", record_exception=False, set_status_on_exception=False)
 def read(platform: str, operation: str, parameters: dict | None = None, body: Any = None,
          *, access: str = "public", creds: dict | None = None) -> dict:
     spec = contract(platform, operation, access)
@@ -199,6 +200,7 @@ def read(platform: str, operation: str, parameters: dict | None = None, body: An
         return result
     except Exception as exc:
         operations.add(1, {**attrs, "outcome": "error"})
+        trace.get_current_span().set_status(Status(StatusCode.ERROR, 'venue_read_failed'))
         logger.warning("Venue read failed: %s/%s", platform, operation)
         if isinstance(exc, (market_data.MarketDataError, market_data.MarketDataInputError, trading.TradingError)):
             raise

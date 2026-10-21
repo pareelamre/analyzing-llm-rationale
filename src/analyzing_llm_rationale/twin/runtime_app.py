@@ -710,8 +710,13 @@ def _maintenance_operation(
     strategy_policy=None,
     calibration_observations=(),
     account_maintenance=None,
+    native_lifecycle=None,
 ) -> dict[str, object]:
     """Safe staging operation until venue/account adapters are configured."""
+    if job.kind is WorkerJobKind.RECOVERY and 'command_id' in job.payload:
+        if native_lifecycle is None:
+            raise WorkerDegraded('native_lifecycle_adapter_unconfigured')
+        return native_lifecycle(job)
     if job.kind is WorkerJobKind.RECOVERY:
         now = datetime.now(timezone.utc)
         stale = jobs.stale(now=now)
@@ -1139,7 +1144,7 @@ def _market_capture_policy(
     )
 
 
-def create_environment_app(*, native_account_plan_resolver=None):
+def create_environment_app(*, native_account_plan_resolver=None, native_lifecycle_reader_resolver=None):
     """Build a role-specific app from secret-free deployment configuration."""
     _assert_shadow_only()
     role = WorkerRole(_required("FORESEA_TWIN_WORKER_ROLE"))
@@ -1187,6 +1192,14 @@ def create_environment_app(*, native_account_plan_resolver=None):
         strategy_store = DatastoreStrategyStore(client)
         account_snapshot_store = DatastoreAccountSnapshotStore(client)
         twin_store = DatastoreTwinStore(client)
+        dispatcher = _build_dispatcher()
+        native_lifecycle = None
+        if native_lifecycle_reader_resolver is not None:
+            from .native_lifecycle import NativeLifecycleMaintenance
+            from .recovery import DatastoreLifecycleStore
+
+            native_lifecycle = NativeLifecycleMaintenance(twin_store, DatastoreLifecycleStore(client), jobs,
+                resolve_reader=native_lifecycle_reader_resolver, clock=now, dispatcher=dispatcher)
         account_maintenance = None
         if native_account_plan_resolver is not None:
             from .account_maintenance import NativeAccountMaintenance
@@ -1201,8 +1214,6 @@ def create_environment_app(*, native_account_plan_resolver=None):
         evidence_cache = DatastorePublicEvidenceCache(client)
         evidence_gateway = NewsPipelinePublicArticleGateway()
         ledger = ForecastLedger(_DatastoreLedgerAdapter(client))
-        dispatcher = _build_dispatcher()
-
         def stage_continuation(assignment: ResearchAssignment) -> WorkerJob | None:
             return _stage_strategy_continuation(
                 jobs, strategy_run_store, assignment, now=now(),
@@ -1339,6 +1350,7 @@ def create_environment_app(*, native_account_plan_resolver=None):
                 account_snapshot_store, twin_store, strategy_policy,
                 lambda: _calibration_observations(ledger, as_of=now()),
                 account_maintenance=account_maintenance,
+                native_lifecycle=native_lifecycle,
             ),
             research_gateway=gateway,
             shared_secret=maintenance_secret,

@@ -13,6 +13,7 @@ from dataclasses import field as dataclass_field
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Any, Callable, Mapping, Optional
+from urllib.parse import urlparse
 
 from .. import market_data
 from .models import SchemaValidationError
@@ -500,8 +501,12 @@ def complete_account_read_plan(
         if not connection_ref or any(not str(credentials.get(key) or '').strip() for key in required):
             raise AccountReadError('native_account_scoped_credentials_unavailable')
         if normalized == 'kalshi':
-            trading._connection_url(credentials.get('kalshi_base_url') or
+            native_url = trading._connection_url(credentials.get('kalshi_base_url') or
                 'https://external-api.kalshi.com/trade-api/v2', platform='kalshi')
+            if urlparse(native_url).hostname not in {
+                'external-api.kalshi.com', 'api.elections.kalshi.com',
+            }:
+                raise AccountReadError('native_account_live_environment_required')
             identity = 'kalshi-key-'+sha256(str(credentials['kalshi_api_key_id']).encode()).hexdigest()
         elif normalized == 'polymarket':
             trading._connection_url(credentials.get('polymarket_clob_host') or
