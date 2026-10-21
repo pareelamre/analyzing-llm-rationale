@@ -10,7 +10,7 @@ import json
 import logging
 import threading
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from enum import Enum
@@ -210,6 +210,8 @@ class FillObservation:
     quantity: Decimal
     occurred_at: datetime
     observed_at: datetime
+    price: Decimal | None = None
+    fee: Decimal | None = None
 
     def __post_init__(self) -> None:
         if not all(str(getattr(self, name)).strip() for name in (
@@ -221,6 +223,13 @@ class FillObservation:
         object.__setattr__(self, "quantity", _decimal("fill quantity", self.quantity))
         if self.quantity == 0:
             raise RecoveryBlocked("fill quantity must be positive")
+        if (self.price is None) != (self.fee is None):
+            raise RecoveryBlocked('fill price and actual fee must be supplied together')
+        if self.price is not None:
+            object.__setattr__(self, 'price', _decimal('fill price', self.price))
+            object.__setattr__(self, 'fee', _decimal('fill fee', self.fee))
+            if self.price > 1:
+                raise RecoveryBlocked('fill price exceeds the normalized range')
         if (
             self.occurred_at.tzinfo is None or self.occurred_at.utcoffset() is None
             or self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None
@@ -230,12 +239,15 @@ class FillObservation:
             raise RecoveryBlocked("fill cannot be observed before it occurs")
 
     def to_storage(self) -> dict[str, Any]:
-        return {
+        result = {
             "fill_id": self.fill_id, "version": self.version, "order_id": self.order_id,
             "client_order_id": self.client_order_id, "instrument_id": self.instrument_id,
             "quantity": str(self.quantity), "occurred_at": self.occurred_at.isoformat(),
             "observed_at": self.observed_at.isoformat(),
         }
+        if self.price is not None:
+            result.update(price=str(self.price), fee=str(self.fee))
+        return result
 
     @classmethod
     def from_storage(cls, value: Mapping[str, Any]) -> "FillObservation":
@@ -247,6 +259,7 @@ class FillObservation:
             Decimal(str(value["quantity"])),
             datetime.fromisoformat(str(value["occurred_at"]).replace("Z", "+00:00")),
             datetime.fromisoformat(str(value["observed_at"]).replace("Z", "+00:00")),
+            price=value.get('price'), fee=value.get('fee'),
         )
 
 
@@ -408,7 +421,7 @@ def _merge_versioned(current: Sequence[Any], incoming: Sequence[Any], identity: 
         if prior is None or item.version > prior.version:
             merged[key] = item
         elif item.version == prior.version:
-            before, after = prior.to_storage(), item.to_storage()
+            before, after = asdict(prior), asdict(item)
             before.pop('observed_at', None)
             after.pop('observed_at', None)
             if before != after:
@@ -626,15 +639,23 @@ def reconcile_lifecycle(
     settlements: Sequence[SettlementObservation] = (), order_status: str | None = None,
     observed_at: datetime, terminal_evidence_complete: bool = False,
     clock: Callable[[], datetime] | None = None,
+    validate: Callable[[], None] | None = None,
+    stage_continuation: Callable[[LifecycleProjection], None] | None = None,
 ) -> LifecycleProjection:
     """Commit lifecycle evidence, command and held cash under one current fence."""
     try:
         with _atomic_recovery(command_store, lifecycle_store):
+            if validate is not None:
+                validate()
             updated = _reconcile_lifecycle_atomic(command_store, lifecycle_store,
                 command=command, intent=intent, claim=claim, venue_order_id=venue_order_id,
                 fills=fills, settlements=settlements, order_status=order_status,
                 observed_at=observed_at, terminal_evidence_complete=terminal_evidence_complete,
                 clock=clock)
+            if stage_continuation is not None:
+                stage_continuation(updated)
+            if validate is not None:
+                validate()
     except LifecycleConflict as exc:
         # The success transaction has rolled back. Preserve bound contradictory
         # evidence separately and pause new reservations/dispatch for this root.
@@ -644,7 +665,7 @@ def reconcile_lifecycle(
                     'settlements':[row.to_storage() for row in settlements],
                     'order_status':order_status, 'terminal_evidence_complete':terminal_evidence_complete,
                     'observed_at':observed_at.isoformat(), 'venue_order_id':venue_order_id},
-                clock=clock or (lambda: datetime.now(timezone.utc)))
+                clock=clock or (lambda: datetime.now(timezone.utc)), validate=validate)
         except Exception:  # aqg: top-level boundary -- never log private evidence or backend error text
             recovery_operations.add(1, {'operation':'lifecycle','state':'unconfirmed'})
             logger.warning('lifecycle attention persistence requires reconciliation')
@@ -689,6 +710,16 @@ def _reconcile_lifecycle_atomic(command_store, lifecycle_store, *, command, inte
         order_status=order_status, observed_at=observed_at,
         terminal_evidence_complete=terminal_evidence_complete,
     )
+    native_fills = [row for row in updated.fills if row.price is not None]
+    if native_fills:
+        if len(native_fills) != len(updated.fills):
+            raise LifecycleConflict('fill_economics_incomplete')
+        notional = sum((row.quantity*row.price for row in native_fills), Decimal('0'))
+        fees = sum((row.fee for row in native_fills), Decimal('0'))
+        cost = notional+fees if intent.action.value.startswith('BUY_') else max(Decimal('0'),fees-notional)
+        reservation = command_store.reservation(command.scope_id,command.reservation_id)
+        if cost > reservation.cash or cost > reservation.max_loss:
+            raise LifecycleConflict('fill_cost_exceeds_reservation')
     if current_command.state is CommandState.FILLED and updated.filled_quantity < intent.quantity:
         raise LifecycleConflict('filled_quantity_correction')
     if (updated.order_status == 'filled' and updated.terminal_evidence_complete
@@ -844,6 +875,7 @@ def recover_submission(
     lookups: Iterable[VenueOrderLookup],
     required_absence_observations: int | None = None,
     clock: Callable[[], datetime] | None = None,
+    validate: Callable[[], None] | None = None,
 ) -> RecoveryResult:
     """Read bounded venue evidence outside the account transaction, then fence its commit."""
     current = _bound_command(store, command, intent)
@@ -860,10 +892,14 @@ def recover_submission(
         raise RecoveryBlocked('recovery evidence exceeds the bounded read budget')
     try:
         with _atomic_recovery(store):
+            if validate is not None:
+                validate()
             current = _check_lifecycle_claim(store, current, intent, claim, now, clock)
             result = _recover_submission_atomic(store, command=current, intent=intent, claim=claim,
                 now=now, lookups=evidence, required_absence_observations=required_absence_observations)
             _check_lifecycle_claim(store, current, intent, claim, now, clock)
+            if validate is not None:
+                validate()
     except RecoveryBlocked:
         raise
     except Exception:  # aqg: top-level boundary -- an unconfirmed commit must never authorize another send
@@ -953,7 +989,5 @@ def recovery_action(command_state: str, venue_order_found: bool | None) -> str:
     if command_state in {"submitting", "submission_unknown"}:
         if venue_order_found is True:
             return "reconcile"
-        if venue_order_found is False:
-            return "mark_no_order"
         return "pause_and_reconcile"
     return "resume"

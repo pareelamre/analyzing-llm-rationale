@@ -294,6 +294,26 @@
           "maxLength": 500
         },
         "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explode": false
+      },
+      {
+        "name": "min_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explode": false
       }
     ],
     "body": {
@@ -347,6 +367,26 @@
         "schema": {
           "type": "string",
           "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explode": false
+      },
+      {
+        "name": "min_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
         },
         "explode": false
       }
@@ -2628,6 +2668,58 @@
         "schema": {
           "type": "string",
           "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.order": {
+    "venue": "kalshi",
+    "operation": "order",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/portfolio/orders/{order_id}",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "order_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.order": {
+    "venue": "polymarket",
+    "operation": "order",
+    "source": "clob",
+    "method": "GET",
+    "path": "/data/order/{order_id}",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "order_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
         },
         "explode": false
       }

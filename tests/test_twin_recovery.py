@@ -111,6 +111,11 @@ class TwinRecoveryTests(unittest.TestCase):
         self.assertEqual(recovery_action("submission_unknown", True), "reconcile")
         self.assertEqual(recovery_action("filled", None), "terminal")
 
+    def test_negative_legacy_lookup_is_not_proof_of_absence(self):
+        for state in ("submitting", "submission_unknown"):
+            with self.subTest(state=state):
+                self.assertEqual(recovery_action(state, False), "pause_and_reconcile")
+
     def test_found_order_is_acknowledged_using_the_prepared_identity(self):
         store, intent, command, claim = prepared_unknown()
         result = recover_submission(

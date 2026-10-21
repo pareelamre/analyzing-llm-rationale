@@ -211,6 +211,7 @@ class WorkerJob:
     completed_at: Optional[datetime] = None
     last_error: Optional[str] = None
     schema_version: int = 1
+    not_before: Optional[datetime] = None
 
     def __post_init__(self) -> None:
         if self.schema_version != 1:
@@ -253,6 +254,13 @@ class WorkerJob:
         for timestamp in (self.created_at, self.completed_at, self.lease_expires_at):
             if timestamp is not None and (timestamp.tzinfo is None or timestamp.utcoffset() is None):
                 raise WorkerJobError("worker job timestamps must be timezone-aware")
+        if self.not_before is not None and (
+            not isinstance(self.not_before, datetime)
+            or self.not_before.tzinfo is None or self.not_before.utcoffset() is None
+            or self.not_before >= self.deadline
+            or (self.created_at is not None and self.not_before < self.created_at)
+        ):
+            raise WorkerJobError("worker delivery time must be aware and between creation and deadline")
         if self.completed_result is not None:
             _validated_result(self.completed_result)
         if self.status in {
@@ -322,6 +330,8 @@ class InMemoryWorkerJobs:
             if job.deadline <= now:
                 self._jobs[job_id] = replace(job, status=WorkerJobStatus.EXPIRED)
                 return None
+            if job.not_before is not None and job.not_before > now:
+                return None
             if job.lease_expires_at is not None and job.lease_expires_at > now:
                 return None
             lease_expires_at = min(job.deadline, now + timedelta(seconds=lease_seconds))
@@ -373,6 +383,7 @@ class InMemoryWorkerJobs:
                 (
                     job for job in self._jobs.values()
                     if job.completed_result is None and job.deadline > now
+                    and (job.not_before is None or job.not_before <= now)
                     and (job.lease_expires_at is None or job.lease_expires_at <= now)
                 ),
                 key=lambda job: (_PRIORITY[job.kind], job.deadline, job.id),
@@ -436,11 +447,14 @@ class DatastoreWorkerJobs:
 
     @staticmethod
     def _identity(job: WorkerJob) -> str:
-        encoded = json.dumps({
+        payload = {
             "id": job.id, "account_scope_id": job.account_scope_id,
             "kind": job.kind.value, "payload": dict(job.payload),
             "deadline": job.deadline.isoformat(), "schema_version": job.schema_version,
-        }, sort_keys=True, separators=(",", ":"))
+        }
+        if job.not_before is not None:
+            payload["not_before"] = job.not_before.isoformat()
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return sha256(encoded.encode()).hexdigest()
 
     @classmethod
@@ -456,6 +470,7 @@ class DatastoreWorkerJobs:
                 attempts=int(entity.get("attempts", 0)), status=WorkerJobStatus(str(entity["status"])),
                 created_at=entity.get("created_at"), completed_at=entity.get("completed_at"),
                 last_error=entity.get("last_error"), schema_version=int(entity["schema_version"]),
+                not_before=entity.get("not_before"),
             )
             if entity.get("identity_hash") != cls._identity(job):
                 raise WorkerJobError("durable worker job identity failed validation")
@@ -482,21 +497,26 @@ class DatastoreWorkerJobs:
             "created_at": job.created_at, "completed_at": job.completed_at,
             "last_error": job.last_error, "schema_version": job.schema_version,
             "identity_hash": cls._identity(job),
+            "not_before": job.not_before,
         })
         return entity
 
     def add(self, job: WorkerJob) -> WorkerJob:
-        key = self._key(job.id)
         with self._client.transaction():
-            existing = self._client.get(key)
-            if existing is not None:
-                stored = self._from_entity(existing)
-                if self._identity(stored) != self._identity(job):
-                    raise WorkerJobError("worker job ID was reused with different work")
-                return stored
-            stored = replace(job, created_at=job.created_at or datetime.now(timezone.utc))
-            self._client.put(self._entity(stored, key))
+            return self._add_in_transaction(job)
+
+    def _add_in_transaction(self, job: WorkerJob) -> WorkerJob:
+        """Join the caller's transaction so work and its continuation commit together."""
+        key = self._key(job.id)
+        existing = self._client.get(key)
+        if existing is not None:
+            stored = self._from_entity(existing)
+            if self._identity(stored) != self._identity(job):
+                raise WorkerJobError("worker job ID was reused with different work")
             return stored
+        stored = replace(job, created_at=job.created_at or datetime.now(timezone.utc))
+        self._client.put(self._entity(stored, key))
+        return stored
 
     def get(self, job_id: str) -> WorkerJob:
         entity = self._client.get(self._key(job_id))
@@ -518,6 +538,8 @@ class DatastoreWorkerJobs:
             if job.deadline <= now:
                 expired = replace(job, status=WorkerJobStatus.EXPIRED, lease_expires_at=None)
                 self._client.put(self._entity(expired, key))
+                return None
+            if job.not_before is not None and job.not_before > now:
                 return None
             if job.lease_expires_at is not None and job.lease_expires_at > now:
                 return None
@@ -566,6 +588,7 @@ class DatastoreWorkerJobs:
         return tuple(sorted((
             job for job in jobs
             if job.completed_result is None and job.deadline > now
+            and (job.not_before is None or job.not_before <= now)
             and (job.lease_expires_at is None or job.lease_expires_at <= now)
         ), key=lambda job: (_PRIORITY[job.kind], job.deadline, job.id)))
 
