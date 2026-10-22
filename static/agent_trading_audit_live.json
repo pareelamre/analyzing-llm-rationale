@@ -13243,6 +13243,88 @@
     ],
     "gemma-4-26b-a4b-it": [
       {
+        "action_id": "a1983340-f35f-413e-855b-a0530c2a5608",
+        "agent_id": "gemma-4-26b-a4b-it",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 734.951087
+          },
+          "initiated_by": "early_profit_harvest_rule",
+          "quote": {
+            "lead_days": 6.580045702824075,
+            "marketable": true,
+            "observed_ask": 0.09,
+            "observed_bid": null,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_price_from_live_quote"
+          },
+          "requested_order": {
+            "price": null,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 7481.042648,
+            "cash_required": 0.0,
+            "concentration_cap": 1500.0,
+            "cycle_id": "30m:995932",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3000.0,
+            "drawdown_after": 0.223372,
+            "fee": 2.4077,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 66.145598,
+            "open_markets_after": 3,
+            "per_cycle_spend_limit": 2000.0,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:995932",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 666.397789196076,
+          "cash_required": 0.0,
+          "fee": 2.4077,
+          "netting_payout": 734.951087028655,
+          "notional": 66.14559783257894,
+          "price": 0.09,
+          "quantity": 734.951087028655,
+          "realized_pnl": 409.16490873604687,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-there-be-no-change-in-fed-interest-rates-after-the-october-2026-meeting-20260617190324031"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "0f569e4e312b7f41efdf56e3ac4a51deee5d0100609bfcacbd209c8927220aa8",
+        "recorded_at": "2026-10-22T14:03:44.156855+00:00"
+      },
+      {
         "action_id": "f94534b8-1c48-4c7b-a004-19e24c583a7c",
         "agent_id": "gemma-4-26b-a4b-it",
         "audit": {
@@ -128641,7 +128723,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-22T12:07:01.672746+00:00",
+  "generated_at": "2026-10-22T14:07:00.547505+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
