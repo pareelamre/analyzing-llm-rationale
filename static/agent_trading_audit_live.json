@@ -39159,6 +39159,88 @@
     ],
     "glm-5-3-flash": [
       {
+        "action_id": "73f5efdf-a0a3-4247-a316-1c33fea96c37",
+        "agent_id": "glm-5-3-flash",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 350.996964
+          },
+          "initiated_by": "early_profit_harvest_rule",
+          "quote": {
+            "lead_days": 6.496370500335647,
+            "marketable": true,
+            "observed_ask": 0.02,
+            "observed_bid": 0.019,
+            "source": "live_venue_quote",
+            "spread": 0.001,
+            "spread_status": "checked",
+            "status": "shadow_price_from_live_quote"
+          },
+          "requested_order": {
+            "price": null,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 8796.064159,
+            "cash_required": 0.0,
+            "concentration_cap": 1500.0,
+            "cycle_id": "30m:996080",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3000.0,
+            "drawdown_after": 0.01452,
+            "fee": 0.27518,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 7.019939,
+            "open_markets_after": 5,
+            "per_cycle_spend_limit": 2000.0,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:996080",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 343.7018447414228,
+          "cash_required": 0.0,
+          "fee": 0.27518,
+          "netting_payout": 350.99696402186,
+          "notional": 7.0199392804372,
+          "price": 0.02,
+          "quantity": 350.99696402186,
+          "realized_pnl": 48.8643949630604,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "nato-x-russia-military-clash-by-october-31-2026"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "b73683018f2cf19658baddbeae141c8b776f3a8af54a018f243874149146cdd8",
+        "recorded_at": "2026-10-25T16:04:13.706823+00:00"
+      },
+      {
         "action_id": "c56d5bed-9ae5-4179-8f43-43957b869d51",
         "agent_id": "glm-5-3-flash",
         "audit": {
@@ -128805,7 +128887,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-25T15:05:24.967705+00:00",
+  "generated_at": "2026-10-25T16:06:46.525906+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
