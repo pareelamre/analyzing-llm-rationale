@@ -5,6 +5,18 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-26 — Kite Personal account reads (Codex)
+
+Kite Personal uses separate authenticated `/integrations/kite` routes and the
+Settings Exchange panel for holdings, net/day positions, funds and today's
+orders. It is not a prediction-market execution venue or public MCP tool.
+Credentials reuse owner-bound KMS envelopes; `KiteConnectionIntent` generations
+prevent a pending connect from restoring a disconnected credential across replicas.
+Access defaults off via `FORESEA_ENABLE_KITE_PERSONAL`; broker/platform prerequisites
+and audit-log retention must be checked before enabling. Kite tokens can trade,
+although Foresea only reads; disconnect removes local credentials without broker
+revocation. See `docs/kite-personal.md` for setup and renewal.
+
 ### 2026-10-18 — Completed ARR research archive (Codex)
 
 `docs/research/arr_2026_10/README.md` indexes the completed prompt-selection,
