@@ -6,6 +6,19 @@
   "implementation_status": "native_recovery_journal_and_owner_opening_implemented_native_sources_and_release_pending",
   "implementation_baseline": "1d8a446dc5b9c1e82143119e6ee582c700371c8f",
   "next_task": "T06",
+  "byom_distribution_goal": {
+    "updated_at": "2026-10-26",
+    "objective": "Deliver a tested, distributable BYOM Foresea twin using existing code, without requiring SCADS access or adding paid infrastructure",
+    "scope": "Shadow software distribution; original live task cards and release gates remain separate",
+    "acceptance_report": "docs/autonomous-twin/BYOM_DELIVERY.md",
+    "status": "offline_shadow_software_reviewed_final_pr_delivery_required",
+    "new_regression": "tests.test_twin_byom_cycle",
+    "verification": "2026-10-26: actual localhost BYOM provider, both venue fixtures, finalizer interruption and fresh SQL-client recovery pass. Initial clean readonly Linux acceptance7 and actual Compose healthy/restart/SQL persistence/empty queue pass; owned resources cleaned. Local full3413 pass/268 emulator skips before final identity checks. Reviewed focused35 pass, including SQL two-client synchronization, all identity conflicts and expired/no-action continuation. Ruff/release/Graphify and Semgrep151 rules/2files/0findings pass. Single audit aud_GpuamJPUE3 terminal partial:4 usable/1 failed,10 findings consolidated into7 accepted/addressed rows. Final image/Compose/CI and merge are required delivery-PR evidence.",
+    "review_table": "docs/autonomous-twin/BYOM_DELIVERY_REVIEW.md",
+    "fix": "Repeated research finalization/callback continuation staging preserves the first job deadline and refuses conflicting work",
+    "model_access_required_for_offline_acceptance": false,
+    "live_activation_or_paid_resources_authorized_by_this_goal": false
+  },
   "live_authorized": false,
   "signal_screen": {
     "date": "2026-10-19",
