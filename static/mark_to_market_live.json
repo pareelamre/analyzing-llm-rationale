@@ -2,7 +2,7 @@
   "arbitrage_signals": [],
   "discrepancy_monitor": {
     "by_status": {
-      "stale_forecast": 1,
+      "thin_market": 1,
       "wide_spread": 2
     },
     "huge_gap_threshold": 0.2,
@@ -15,20 +15,20 @@
   },
   "edge_board": [
     {
-      "abs_edge": 0.74,
+      "abs_edge": 0.715,
       "categories": [],
       "context_complete": true,
-      "crowd_move_since_forecast": 0.11,
+      "crowd_move_since_forecast": 0.085,
       "description": "This market will resolve to \"Yes\" if any single lot is sold at public auction for an all-in price (inclusive of buyer's premium) of at least $150 million at a major auction house between market creation and December 31, 2026. Otherwise, this market will resolve to \"No\".\n\nFor the purposes of this market, a major auction house will be one of the following: Sotheby's. Christie's, or Phillips. If no such lot is reported by December 31, 2026, 11:59PM ET, this market will resolve to \"No\".\n\nThis market will resolve according to the official post-sales results as published on each auction house's official website. If the resolution source becomes permanently unavailable or no qualifying report is released by December 31, 2026, 11:59PM ET, this market will resolve to \"No\".",
-      "discrepancy_status": "stale_forecast",
+      "discrepancy_status": "thin_market",
       "domain": "other",
-      "edge": -0.74,
+      "edge": -0.715,
       "edge_bucket": "20pp+",
-      "entry_price": 0.11,
+      "entry_price": 0.135,
       "evidence_count": 1,
       "executable_edge": 0.56,
       "executable_entry_price": 0.29,
-      "forecast_age_hours": 229.3,
+      "forecast_age_hours": 229.5,
       "forecast_market_probability": 0.78,
       "forecasted_at": "2026-10-16T20:36:57.673173+00:00",
       "horizon": "30d+",
@@ -51,18 +51,17 @@
       "market_ask": 0.85,
       "market_bid": 0.71,
       "market_liquidity": 522.998,
-      "market_probability": 0.89,
+      "market_probability": 0.865,
       "market_url": "https://polymarket.com/market/will-an-artwork-sell-for-150-million-by-december-31",
       "market_volume": 100.0,
       "model_probability": 0.15,
       "needs_discrepancy_review": true,
-      "payout_odds": 8.1,
+      "payout_odds": 6.4,
       "platform": "Polymarket",
       "question": "Will an artwork sell for $150 million by December 31?",
       "resolution_criteria": "This market will resolve to \"Yes\" if any single lot is sold at public auction for an all-in price (inclusive of buyer's premium) of at least $150 million at a major auction house between market creation and December 31, 2026. Otherwise, this market will resolve to \"No\".\n\nFor the purposes of this market, a major auction house will be one of the following: Sotheby's. Christie's, or Phillips. If no such lot is reported by December 31, 2026, 11:59PM ET, this market will resolve to \"No\".\n\nThis market will resolve according to the official post-sales results as published on each auction house's official website. If the resolution source becomes permanently unavailable or no qualifying report is released by December 31, 2026, 11:59PM ET, this market will resolve to \"No\".",
       "resolve_time": "2027-01-01T04:59:00Z",
       "review_reasons": [
-        "crowd_moved_since_forecast",
         "thin_market"
       ],
       "rules_present": true,
@@ -98,7 +97,7 @@
       "evidence_count": 5,
       "executable_edge": -0.01,
       "executable_entry_price": 0.74,
-      "forecast_age_hours": 229.3,
+      "forecast_age_hours": 229.4,
       "forecast_market_probability": 0.625,
       "forecasted_at": "2026-10-16T20:38:31.476061+00:00",
       "horizon": "30d+",
@@ -168,7 +167,7 @@
       "evidence_count": 5,
       "executable_edge": -0.13,
       "executable_entry_price": 0.98,
-      "forecast_age_hours": 221.4,
+      "forecast_age_hours": 221.5,
       "forecast_market_probability": 0.49,
       "forecasted_at": "2026-10-17T04:34:52.329168+00:00",
       "horizon": "30d+",
@@ -223,22 +222,22 @@
       "venue_news_count": 0
     },
     {
-      "abs_edge": 0.185,
+      "abs_edge": 0.155,
       "categories": [
         "Crypto"
       ],
       "context_complete": true,
-      "crowd_move_since_forecast": 0.19,
+      "crowd_move_since_forecast": 0.16,
       "description": "What price will Ethereum hit before 2027?",
       "discrepancy_status": "genuine_candidate",
       "domain": "crypto",
-      "edge": -0.185,
+      "edge": -0.155,
       "edge_bucket": "10-20pp",
-      "entry_price": 0.175,
+      "entry_price": 0.205,
       "evidence_count": 4,
       "executable_edge": -0.01,
       "executable_entry_price": 0.37,
-      "forecast_age_hours": 215.5,
+      "forecast_age_hours": 215.6,
       "forecast_market_probability": 0.635,
       "forecasted_at": "2026-10-17T10:26:35.677000+00:00",
       "horizon": "30d+",
@@ -261,12 +260,12 @@
       "market_ask": 0.64,
       "market_bid": 0.63,
       "market_liquidity": 47208.1067,
-      "market_probability": 0.825,
+      "market_probability": 0.795,
       "market_url": "https://polymarket.com/market/will-ethereum-dip-to-2250-by-december-31-2026",
       "market_volume": 1284.396844,
       "model_probability": 0.64,
       "needs_discrepancy_review": false,
-      "payout_odds": 4.7,
+      "payout_odds": 3.9,
       "platform": "Polymarket",
       "question": "Will Ethereum dip to $2,250 by December 31, 2026?",
       "resolution_criteria": "This market will resolve to \u201cYes\u201d if any Binance 1-minute candle for Ethereum (ETH/USDT) from the creation of this market through 11:59 PM ET on the last day of the year specified in the title has a final \"High\" or \"Low\" price equal to or beyond (above for \u2191 High Prices, below for \u2193 Low Prices) the listed price. Otherwise, this market will resolve to \"No\u201d. Price action before this market's creation will not be considered.\n\nThe resolution source for this market is Binance, specifically the ETH/USDT \u201cHigh\u201d and \u201cLow\u201d prices available at:\nhttps://www.binance.com/en/trade/ETH_USDT with the chart settings on \u201c1m\u201d (one-minute candles) selected on the top bar.\n\nPlease note that the outcome of this market depends solely on the price data from the Binance ETH/USDT trading pair. Prices from other exchanges, different trading pairs, or spot markets will not be considered for the resolution of this market.\n\nWhat price will Ethereum hit before 2027?",
@@ -290,28 +289,28 @@
       "venue_news_count": 0
     },
     {
-      "abs_edge": 0.085,
+      "abs_edge": 0.095,
       "categories": [
         "Economics"
       ],
       "context_complete": true,
-      "crowd_move_since_forecast": 0.08,
+      "crowd_move_since_forecast": 0.09,
       "description": "The FED interest rates are defined in this market by the upper bound of the target federal funds range. The decisions on the target federal funds range are made by the Federal Open Market Committee (FOMC) meetings.\n\nThis market will resolve to the amount of basis points the upper bound of the target federal funds rate is changed by versus the level it was prior to the Federal Reserve's October 2026 meeting.\n\nIf the target federal funds rate is changed to a level not expressed in the displayed options, the change will be rounded up to the nearest 25 and will resolve to the relevant bracket. (e.g. if there's a cut/increase of 12.5 bps it will be considered to be 25 bps)\n\nThe resolution source for this market is the FOMC\u2019s statement after its meeting scheduled for October 27-28, 2026 according to the official calendar: https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm.\n\nThe level and change of the target federal funds rate is also published at the official website of the Federal Reserve at https://www.federalreserve.gov/monetarypolicy/openmarket.htm.\n\nThis market may resolve as soon as the FOMC\u2019s statement for their October meeting with relevant data is issued. If no statement is released by the end date of the next scheduled meeting, this market will resolve to the \"No change\" bracket.",
       "discrepancy_status": "genuine_candidate",
       "domain": "economics",
-      "edge": -0.085,
+      "edge": -0.095,
       "edge_bucket": "5-10pp",
-      "entry_price": 0.055,
+      "entry_price": 0.045,
       "evidence_count": 5,
       "executable_edge": 0.0,
       "executable_entry_price": 0.14,
-      "forecast_age_hours": 227.3,
+      "forecast_age_hours": 227.4,
       "forecast_market_probability": 0.865,
       "forecasted_at": "2026-10-16T22:42:03.559592+00:00",
       "horizon": "7-14d",
       "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-october-2026-meeting-20260617190324031",
       "lead_bucket": "1-3d",
-      "lead_days": 2.8,
+      "lead_days": 2.7,
       "lead_track_record": {
         "accuracy": 0.8555,
         "horizon": "1-3d",
@@ -328,12 +327,12 @@
       "market_ask": 0.87,
       "market_bid": 0.86,
       "market_liquidity": 549148.3329,
-      "market_probability": 0.945,
+      "market_probability": 0.955,
       "market_url": "https://polymarket.com/market/will-there-be-no-change-in-fed-interest-rates-after-the-october-2026-meeting-20260617190324031",
       "market_volume": 511004.167569,
       "model_probability": 0.86,
       "needs_discrepancy_review": false,
-      "payout_odds": 17.2,
+      "payout_odds": 21.2,
       "platform": "Polymarket",
       "question": "Will there be no change in Fed interest rates after the October 2026 meeting?",
       "resolution_criteria": "The FED interest rates are defined in this market by the upper bound of the target federal funds range. The decisions on the target federal funds range are made by the Federal Open Market Committee (FOMC) meetings.\n\nThis market will resolve to the amount of basis points the upper bound of the target federal funds rate is changed by versus the level it was prior to the Federal Reserve's October 2026 meeting.\n\nIf the target federal funds rate is changed to a level not expressed in the displayed options, the change will be rounded up to the nearest 25 and will resolve to the relevant bracket. (e.g. if there's a cut/increase of 12.5 bps it will be considered to be 25 bps)\n\nThe resolution source for this market is the FOMC\u2019s statement after its meeting scheduled for October 27-28, 2026 according to the official calendar: https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm.\n\nThe level and change of the target federal funds rate is also published at the official website of the Federal Reserve at https://www.federalreserve.gov/monetarypolicy/openmarket.htm.\n\nThis market may resolve as soon as the FOMC\u2019s statement for their October meeting with relevant data is issued. If no statement is released by the end date of the next scheduled meeting, this market will resolve to the \"No change\" bracket.",
@@ -372,13 +371,13 @@
       "evidence_count": 4,
       "executable_edge": -0.01,
       "executable_entry_price": 0.14,
-      "forecast_age_hours": 229.3,
+      "forecast_age_hours": 229.5,
       "forecast_market_probability": 0.135,
       "forecasted_at": "2026-10-16T20:38:02.815732+00:00",
       "horizon": "7-14d",
       "ident": "will-the-fed-increase-interest-rates-by-25-bps-after-the-october-2026-meeting-20260617190324032",
       "lead_bucket": "1-3d",
-      "lead_days": 2.8,
+      "lead_days": 2.7,
       "lead_track_record": {
         "accuracy": 0.8555,
         "horizon": "1-3d",
@@ -439,7 +438,7 @@
       "evidence_count": 2,
       "executable_edge": 0.0,
       "executable_entry_price": 0.22,
-      "forecast_age_hours": 221.3,
+      "forecast_age_hours": 221.5,
       "forecast_market_probability": 0.785,
       "forecasted_at": "2026-10-17T04:36:19.062852+00:00",
       "horizon": "14-30d",
@@ -504,7 +503,7 @@
       "evidence_count": 5,
       "executable_edge": 0.01,
       "executable_entry_price": 0.14,
-      "forecast_age_hours": 215.5,
+      "forecast_age_hours": 215.6,
       "forecast_market_probability": 0.125,
       "forecasted_at": "2026-10-17T10:28:11.775927+00:00",
       "horizon": "30d+",
@@ -571,7 +570,7 @@
       "evidence_count": 5,
       "executable_edge": 0.0,
       "executable_entry_price": 0.85,
-      "forecast_age_hours": 215.5,
+      "forecast_age_hours": 215.7,
       "forecast_market_probability": 0.155,
       "forecasted_at": "2026-10-17T10:26:08.231747+00:00",
       "horizon": "30d+",
@@ -638,7 +637,7 @@
       "evidence_count": 5,
       "executable_edge": -0.0,
       "executable_entry_price": 0.1,
-      "forecast_age_hours": 221.4,
+      "forecast_age_hours": 221.5,
       "forecast_market_probability": 0.095,
       "forecasted_at": "2026-10-17T04:33:02.093840+00:00",
       "horizon": "14-30d",
@@ -690,57 +689,59 @@
       "venue_news_count": 0
     },
     {
-      "abs_edge": 0.021,
-      "categories": [],
+      "abs_edge": 0.025,
+      "categories": [
+        "Other"
+      ],
       "context_complete": true,
-      "crowd_move_since_forecast": -0.021,
-      "description": "This market will resolve according to the winner of the 2026 Ballon d\u2019Or.\n\nIf no 2026 Ballon d\u2019Or winner is declared by December 31, 2026, 11:59 PM ET, this market will resolve to \"Other\".\n\nThe primary resolution source for this market is official information from France Football (https://www.francefootball.fr/).",
+      "crowd_move_since_forecast": -0.025,
+      "description": "This market will resolve to the individual who officially holds the position of the head of state of Venezuela on Dec 31, 2026 at 12 PM ET.\n\nFor the purposes of this market, \"officially holds\" refers to the individual that was formally appointed, confirmed (if confirmation is required), and sworn in as the head of state of Venezuela or otherwise confirmed by official government information as being the head of state of Venezuela. \n\nIf the Venezuelan government does not clearly state who is the head of state, the market will resolve to the individual who is listed as the Head of State by the UN (see: https://www.un.org/dgacm/en/content/protocol/hshgnfa).  \n\nIn the event that more than one official head of state is listed by the Venezuelan  government, this market will resolve to the individual who is listed as having primary status. If no distinction is made, the market will resolve to the individual who first assumed the position. \n\nIf no individual holds the position this market will resolve to \u201cNo Head of State\u201d. \n\nThe following do NOT constitute \"officially holding\" the role: nominated, announced, or designated as the head of state of Venezuela but appointment not yet effective; appointed with an effective date after Dec 31, 2026; previously served as the head of state of Venezuela but term has expired, resigned, or been terminated before Dec 31, 2026; serving as the head of state of Venezuela in a consultant, contractor, or unofficial capacity; named as successor or heir apparent to the head of state of Venezuela but not yet appointed; or holding a different role with oversight of the head of state of Venezuela but not the specified position itself.\n\nThe primary resolution source will be official information from the UN recognized government of Venezuela. If the Government of Venezuela does not clearly state who is the head of state, information from the UN and a consensus of credible reporting may be used. \n\nNote: this market is mutually exclusive.",
       "discrepancy_status": "normal",
       "domain": "other",
-      "edge": 0.021,
+      "edge": -0.025,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.009,
+      "entry_price": 0.795,
       "evidence_count": 5,
-      "executable_edge": -0.001,
-      "executable_entry_price": 0.031,
-      "forecast_age_hours": 215.5,
-      "forecast_market_probability": 0.03,
-      "forecasted_at": "2026-10-17T10:27:15.795625+00:00",
+      "executable_edge": 0.04,
+      "executable_entry_price": 0.78,
+      "forecast_age_hours": 227.4,
+      "forecast_market_probability": 0.23,
+      "forecasted_at": "2026-10-16T22:42:39.107138+00:00",
       "horizon": "30d+",
-      "ident": "will-lionel-messi-win-the-2026-ballon-dor",
-      "lead_bucket": "<1d",
-      "lead_days": 0.8,
+      "ident": "will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
+      "lead_bucket": "30d+",
+      "lead_days": 66.8,
       "lead_track_record": {
-        "accuracy": 0.8162,
-        "horizon": "<1d",
-        "n": 1659,
-        "n_markets": 392,
+        "accuracy": 0.8665,
+        "horizon": "30d+",
+        "n": 1303,
+        "n_markets": 26,
         "skill_ci_comparisons": 6,
-        "skill_ci_high": 0.0022,
-        "skill_ci_low": -0.0089,
-        "skill_ci_mean": -0.0033,
+        "skill_ci_high": 0.008,
+        "skill_ci_low": -0.0451,
+        "skill_ci_mean": -0.0186,
         "skill_ci_method": "market_means_normal_bonferroni_v1",
         "skill_significant": false,
         "skill_vs_market": -0.0055
       },
-      "market_ask": 0.031,
-      "market_bid": 0.03,
-      "market_liquidity": 190300.25681,
-      "market_probability": 0.009,
-      "market_url": "https://polymarket.com/market/will-lionel-messi-win-the-2026-ballon-dor",
-      "market_volume": 71591.138937,
-      "model_probability": 0.03,
+      "market_ask": 0.24,
+      "market_bid": 0.22,
+      "market_liquidity": 110825.6283,
+      "market_probability": 0.205,
+      "market_url": "https://polymarket.com/market/will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
+      "market_volume": 1361.955001,
+      "model_probability": 0.18,
       "needs_discrepancy_review": false,
-      "payout_odds": 104.3,
+      "payout_odds": 0.3,
       "platform": "Polymarket",
-      "question": "Will Lionel Messi win the 2026 Ballon d'Or?",
-      "resolution_criteria": "This market will resolve according to the winner of the 2026 Ballon d\u2019Or.\n\nIf no 2026 Ballon d\u2019Or winner is declared by December 31, 2026, 11:59 PM ET, this market will resolve to \"Other\".\n\nThe primary resolution source for this market is official information from France Football (https://www.francefootball.fr/).",
-      "resolve_time": "2026-10-27T03:59:00Z",
+      "question": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
+      "resolution_criteria": "This market will resolve to the individual who officially holds the position of the head of state of Venezuela on Dec 31, 2026 at 12 PM ET.\n\nFor the purposes of this market, \"officially holds\" refers to the individual that was formally appointed, confirmed (if confirmation is required), and sworn in as the head of state of Venezuela or otherwise confirmed by official government information as being the head of state of Venezuela. \n\nIf the Venezuelan government does not clearly state who is the head of state, the market will resolve to the individual who is listed as the Head of State by the UN (see: https://www.un.org/dgacm/en/content/protocol/hshgnfa).  \n\nIn the event that more than one official head of state is listed by the Venezuelan  government, this market will resolve to the individual who is listed as having primary status. If no distinction is made, the market will resolve to the individual who first assumed the position. \n\nIf no individual holds the position this market will resolve to \u201cNo Head of State\u201d. \n\nThe following do NOT constitute \"officially holding\" the role: nominated, announced, or designated as the head of state of Venezuela but appointment not yet effective; appointed with an effective date after Dec 31, 2026; previously served as the head of state of Venezuela but term has expired, resigned, or been terminated before Dec 31, 2026; serving as the head of state of Venezuela in a consultant, contractor, or unofficial capacity; named as successor or heir apparent to the head of state of Venezuela but not yet appointed; or holding a different role with oversight of the head of state of Venezuela but not the specified position itself.\n\nThe primary resolution source will be official information from the UN recognized government of Venezuela. If the Government of Venezuela does not clearly state who is the head of state, information from the UN and a consensus of credible reporting may be used. \n\nNote: this market is mutually exclusive.",
+      "resolve_time": "2027-01-01T04:59:00Z",
       "review_reasons": [],
       "rules_present": true,
-      "side": "YES",
-      "spread": 0.001,
-      "stance": "model_above_market",
+      "side": "NO",
+      "spread": 0.02,
+      "stance": "model_below_market",
       "track_record": {
         "n": 6875,
         "n_markets": 478,
@@ -770,7 +771,7 @@
       "evidence_count": 5,
       "executable_edge": -0.005,
       "executable_entry_price": 0.38,
-      "forecast_age_hours": 215.5,
+      "forecast_age_hours": 215.6,
       "forecast_market_probability": 0.625,
       "forecasted_at": "2026-10-17T10:27:39.859972+00:00",
       "horizon": "14-30d",
@@ -823,125 +824,56 @@
     },
     {
       "abs_edge": 0.02,
-      "categories": [
-        "Politics"
-      ],
+      "categories": [],
       "context_complete": true,
-      "crowd_move_since_forecast": 0.015,
-      "description": "This market will resolve according to the party that wins control of the United States House of Representatives in the 2026 United States midterm election.\n\nA party wins control of the United States House of Representatives if it wins a majority of the chamber\u2019s voting seats. If no party wins a majority of voting seats, the chamber will be deemed controlled by the party with which the first elected Speaker of the House of the Congress that convenes after the 2026 midterm election is affiliated.\n\nThe following rules govern the counting of seats for determining which party wins control of the chamber.\n\nAll House elections in the 2026 United States midterm election that elect voting members and determine representation in the upcoming 120th Congress are included. Where a seat is decided by a runoff, the runoff result will determine attribution of that seat.\n\nSeats are attributed to the party under which the member was elected. If a member-elect changes party affiliation, or vacates their seat, between election day and the formal organization of Congress, the seat is attributed to the party under which the member was elected.\n\nHouse members elected as independents who formally caucus with, or, for newly elected members, who announce their intent to caucus with, a party are included in that party\u2019s count. If the caucus decisions of members of the House elected as independents cannot be determined on the date of the election, this market may remain open until the earlier of (i) an announcement from the relevant members of their intents to caucus, or (ii) January 4th, 11:59 PM ET of the following calendar year. If no such announcement is made by January 4th, 11:59 PM ET of the following calendar year, the member will not count towards the seat count of any party.\n\nThe resolution sources for this market will be official information from relevant state electoral authorities, the United States Congress, and a consensus of credible reporting.",
-      "discrepancy_status": "normal",
-      "domain": "elections",
-      "edge": -0.02,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.08,
-      "evidence_count": 5,
-      "executable_edge": 0.0,
-      "executable_entry_price": 0.1,
-      "forecast_age_hours": 221.4,
-      "forecast_market_probability": 0.905,
-      "forecasted_at": "2026-10-17T04:35:50.386144+00:00",
-      "horizon": "14-30d",
-      "ident": "will-the-democratic-party-control-the-house-after-the-2026-midterm-elections",
-      "lead_bucket": "7-14d",
-      "lead_days": 8.8,
-      "lead_track_record": {
-        "accuracy": 0.8091,
-        "horizon": "7-14d",
-        "n": 1833,
-        "n_markets": 119,
-        "skill_ci_comparisons": 6,
-        "skill_ci_high": 0.0137,
-        "skill_ci_low": -0.0175,
-        "skill_ci_mean": -0.0019,
-        "skill_ci_method": "market_means_normal_bonferroni_v1",
-        "skill_significant": false,
-        "skill_vs_market": 0.0044
-      },
-      "market_ask": 0.91,
-      "market_bid": 0.9,
-      "market_liquidity": 2357892.4049,
-      "market_probability": 0.92,
-      "market_url": "https://polymarket.com/market/will-the-democratic-party-control-the-house-after-the-2026-midterm-elections",
-      "market_volume": 307599.10031199997,
-      "model_probability": 0.9,
-      "needs_discrepancy_review": false,
-      "payout_odds": 11.5,
-      "platform": "Polymarket",
-      "question": "Will the Democratic Party control the House after the 2026 Midterm elections?",
-      "resolution_criteria": "This market will resolve according to the party that wins control of the United States House of Representatives in the 2026 United States midterm election.\n\nA party wins control of the United States House of Representatives if it wins a majority of the chamber\u2019s voting seats. If no party wins a majority of voting seats, the chamber will be deemed controlled by the party with which the first elected Speaker of the House of the Congress that convenes after the 2026 midterm election is affiliated.\n\nThe following rules govern the counting of seats for determining which party wins control of the chamber.\n\nAll House elections in the 2026 United States midterm election that elect voting members and determine representation in the upcoming 120th Congress are included. Where a seat is decided by a runoff, the runoff result will determine attribution of that seat.\n\nSeats are attributed to the party under which the member was elected. If a member-elect changes party affiliation, or vacates their seat, between election day and the formal organization of Congress, the seat is attributed to the party under which the member was elected.\n\nHouse members elected as independents who formally caucus with, or, for newly elected members, who announce their intent to caucus with, a party are included in that party\u2019s count. If the caucus decisions of members of the House elected as independents cannot be determined on the date of the election, this market may remain open until the earlier of (i) an announcement from the relevant members of their intents to caucus, or (ii) January 4th, 11:59 PM ET of the following calendar year. If no such announcement is made by January 4th, 11:59 PM ET of the following calendar year, the member will not count towards the seat count of any party.\n\nThe resolution sources for this market will be official information from relevant state electoral authorities, the United States Congress, and a consensus of credible reporting.",
-      "resolve_time": "2026-11-04T04:59:00Z",
-      "review_reasons": [],
-      "rules_present": true,
-      "side": "NO",
-      "spread": 0.01,
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 6875,
-        "n_markets": 478,
-        "skill_ci_comparisons": 4,
-        "skill_ci_high": 0.0001,
-        "skill_ci_low": -0.0016,
-        "skill_ci_mean": -0.0008,
-        "skill_ci_method": "market_means_normal_bonferroni_v1",
-        "skill_significant": false,
-        "skill_vs_market": -0.0006
-      },
-      "venue_news_count": 0
-    },
-    {
-      "abs_edge": 0.02,
-      "categories": [
-        "Other"
-      ],
-      "context_complete": true,
-      "crowd_move_since_forecast": -0.03,
-      "description": "This market will resolve to the individual who officially holds the position of the head of state of Venezuela on Dec 31, 2026 at 12 PM ET.\n\nFor the purposes of this market, \"officially holds\" refers to the individual that was formally appointed, confirmed (if confirmation is required), and sworn in as the head of state of Venezuela or otherwise confirmed by official government information as being the head of state of Venezuela. \n\nIf the Venezuelan government does not clearly state who is the head of state, the market will resolve to the individual who is listed as the Head of State by the UN (see: https://www.un.org/dgacm/en/content/protocol/hshgnfa).  \n\nIn the event that more than one official head of state is listed by the Venezuelan  government, this market will resolve to the individual who is listed as having primary status. If no distinction is made, the market will resolve to the individual who first assumed the position. \n\nIf no individual holds the position this market will resolve to \u201cNo Head of State\u201d. \n\nThe following do NOT constitute \"officially holding\" the role: nominated, announced, or designated as the head of state of Venezuela but appointment not yet effective; appointed with an effective date after Dec 31, 2026; previously served as the head of state of Venezuela but term has expired, resigned, or been terminated before Dec 31, 2026; serving as the head of state of Venezuela in a consultant, contractor, or unofficial capacity; named as successor or heir apparent to the head of state of Venezuela but not yet appointed; or holding a different role with oversight of the head of state of Venezuela but not the specified position itself.\n\nThe primary resolution source will be official information from the UN recognized government of Venezuela. If the Government of Venezuela does not clearly state who is the head of state, information from the UN and a consensus of credible reporting may be used. \n\nNote: this market is mutually exclusive.",
+      "crowd_move_since_forecast": -0.02,
+      "description": "This market will resolve according to the winner of the 2026 Ballon d\u2019Or.\n\nIf no 2026 Ballon d\u2019Or winner is declared by December 31, 2026, 11:59 PM ET, this market will resolve to \"Other\".\n\nThe primary resolution source for this market is official information from France Football (https://www.francefootball.fr/).",
       "discrepancy_status": "normal",
       "domain": "other",
-      "edge": -0.02,
+      "edge": 0.02,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.8,
+      "entry_price": 0.011,
       "evidence_count": 5,
-      "executable_edge": 0.04,
-      "executable_entry_price": 0.78,
-      "forecast_age_hours": 227.2,
-      "forecast_market_probability": 0.23,
-      "forecasted_at": "2026-10-16T22:42:39.107138+00:00",
+      "executable_edge": -0.001,
+      "executable_entry_price": 0.031,
+      "forecast_age_hours": 215.6,
+      "forecast_market_probability": 0.03,
+      "forecasted_at": "2026-10-17T10:27:15.795625+00:00",
       "horizon": "30d+",
-      "ident": "will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "lead_bucket": "30d+",
-      "lead_days": 66.8,
+      "ident": "will-lionel-messi-win-the-2026-ballon-dor",
+      "lead_bucket": "<1d",
+      "lead_days": 0.7,
       "lead_track_record": {
-        "accuracy": 0.8665,
-        "horizon": "30d+",
-        "n": 1303,
-        "n_markets": 26,
+        "accuracy": 0.8162,
+        "horizon": "<1d",
+        "n": 1659,
+        "n_markets": 392,
         "skill_ci_comparisons": 6,
-        "skill_ci_high": 0.008,
-        "skill_ci_low": -0.0451,
-        "skill_ci_mean": -0.0186,
+        "skill_ci_high": 0.0022,
+        "skill_ci_low": -0.0089,
+        "skill_ci_mean": -0.0033,
         "skill_ci_method": "market_means_normal_bonferroni_v1",
         "skill_significant": false,
         "skill_vs_market": -0.0055
       },
-      "market_ask": 0.24,
-      "market_bid": 0.22,
-      "market_liquidity": 110825.6283,
-      "market_probability": 0.2,
-      "market_url": "https://polymarket.com/market/will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "market_volume": 1361.955001,
-      "model_probability": 0.18,
+      "market_ask": 0.031,
+      "market_bid": 0.03,
+      "market_liquidity": 190300.25681,
+      "market_probability": 0.011,
+      "market_url": "https://polymarket.com/market/will-lionel-messi-win-the-2026-ballon-dor",
+      "market_volume": 71591.138937,
+      "model_probability": 0.03,
       "needs_discrepancy_review": false,
-      "payout_odds": 0.2,
+      "payout_odds": 94.2,
       "platform": "Polymarket",
-      "question": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "resolution_criteria": "This market will resolve to the individual who officially holds the position of the head of state of Venezuela on Dec 31, 2026 at 12 PM ET.\n\nFor the purposes of this market, \"officially holds\" refers to the individual that was formally appointed, confirmed (if confirmation is required), and sworn in as the head of state of Venezuela or otherwise confirmed by official government information as being the head of state of Venezuela. \n\nIf the Venezuelan government does not clearly state who is the head of state, the market will resolve to the individual who is listed as the Head of State by the UN (see: https://www.un.org/dgacm/en/content/protocol/hshgnfa).  \n\nIn the event that more than one official head of state is listed by the Venezuelan  government, this market will resolve to the individual who is listed as having primary status. If no distinction is made, the market will resolve to the individual who first assumed the position. \n\nIf no individual holds the position this market will resolve to \u201cNo Head of State\u201d. \n\nThe following do NOT constitute \"officially holding\" the role: nominated, announced, or designated as the head of state of Venezuela but appointment not yet effective; appointed with an effective date after Dec 31, 2026; previously served as the head of state of Venezuela but term has expired, resigned, or been terminated before Dec 31, 2026; serving as the head of state of Venezuela in a consultant, contractor, or unofficial capacity; named as successor or heir apparent to the head of state of Venezuela but not yet appointed; or holding a different role with oversight of the head of state of Venezuela but not the specified position itself.\n\nThe primary resolution source will be official information from the UN recognized government of Venezuela. If the Government of Venezuela does not clearly state who is the head of state, information from the UN and a consensus of credible reporting may be used. \n\nNote: this market is mutually exclusive.",
-      "resolve_time": "2027-01-01T04:59:00Z",
+      "question": "Will Lionel Messi win the 2026 Ballon d'Or?",
+      "resolution_criteria": "This market will resolve according to the winner of the 2026 Ballon d\u2019Or.\n\nIf no 2026 Ballon d\u2019Or winner is declared by December 31, 2026, 11:59 PM ET, this market will resolve to \"Other\".\n\nThe primary resolution source for this market is official information from France Football (https://www.francefootball.fr/).",
+      "resolve_time": "2026-10-27T03:59:00Z",
       "review_reasons": [],
       "rules_present": true,
-      "side": "NO",
-      "spread": 0.02,
-      "stance": "model_below_market",
+      "side": "YES",
+      "spread": 0.001,
+      "stance": "model_above_market",
       "track_record": {
         "n": 6875,
         "n_markets": 478,
@@ -971,7 +903,7 @@
       "evidence_count": 5,
       "executable_edge": 0.003,
       "executable_entry_price": 0.037,
-      "forecast_age_hours": 229.3,
+      "forecast_age_hours": 229.4,
       "forecast_market_probability": 0.036,
       "forecasted_at": "2026-10-16T20:40:04.319321+00:00",
       "horizon": "30d+",
@@ -1038,7 +970,7 @@
       "evidence_count": 5,
       "executable_edge": -0.009,
       "executable_entry_price": 0.059,
-      "forecast_age_hours": 229.3,
+      "forecast_age_hours": 229.4,
       "forecast_market_probability": 0.059,
       "forecasted_at": "2026-10-16T20:39:40.769243+00:00",
       "horizon": "30d+",
@@ -1092,6 +1024,73 @@
     {
       "abs_edge": 0.015,
       "categories": [
+        "Politics"
+      ],
+      "context_complete": true,
+      "crowd_move_since_forecast": 0.01,
+      "description": "This market will resolve according to the party that wins control of the United States House of Representatives in the 2026 United States midterm election.\n\nA party wins control of the United States House of Representatives if it wins a majority of the chamber\u2019s voting seats. If no party wins a majority of voting seats, the chamber will be deemed controlled by the party with which the first elected Speaker of the House of the Congress that convenes after the 2026 midterm election is affiliated.\n\nThe following rules govern the counting of seats for determining which party wins control of the chamber.\n\nAll House elections in the 2026 United States midterm election that elect voting members and determine representation in the upcoming 120th Congress are included. Where a seat is decided by a runoff, the runoff result will determine attribution of that seat.\n\nSeats are attributed to the party under which the member was elected. If a member-elect changes party affiliation, or vacates their seat, between election day and the formal organization of Congress, the seat is attributed to the party under which the member was elected.\n\nHouse members elected as independents who formally caucus with, or, for newly elected members, who announce their intent to caucus with, a party are included in that party\u2019s count. If the caucus decisions of members of the House elected as independents cannot be determined on the date of the election, this market may remain open until the earlier of (i) an announcement from the relevant members of their intents to caucus, or (ii) January 4th, 11:59 PM ET of the following calendar year. If no such announcement is made by January 4th, 11:59 PM ET of the following calendar year, the member will not count towards the seat count of any party.\n\nThe resolution sources for this market will be official information from relevant state electoral authorities, the United States Congress, and a consensus of credible reporting.",
+      "discrepancy_status": "normal",
+      "domain": "elections",
+      "edge": -0.015,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.085,
+      "evidence_count": 5,
+      "executable_edge": 0.0,
+      "executable_entry_price": 0.1,
+      "forecast_age_hours": 221.5,
+      "forecast_market_probability": 0.905,
+      "forecasted_at": "2026-10-17T04:35:50.386144+00:00",
+      "horizon": "14-30d",
+      "ident": "will-the-democratic-party-control-the-house-after-the-2026-midterm-elections",
+      "lead_bucket": "7-14d",
+      "lead_days": 8.8,
+      "lead_track_record": {
+        "accuracy": 0.8091,
+        "horizon": "7-14d",
+        "n": 1833,
+        "n_markets": 119,
+        "skill_ci_comparisons": 6,
+        "skill_ci_high": 0.0137,
+        "skill_ci_low": -0.0175,
+        "skill_ci_mean": -0.0019,
+        "skill_ci_method": "market_means_normal_bonferroni_v1",
+        "skill_significant": false,
+        "skill_vs_market": 0.0044
+      },
+      "market_ask": 0.91,
+      "market_bid": 0.9,
+      "market_liquidity": 2357892.4049,
+      "market_probability": 0.915,
+      "market_url": "https://polymarket.com/market/will-the-democratic-party-control-the-house-after-the-2026-midterm-elections",
+      "market_volume": 307599.10031199997,
+      "model_probability": 0.9,
+      "needs_discrepancy_review": false,
+      "payout_odds": 10.8,
+      "platform": "Polymarket",
+      "question": "Will the Democratic Party control the House after the 2026 Midterm elections?",
+      "resolution_criteria": "This market will resolve according to the party that wins control of the United States House of Representatives in the 2026 United States midterm election.\n\nA party wins control of the United States House of Representatives if it wins a majority of the chamber\u2019s voting seats. If no party wins a majority of voting seats, the chamber will be deemed controlled by the party with which the first elected Speaker of the House of the Congress that convenes after the 2026 midterm election is affiliated.\n\nThe following rules govern the counting of seats for determining which party wins control of the chamber.\n\nAll House elections in the 2026 United States midterm election that elect voting members and determine representation in the upcoming 120th Congress are included. Where a seat is decided by a runoff, the runoff result will determine attribution of that seat.\n\nSeats are attributed to the party under which the member was elected. If a member-elect changes party affiliation, or vacates their seat, between election day and the formal organization of Congress, the seat is attributed to the party under which the member was elected.\n\nHouse members elected as independents who formally caucus with, or, for newly elected members, who announce their intent to caucus with, a party are included in that party\u2019s count. If the caucus decisions of members of the House elected as independents cannot be determined on the date of the election, this market may remain open until the earlier of (i) an announcement from the relevant members of their intents to caucus, or (ii) January 4th, 11:59 PM ET of the following calendar year. If no such announcement is made by January 4th, 11:59 PM ET of the following calendar year, the member will not count towards the seat count of any party.\n\nThe resolution sources for this market will be official information from relevant state electoral authorities, the United States Congress, and a consensus of credible reporting.",
+      "resolve_time": "2026-11-04T04:59:00Z",
+      "review_reasons": [],
+      "rules_present": true,
+      "side": "NO",
+      "spread": 0.01,
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 6875,
+        "n_markets": 478,
+        "skill_ci_comparisons": 4,
+        "skill_ci_high": 0.0001,
+        "skill_ci_low": -0.0016,
+        "skill_ci_mean": -0.0008,
+        "skill_ci_method": "market_means_normal_bonferroni_v1",
+        "skill_significant": false,
+        "skill_vs_market": -0.0006
+      },
+      "venue_news_count": 0
+    },
+    {
+      "abs_edge": 0.015,
+      "categories": [
         "Other"
       ],
       "context_complete": true,
@@ -1105,7 +1104,7 @@
       "evidence_count": 3,
       "executable_edge": -0.01,
       "executable_entry_price": 0.96,
-      "forecast_age_hours": 221.4,
+      "forecast_age_hours": 221.5,
       "forecast_market_probability": 0.045,
       "forecasted_at": "2026-10-17T04:35:22.018433+00:00",
       "horizon": "30d+",
@@ -1172,7 +1171,7 @@
       "evidence_count": 5,
       "executable_edge": 0.0,
       "executable_entry_price": 0.28,
-      "forecast_age_hours": 227.2,
+      "forecast_age_hours": 227.4,
       "forecast_market_probability": 0.275,
       "forecasted_at": "2026-10-16T22:43:08.845924+00:00",
       "horizon": "14-30d",
@@ -1224,6 +1223,73 @@
       "venue_news_count": 0
     },
     {
+      "abs_edge": 0.015,
+      "categories": [
+        "Politics"
+      ],
+      "context_complete": true,
+      "crowd_move_since_forecast": -0.02,
+      "description": "Legislative elections are schedule to be held in Israel on October 27, 2026. \n\nThis market will resolve to the next individual who is officially appointed and sworn in as Prime Minister of Israel following the 2026 parliamentary election. If an election is called early, this market will immediately resolve to the individual who is officially appointed and sworn in after that election.\n\nTo count for resolution, the individual must be formally sworn in. Any interim or caretaker Prime Minister will not count toward the resolution of this market.\n\nIf no such Prime Minister is sworn in by December 31, 2027, 11:59 PM ET, this market will resolve to \u201cOther\u201d.\n\nThe primary resolution source for this market will be official information from the Government of Israel; however, a consensus of credible reporting may also be used.",
+      "discrepancy_status": "normal",
+      "domain": "geopolitics",
+      "edge": 0.015,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.275,
+      "evidence_count": 5,
+      "executable_edge": -0.01,
+      "executable_entry_price": 0.3,
+      "forecast_age_hours": 229.4,
+      "forecast_market_probability": 0.295,
+      "forecasted_at": "2026-10-16T20:40:37.988031+00:00",
+      "horizon": "7-14d",
+      "ident": "will-benjamin-netanyahu-be-the-next-prime-minister-of-israel",
+      "lead_bucket": "1-3d",
+      "lead_days": 1.7,
+      "lead_track_record": {
+        "accuracy": 0.8555,
+        "horizon": "1-3d",
+        "n": 934,
+        "n_markets": 125,
+        "skill_ci_comparisons": 6,
+        "skill_ci_high": 0.0121,
+        "skill_ci_low": -0.0096,
+        "skill_ci_mean": 0.0012,
+        "skill_ci_method": "market_means_normal_bonferroni_v1",
+        "skill_significant": false,
+        "skill_vs_market": -0.003
+      },
+      "market_ask": 0.3,
+      "market_bid": 0.29,
+      "market_liquidity": 444903.9266,
+      "market_probability": 0.275,
+      "market_url": "https://polymarket.com/market/will-benjamin-netanyahu-be-the-next-prime-minister-of-israel",
+      "market_volume": 165055.55964599995,
+      "model_probability": 0.29,
+      "needs_discrepancy_review": false,
+      "payout_odds": 2.6,
+      "platform": "Polymarket",
+      "question": "Will Benjamin Netanyahu be the next Prime Minister of Israel?",
+      "resolution_criteria": "Legislative elections are schedule to be held in Israel on October 27, 2026. \n\nThis market will resolve to the next individual who is officially appointed and sworn in as Prime Minister of Israel following the 2026 parliamentary election. If an election is called early, this market will immediately resolve to the individual who is officially appointed and sworn in after that election.\n\nTo count for resolution, the individual must be formally sworn in. Any interim or caretaker Prime Minister will not count toward the resolution of this market.\n\nIf no such Prime Minister is sworn in by December 31, 2027, 11:59 PM ET, this market will resolve to \u201cOther\u201d.\n\nThe primary resolution source for this market will be official information from the Government of Israel; however, a consensus of credible reporting may also be used.",
+      "resolve_time": "2026-10-28T03:59:00Z",
+      "review_reasons": [],
+      "rules_present": true,
+      "side": "YES",
+      "spread": 0.01,
+      "stance": "model_above_market",
+      "track_record": {
+        "n": 6875,
+        "n_markets": 478,
+        "skill_ci_comparisons": 4,
+        "skill_ci_high": 0.0001,
+        "skill_ci_low": -0.0016,
+        "skill_ci_mean": -0.0008,
+        "skill_ci_method": "market_means_normal_bonferroni_v1",
+        "skill_significant": false,
+        "skill_vs_market": -0.0006
+      },
+      "venue_news_count": 0
+    },
+    {
       "abs_edge": 0.01,
       "categories": [
         "Sports"
@@ -1239,7 +1305,7 @@
       "evidence_count": 5,
       "executable_edge": -0.01,
       "executable_entry_price": 0.04,
-      "forecast_age_hours": 229.3,
+      "forecast_age_hours": 229.5,
       "forecast_market_probability": 0.02,
       "forecasted_at": "2026-10-16T20:37:25.351669+00:00",
       "horizon": "14-30d",
@@ -1306,7 +1372,7 @@
       "evidence_count": 4,
       "executable_edge": 0.002,
       "executable_entry_price": 0.038,
-      "forecast_age_hours": 227.3,
+      "forecast_age_hours": 227.4,
       "forecast_market_probability": 0.035,
       "forecasted_at": "2026-10-16T22:40:45.389924+00:00",
       "horizon": "30d+",
@@ -1358,26 +1424,26 @@
       "venue_news_count": 0
     },
     {
-      "abs_edge": 0.006,
+      "abs_edge": 0.005,
       "categories": [
-        "Crypto"
+        "Other"
       ],
       "context_complete": true,
-      "crowd_move_since_forecast": 0.007,
-      "description": "What price will Bitcoin hit before 2027?",
+      "crowd_move_since_forecast": 0.0,
+      "description": "This market will resolve to \"Yes\" if the Islamic Republic of Iran\u2019s current ruling regime is overthrown, collapsed, or otherwise ceases to govern by December 31, 2026, 11:59 PM ET. Otherwise, this market will resolve to \u201cNo\u201d.\n\nThis requires a broad consensus of reporting indicating that core structures of the Islamic Republic (e.g. the office of the Supreme Leader, the Guardian Council, IRGC control under clerical authority) have been dissolved, incapacitated, or replaced by a fundamentally different governing system or otherwise lost de facto power over a majority of the population of Iran. This could occur via revolution, civil war, military coup, or voluntary abdication, but only qualifies if the Islamic Republic no longer exercises sovereign power.\n\nRoutine political events such as elections, reforms, or leadership succession do not qualify. Internal coups or power shifts that preserve the Islamic Republic\u2019s core structures also do not qualify. Only a clear break in continuity\u2014such as a new provisional government, revolutionary council, or constitution replacing the Islamic Republic will qualify.\n\nPartial loss of territory or challenges from rebel or exile groups will not qualify unless the Islamic Republic no longer administers the majority of the Iranian population within Iran. \n\nThe resolution source will be a consensus of credible reporting.",
       "discrepancy_status": "normal",
-      "domain": "crypto",
-      "edge": -0.006,
+      "domain": "geopolitics",
+      "edge": 0.005,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.944,
-      "evidence_count": 2,
-      "executable_edge": -0.003,
-      "executable_entry_price": 0.953,
-      "forecast_age_hours": 221.4,
-      "forecast_market_probability": 0.049,
-      "forecasted_at": "2026-10-17T04:34:23.856720+00:00",
+      "entry_price": 0.055,
+      "evidence_count": 5,
+      "executable_edge": 0.0,
+      "executable_entry_price": 0.06,
+      "forecast_age_hours": 215.6,
+      "forecast_market_probability": 0.055,
+      "forecasted_at": "2026-10-17T10:28:36.760563+00:00",
       "horizon": "30d+",
-      "ident": "will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
+      "ident": "will-the-iranian-regime-fall-by-the-end-of-2026",
       "lead_bucket": "30d+",
       "lead_days": 66.8,
       "lead_track_record": {
@@ -1393,24 +1459,24 @@
         "skill_significant": false,
         "skill_vs_market": -0.0055
       },
-      "market_ask": 0.051,
-      "market_bid": 0.047,
-      "market_liquidity": 205015.52398,
-      "market_probability": 0.056,
-      "market_url": "https://polymarket.com/market/will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "market_volume": 11687.469415999998,
-      "model_probability": 0.05,
+      "market_ask": 0.06,
+      "market_bid": 0.05,
+      "market_liquidity": 582987.9294,
+      "market_probability": 0.055,
+      "market_url": "https://polymarket.com/market/will-the-iranian-regime-fall-by-the-end-of-2026",
+      "market_volume": 130504.65808200002,
+      "model_probability": 0.06,
       "needs_discrepancy_review": false,
-      "payout_odds": 0.1,
+      "payout_odds": 17.2,
       "platform": "Polymarket",
-      "question": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "resolution_criteria": "This market will immediately resolve to \"Yes\" if any Binance 1 minute candle for Bitcoin (BTC/USDT) between November 24, 2025, 14:00 and December 31, 2026, 23:59 in the ET timezone has a final \"Low\" price equal to or lower than the price specified in the title. Otherwise, this market will resolve to \"No.\"\n\nThe resolution source for this market is Binance, specifically the BTC/USDT \"Low\" prices available at https://www.binance.com/en/trade/BTC_USDT, with the chart settings on \"1m\" for one-minute candles selected on the top bar.\n\nPlease note that the outcome of this market depends solely on the price data from the Binance BTC/USDT trading pair. Prices from other exchanges, different trading pairs, or spot markets will not be considered for the resolution of this market.\n\nWhat price will Bitcoin hit before 2027?",
-      "resolve_time": "2027-01-01T05:00:00Z",
+      "question": "Will the Iranian regime fall before 2027?",
+      "resolution_criteria": "This market will resolve to \"Yes\" if the Islamic Republic of Iran\u2019s current ruling regime is overthrown, collapsed, or otherwise ceases to govern by December 31, 2026, 11:59 PM ET. Otherwise, this market will resolve to \u201cNo\u201d.\n\nThis requires a broad consensus of reporting indicating that core structures of the Islamic Republic (e.g. the office of the Supreme Leader, the Guardian Council, IRGC control under clerical authority) have been dissolved, incapacitated, or replaced by a fundamentally different governing system or otherwise lost de facto power over a majority of the population of Iran. This could occur via revolution, civil war, military coup, or voluntary abdication, but only qualifies if the Islamic Republic no longer exercises sovereign power.\n\nRoutine political events such as elections, reforms, or leadership succession do not qualify. Internal coups or power shifts that preserve the Islamic Republic\u2019s core structures also do not qualify. Only a clear break in continuity\u2014such as a new provisional government, revolutionary council, or constitution replacing the Islamic Republic will qualify.\n\nPartial loss of territory or challenges from rebel or exile groups will not qualify unless the Islamic Republic no longer administers the majority of the Iranian population within Iran. \n\nThe resolution source will be a consensus of credible reporting.",
+      "resolve_time": "2027-01-01T04:59:00Z",
       "review_reasons": [],
       "rules_present": true,
-      "side": "NO",
-      "spread": 0.004,
-      "stance": "model_below_market",
+      "side": "YES",
+      "spread": 0.01,
+      "stance": "model_above_market",
       "track_record": {
         "n": 6875,
         "n_markets": 478,
@@ -1440,7 +1506,7 @@
       "evidence_count": 3,
       "executable_edge": -0.01,
       "executable_entry_price": 0.1,
-      "forecast_age_hours": 215.5,
+      "forecast_age_hours": 215.7,
       "forecast_market_probability": 0.095,
       "forecasted_at": "2026-10-17T10:25:43.709161+00:00",
       "horizon": "14-30d",
@@ -1507,13 +1573,13 @@
       "evidence_count": 1,
       "executable_edge": 0.0,
       "executable_entry_price": 0.06,
-      "forecast_age_hours": 227.2,
+      "forecast_age_hours": 227.4,
       "forecast_market_probability": 0.055,
       "forecasted_at": "2026-10-16T22:43:32.660358+00:00",
       "horizon": "14-30d",
       "ident": "us-announces-end-of-iranian-blockade-by-october-31-2026-20260727171711632-895-372-622-413-171-454-592-696",
       "lead_bucket": "3-7d",
-      "lead_days": 5.8,
+      "lead_days": 5.7,
       "lead_track_record": {
         "accuracy": 0.9293,
         "horizon": "3-7d",
@@ -1557,76 +1623,9 @@
         "skill_vs_market": -0.0006
       },
       "venue_news_count": 0
-    },
-    {
-      "abs_edge": 0.005,
-      "categories": [
-        "Politics"
-      ],
-      "context_complete": true,
-      "crowd_move_since_forecast": 0.0,
-      "description": "Legislative elections are schedule to be held in Israel on October 27, 2026. \n\nThis market will resolve to the next individual who is officially appointed and sworn in as Prime Minister of Israel following the 2026 parliamentary election. If an election is called early, this market will immediately resolve to the individual who is officially appointed and sworn in after that election.\n\nTo count for resolution, the individual must be formally sworn in. Any interim or caretaker Prime Minister will not count toward the resolution of this market.\n\nIf no such Prime Minister is sworn in by December 31, 2027, 11:59 PM ET, this market will resolve to \u201cOther\u201d.\n\nThe primary resolution source for this market will be official information from the Government of Israel; however, a consensus of credible reporting may also be used.",
-      "discrepancy_status": "normal",
-      "domain": "geopolitics",
-      "edge": -0.005,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.705,
-      "evidence_count": 5,
-      "executable_edge": 0.0,
-      "executable_entry_price": 0.71,
-      "forecast_age_hours": 229.3,
-      "forecast_market_probability": 0.295,
-      "forecasted_at": "2026-10-16T20:40:37.988031+00:00",
-      "horizon": "7-14d",
-      "ident": "will-benjamin-netanyahu-be-the-next-prime-minister-of-israel",
-      "lead_bucket": "1-3d",
-      "lead_days": 1.8,
-      "lead_track_record": {
-        "accuracy": 0.8555,
-        "horizon": "1-3d",
-        "n": 934,
-        "n_markets": 125,
-        "skill_ci_comparisons": 6,
-        "skill_ci_high": 0.0121,
-        "skill_ci_low": -0.0096,
-        "skill_ci_mean": 0.0012,
-        "skill_ci_method": "market_means_normal_bonferroni_v1",
-        "skill_significant": false,
-        "skill_vs_market": -0.003
-      },
-      "market_ask": 0.3,
-      "market_bid": 0.29,
-      "market_liquidity": 444903.9266,
-      "market_probability": 0.295,
-      "market_url": "https://polymarket.com/market/will-benjamin-netanyahu-be-the-next-prime-minister-of-israel",
-      "market_volume": 165055.55964599995,
-      "model_probability": 0.29,
-      "needs_discrepancy_review": false,
-      "payout_odds": 0.4,
-      "platform": "Polymarket",
-      "question": "Will Benjamin Netanyahu be the next Prime Minister of Israel?",
-      "resolution_criteria": "Legislative elections are schedule to be held in Israel on October 27, 2026. \n\nThis market will resolve to the next individual who is officially appointed and sworn in as Prime Minister of Israel following the 2026 parliamentary election. If an election is called early, this market will immediately resolve to the individual who is officially appointed and sworn in after that election.\n\nTo count for resolution, the individual must be formally sworn in. Any interim or caretaker Prime Minister will not count toward the resolution of this market.\n\nIf no such Prime Minister is sworn in by December 31, 2027, 11:59 PM ET, this market will resolve to \u201cOther\u201d.\n\nThe primary resolution source for this market will be official information from the Government of Israel; however, a consensus of credible reporting may also be used.",
-      "resolve_time": "2026-10-28T03:59:00Z",
-      "review_reasons": [],
-      "rules_present": true,
-      "side": "NO",
-      "spread": 0.01,
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 6875,
-        "n_markets": 478,
-        "skill_ci_comparisons": 4,
-        "skill_ci_high": 0.0001,
-        "skill_ci_low": -0.0016,
-        "skill_ci_mean": -0.0008,
-        "skill_ci_method": "market_means_normal_bonferroni_v1",
-        "skill_significant": false,
-        "skill_vs_market": -0.0006
-      },
-      "venue_news_count": 0
     }
   ],
-  "generated_at": "2026-10-26T10:00:40.747876+00:00",
+  "generated_at": "2026-10-26T10:08:50.219517+00:00",
   "growth_1pct_by_model": [
     {
       "account": {
@@ -1649,7 +1648,7 @@
         ],
         "realized_pnl": 18971.612028,
         "return": 1.744138,
-        "ts": "2026-10-26T10:00:34.708032+00:00",
+        "ts": "2026-10-26T10:08:44.123748+00:00",
         "unrealized_pnl": -1014.625349,
         "value_curve": [
           {
@@ -2084,7 +2083,7 @@
           {
             "account_value": 27441.380736,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T10:00:34.708032+00:00"
+            "ts": "2026-10-26T10:08:44.123748+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -2119,7 +2118,7 @@
         ],
         "realized_pnl": 3185.904123,
         "return": 0.269754,
-        "ts": "2026-10-26T10:00:23.183596+00:00",
+        "ts": "2026-10-26T10:08:32.493306+00:00",
         "unrealized_pnl": -470.075856,
         "value_curve": [
           {
@@ -2538,7 +2537,7 @@
           {
             "account_value": 12697.541433,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T10:00:23.183596+00:00"
+            "ts": "2026-10-26T10:08:32.493306+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -2573,7 +2572,7 @@
         ],
         "realized_pnl": 1909.808261,
         "return": 0.187204,
-        "ts": "2026-10-26T09:59:43.309706+00:00",
+        "ts": "2026-10-26T10:07:51.815566+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -2994,7 +2993,7 @@
           {
             "account_value": 11872.039626,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:43.309706+00:00"
+            "ts": "2026-10-26T10:07:51.815566+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -3029,7 +3028,7 @@
         ],
         "realized_pnl": 1730.368353,
         "return": 0.16542,
-        "ts": "2026-10-26T09:59:38.375204+00:00",
+        "ts": "2026-10-26T10:07:46.877773+00:00",
         "unrealized_pnl": -42.510104,
         "value_curve": [
           {
@@ -3452,7 +3451,7 @@
           {
             "account_value": 11654.198243,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:38.375204+00:00"
+            "ts": "2026-10-26T10:07:46.877773+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -3487,7 +3486,7 @@
         ],
         "realized_pnl": -477.015832,
         "return": -0.054482,
-        "ts": "2026-10-26T09:59:27.362691+00:00",
+        "ts": "2026-10-26T10:07:35.635333+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -3906,7 +3905,7 @@
           {
             "account_value": 9455.17864,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:27.362691+00:00"
+            "ts": "2026-10-26T10:07:35.635333+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -3941,7 +3940,7 @@
         ],
         "realized_pnl": -134.335047,
         "return": -0.072475,
-        "ts": "2026-10-26T09:59:35.304076+00:00",
+        "ts": "2026-10-26T10:07:43.739734+00:00",
         "unrealized_pnl": -481.692887,
         "value_curve": [
           {
@@ -4362,7 +4361,7 @@
           {
             "account_value": 9275.248608,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:35.304076+00:00"
+            "ts": "2026-10-26T10:07:43.739734+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -4378,9 +4377,9 @@
     },
     {
       "account": {
-        "account_value": 9207.478538,
-        "cash": 8820.353831,
-        "liquidation_value": 387.124707,
+        "account_value": 9226.834773,
+        "cash": 8819.335081,
+        "liquidation_value": 407.499692,
         "n_illiquid_positions": 0,
         "n_open_positions": 1,
         "n_settlements": 117,
@@ -4395,10 +4394,10 @@
           "Sizing shrinks calibrated probabilities 25% toward the executable market price.",
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
-        "realized_pnl": -649.658235,
-        "return": -0.079252,
-        "ts": "2026-10-26T10:00:40.734552+00:00",
-        "unrealized_pnl": -101.874923,
+        "realized_pnl": -650.676985,
+        "return": -0.077317,
+        "ts": "2026-10-26T10:08:50.206556+00:00",
+        "unrealized_pnl": -81.499938,
         "value_curve": [
           {
             "account_value": 9472.35,
@@ -4792,42 +4791,42 @@
             "ts": "2026-10-16T07:09:15.158256+00:00"
           },
           {
-            "account_value": 9678.117686,
+            "account_value": 9698.49267,
             "event_type": "trade",
             "sized_fraction": 0.05,
             "trade_status": "open",
             "ts": "2026-10-16T20:11:38.090411+00:00"
           },
           {
-            "account_value": 9678.117686,
+            "account_value": 9698.49267,
             "event_type": "settlement",
             "ts": "2026-10-16T21:01:00.974612+00:00"
           },
           {
-            "account_value": 9197.752576,
+            "account_value": 9217.116266,
             "event_type": "settlement",
             "ts": "2026-10-17T17:09:40.289120+00:00"
           },
           {
-            "account_value": 9211.019313,
+            "account_value": 9230.383003,
             "event_type": "settlement",
             "ts": "2026-10-26T06:08:49.461716+00:00"
           },
           {
-            "account_value": 9207.478538,
+            "account_value": 9226.834773,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T10:00:40.734552+00:00"
+            "ts": "2026-10-26T10:08:50.206556+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9207.478538,
+      "account_value": 9226.834773,
       "max_drawdown": 0.227117,
       "model": "qwen3-8-27b",
       "n_settlements": 117,
       "n_trades": 13,
-      "return": -0.079252,
-      "sharpe": -0.0018,
+      "return": -0.077317,
+      "sharpe": -0.001,
       "status": "active"
     },
     {
@@ -4851,7 +4850,7 @@
         ],
         "realized_pnl": 60.89141,
         "return": -0.082164,
-        "ts": "2026-10-26T09:59:21.794426+00:00",
+        "ts": "2026-10-26T10:07:30.047064+00:00",
         "unrealized_pnl": -811.832987,
         "value_curve": [
           {
@@ -5270,7 +5269,7 @@
           {
             "account_value": 9178.361723,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:21.794426+00:00"
+            "ts": "2026-10-26T10:07:30.047064+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -5305,7 +5304,7 @@
         ],
         "realized_pnl": -3101.23474,
         "return": -0.314033,
-        "ts": "2026-10-26T10:00:06.125236+00:00",
+        "ts": "2026-10-26T10:08:15.201126+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -5720,7 +5719,7 @@
           {
             "account_value": 6859.665796,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T10:00:06.125236+00:00"
+            "ts": "2026-10-26T10:08:15.201126+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -5757,7 +5756,7 @@
         ],
         "realized_pnl": 31896.288867,
         "return": 3.117081,
-        "ts": "2026-10-26T10:00:34.721065+00:00",
+        "ts": "2026-10-26T10:08:44.137350+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -6184,7 +6183,7 @@
           {
             "account_value": 41170.813944,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T10:00:34.721065+00:00"
+            "ts": "2026-10-26T10:08:44.137350+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -6219,7 +6218,7 @@
         ],
         "realized_pnl": 2892.177392,
         "return": 0.283094,
-        "ts": "2026-10-26T09:59:43.318186+00:00",
+        "ts": "2026-10-26T10:07:51.823820+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -6640,7 +6639,7 @@
           {
             "account_value": 12830.936912,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:43.318186+00:00"
+            "ts": "2026-10-26T10:07:51.823820+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -6675,7 +6674,7 @@
         ],
         "realized_pnl": 2791.161745,
         "return": 0.266428,
-        "ts": "2026-10-26T09:59:38.382465+00:00",
+        "ts": "2026-10-26T10:07:46.885015+00:00",
         "unrealized_pnl": -70.571771,
         "value_curve": [
           {
@@ -7098,7 +7097,7 @@
           {
             "account_value": 12664.275778,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:38.382465+00:00"
+            "ts": "2026-10-26T10:07:46.885015+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -7133,7 +7132,7 @@
         ],
         "realized_pnl": 1264.682887,
         "return": 0.020444,
-        "ts": "2026-10-26T09:59:35.314077+00:00",
+        "ts": "2026-10-26T10:07:43.750633+00:00",
         "unrealized_pnl": -875.708765,
         "value_curve": [
           {
@@ -7556,7 +7555,7 @@
           {
             "account_value": 10204.444705,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:35.314077+00:00"
+            "ts": "2026-10-26T10:07:43.750633+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -7591,7 +7590,7 @@
         ],
         "realized_pnl": 134.82619,
         "return": 0.013483,
-        "ts": "2026-10-26T10:00:23.197253+00:00",
+        "ts": "2026-10-26T10:08:32.507748+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -8006,7 +8005,7 @@
           {
             "account_value": 10134.82619,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T10:00:23.197253+00:00"
+            "ts": "2026-10-26T10:08:32.507748+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -8041,7 +8040,7 @@
         ],
         "realized_pnl": -945.61552,
         "return": -0.105028,
-        "ts": "2026-10-26T09:59:27.370747+00:00",
+        "ts": "2026-10-26T10:07:35.643997+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -8456,7 +8455,7 @@
           {
             "account_value": 8949.717719,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:27.370747+00:00"
+            "ts": "2026-10-26T10:07:35.643997+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -8491,7 +8490,7 @@
         ],
         "realized_pnl": -17.648581,
         "return": -0.135482,
-        "ts": "2026-10-26T09:59:21.807132+00:00",
+        "ts": "2026-10-26T10:07:30.058844+00:00",
         "unrealized_pnl": -1226.532497,
         "value_curve": [
           {
@@ -8908,7 +8907,7 @@
           {
             "account_value": 8645.177287,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:59:21.807132+00:00"
+            "ts": "2026-10-26T10:07:30.058844+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -8924,9 +8923,9 @@
     },
     {
       "account": {
-        "account_value": 7280.92087,
-        "cash": 6770.924657,
-        "liquidation_value": 509.996213,
+        "account_value": 7305.615424,
+        "cash": 6768.777305,
+        "liquidation_value": 536.838119,
         "n_illiquid_positions": 0,
         "n_open_positions": 1,
         "n_settlements": 117,
@@ -8941,10 +8940,10 @@
           "Sizing shrinks calibrated probabilities 25% toward the executable market price.",
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
-        "realized_pnl": -2520.374402,
-        "return": -0.271908,
-        "ts": "2026-10-26T10:00:40.742912+00:00",
-        "unrealized_pnl": -134.20953,
+        "realized_pnl": -2522.521755,
+        "return": -0.269438,
+        "ts": "2026-10-26T10:08:50.214356+00:00",
+        "unrealized_pnl": -107.367624,
         "value_curve": [
           {
             "account_value": 9155.76,
@@ -9338,42 +9337,42 @@
             "ts": "2026-10-16T07:09:15.158256+00:00"
           },
           {
-            "account_value": 7918.362258,
+            "account_value": 7945.204164,
             "event_type": "trade",
             "sized_fraction": 0.08,
             "trade_status": "open",
             "ts": "2026-10-16T20:11:38.090411+00:00"
           },
           {
-            "account_value": 7918.362258,
+            "account_value": 7945.204164,
             "event_type": "settlement",
             "ts": "2026-10-16T21:01:00.974612+00:00"
           },
           {
-            "account_value": 7289.528417,
+            "account_value": 7314.238683,
             "event_type": "settlement",
             "ts": "2026-10-17T17:09:40.289120+00:00"
           },
           {
-            "account_value": 7285.556009,
+            "account_value": 7310.266275,
             "event_type": "settlement",
             "ts": "2026-10-26T06:08:49.461716+00:00"
           },
           {
-            "account_value": 7280.92087,
+            "account_value": 7305.615424,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T10:00:40.742912+00:00"
+            "ts": "2026-10-26T10:08:50.214356+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 7280.92087,
+      "account_value": 7305.615424,
       "max_drawdown": 0.342182,
       "model": "qwen3-8-27b",
       "n_settlements": 117,
       "n_trades": 12,
-      "return": -0.271908,
-      "sharpe": -0.0526,
+      "return": -0.269438,
+      "sharpe": -0.0517,
       "status": "active"
     },
     {
@@ -9397,7 +9396,7 @@
         ],
         "realized_pnl": -2752.391961,
         "return": -0.275239,
-        "ts": "2026-10-26T10:00:06.139246+00:00",
+        "ts": "2026-10-26T10:08:15.215321+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -9806,7 +9805,7 @@
           {
             "account_value": 7247.608039,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T10:00:06.139246+00:00"
+            "ts": "2026-10-26T10:08:15.215321+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -9822,9 +9821,9 @@
     }
   ],
   "mark_to_market_account": {
-    "account_value": 9956.777554,
+    "account_value": 9956.766554,
     "cash": 9945.929554,
-    "liquidation_value": 10.848,
+    "liquidation_value": 10.837,
     "n_illiquid_positions": 1,
     "n_open_positions": 29,
     "n_settlements": 483,
@@ -9836,9 +9835,9 @@
       "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
     ],
     "realized_pnl": -40.971842,
-    "return": -0.004322,
-    "ts": "2026-10-26T09:57:08.508893+00:00",
-    "unrealized_pnl": -1.408,
+    "return": -0.004323,
+    "ts": "2026-10-26T10:05:15.917946+00:00",
+    "unrealized_pnl": -1.419,
     "value_curve": [
       {
         "account_value": 9999.885,
@@ -10277,13 +10276,13 @@
         "ts": "2026-10-14T13:29:51.651101+00:00"
       },
       {
-        "account_value": 9958.008384,
+        "account_value": 9957.979384,
         "event_type": "trade",
         "trade_status": "realized",
         "ts": "2026-10-15T09:27:17.083198+00:00"
       },
       {
-        "account_value": 9955.865555,
+        "account_value": 9955.854555,
         "event_type": "trade",
         "trade_status": "open",
         "ts": "2026-10-15T17:42:36.928467+00:00"
@@ -10295,15 +10294,15 @@
         "ts": "2026-10-16T08:31:37.956402+00:00"
       },
       {
-        "account_value": 9954.594554,
+        "account_value": 9954.585554,
         "event_type": "trade",
         "trade_status": "realized",
         "ts": "2026-10-16T21:43:02.161782+00:00"
       },
       {
-        "account_value": 9956.777554,
+        "account_value": 9956.766554,
         "event_type": "mark_to_market",
-        "ts": "2026-10-26T09:57:08.508893+00:00"
+        "ts": "2026-10-26T10:05:15.917946+00:00"
       }
     ],
     "value_method": "mark_to_market_bid_liquidation"
@@ -10311,9 +10310,9 @@
   "mark_to_market_by_model": [
     {
       "account": {
-        "account_value": 9998.667462,
+        "account_value": 9998.668462,
         "cash": 9995.604462,
-        "liquidation_value": 3.063,
+        "liquidation_value": 3.064,
         "n_illiquid_positions": 0,
         "n_open_positions": 10,
         "n_settlements": 25,
@@ -10326,8 +10325,8 @@
         ],
         "realized_pnl": -0.378,
         "return": -0.000133,
-        "ts": "2026-10-26T09:57:10.969590+00:00",
-        "unrealized_pnl": -0.92,
+        "ts": "2026-10-26T10:05:18.308436+00:00",
+        "unrealized_pnl": -0.919,
         "value_curve": [
           {
             "account_value": 9999.088628,
@@ -10474,229 +10473,229 @@
             "ts": "2026-08-18T05:01:57.745140+00:00"
           },
           {
-            "account_value": 9998.184994,
+            "account_value": 9998.185994,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T05:02:31.348475+00:00"
           },
           {
-            "account_value": 9998.364994,
+            "account_value": 9998.365994,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T05:03:31.625240+00:00"
           },
           {
-            "account_value": 9998.344994,
+            "account_value": 9998.345994,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T05:03:57.441680+00:00"
           },
           {
-            "account_value": 9998.498994,
+            "account_value": 9998.499994,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T05:05:55.017664+00:00"
           },
           {
-            "account_value": 9998.472994,
+            "account_value": 9998.473994,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T05:06:46.776797+00:00"
           },
           {
-            "account_value": 9997.777762,
+            "account_value": 9997.778762,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T05:08:52.772165+00:00"
           },
           {
-            "account_value": 9997.747762,
+            "account_value": 9997.748762,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-18T06:12:48.895139+00:00"
           },
           {
-            "account_value": 9997.767762,
+            "account_value": 9997.768762,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-18T08:20:12.704319+00:00"
           },
           {
-            "account_value": 9997.964762,
+            "account_value": 9997.965762,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-18T08:24:23.960306+00:00"
           },
           {
-            "account_value": 9997.944762,
+            "account_value": 9997.945762,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T08:26:20.898785+00:00"
           },
           {
-            "account_value": 9997.918462,
+            "account_value": 9997.919462,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T08:27:12.883058+00:00"
           },
           {
-            "account_value": 9998.817462,
+            "account_value": 9998.818462,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T09:40:04.357493+00:00"
           },
           {
-            "account_value": 9998.510462,
+            "account_value": 9998.511462,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T09:45:50.152172+00:00"
           },
           {
-            "account_value": 9998.566462,
+            "account_value": 9998.567462,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-18T11:50:04.279724+00:00"
           },
           {
-            "account_value": 9998.127462,
+            "account_value": 9998.128462,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T12:01:15.756406+00:00"
           },
           {
-            "account_value": 9997.917462,
+            "account_value": 9997.918462,
             "event_type": "settlement",
             "ts": "2026-08-18T14:48:14.589763+00:00"
           },
           {
-            "account_value": 9997.446462,
+            "account_value": 9997.447462,
             "event_type": "settlement",
             "ts": "2026-08-18T18:53:54.364353+00:00"
           },
           {
-            "account_value": 9997.445462,
+            "account_value": 9997.446462,
             "event_type": "settlement",
             "ts": "2026-08-18T18:53:54.581019+00:00"
           },
           {
-            "account_value": 9997.446462,
+            "account_value": 9997.447462,
             "event_type": "settlement",
             "ts": "2026-08-19T22:36:51.819128+00:00"
           },
           {
-            "account_value": 9997.451462,
+            "account_value": 9997.452462,
             "event_type": "settlement",
             "ts": "2026-08-21T08:55:02.939234+00:00"
           },
           {
-            "account_value": 9997.453462,
+            "account_value": 9997.454462,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:02.275761+00:00"
           },
           {
-            "account_value": 9997.452462,
+            "account_value": 9997.453462,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:02.323750+00:00"
           },
           {
-            "account_value": 9997.449462,
+            "account_value": 9997.450462,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:02.368624+00:00"
           },
           {
-            "account_value": 9997.449462,
+            "account_value": 9997.450462,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:02.373328+00:00"
           },
           {
-            "account_value": 9997.448462,
+            "account_value": 9997.449462,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:02.581084+00:00"
           },
           {
-            "account_value": 9997.448462,
+            "account_value": 9997.449462,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:02.585778+00:00"
           },
           {
-            "account_value": 9997.368462,
+            "account_value": 9997.369462,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:02.964225+00:00"
           },
           {
-            "account_value": 9997.365462,
+            "account_value": 9997.366462,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:03.090560+00:00"
           },
           {
-            "account_value": 9997.366462,
+            "account_value": 9997.367462,
             "event_type": "settlement",
             "ts": "2026-09-09T16:34:02.090414+00:00"
           },
           {
-            "account_value": 9997.366462,
+            "account_value": 9997.367462,
             "event_type": "settlement",
             "ts": "2026-09-10T01:02:13.747052+00:00"
           },
           {
-            "account_value": 9998.296462,
+            "account_value": 9998.297462,
             "event_type": "settlement",
             "ts": "2026-09-10T01:02:13.754761+00:00"
           },
           {
-            "account_value": 9998.376462,
+            "account_value": 9998.377462,
             "event_type": "settlement",
             "ts": "2026-09-10T01:02:13.880151+00:00"
           },
           {
-            "account_value": 9998.376462,
+            "account_value": 9998.377462,
             "event_type": "settlement",
             "ts": "2026-09-10T01:02:14.007765+00:00"
           },
           {
-            "account_value": 9998.416462,
+            "account_value": 9998.417462,
             "event_type": "settlement",
             "ts": "2026-09-10T01:02:14.015430+00:00"
           },
           {
-            "account_value": 9998.416462,
+            "account_value": 9998.417462,
             "event_type": "settlement",
             "ts": "2026-09-10T01:02:14.432530+00:00"
           },
           {
-            "account_value": 9998.546462,
+            "account_value": 9998.547462,
             "event_type": "settlement",
             "ts": "2026-09-16T22:05:59.746507+00:00"
           },
           {
-            "account_value": 9998.666462,
+            "account_value": 9998.667462,
             "event_type": "settlement",
             "ts": "2026-09-16T22:05:59.754870+00:00"
           },
           {
-            "account_value": 9998.666462,
+            "account_value": 9998.667462,
             "event_type": "settlement",
             "ts": "2026-09-16T22:05:59.873297+00:00"
           },
           {
-            "account_value": 9998.666462,
+            "account_value": 9998.667462,
             "event_type": "settlement",
             "ts": "2026-10-01T18:50:39.134864+00:00"
           },
           {
-            "account_value": 9998.667462,
+            "account_value": 9998.668462,
             "event_type": "settlement",
             "ts": "2026-10-06T17:17:17.235367+00:00"
           },
           {
-            "account_value": 9998.667462,
+            "account_value": 9998.668462,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:10.969590+00:00"
+            "ts": "2026-10-26T10:05:18.308436+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9998.667462,
+      "account_value": 9998.668462,
       "max_drawdown": 0.000309,
       "model": "kimi-k3",
       "n_illiquid_positions": 0,
@@ -10708,9 +10707,9 @@
     },
     {
       "account": {
-        "account_value": 9998.232185,
+        "account_value": 9998.191185,
         "cash": 9987.855185,
-        "liquidation_value": 10.377,
+        "liquidation_value": 10.336,
         "n_illiquid_positions": 0,
         "n_open_positions": 29,
         "n_settlements": 263,
@@ -10722,9 +10721,9 @@
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
         "realized_pnl": 0.49108,
-        "return": -0.000177,
-        "ts": "2026-10-26T09:57:10.941407+00:00",
-        "unrealized_pnl": -1.727,
+        "return": -0.000181,
+        "ts": "2026-10-26T10:05:18.279535+00:00",
+        "unrealized_pnl": -1.768,
         "value_curve": [
           {
             "account_value": 9999.892,
@@ -11149,58 +11148,58 @@
             "ts": "2026-10-14T12:36:06.477963+00:00"
           },
           {
-            "account_value": 9999.741131,
+            "account_value": 9999.740131,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T00:37:31.154089+00:00"
           },
           {
-            "account_value": 9999.136626,
+            "account_value": 9999.105626,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T15:46:22.417735+00:00"
           },
           {
-            "account_value": 9996.369929,
+            "account_value": 9996.328929,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T18:39:56.723991+00:00"
           },
           {
-            "account_value": 9997.049929,
+            "account_value": 9997.010929,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-16T09:40:23.669806+00:00"
           },
           {
-            "account_value": 9997.593185,
+            "account_value": 9997.554185,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-17T05:34:00.249452+00:00"
           },
           {
-            "account_value": 9998.232185,
+            "account_value": 9998.191185,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:10.941407+00:00"
+            "ts": "2026-10-26T10:05:18.279535+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9998.232185,
-      "max_drawdown": 0.001674,
+      "account_value": 9998.191185,
+      "max_drawdown": 0.001678,
       "model": "gemma-4-26b-a4b-it",
       "n_illiquid_positions": 0,
       "n_open_positions": 29,
       "n_settlements": 263,
       "n_trades": 849,
-      "return": -0.000177,
-      "sharpe": -0.0036
+      "return": -0.000181,
+      "sharpe": -0.0037
     },
     {
       "account": {
-        "account_value": 9995.60062,
+        "account_value": 9995.59962,
         "cash": 9994.38162,
-        "liquidation_value": 1.219,
+        "liquidation_value": 1.218,
         "n_illiquid_positions": 0,
         "n_open_positions": 4,
         "n_settlements": 274,
@@ -11213,8 +11212,8 @@
         ],
         "realized_pnl": -3.484915,
         "return": -0.00044,
-        "ts": "2026-10-26T09:57:06.934866+00:00",
-        "unrealized_pnl": -0.77,
+        "ts": "2026-10-26T10:05:14.360199+00:00",
+        "unrealized_pnl": -0.771,
         "value_curve": [
           {
             "account_value": 9999.978628,
@@ -11627,52 +11626,52 @@
             "ts": "2026-08-11T09:12:06.004597+00:00"
           },
           {
-            "account_value": 9995.618888,
+            "account_value": 9995.617888,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-12T03:50:53.757145+00:00"
           },
           {
-            "account_value": 9994.326888,
+            "account_value": 9994.325888,
             "event_type": "settlement",
             "ts": "2026-08-12T19:17:58.465892+00:00"
           },
           {
-            "account_value": 9994.331814,
+            "account_value": 9994.330814,
             "event_type": "settlement",
             "ts": "2026-08-13T06:41:23.114637+00:00"
           },
           {
-            "account_value": 9994.73607,
+            "account_value": 9994.73507,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-13T21:41:39.664631+00:00"
           },
           {
-            "account_value": 9994.43562,
+            "account_value": 9994.43462,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-14T08:00:07.508687+00:00"
           },
           {
-            "account_value": 9994.44162,
+            "account_value": 9994.44062,
             "event_type": "settlement",
             "ts": "2026-09-06T00:12:56.675314+00:00"
           },
           {
-            "account_value": 9995.51962,
+            "account_value": 9995.51862,
             "event_type": "settlement",
             "ts": "2026-09-10T01:01:18.482089+00:00"
           },
           {
-            "account_value": 9995.60062,
+            "account_value": 9995.59962,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:06.934866+00:00"
+            "ts": "2026-10-26T10:05:14.360199+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9995.60062,
+      "account_value": 9995.59962,
       "max_drawdown": 0.00098,
       "model": "gemma-4-31b-it",
       "n_illiquid_positions": 0,
@@ -11699,7 +11698,7 @@
         ],
         "realized_pnl": -5.469113,
         "return": -0.000568,
-        "ts": "2026-10-26T09:57:09.707004+00:00",
+        "ts": "2026-10-26T10:05:17.089932+00:00",
         "unrealized_pnl": -0.047,
         "value_curve": [
           {
@@ -12164,7 +12163,7 @@
           {
             "account_value": 9994.322278,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:09.707004+00:00"
+            "ts": "2026-10-26T10:05:17.089932+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -12181,9 +12180,9 @@
     },
     {
       "account": {
-        "account_value": 9993.573358,
+        "account_value": 9993.574358,
         "cash": 9991.625358,
-        "liquidation_value": 1.948,
+        "liquidation_value": 1.949,
         "n_illiquid_positions": 0,
         "n_open_positions": 6,
         "n_settlements": 48,
@@ -12196,8 +12195,8 @@
         ],
         "realized_pnl": -5.793623,
         "return": -0.000643,
-        "ts": "2026-10-26T09:57:09.760638+00:00",
-        "unrealized_pnl": -0.565,
+        "ts": "2026-10-26T10:05:17.140410+00:00",
+        "unrealized_pnl": -0.564,
         "value_curve": [
           {
             "account_value": 10000.109,
@@ -12583,84 +12582,84 @@
             "ts": "2026-08-09T12:27:10.882187+00:00"
           },
           {
-            "account_value": 9995.563744,
+            "account_value": 9995.564744,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-09T14:02:37.041469+00:00"
           },
           {
-            "account_value": 9995.470744,
+            "account_value": 9995.471744,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-09T14:04:00.713317+00:00"
           },
           {
-            "account_value": 9995.531744,
+            "account_value": 9995.532744,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-09T15:48:20.264807+00:00"
           },
           {
-            "account_value": 9994.724744,
+            "account_value": 9994.725744,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-09T16:37:31.452746+00:00"
           },
           {
-            "account_value": 9994.223744,
+            "account_value": 9994.224744,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-09T16:38:23.098952+00:00"
           },
           {
-            "account_value": 9994.166358,
+            "account_value": 9994.167358,
             "event_type": "settlement",
             "ts": "2026-08-11T09:12:05.311532+00:00"
           },
           {
-            "account_value": 9993.264358,
+            "account_value": 9993.265358,
             "event_type": "settlement",
             "ts": "2026-08-12T19:18:03.723924+00:00"
           },
           {
-            "account_value": 9993.256358,
+            "account_value": 9993.257358,
             "event_type": "settlement",
             "ts": "2026-08-16T06:55:51.646763+00:00"
           },
           {
-            "account_value": 9993.262358,
+            "account_value": 9993.263358,
             "event_type": "settlement",
             "ts": "2026-09-09T16:33:53.913996+00:00"
           },
           {
-            "account_value": 9993.372358,
+            "account_value": 9993.373358,
             "event_type": "settlement",
             "ts": "2026-09-10T01:01:25.476320+00:00"
           },
           {
-            "account_value": 9993.372358,
+            "account_value": 9993.373358,
             "event_type": "settlement",
             "ts": "2026-09-10T01:01:25.626873+00:00"
           },
           {
-            "account_value": 9993.452358,
+            "account_value": 9993.453358,
             "event_type": "settlement",
             "ts": "2026-09-16T22:05:35.768748+00:00"
           },
           {
-            "account_value": 9993.572358,
+            "account_value": 9993.573358,
             "event_type": "settlement",
             "ts": "2026-10-01T18:50:32.884026+00:00"
           },
           {
-            "account_value": 9993.573358,
+            "account_value": 9993.574358,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:09.760638+00:00"
+            "ts": "2026-10-26T10:05:17.140410+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9993.573358,
+      "account_value": 9993.574358,
       "max_drawdown": 0.000729,
       "model": "kimi-k2.7-code",
       "n_illiquid_positions": 0,
@@ -12687,7 +12686,7 @@
         ],
         "realized_pnl": -6.277375,
         "return": -0.000659,
-        "ts": "2026-10-26T09:57:09.544652+00:00",
+        "ts": "2026-10-26T10:05:16.930983+00:00",
         "unrealized_pnl": -0.025,
         "value_curve": [
           {
@@ -13094,7 +13093,7 @@
             "ts": "2026-08-21T15:32:40.594347+00:00"
           },
           {
-            "account_value": 9991.525895,
+            "account_value": 9991.526895,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-09-01T11:52:24.333533+00:00"
@@ -13150,7 +13149,7 @@
           {
             "account_value": 9993.411591,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:09.544652+00:00"
+            "ts": "2026-10-26T10:05:16.930983+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -13167,9 +13166,9 @@
     },
     {
       "account": {
-        "account_value": 9991.739574,
+        "account_value": 9991.738574,
         "cash": 9990.520574,
-        "liquidation_value": 1.219,
+        "liquidation_value": 1.218,
         "n_illiquid_positions": 0,
         "n_open_positions": 4,
         "n_settlements": 224,
@@ -13182,8 +13181,8 @@
         ],
         "realized_pnl": -7.511093,
         "return": -0.000826,
-        "ts": "2026-10-26T09:57:07.831817+00:00",
-        "unrealized_pnl": -0.634,
+        "ts": "2026-10-26T10:05:15.252298+00:00",
+        "unrealized_pnl": -0.635,
         "value_curve": [
           {
             "account_value": 9999.978628,
@@ -13549,95 +13548,95 @@
             "ts": "2026-07-25T00:45:05.749440+00:00"
           },
           {
-            "account_value": 9995.277114,
+            "account_value": 9995.275114,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-07-25T01:09:01.405244+00:00"
           },
           {
-            "account_value": 9995.421114,
+            "account_value": 9995.419114,
             "event_type": "settlement",
             "ts": "2026-07-25T07:15:36.498033+00:00"
           },
           {
-            "account_value": 9994.718114,
+            "account_value": 9994.716114,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-07-26T00:15:26.836749+00:00"
           },
           {
-            "account_value": 9993.666648,
+            "account_value": 9993.664648,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-07-26T00:58:05.463855+00:00"
           },
           {
-            "account_value": 9992.907648,
+            "account_value": 9992.905648,
             "event_type": "settlement",
             "ts": "2026-07-26T03:01:10.092980+00:00"
           },
           {
-            "account_value": 9992.580648,
+            "account_value": 9992.578648,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-07-26T12:29:41.370358+00:00"
           },
           {
-            "account_value": 9992.436648,
+            "account_value": 9992.434648,
             "event_type": "settlement",
             "ts": "2026-07-26T19:45:42.085105+00:00"
           },
           {
-            "account_value": 9992.621574,
+            "account_value": 9992.620574,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-07-27T01:53:33.021377+00:00"
           },
           {
-            "account_value": 9992.591574,
+            "account_value": 9992.590574,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-07-27T05:23:14.355582+00:00"
           },
           {
-            "account_value": 9992.543574,
+            "account_value": 9992.542574,
             "event_type": "settlement",
             "ts": "2026-07-28T18:45:59.249981+00:00"
           },
           {
-            "account_value": 9992.498574,
+            "account_value": 9992.497574,
             "event_type": "settlement",
             "ts": "2026-07-31T20:55:30.857593+00:00"
           },
           {
-            "account_value": 9992.502574,
+            "account_value": 9992.501574,
             "event_type": "settlement",
             "ts": "2026-08-01T06:38:59.395205+00:00"
           },
           {
-            "account_value": 9992.508574,
+            "account_value": 9992.507574,
             "event_type": "settlement",
             "ts": "2026-08-01T13:48:27.947712+00:00"
           },
           {
-            "account_value": 9992.530574,
+            "account_value": 9992.529574,
             "event_type": "settlement",
             "ts": "2026-08-04T21:24:03.444846+00:00"
           },
           {
-            "account_value": 9991.629574,
+            "account_value": 9991.628574,
             "event_type": "settlement",
             "ts": "2026-09-10T01:01:18.104860+00:00"
           },
           {
-            "account_value": 9991.739574,
+            "account_value": 9991.738574,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:07.831817+00:00"
+            "ts": "2026-10-26T10:05:15.252298+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9991.739574,
+      "account_value": 9991.738574,
       "max_drawdown": 0.001051,
       "model": "kimi-k2.6",
       "n_illiquid_positions": 0,
@@ -13649,9 +13648,9 @@
     },
     {
       "account": {
-        "account_value": 9990.689551,
+        "account_value": 9990.690551,
         "cash": 9988.893551,
-        "liquidation_value": 1.796,
+        "liquidation_value": 1.797,
         "n_illiquid_positions": 0,
         "n_open_positions": 3,
         "n_settlements": 109,
@@ -13664,8 +13663,8 @@
         ],
         "realized_pnl": -8.973077,
         "return": -0.000931,
-        "ts": "2026-10-26T09:57:09.873684+00:00",
-        "unrealized_pnl": 0.007,
+        "ts": "2026-10-26T10:05:17.247641+00:00",
+        "unrealized_pnl": 0.008,
         "value_curve": [
           {
             "account_value": 9999.881,
@@ -14081,56 +14080,56 @@
             "ts": "2026-08-23T16:31:25.889329+00:00"
           },
           {
-            "account_value": 9988.897855,
+            "account_value": 9988.898855,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-09-01T10:54:43.661707+00:00"
           },
           {
-            "account_value": 9989.065855,
+            "account_value": 9989.066855,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-09-02T01:31:48.369793+00:00"
           },
           {
-            "account_value": 9989.149551,
+            "account_value": 9989.150551,
             "event_type": "settlement",
             "ts": "2026-09-06T00:12:58.006209+00:00"
           },
           {
-            "account_value": 9989.151551,
+            "account_value": 9989.152551,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:02.959012+00:00"
           },
           {
-            "account_value": 9989.069551,
+            "account_value": 9989.070551,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:13.751548+00:00"
           },
           {
-            "account_value": 9989.277551,
+            "account_value": 9989.278551,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:20.153251+00:00"
           },
           {
-            "account_value": 9989.272551,
+            "account_value": 9989.273551,
             "event_type": "settlement",
             "ts": "2026-09-10T01:01:25.591720+00:00"
           },
           {
-            "account_value": 9990.670551,
+            "account_value": 9990.671551,
             "event_type": "settlement",
             "ts": "2026-09-16T22:05:35.940156+00:00"
           },
           {
-            "account_value": 9990.689551,
+            "account_value": 9990.690551,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:09.873684+00:00"
+            "ts": "2026-10-26T10:05:17.247641+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9990.689551,
+      "account_value": 9990.690551,
       "max_drawdown": 0.00146,
       "model": "glm-5.2-fp8",
       "n_illiquid_positions": 0,
@@ -14157,7 +14156,7 @@
         ],
         "realized_pnl": -11.035215,
         "return": -0.001136,
-        "ts": "2026-10-26T09:57:10.381486+00:00",
+        "ts": "2026-10-26T10:05:17.735366+00:00",
         "unrealized_pnl": -0.05,
         "value_curve": [
           {
@@ -14614,7 +14613,7 @@
           {
             "account_value": 9988.644543,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:10.381486+00:00"
+            "ts": "2026-10-26T10:05:17.735366+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -14646,7 +14645,7 @@
         ],
         "realized_pnl": -12.664271,
         "return": -0.001299,
-        "ts": "2026-10-26T09:57:10.654096+00:00",
+        "ts": "2026-10-26T10:05:18.002817+00:00",
         "unrealized_pnl": -0.025,
         "value_curve": [
           {
@@ -15110,7 +15109,7 @@
           {
             "account_value": 9987.007048,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:10.654096+00:00"
+            "ts": "2026-10-26T10:05:18.002817+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -15127,9 +15126,9 @@
     },
     {
       "account": {
-        "account_value": 9986.56218,
+        "account_value": 9986.56318,
         "cash": 9984.34218,
-        "liquidation_value": 2.22,
+        "liquidation_value": 2.221,
         "n_illiquid_positions": 0,
         "n_open_positions": 10,
         "n_settlements": 93,
@@ -15142,8 +15141,8 @@
         ],
         "realized_pnl": -12.257019,
         "return": -0.001344,
-        "ts": "2026-10-26T09:57:08.704194+00:00",
-        "unrealized_pnl": -1.065,
+        "ts": "2026-10-26T10:05:16.114885+00:00",
+        "unrealized_pnl": -1.064,
         "value_curve": [
           {
             "account_value": 9999.881,
@@ -15511,53 +15510,53 @@
             "ts": "2026-08-16T13:19:20.956817+00:00"
           },
           {
-            "account_value": 9987.29512,
+            "account_value": 9987.29612,
             "event_type": "settlement",
             "ts": "2026-08-16T18:43:20.952089+00:00"
           },
           {
-            "account_value": 9990.55512,
+            "account_value": 9990.55612,
             "event_type": "settlement",
             "ts": "2026-08-16T20:34:45.959432+00:00"
           },
           {
-            "account_value": 9988.941712,
+            "account_value": 9988.942712,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-17T02:32:07.288190+00:00"
           },
           {
-            "account_value": 9989.541712,
+            "account_value": 9989.543712,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-17T07:02:37.409112+00:00"
           },
           {
-            "account_value": 9990.196712,
+            "account_value": 9990.198712,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-17T10:46:44.982932+00:00"
           },
           {
-            "account_value": 9990.107712,
+            "account_value": 9990.108712,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-17T13:22:09.669259+00:00"
           },
           {
-            "account_value": 9988.813712,
+            "account_value": 9988.815712,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-17T17:57:13.656123+00:00"
           },
           {
-            "account_value": 9988.615712,
+            "account_value": 9988.617712,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-17T23:29:57.266469+00:00"
           },
           {
-            "account_value": 9988.306712,
+            "account_value": 9988.307712,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-18T04:00:47.290852+00:00"
@@ -15568,46 +15567,46 @@
             "ts": "2026-08-18T05:40:21.525832+00:00"
           },
           {
-            "account_value": 9986.36548,
+            "account_value": 9986.36648,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-08-18T06:05:17.569759+00:00"
           },
           {
-            "account_value": 9986.09218,
+            "account_value": 9986.09318,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-08-18T11:51:59.104715+00:00"
           },
           {
-            "account_value": 9985.87818,
+            "account_value": 9985.87918,
             "event_type": "settlement",
             "ts": "2026-09-06T00:12:58.065986+00:00"
           },
           {
-            "account_value": 9985.87118,
+            "account_value": 9985.87218,
             "event_type": "settlement",
             "ts": "2026-09-06T00:13:02.620485+00:00"
           },
           {
-            "account_value": 9985.79118,
+            "account_value": 9985.79218,
             "event_type": "settlement",
             "ts": "2026-09-10T01:01:25.360983+00:00"
           },
           {
-            "account_value": 9986.79118,
+            "account_value": 9986.79218,
             "event_type": "settlement",
             "ts": "2026-09-16T22:05:35.711354+00:00"
           },
           {
-            "account_value": 9986.56218,
+            "account_value": 9986.56318,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:08.704194+00:00"
+            "ts": "2026-10-26T10:05:16.114885+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9986.56218,
+      "account_value": 9986.56318,
       "max_drawdown": 0.00141,
       "model": "qwen3-coder-30b-a3b-instruct",
       "n_illiquid_positions": 0,
@@ -15616,498 +15615,6 @@
       "n_trades": 304,
       "return": -0.001344,
       "sharpe": -0.0723
-    },
-    {
-      "account": {
-        "account_value": 9985.768751,
-        "cash": 9977.890751,
-        "liquidation_value": 7.878,
-        "n_illiquid_positions": 1,
-        "n_open_positions": 28,
-        "n_settlements": 177,
-        "n_trades": 585,
-        "notes": [
-          "Shadow ledger: trades are inferred from model-vs-market edge at forecast time, not sent to an exchange.",
-          "Open positions are valued at bid-side liquidation prices.",
-          "Resolved markets settle into cash once per market before later trades are considered.",
-          "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
-        ],
-        "realized_pnl": -11.063876,
-        "return": -0.001423,
-        "ts": "2026-10-26T09:57:11.932442+00:00",
-        "unrealized_pnl": -2.822,
-        "value_curve": [
-          {
-            "account_value": 9999.618,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-05T08:09:29.355932+00:00"
-          },
-          {
-            "account_value": 10000.425895,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-05T12:36:28.611252+00:00"
-          },
-          {
-            "account_value": 9998.909519,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-06T01:30:15.304183+00:00"
-          },
-          {
-            "account_value": 9997.93832,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-06T12:12:35.340839+00:00"
-          },
-          {
-            "account_value": 9997.76632,
-            "event_type": "settlement",
-            "ts": "2026-09-06T19:06:12.286353+00:00"
-          },
-          {
-            "account_value": 9997.532636,
-            "event_type": "settlement",
-            "ts": "2026-09-07T04:28:37.464126+00:00"
-          },
-          {
-            "account_value": 9997.61812,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-07T18:33:02.627968+00:00"
-          },
-          {
-            "account_value": 9999.379318,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-08T14:11:34.395013+00:00"
-          },
-          {
-            "account_value": 9997.605318,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-08T22:41:43.961611+00:00"
-          },
-          {
-            "account_value": 9996.435318,
-            "event_type": "settlement",
-            "ts": "2026-09-10T01:02:27.386018+00:00"
-          },
-          {
-            "account_value": 9995.653318,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-10T12:41:47.708797+00:00"
-          },
-          {
-            "account_value": 9997.661318,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-10T21:42:02.130503+00:00"
-          },
-          {
-            "account_value": 9998.618318,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-11T04:33:32.083038+00:00"
-          },
-          {
-            "account_value": 9998.879318,
-            "event_type": "settlement",
-            "ts": "2026-09-11T19:37:39.959170+00:00"
-          },
-          {
-            "account_value": 9997.311422,
-            "event_type": "settlement",
-            "ts": "2026-09-12T10:40:04.466507+00:00"
-          },
-          {
-            "account_value": 9998.169526,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-12T23:40:58.084939+00:00"
-          },
-          {
-            "account_value": 9996.563526,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-13T10:38:31.761026+00:00"
-          },
-          {
-            "account_value": 9997.062526,
-            "event_type": "settlement",
-            "ts": "2026-09-13T19:24:07.230472+00:00"
-          },
-          {
-            "account_value": 9996.869526,
-            "event_type": "settlement",
-            "ts": "2026-09-14T06:09:50.246529+00:00"
-          },
-          {
-            "account_value": 9996.745526,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-17T16:54:49.995173+00:00"
-          },
-          {
-            "account_value": 9998.174124,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-18T03:34:42.119810+00:00"
-          },
-          {
-            "account_value": 9998.275207,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-18T10:50:43.459844+00:00"
-          },
-          {
-            "account_value": 9999.089207,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-18T18:20:14.144206+00:00"
-          },
-          {
-            "account_value": 9999.140064,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-19T00:39:31.890225+00:00"
-          },
-          {
-            "account_value": 9999.83095,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-19T08:38:03.229989+00:00"
-          },
-          {
-            "account_value": 9999.7165,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-19T14:33:38.122852+00:00"
-          },
-          {
-            "account_value": 9999.084604,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-19T21:37:43.702782+00:00"
-          },
-          {
-            "account_value": 9998.009604,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-20T04:33:51.631013+00:00"
-          },
-          {
-            "account_value": 9999.035736,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-20T11:48:11.005130+00:00"
-          },
-          {
-            "account_value": 9999.240736,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-20T18:36:59.981682+00:00"
-          },
-          {
-            "account_value": 9998.306988,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-20T22:39:09.742144+00:00"
-          },
-          {
-            "account_value": 9998.929612,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-21T08:36:43.709465+00:00"
-          },
-          {
-            "account_value": 9998.742695,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-21T14:26:22.341179+00:00"
-          },
-          {
-            "account_value": 9995.754045,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-21T21:17:13.791976+00:00"
-          },
-          {
-            "account_value": 9996.390045,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-22T02:41:18.735894+00:00"
-          },
-          {
-            "account_value": 9996.144045,
-            "event_type": "settlement",
-            "ts": "2026-09-22T09:53:24.457784+00:00"
-          },
-          {
-            "account_value": 9996.648261,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-22T18:18:37.873828+00:00"
-          },
-          {
-            "account_value": 9996.239237,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-23T01:34:03.736545+00:00"
-          },
-          {
-            "account_value": 9994.888737,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-23T07:43:17.434833+00:00"
-          },
-          {
-            "account_value": 9996.031405,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-23T19:30:15.968711+00:00"
-          },
-          {
-            "account_value": 9996.430379,
-            "event_type": "settlement",
-            "ts": "2026-09-24T04:39:10.700120+00:00"
-          },
-          {
-            "account_value": 9994.801527,
-            "event_type": "settlement",
-            "ts": "2026-09-24T19:04:50.378737+00:00"
-          },
-          {
-            "account_value": 9992.619784,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-25T11:15:27.990348+00:00"
-          },
-          {
-            "account_value": 9993.171134,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-25T20:41:06.701467+00:00"
-          },
-          {
-            "account_value": 9994.639134,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-26T16:55:17.914782+00:00"
-          },
-          {
-            "account_value": 9993.136134,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-27T04:47:14.532058+00:00"
-          },
-          {
-            "account_value": 9993.657134,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-28T00:41:07.091334+00:00"
-          },
-          {
-            "account_value": 9991.335189,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-28T17:00:09.263266+00:00"
-          },
-          {
-            "account_value": 9992.201249,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-09-29T10:50:01.341373+00:00"
-          },
-          {
-            "account_value": 9991.919149,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-09-30T13:57:51.743108+00:00"
-          },
-          {
-            "account_value": 9991.755643,
-            "event_type": "settlement",
-            "ts": "2026-09-30T23:43:14.569166+00:00"
-          },
-          {
-            "account_value": 9991.22271,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-10-01T13:43:30.756433+00:00"
-          },
-          {
-            "account_value": 9991.23371,
-            "event_type": "settlement",
-            "ts": "2026-10-01T18:51:03.155281+00:00"
-          },
-          {
-            "account_value": 9990.41171,
-            "event_type": "settlement",
-            "ts": "2026-10-02T02:15:51.761272+00:00"
-          },
-          {
-            "account_value": 9989.77471,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-02T14:43:13.876110+00:00"
-          },
-          {
-            "account_value": 9989.74671,
-            "event_type": "settlement",
-            "ts": "2026-10-02T21:21:47.259721+00:00"
-          },
-          {
-            "account_value": 9988.01671,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-10-04T07:39:54.607073+00:00"
-          },
-          {
-            "account_value": 9989.97171,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-10-05T01:36:10.926436+00:00"
-          },
-          {
-            "account_value": 9990.57971,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-05T08:37:09.599108+00:00"
-          },
-          {
-            "account_value": 9989.966814,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-10-05T14:54:25.172887+00:00"
-          },
-          {
-            "account_value": 9990.679814,
-            "event_type": "settlement",
-            "ts": "2026-10-06T17:17:18.907868+00:00"
-          },
-          {
-            "account_value": 9990.843814,
-            "event_type": "settlement",
-            "ts": "2026-10-07T10:10:35.338615+00:00"
-          },
-          {
-            "account_value": 9989.659814,
-            "event_type": "settlement",
-            "ts": "2026-10-07T23:07:39.853739+00:00"
-          },
-          {
-            "account_value": 9988.959814,
-            "event_type": "settlement",
-            "ts": "2026-10-08T17:53:36.000004+00:00"
-          },
-          {
-            "account_value": 9988.893081,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-10-09T13:02:29.096123+00:00"
-          },
-          {
-            "account_value": 9988.630081,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-10-10T06:42:42.039807+00:00"
-          },
-          {
-            "account_value": 9988.426081,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-11T11:43:20.433870+00:00"
-          },
-          {
-            "account_value": 9988.621081,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-12T14:15:27.608857+00:00"
-          },
-          {
-            "account_value": 9987.685081,
-            "event_type": "settlement",
-            "ts": "2026-10-13T23:18:30.080453+00:00"
-          },
-          {
-            "account_value": 9986.968081,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-10-15T00:44:08.384374+00:00"
-          },
-          {
-            "account_value": 9986.814081,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-15T14:40:14.056001+00:00"
-          },
-          {
-            "account_value": 9985.709388,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-10-15T16:49:24.855646+00:00"
-          },
-          {
-            "account_value": 9987.095752,
-            "event_type": "trade",
-            "trade_status": "open",
-            "ts": "2026-10-15T18:44:28.104507+00:00"
-          },
-          {
-            "account_value": 9988.55138,
-            "event_type": "settlement",
-            "ts": "2026-10-16T07:09:15.312429+00:00"
-          },
-          {
-            "account_value": 9989.28838,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-16T08:57:03.738499+00:00"
-          },
-          {
-            "account_value": 9987.27938,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-16T12:41:30.346904+00:00"
-          },
-          {
-            "account_value": 9986.418055,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-16T18:58:55.241744+00:00"
-          },
-          {
-            "account_value": 9986.046751,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-17T03:41:07.095369+00:00"
-          },
-          {
-            "account_value": 9985.932751,
-            "event_type": "trade",
-            "trade_status": "realized",
-            "ts": "2026-10-17T08:42:24.094959+00:00"
-          },
-          {
-            "account_value": 9985.768751,
-            "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:11.932442+00:00"
-          }
-        ],
-        "value_method": "mark_to_market_bid_liquidation"
-      },
-      "account_value": 9985.768751,
-      "max_drawdown": 0.001482,
-      "model": "glm-5-3",
-      "n_illiquid_positions": 1,
-      "n_open_positions": 28,
-      "n_settlements": 177,
-      "n_trades": 585,
-      "return": -0.001423,
-      "sharpe": -0.0418
     },
     {
       "account": {
@@ -16126,7 +15633,7 @@
         ],
         "realized_pnl": -14.058695,
         "return": -0.001426,
-        "ts": "2026-10-26T09:57:08.874451+00:00",
+        "ts": "2026-10-26T10:05:16.277943+00:00",
         "unrealized_pnl": -0.025,
         "value_curve": [
           {
@@ -16559,7 +16066,7 @@
             "ts": "2026-09-01T16:47:41.531932+00:00"
           },
           {
-            "account_value": 9983.194258,
+            "account_value": 9983.195258,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-09-02T23:32:11.050510+00:00"
@@ -16592,7 +16099,7 @@
           {
             "account_value": 9985.743258,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:08.874451+00:00"
+            "ts": "2026-10-26T10:05:16.277943+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -16609,9 +16116,501 @@
     },
     {
       "account": {
-        "account_value": 9982.26934,
+        "account_value": 9985.738751,
+        "cash": 9977.890751,
+        "liquidation_value": 7.848,
+        "n_illiquid_positions": 1,
+        "n_open_positions": 28,
+        "n_settlements": 177,
+        "n_trades": 585,
+        "notes": [
+          "Shadow ledger: trades are inferred from model-vs-market edge at forecast time, not sent to an exchange.",
+          "Open positions are valued at bid-side liquidation prices.",
+          "Resolved markets settle into cash once per market before later trades are considered.",
+          "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
+        ],
+        "realized_pnl": -11.063876,
+        "return": -0.001426,
+        "ts": "2026-10-26T10:05:19.261709+00:00",
+        "unrealized_pnl": -2.852,
+        "value_curve": [
+          {
+            "account_value": 9999.618,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-05T08:09:29.355932+00:00"
+          },
+          {
+            "account_value": 10000.425895,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-05T12:36:28.611252+00:00"
+          },
+          {
+            "account_value": 9998.909519,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-06T01:30:15.304183+00:00"
+          },
+          {
+            "account_value": 9997.93832,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-06T12:12:35.340839+00:00"
+          },
+          {
+            "account_value": 9997.76632,
+            "event_type": "settlement",
+            "ts": "2026-09-06T19:06:12.286353+00:00"
+          },
+          {
+            "account_value": 9997.532636,
+            "event_type": "settlement",
+            "ts": "2026-09-07T04:28:37.464126+00:00"
+          },
+          {
+            "account_value": 9997.61812,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-07T18:33:02.627968+00:00"
+          },
+          {
+            "account_value": 9999.379318,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-08T14:11:34.395013+00:00"
+          },
+          {
+            "account_value": 9997.605318,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-08T22:41:43.961611+00:00"
+          },
+          {
+            "account_value": 9996.435318,
+            "event_type": "settlement",
+            "ts": "2026-09-10T01:02:27.386018+00:00"
+          },
+          {
+            "account_value": 9995.653318,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-10T12:41:47.708797+00:00"
+          },
+          {
+            "account_value": 9997.661318,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-10T21:42:02.130503+00:00"
+          },
+          {
+            "account_value": 9998.618318,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-11T04:33:32.083038+00:00"
+          },
+          {
+            "account_value": 9998.879318,
+            "event_type": "settlement",
+            "ts": "2026-09-11T19:37:39.959170+00:00"
+          },
+          {
+            "account_value": 9997.311422,
+            "event_type": "settlement",
+            "ts": "2026-09-12T10:40:04.466507+00:00"
+          },
+          {
+            "account_value": 9998.169526,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-12T23:40:58.084939+00:00"
+          },
+          {
+            "account_value": 9996.563526,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-13T10:38:31.761026+00:00"
+          },
+          {
+            "account_value": 9997.062526,
+            "event_type": "settlement",
+            "ts": "2026-09-13T19:24:07.230472+00:00"
+          },
+          {
+            "account_value": 9996.869526,
+            "event_type": "settlement",
+            "ts": "2026-09-14T06:09:50.246529+00:00"
+          },
+          {
+            "account_value": 9996.745526,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-17T16:54:49.995173+00:00"
+          },
+          {
+            "account_value": 9998.174124,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-18T03:34:42.119810+00:00"
+          },
+          {
+            "account_value": 9998.275207,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-18T10:50:43.459844+00:00"
+          },
+          {
+            "account_value": 9999.089207,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-18T18:20:14.144206+00:00"
+          },
+          {
+            "account_value": 9999.140064,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-19T00:39:31.890225+00:00"
+          },
+          {
+            "account_value": 9999.83095,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-19T08:38:03.229989+00:00"
+          },
+          {
+            "account_value": 9999.7165,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-19T14:33:38.122852+00:00"
+          },
+          {
+            "account_value": 9999.084604,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-19T21:37:43.702782+00:00"
+          },
+          {
+            "account_value": 9998.009604,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-20T04:33:51.631013+00:00"
+          },
+          {
+            "account_value": 9999.035736,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-20T11:48:11.005130+00:00"
+          },
+          {
+            "account_value": 9999.240736,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-20T18:36:59.981682+00:00"
+          },
+          {
+            "account_value": 9998.306988,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-20T22:39:09.742144+00:00"
+          },
+          {
+            "account_value": 9998.929612,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-21T08:36:43.709465+00:00"
+          },
+          {
+            "account_value": 9998.742695,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-21T14:26:22.341179+00:00"
+          },
+          {
+            "account_value": 9995.754045,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-21T21:17:13.791976+00:00"
+          },
+          {
+            "account_value": 9996.390045,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-22T02:41:18.735894+00:00"
+          },
+          {
+            "account_value": 9996.144045,
+            "event_type": "settlement",
+            "ts": "2026-09-22T09:53:24.457784+00:00"
+          },
+          {
+            "account_value": 9996.648261,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-22T18:18:37.873828+00:00"
+          },
+          {
+            "account_value": 9996.239237,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-23T01:34:03.736545+00:00"
+          },
+          {
+            "account_value": 9994.888737,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-23T07:43:17.434833+00:00"
+          },
+          {
+            "account_value": 9996.031405,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-23T19:30:15.968711+00:00"
+          },
+          {
+            "account_value": 9996.430379,
+            "event_type": "settlement",
+            "ts": "2026-09-24T04:39:10.700120+00:00"
+          },
+          {
+            "account_value": 9994.801527,
+            "event_type": "settlement",
+            "ts": "2026-09-24T19:04:50.378737+00:00"
+          },
+          {
+            "account_value": 9992.619784,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-25T11:15:27.990348+00:00"
+          },
+          {
+            "account_value": 9993.171134,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-25T20:41:06.701467+00:00"
+          },
+          {
+            "account_value": 9994.639134,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-26T16:55:17.914782+00:00"
+          },
+          {
+            "account_value": 9993.136134,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-27T04:47:14.532058+00:00"
+          },
+          {
+            "account_value": 9993.657134,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-28T00:41:07.091334+00:00"
+          },
+          {
+            "account_value": 9991.335189,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-28T17:00:09.263266+00:00"
+          },
+          {
+            "account_value": 9992.201249,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-09-29T10:50:01.341373+00:00"
+          },
+          {
+            "account_value": 9991.919149,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-09-30T13:57:51.743108+00:00"
+          },
+          {
+            "account_value": 9991.755643,
+            "event_type": "settlement",
+            "ts": "2026-09-30T23:43:14.569166+00:00"
+          },
+          {
+            "account_value": 9991.22271,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-10-01T13:43:30.756433+00:00"
+          },
+          {
+            "account_value": 9991.23371,
+            "event_type": "settlement",
+            "ts": "2026-10-01T18:51:03.155281+00:00"
+          },
+          {
+            "account_value": 9990.41171,
+            "event_type": "settlement",
+            "ts": "2026-10-02T02:15:51.761272+00:00"
+          },
+          {
+            "account_value": 9989.77471,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-02T14:43:13.876110+00:00"
+          },
+          {
+            "account_value": 9989.74671,
+            "event_type": "settlement",
+            "ts": "2026-10-02T21:21:47.259721+00:00"
+          },
+          {
+            "account_value": 9988.01671,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-10-04T07:39:54.607073+00:00"
+          },
+          {
+            "account_value": 9989.97171,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-10-05T01:36:10.926436+00:00"
+          },
+          {
+            "account_value": 9990.57971,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-05T08:37:09.599108+00:00"
+          },
+          {
+            "account_value": 9989.966814,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-10-05T14:54:25.172887+00:00"
+          },
+          {
+            "account_value": 9990.679814,
+            "event_type": "settlement",
+            "ts": "2026-10-06T17:17:18.907868+00:00"
+          },
+          {
+            "account_value": 9990.843814,
+            "event_type": "settlement",
+            "ts": "2026-10-07T10:10:35.338615+00:00"
+          },
+          {
+            "account_value": 9989.659814,
+            "event_type": "settlement",
+            "ts": "2026-10-07T23:07:39.853739+00:00"
+          },
+          {
+            "account_value": 9988.959814,
+            "event_type": "settlement",
+            "ts": "2026-10-08T17:53:36.000004+00:00"
+          },
+          {
+            "account_value": 9988.893081,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-10-09T13:02:29.096123+00:00"
+          },
+          {
+            "account_value": 9988.630081,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-10-10T06:42:42.039807+00:00"
+          },
+          {
+            "account_value": 9988.426081,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-11T11:43:20.433870+00:00"
+          },
+          {
+            "account_value": 9988.621081,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-12T14:15:27.608857+00:00"
+          },
+          {
+            "account_value": 9987.685081,
+            "event_type": "settlement",
+            "ts": "2026-10-13T23:18:30.080453+00:00"
+          },
+          {
+            "account_value": 9986.969081,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-10-15T00:44:08.384374+00:00"
+          },
+          {
+            "account_value": 9986.844081,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-15T14:40:14.056001+00:00"
+          },
+          {
+            "account_value": 9985.720388,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-10-15T16:49:24.855646+00:00"
+          },
+          {
+            "account_value": 9987.126752,
+            "event_type": "trade",
+            "trade_status": "open",
+            "ts": "2026-10-15T18:44:28.104507+00:00"
+          },
+          {
+            "account_value": 9988.58238,
+            "event_type": "settlement",
+            "ts": "2026-10-16T07:09:15.312429+00:00"
+          },
+          {
+            "account_value": 9989.25838,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-16T08:57:03.738499+00:00"
+          },
+          {
+            "account_value": 9987.24038,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-16T12:41:30.346904+00:00"
+          },
+          {
+            "account_value": 9986.358055,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-16T18:58:55.241744+00:00"
+          },
+          {
+            "account_value": 9986.006751,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-17T03:41:07.095369+00:00"
+          },
+          {
+            "account_value": 9985.902751,
+            "event_type": "trade",
+            "trade_status": "realized",
+            "ts": "2026-10-17T08:42:24.094959+00:00"
+          },
+          {
+            "account_value": 9985.738751,
+            "event_type": "mark_to_market",
+            "ts": "2026-10-26T10:05:19.261709+00:00"
+          }
+        ],
+        "value_method": "mark_to_market_bid_liquidation"
+      },
+      "account_value": 9985.738751,
+      "max_drawdown": 0.001481,
+      "model": "glm-5-3",
+      "n_illiquid_positions": 1,
+      "n_open_positions": 28,
+      "n_settlements": 177,
+      "n_trades": 585,
+      "return": -0.001426,
+      "sharpe": -0.0419
+    },
+    {
+      "account": {
+        "account_value": 9982.21834,
         "cash": 9958.86334,
-        "liquidation_value": 23.406,
+        "liquidation_value": 23.355,
         "n_illiquid_positions": 0,
         "n_open_positions": 29,
         "n_settlements": 483,
@@ -16624,9 +16623,9 @@
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
         "realized_pnl": -15.903957,
-        "return": -0.001773,
-        "ts": "2026-10-26T09:57:12.333572+00:00",
-        "unrealized_pnl": -1.599,
+        "return": -0.001778,
+        "ts": "2026-10-26T10:05:19.663754+00:00",
+        "unrealized_pnl": -1.65,
         "value_curve": [
           {
             "account_value": 9999.115,
@@ -17042,36 +17041,36 @@
             "ts": "2026-10-14T04:50:44.485127+00:00"
           },
           {
-            "account_value": 9983.719143,
+            "account_value": 9983.637143,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T15:35:30.039599+00:00"
           },
           {
-            "account_value": 9983.440413,
+            "account_value": 9983.388413,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T17:40:36.255760+00:00"
           },
           {
-            "account_value": 9983.074716,
+            "account_value": 9983.023716,
             "event_type": "settlement",
             "ts": "2026-10-16T07:09:15.263763+00:00"
           },
           {
-            "account_value": 9983.34034,
+            "account_value": 9983.28934,
             "event_type": "settlement",
             "ts": "2026-10-16T21:01:00.530179+00:00"
           },
           {
-            "account_value": 9982.26934,
+            "account_value": 9982.21834,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:12.333572+00:00"
+            "ts": "2026-10-26T10:05:19.663754+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9982.26934,
+      "account_value": 9982.21834,
       "baseline": true,
       "max_drawdown": 0.002088,
       "model": "market-follow",
@@ -17079,14 +17078,14 @@
       "n_open_positions": 29,
       "n_settlements": 483,
       "n_trades": 622,
-      "return": -0.001773,
-      "sharpe": -0.0392
+      "return": -0.001778,
+      "sharpe": -0.0394
     },
     {
       "account": {
-        "account_value": 9980.178351,
+        "account_value": 9980.177351,
         "cash": 9972.894351,
-        "liquidation_value": 7.284,
+        "liquidation_value": 7.283,
         "n_illiquid_positions": 1,
         "n_open_positions": 29,
         "n_settlements": 222,
@@ -17099,8 +17098,8 @@
         ],
         "realized_pnl": -17.478319,
         "return": -0.001982,
-        "ts": "2026-10-26T09:57:11.456319+00:00",
-        "unrealized_pnl": -1.817,
+        "ts": "2026-10-26T10:05:18.790149+00:00",
+        "unrealized_pnl": -1.818,
         "value_curve": [
           {
             "account_value": 9999.088628,
@@ -17520,60 +17519,60 @@
             "ts": "2026-10-14T17:28:54.173660+00:00"
           },
           {
-            "account_value": 9978.595831,
+            "account_value": 9978.626831,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T04:29:41.413228+00:00"
           },
           {
-            "account_value": 9978.317794,
+            "account_value": 9978.348794,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T15:38:16.496575+00:00"
           },
           {
-            "account_value": 9977.377326,
+            "account_value": 9977.388326,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T17:43:03.139881+00:00"
           },
           {
-            "account_value": 9977.687006,
+            "account_value": 9977.648006,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-15T23:30:02.491945+00:00"
           },
           {
-            "account_value": 9977.842006,
+            "account_value": 9977.803006,
             "event_type": "settlement",
             "ts": "2026-10-16T07:09:40.223862+00:00"
           },
           {
-            "account_value": 9976.983006,
+            "account_value": 9976.944006,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T14:30:02.831298+00:00"
           },
           {
-            "account_value": 9975.708305,
+            "account_value": 9975.709305,
             "event_type": "settlement",
             "ts": "2026-10-16T21:01:00.583526+00:00"
           },
           {
-            "account_value": 9978.694351,
+            "account_value": 9978.755351,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-17T05:28:09.315638+00:00"
           },
           {
-            "account_value": 9980.178351,
+            "account_value": 9980.177351,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:11.456319+00:00"
+            "ts": "2026-10-26T10:05:18.790149+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9980.178351,
+      "account_value": 9980.177351,
       "max_drawdown": 0.002538,
       "model": "deepseek-v4-flash",
       "n_illiquid_positions": 1,
@@ -17585,9 +17584,9 @@
     },
     {
       "account": {
-        "account_value": 9977.821512,
+        "account_value": 9977.779512,
         "cash": 9968.743512,
-        "liquidation_value": 9.078,
+        "liquidation_value": 9.036,
         "n_illiquid_positions": 1,
         "n_open_positions": 28,
         "n_settlements": 211,
@@ -17599,9 +17598,9 @@
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
         "realized_pnl": -19.724404,
-        "return": -0.002218,
-        "ts": "2026-10-26T09:57:11.215800+00:00",
-        "unrealized_pnl": -1.691,
+        "return": -0.002222,
+        "ts": "2026-10-26T10:05:18.553458+00:00",
+        "unrealized_pnl": -1.733,
         "value_curve": [
           {
             "account_value": 9999.088628,
@@ -18018,75 +18017,75 @@
             "ts": "2026-10-14T16:03:12.920036+00:00"
           },
           {
-            "account_value": 9979.090267,
+            "account_value": 9979.121267,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-15T02:58:43.106261+00:00"
           },
           {
-            "account_value": 9977.925267,
+            "account_value": 9977.895267,
             "event_type": "settlement",
             "ts": "2026-10-15T14:57:42.781958+00:00"
           },
           {
-            "account_value": 9976.274111,
+            "account_value": 9976.275111,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T18:09:42.994440+00:00"
           },
           {
-            "account_value": 9976.402791,
+            "account_value": 9976.343791,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T02:06:48.043418+00:00"
           },
           {
-            "account_value": 9976.804791,
+            "account_value": 9976.755791,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-16T08:05:03.275687+00:00"
           },
           {
-            "account_value": 9975.244791,
+            "account_value": 9975.195791,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T17:59:52.489176+00:00"
           },
           {
-            "account_value": 9976.338162,
+            "account_value": 9976.299162,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T22:13:27.521379+00:00"
           },
           {
-            "account_value": 9977.002512,
+            "account_value": 9976.961512,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-17T06:05:50.658990+00:00"
           },
           {
-            "account_value": 9977.821512,
+            "account_value": 9977.779512,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:11.215800+00:00"
+            "ts": "2026-10-26T10:05:18.553458+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9977.821512,
-      "max_drawdown": 0.002646,
+      "account_value": 9977.779512,
+      "max_drawdown": 0.00265,
       "model": "qwen3-8-27b",
       "n_illiquid_positions": 1,
       "n_open_positions": 28,
       "n_settlements": 211,
       "n_trades": 949,
-      "return": -0.002218,
-      "sharpe": -0.0408
+      "return": -0.002222,
+      "sharpe": -0.0409
     },
     {
       "account": {
-        "account_value": 9976.987022,
+        "account_value": 9976.946022,
         "cash": 9965.232022,
-        "liquidation_value": 11.755,
+        "liquidation_value": 11.714,
         "n_illiquid_positions": 1,
         "n_open_positions": 28,
         "n_settlements": 329,
@@ -18098,9 +18097,9 @@
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
         "realized_pnl": -19.984859,
-        "return": -0.002301,
-        "ts": "2026-10-26T09:57:09.366039+00:00",
-        "unrealized_pnl": -2.461,
+        "return": -0.002305,
+        "ts": "2026-10-26T10:05:16.755896+00:00",
+        "unrealized_pnl": -2.502,
         "value_curve": [
           {
             "account_value": 9999.881,
@@ -18537,51 +18536,51 @@
             "ts": "2026-10-13T12:59:59.968204+00:00"
           },
           {
-            "account_value": 9979.566251,
+            "account_value": 9979.567251,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T00:55:40.102811+00:00"
           },
           {
-            "account_value": 9977.697095,
+            "account_value": 9977.668095,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T16:04:41.618397+00:00"
           },
           {
-            "account_value": 9976.198398,
+            "account_value": 9976.220398,
             "event_type": "settlement",
             "ts": "2026-10-16T07:09:15.331518+00:00"
           },
           {
-            "account_value": 9976.404022,
+            "account_value": 9976.426022,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T22:06:15.069246+00:00"
           },
           {
-            "account_value": 9976.987022,
+            "account_value": 9976.946022,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:09.366039+00:00"
+            "ts": "2026-10-26T10:05:16.755896+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9976.987022,
-      "max_drawdown": 0.002611,
+      "account_value": 9976.946022,
+      "max_drawdown": 0.002609,
       "model": "llama-3.3-70b-instruct",
       "n_illiquid_positions": 1,
       "n_open_positions": 28,
       "n_settlements": 329,
       "n_trades": 1113,
-      "return": -0.002301,
-      "sharpe": -0.0379
+      "return": -0.002305,
+      "sharpe": -0.038
     },
     {
       "account": {
-        "account_value": 9974.418418,
+        "account_value": 9974.367418,
         "cash": 9969.385418,
-        "liquidation_value": 5.033,
+        "liquidation_value": 4.982,
         "n_illiquid_positions": 1,
         "n_open_positions": 27,
         "n_settlements": 210,
@@ -18593,9 +18592,9 @@
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
         "realized_pnl": -23.416086,
-        "return": -0.002558,
-        "ts": "2026-10-26T09:57:11.767126+00:00",
-        "unrealized_pnl": -1.445,
+        "return": -0.002563,
+        "ts": "2026-10-26T10:05:19.096333+00:00",
+        "unrealized_pnl": -1.496,
         "value_curve": [
           {
             "account_value": 9999.66,
@@ -19003,80 +19002,80 @@
             "ts": "2026-10-14T00:43:28.217576+00:00"
           },
           {
-            "account_value": 9976.422973,
+            "account_value": 9976.423973,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T00:49:30.556538+00:00"
           },
           {
-            "account_value": 9976.330973,
+            "account_value": 9976.361973,
             "event_type": "settlement",
             "ts": "2026-10-15T14:57:42.734182+00:00"
           },
           {
-            "account_value": 9975.480743,
+            "account_value": 9975.501743,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T17:52:48.924464+00:00"
           },
           {
-            "account_value": 9973.948423,
+            "account_value": 9973.979423,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-15T21:41:50.323942+00:00"
           },
           {
-            "account_value": 9975.056423,
+            "account_value": 9975.027423,
             "event_type": "settlement",
             "ts": "2026-10-16T07:09:15.109585+00:00"
           },
           {
-            "account_value": 9975.231423,
+            "account_value": 9975.202423,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T13:43:18.971399+00:00"
           },
           {
-            "account_value": 9973.717098,
+            "account_value": 9973.668098,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T18:58:40.158801+00:00"
           },
           {
-            "account_value": 9974.091418,
+            "account_value": 9974.042418,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T21:56:56.292148+00:00"
           },
           {
-            "account_value": 9975.443418,
+            "account_value": 9975.394418,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-17T08:41:25.918101+00:00"
           },
           {
-            "account_value": 9974.418418,
+            "account_value": 9974.367418,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:11.767126+00:00"
+            "ts": "2026-10-26T10:05:19.096333+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9974.418418,
-      "max_drawdown": 0.002692,
+      "account_value": 9974.367418,
+      "max_drawdown": 0.002695,
       "model": "glm-5-3-flash",
       "n_illiquid_positions": 1,
       "n_open_positions": 27,
       "n_settlements": 210,
       "n_trades": 658,
-      "return": -0.002558,
-      "sharpe": -0.0621
+      "return": -0.002563,
+      "sharpe": -0.0623
     },
     {
       "account": {
-        "account_value": 9957.802013,
+        "account_value": 9957.862013,
         "cash": 9947.919013,
-        "liquidation_value": 9.883,
+        "liquidation_value": 9.943,
         "n_illiquid_positions": 0,
         "n_open_positions": 29,
         "n_settlements": 281,
@@ -19088,9 +19087,9 @@
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
         "realized_pnl": -37.814175,
-        "return": -0.00422,
-        "ts": "2026-10-26T09:57:10.253978+00:00",
-        "unrealized_pnl": -3.466,
+        "return": -0.004214,
+        "ts": "2026-10-26T10:05:17.610998+00:00",
+        "unrealized_pnl": -3.406,
         "value_curve": [
           {
             "account_value": 10000.109,
@@ -19513,64 +19512,64 @@
             "ts": "2026-10-14T21:01:57.569103+00:00"
           },
           {
-            "account_value": 9962.931117,
+            "account_value": 9962.962117,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-15T12:02:55.242576+00:00"
           },
           {
-            "account_value": 9961.788612,
+            "account_value": 9961.839612,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T18:09:01.852046+00:00"
           },
           {
-            "account_value": 9962.076292,
+            "account_value": 9962.078292,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-16T05:59:35.316659+00:00"
           },
           {
-            "account_value": 9960.294292,
+            "account_value": 9960.356292,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T13:59:30.038384+00:00"
           },
           {
-            "account_value": 9957.553967,
+            "account_value": 9957.615967,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-16T21:11:53.679649+00:00"
           },
           {
-            "account_value": 9958.047013,
+            "account_value": 9958.049013,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-17T04:00:09.864051+00:00"
           },
           {
-            "account_value": 9957.802013,
+            "account_value": 9957.862013,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:10.253978+00:00"
+            "ts": "2026-10-26T10:05:17.610998+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9957.802013,
-      "max_drawdown": 0.004278,
+      "account_value": 9957.862013,
+      "max_drawdown": 0.004272,
       "model": "minimax-m3",
       "n_illiquid_positions": 0,
       "n_open_positions": 29,
       "n_settlements": 281,
       "n_trades": 1102,
-      "return": -0.00422,
-      "sharpe": -0.064
+      "return": -0.004214,
+      "sharpe": -0.0639
     },
     {
       "account": {
-        "account_value": 9956.777554,
+        "account_value": 9956.766554,
         "cash": 9945.929554,
-        "liquidation_value": 10.848,
+        "liquidation_value": 10.837,
         "n_illiquid_positions": 1,
         "n_open_positions": 29,
         "n_settlements": 483,
@@ -19582,9 +19581,9 @@
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
         "realized_pnl": -40.971842,
-        "return": -0.004322,
-        "ts": "2026-10-26T09:57:08.508893+00:00",
-        "unrealized_pnl": -1.408,
+        "return": -0.004323,
+        "ts": "2026-10-26T10:05:15.917946+00:00",
+        "unrealized_pnl": -1.419,
         "value_curve": [
           {
             "account_value": 9999.885,
@@ -20023,13 +20022,13 @@
             "ts": "2026-10-14T13:29:51.651101+00:00"
           },
           {
-            "account_value": 9958.008384,
+            "account_value": 9957.979384,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-15T09:27:17.083198+00:00"
           },
           {
-            "account_value": 9955.865555,
+            "account_value": 9955.854555,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T17:42:36.928467+00:00"
@@ -20041,34 +20040,34 @@
             "ts": "2026-10-16T08:31:37.956402+00:00"
           },
           {
-            "account_value": 9954.594554,
+            "account_value": 9954.585554,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T21:43:02.161782+00:00"
           },
           {
-            "account_value": 9956.777554,
+            "account_value": 9956.766554,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:08.508893+00:00"
+            "ts": "2026-10-26T10:05:15.917946+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9956.777554,
-      "max_drawdown": 0.004679,
+      "account_value": 9956.766554,
+      "max_drawdown": 0.004673,
       "model": "council",
       "n_illiquid_positions": 1,
       "n_open_positions": 29,
       "n_settlements": 483,
       "n_trades": 1598,
-      "return": -0.004322,
+      "return": -0.004323,
       "sharpe": -0.0458
     },
     {
       "account": {
-        "account_value": 9935.687765,
+        "account_value": 9935.766765,
         "cash": 9929.972765,
-        "liquidation_value": 5.715,
+        "liquidation_value": 5.794,
         "n_illiquid_positions": 1,
         "n_open_positions": 29,
         "n_settlements": 594,
@@ -20080,9 +20079,9 @@
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
         "realized_pnl": -59.317167,
-        "return": -0.006431,
-        "ts": "2026-10-26T09:57:07.636052+00:00",
-        "unrealized_pnl": -3.161,
+        "return": -0.006423,
+        "ts": "2026-10-26T10:05:15.060027+00:00",
+        "unrealized_pnl": -3.082,
         "value_curve": [
           {
             "account_value": 9999.978628,
@@ -20521,46 +20520,46 @@
             "ts": "2026-10-13T18:54:46.981495+00:00"
           },
           {
-            "account_value": 9939.464947,
+            "account_value": 9939.495947,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-15T05:52:29.729250+00:00"
           },
           {
-            "account_value": 9940.312118,
+            "account_value": 9940.283118,
             "event_type": "trade",
             "trade_status": "open",
             "ts": "2026-10-15T18:04:52.166663+00:00"
           },
           {
-            "account_value": 9937.128626,
+            "account_value": 9937.100626,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T11:55:43.840650+00:00"
           },
           {
-            "account_value": 9935.958557,
+            "account_value": 9936.030557,
             "event_type": "trade",
             "trade_status": "realized",
             "ts": "2026-10-16T23:02:09.470470+00:00"
           },
           {
-            "account_value": 9935.687765,
+            "account_value": 9935.766765,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:07.636052+00:00"
+            "ts": "2026-10-26T10:05:15.060027+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 9935.687765,
-      "max_drawdown": 0.006559,
+      "account_value": 9935.766765,
+      "max_drawdown": 0.006551,
       "model": "gpt-oss-120b",
       "n_illiquid_positions": 1,
       "n_open_positions": 29,
       "n_settlements": 594,
       "n_trades": 1965,
-      "return": -0.006431,
-      "sharpe": -0.0522
+      "return": -0.006423,
+      "sharpe": -0.0521
     },
     {
       "account": {
@@ -20579,7 +20578,7 @@
         ],
         "realized_pnl": 0.0,
         "return": 0.0,
-        "ts": "2026-10-26T09:57:08.591540+00:00",
+        "ts": "2026-10-26T10:05:16.002259+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -20980,7 +20979,7 @@
           {
             "account_value": 10000.0,
             "event_type": "heartbeat",
-            "ts": "2026-10-26T09:57:08.591540+00:00"
+            "ts": "2026-10-26T10:05:16.002259+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -143268,9 +143267,9 @@
   "quarter_kelly_by_model": [
     {
       "account": {
-        "account_value": 54850.900392,
-        "cash": 48481.21848,
-        "liquidation_value": 6369.681912,
+        "account_value": 54743.720884,
+        "cash": 48479.599575,
+        "liquidation_value": 6264.121309,
         "n_illiquid_positions": 0,
         "n_open_positions": 4,
         "n_settlements": 281,
@@ -143285,10 +143284,10 @@
           "Sizing shrinks calibrated probabilities 50% toward the executable market price.",
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
-        "realized_pnl": 45959.102358,
-        "return": 4.48509,
-        "ts": "2026-10-26T09:58:51.746722+00:00",
-        "unrealized_pnl": 323.62212,
+        "realized_pnl": 45945.706492,
+        "return": 4.474372,
+        "ts": "2026-10-26T10:06:59.872837+00:00",
+        "unrealized_pnl": 229.834845,
         "value_curve": [
           {
             "account_value": 10099.036971,
@@ -143735,63 +143734,63 @@
             "ts": "2026-10-16T07:09:15.148595+00:00"
           },
           {
-            "account_value": 47909.493477,
+            "account_value": 47842.62736,
             "event_type": "trade",
             "sized_fraction": 0.016067,
             "trade_status": "open",
             "ts": "2026-10-16T09:04:59.889320+00:00"
           },
           {
-            "account_value": 52372.169891,
+            "account_value": 52277.786991,
             "event_type": "trade",
             "sized_fraction": 0.058496,
             "trade_status": "open",
             "ts": "2026-10-16T13:58:51.319719+00:00"
           },
           {
-            "account_value": 45914.740487,
+            "account_value": 45824.447453,
             "event_type": "trade",
             "sized_fraction": 0.068655,
             "trade_status": "open",
             "ts": "2026-10-16T19:10:33.610124+00:00"
           },
           {
-            "account_value": 53171.186017,
+            "account_value": 53067.288598,
             "event_type": "trade",
             "sized_fraction": 0.058415,
             "trade_status": "realized",
             "ts": "2026-10-17T02:03:04.328248+00:00"
           },
           {
-            "account_value": 53672.966762,
+            "account_value": 53568.089026,
             "event_type": "settlement",
             "ts": "2026-10-17T17:09:40.275721+00:00"
           },
           {
-            "account_value": 54850.900392,
+            "account_value": 54743.720884,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:58:51.746722+00:00"
+            "ts": "2026-10-26T10:06:59.872837+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 54850.900392,
+      "account_value": 54743.720884,
       "max_drawdown": 0.31092,
       "model": "minimax-m3",
       "n_settlements": 281,
       "n_skipped_not_validated": 0,
       "n_trades": 271,
       "n_validated_buckets": 0,
-      "recommended_weight": 0.5074,
-      "return": 4.48509,
-      "sharpe": 0.106,
+      "recommended_weight": 0.5076,
+      "return": 4.474372,
+      "sharpe": 0.1059,
       "status": "active"
     },
     {
       "account": {
-        "account_value": 24028.52769,
-        "cash": 19635.255189,
-        "liquidation_value": 4393.272501,
+        "account_value": 23967.818627,
+        "cash": 19645.678927,
+        "liquidation_value": 4322.1397,
         "n_illiquid_positions": 0,
         "n_open_positions": 5,
         "n_settlements": 263,
@@ -143806,10 +143805,10 @@
           "Sizing shrinks calibrated probabilities 50% toward the executable market price.",
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
-        "realized_pnl": 15309.689884,
-        "return": 1.402853,
-        "ts": "2026-10-26T09:57:50.700195+00:00",
-        "unrealized_pnl": -1038.707161,
+        "realized_pnl": 15306.36102,
+        "return": 1.396782,
+        "ts": "2026-10-26T10:05:58.205150+00:00",
+        "unrealized_pnl": -1096.140681,
         "value_curve": [
           {
             "account_value": 9208.0,
@@ -144265,54 +144264,54 @@
             "ts": "2026-10-16T07:09:40.079094+00:00"
           },
           {
-            "account_value": 23783.905027,
+            "account_value": 23730.58943,
             "event_type": "trade",
             "sized_fraction": 0.050868,
             "trade_status": "open",
             "ts": "2026-10-16T09:38:12.707149+00:00"
           },
           {
-            "account_value": 24189.198105,
+            "account_value": 24127.748668,
             "event_type": "trade",
             "sized_fraction": 0.031767,
             "trade_status": "open",
             "ts": "2026-10-16T12:39:12.671989+00:00"
           },
           {
-            "account_value": 22968.081462,
+            "account_value": 22909.733416,
             "event_type": "settlement",
             "ts": "2026-10-16T21:01:00.602501+00:00"
           },
           {
-            "account_value": 24028.52769,
+            "account_value": 23967.818627,
             "event_type": "settlement",
             "ts": "2026-10-17T17:09:40.207550+00:00"
           },
           {
-            "account_value": 24028.52769,
+            "account_value": 23967.818627,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:50.700195+00:00"
+            "ts": "2026-10-26T10:05:58.205150+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 24028.52769,
+      "account_value": 23967.818627,
       "max_drawdown": 0.356188,
       "model": "gemma-4-26b-a4b-it",
       "n_settlements": 263,
       "n_skipped_not_validated": 0,
       "n_trades": 314,
       "n_validated_buckets": 0,
-      "recommended_weight": 0.1587,
-      "return": 1.402853,
-      "sharpe": 0.0883,
+      "recommended_weight": 0.1585,
+      "return": 1.396782,
+      "sharpe": 0.0881,
       "status": "active"
     },
     {
       "account": {
-        "account_value": 20983.094326,
-        "cash": 14269.713964,
-        "liquidation_value": 6713.380362,
+        "account_value": 20942.787867,
+        "cash": 14284.888487,
+        "liquidation_value": 6657.899379,
         "n_illiquid_positions": 0,
         "n_open_positions": 8,
         "n_settlements": 210,
@@ -144327,10 +144326,10 @@
           "Sizing shrinks calibrated probabilities 50% toward the executable market price.",
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
-        "realized_pnl": 11794.528343,
-        "return": 1.098309,
-        "ts": "2026-10-26T09:57:58.877697+00:00",
-        "unrealized_pnl": -673.460068,
+        "realized_pnl": 11791.978638,
+        "return": 1.094279,
+        "ts": "2026-10-26T10:06:06.443792+00:00",
+        "unrealized_pnl": -711.218116,
         "value_curve": [
           {
             "account_value": 10392.835821,
@@ -144771,64 +144770,64 @@
             "ts": "2026-10-14T04:50:45.810684+00:00"
           },
           {
-            "account_value": 15760.120134,
+            "account_value": 15706.318976,
             "event_type": "trade",
             "sized_fraction": 0.08,
             "trade_status": "open",
             "ts": "2026-10-15T07:42:15.291586+00:00"
           },
           {
-            "account_value": 15506.469147,
+            "account_value": 15453.321264,
             "event_type": "settlement",
             "ts": "2026-10-15T14:57:42.734182+00:00"
           },
           {
-            "account_value": 15899.493465,
+            "account_value": 15868.923571,
             "event_type": "trade",
             "sized_fraction": 0.019737,
             "trade_status": "open",
             "ts": "2026-10-15T17:53:48.594891+00:00"
           },
           {
-            "account_value": 18800.225851,
+            "account_value": 18768.370753,
             "event_type": "settlement",
             "ts": "2026-10-16T07:09:40.109507+00:00"
           },
           {
-            "account_value": 20998.071203,
+            "account_value": 20959.898552,
             "event_type": "trade",
             "sized_fraction": 0.08,
             "trade_status": "open",
             "ts": "2026-10-16T09:49:03.717809+00:00"
           },
           {
-            "account_value": 19350.3813,
+            "account_value": 19313.118929,
             "event_type": "settlement",
             "ts": "2026-10-16T21:01:00.620801+00:00"
           },
           {
-            "account_value": 21110.267749,
+            "account_value": 21069.717639,
             "event_type": "settlement",
             "ts": "2026-10-17T17:09:40.221366+00:00"
           },
           {
-            "account_value": 20983.094326,
+            "account_value": 20942.787867,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:58.877697+00:00"
+            "ts": "2026-10-26T10:06:06.443792+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 20983.094326,
+      "account_value": 20942.787867,
       "max_drawdown": 0.321111,
       "model": "glm-5-3-flash",
       "n_settlements": 210,
       "n_skipped_not_validated": 0,
       "n_trades": 307,
       "n_validated_buckets": 0,
-      "recommended_weight": 0.1242,
-      "return": 1.098309,
-      "sharpe": 0.0593,
+      "recommended_weight": 0.1241,
+      "return": 1.094279,
+      "sharpe": 0.0592,
       "status": "active"
     },
     {
@@ -144852,7 +144851,7 @@
         ],
         "realized_pnl": 6934.052333,
         "return": 0.682479,
-        "ts": "2026-10-26T09:57:53.798881+00:00",
+        "ts": "2026-10-26T10:06:01.344040+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -145327,7 +145326,7 @@
           {
             "account_value": 16824.791192,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:53.798881+00:00"
+            "ts": "2026-10-26T10:06:01.344040+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -145339,16 +145338,16 @@
       "n_skipped_not_validated": 0,
       "n_trades": 174,
       "n_validated_buckets": 0,
-      "recommended_weight": 0.0772,
+      "recommended_weight": 0.0774,
       "return": 0.682479,
       "sharpe": 0.0651,
       "status": "active"
     },
     {
       "account": {
-        "account_value": 16206.600378,
-        "cash": 12320.137101,
-        "liquidation_value": 3886.463278,
+        "account_value": 16159.731956,
+        "cash": 12327.831462,
+        "liquidation_value": 3831.900494,
         "n_illiquid_positions": 0,
         "n_open_positions": 6,
         "n_settlements": 211,
@@ -145363,10 +145362,10 @@
           "Sizing shrinks calibrated probabilities 50% toward the executable market price.",
           "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
         ],
-        "realized_pnl": 7376.292953,
-        "return": 0.62066,
-        "ts": "2026-10-26T09:58:58.267961+00:00",
-        "unrealized_pnl": -935.687149,
+        "realized_pnl": 7378.312845,
+        "return": 0.615973,
+        "ts": "2026-10-26T10:07:06.352583+00:00",
+        "unrealized_pnl": -984.575215,
         "value_curve": [
           {
             "account_value": 10400.0,
@@ -145828,49 +145827,49 @@
             "ts": "2026-10-16T07:09:22.132664+00:00"
           },
           {
-            "account_value": 16020.352404,
+            "account_value": 15977.802716,
             "event_type": "trade",
             "sized_fraction": 0.045,
             "trade_status": "open",
             "ts": "2026-10-16T10:50:30.863718+00:00"
           },
           {
-            "account_value": 15930.92669,
+            "account_value": 15936.796968,
             "event_type": "trade",
             "sized_fraction": 0.08,
             "trade_status": "realized",
             "ts": "2026-10-16T20:11:38.090411+00:00"
           },
           {
-            "account_value": 16601.483701,
+            "account_value": 16605.457335,
             "event_type": "trade",
             "sized_fraction": 0.003851,
             "trade_status": "open",
             "ts": "2026-10-16T21:15:29.354160+00:00"
           },
           {
-            "account_value": 16217.340957,
+            "account_value": 16170.440214,
             "event_type": "settlement",
             "ts": "2026-10-17T17:09:40.295845+00:00"
           },
           {
-            "account_value": 16206.600378,
+            "account_value": 16159.731956,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:58:58.267961+00:00"
+            "ts": "2026-10-26T10:07:06.352583+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
       },
-      "account_value": 16206.600378,
+      "account_value": 16159.731956,
       "max_drawdown": 0.343073,
       "model": "qwen3-8-27b",
       "n_settlements": 211,
       "n_skipped_not_validated": 0,
       "n_trades": 269,
       "n_validated_buckets": 0,
-      "recommended_weight": 0.0702,
-      "return": 0.62066,
-      "sharpe": 0.0475,
+      "recommended_weight": 0.0699,
+      "return": 0.615973,
+      "sharpe": 0.0473,
       "status": "active"
     },
     {
@@ -145894,7 +145893,7 @@
         ],
         "realized_pnl": 5697.105783,
         "return": 0.55033,
-        "ts": "2026-10-26T09:57:42.223342+00:00",
+        "ts": "2026-10-26T10:05:49.865653+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -146379,7 +146378,7 @@
           {
             "account_value": 15503.300053,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:42.223342+00:00"
+            "ts": "2026-10-26T10:05:49.865653+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -146391,7 +146390,7 @@
       "n_skipped_not_validated": 0,
       "n_trades": 248,
       "n_validated_buckets": 0,
-      "recommended_weight": 0.0623,
+      "recommended_weight": 0.0624,
       "return": 0.55033,
       "sharpe": 0.0527,
       "status": "active"
@@ -146417,7 +146416,7 @@
         ],
         "realized_pnl": -1681.616617,
         "return": -0.168163,
-        "ts": "2026-10-26T09:58:22.119001+00:00",
+        "ts": "2026-10-26T10:06:30.283923+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -146856,7 +146855,7 @@
           {
             "account_value": 8318.370361,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:58:22.119001+00:00"
+            "ts": "2026-10-26T10:06:30.283923+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -146894,7 +146893,7 @@
         ],
         "realized_pnl": -2442.90584,
         "return": -0.244291,
-        "ts": "2026-10-26T09:57:36.734838+00:00",
+        "ts": "2026-10-26T10:05:44.319505+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -147327,7 +147326,7 @@
           {
             "account_value": 7557.09416,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:57:36.734838+00:00"
+            "ts": "2026-10-26T10:05:44.319505+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
@@ -147365,7 +147364,7 @@
         ],
         "realized_pnl": -2698.937332,
         "return": -0.269894,
-        "ts": "2026-10-26T09:58:39.861849+00:00",
+        "ts": "2026-10-26T10:06:47.995600+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -147786,7 +147785,7 @@
           {
             "account_value": 7301.062668,
             "event_type": "mark_to_market",
-            "ts": "2026-10-26T09:58:39.861849+00:00"
+            "ts": "2026-10-26T10:06:47.995600+00:00"
           }
         ],
         "value_method": "mark_to_market_bid_liquidation"
