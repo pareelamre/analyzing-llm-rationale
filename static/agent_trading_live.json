@@ -60,13 +60,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.024158,
+      "max_drawdown": 0.024541,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -2.4158,
+      "return_pct": -2.4541,
       "settled_count": 7,
-      "sharpe": -0.0836
+      "sharpe": -0.0843
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
@@ -132,9 +132,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -4.9083,
+      "return_pct": -4.9003,
       "settled_count": 7,
-      "sharpe": -0.0737
+      "sharpe": -0.0735
     }
   },
   "equity_curves": {
@@ -967,7 +967,7 @@
         {
           "account_value": 9264.546356,
           "event_type": "mark_to_market",
-          "ts": "2026-10-26T08:06:27.591473+00:00"
+          "ts": "2026-10-26T10:06:44.552857+00:00"
         }
       ]
     },
@@ -2090,7 +2090,7 @@
         {
           "account_value": 8279.767611,
           "event_type": "mark_to_market",
-          "ts": "2026-10-26T08:06:27.591473+00:00"
+          "ts": "2026-10-26T10:06:44.552857+00:00"
         }
       ]
     },
@@ -2528,15 +2528,15 @@
         {
           "account_value": 10061.911284,
           "event_type": "mark_to_market",
-          "ts": "2026-10-26T08:06:27.591473+00:00"
+          "ts": "2026-10-26T10:06:44.552857+00:00"
         }
       ]
     },
     "glm-5-3-flash": {
       "agent_id": "glm-5-3-flash",
-      "current_drawdown": 0.024158,
-      "max_drawdown": 0.024158,
-      "sharpe": -0.0836,
+      "current_drawdown": 0.024541,
+      "max_drawdown": 0.024541,
+      "sharpe": -0.0843,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -3359,9 +3359,9 @@
           "ts": "2026-10-25T16:04:13.706823+00:00"
         },
         {
-          "account_value": 9758.422833,
+          "account_value": 9754.585733,
           "event_type": "mark_to_market",
-          "ts": "2026-10-26T08:06:27.591473+00:00"
+          "ts": "2026-10-26T10:06:44.552857+00:00"
         }
       ]
     },
@@ -4969,7 +4969,7 @@
         {
           "account_value": 7788.123465,
           "event_type": "mark_to_market",
-          "ts": "2026-10-26T08:06:27.591473+00:00"
+          "ts": "2026-10-26T10:06:44.552857+00:00"
         }
       ]
     },
@@ -6652,7 +6652,7 @@
         {
           "account_value": 7872.551276,
           "event_type": "mark_to_market",
-          "ts": "2026-10-26T08:06:27.591473+00:00"
+          "ts": "2026-10-26T10:06:44.552857+00:00"
         }
       ]
     },
@@ -7105,15 +7105,15 @@
         {
           "account_value": 8174.188148,
           "event_type": "mark_to_market",
-          "ts": "2026-10-26T08:06:27.591473+00:00"
+          "ts": "2026-10-26T10:06:44.552857+00:00"
         }
       ]
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "current_drawdown": 0.057777,
+      "current_drawdown": 0.057697,
       "max_drawdown": 0.097708,
-      "sharpe": -0.0737,
+      "sharpe": -0.0735,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -8086,9 +8086,9 @@
           "ts": "2026-10-16T16:20:44.431284+00:00"
         },
         {
-          "account_value": 9509.173697,
+          "account_value": 9509.974357,
           "event_type": "mark_to_market",
-          "ts": "2026-10-26T08:06:27.591473+00:00"
+          "ts": "2026-10-26T10:06:44.552857+00:00"
         }
       ]
     }
@@ -8428,10 +8428,21 @@
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
-      "brier_score": 0.266298,
-      "market_brier_score": 0.155228,
-      "probability_bias": -0.036327,
+      "brier_score": 0.264066,
+      "market_brier_score": 0.153769,
+      "probability_bias": -0.039665,
       "recent_reviews": [
+        {
+          "brier_score": 0.09,
+          "forecast_ts": "2026-09-20T02:20:31.514275+00:00",
+          "market_brier_score": 0.04,
+          "market_probability": 0.8,
+          "model_probability": 0.7,
+          "platform": "polymarket",
+          "resolved_at": "2026-10-26T10:04:50.012662+00:00",
+          "resolved_outcome": 1,
+          "ticker": "us-x-iran-ceasefire-continues-through-september-25-20260917"
+        },
         {
           "brier_score": 0.015625,
           "forecast_ts": "2026-09-19T22:22:49.482354+00:00",
@@ -8453,21 +8464,10 @@
           "resolved_at": "2026-10-26T08:04:46.634486+00:00",
           "resolved_outcome": 1,
           "ticker": "KXHIGHNY-26SEP20-T71"
-        },
-        {
-          "brier_score": 0.0144,
-          "forecast_ts": "2026-09-20T08:18:23.239916+00:00",
-          "market_brier_score": 0.0256,
-          "market_probability": 0.84,
-          "model_probability": 0.88,
-          "platform": "kalshi",
-          "resolved_at": "2026-10-26T08:04:46.634486+00:00",
-          "resolved_outcome": 1,
-          "ticker": "KXHIGHNY-26SEP20-T71"
         }
       ],
       "recorded_forecasts": 342,
-      "resolved_forecasts": 78,
+      "resolved_forecasts": 79,
       "status": "learning",
       "weather_calibration": [
         {
@@ -8482,10 +8482,21 @@
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "brier_score": 0.150476,
-      "market_brier_score": 0.139073,
-      "probability_bias": 0.10297,
+      "brier_score": 0.15,
+      "market_brier_score": 0.138909,
+      "probability_bias": 0.105119,
       "recent_reviews": [
+        {
+          "brier_score": 0.1024,
+          "forecast_ts": "2026-09-09T08:22:44.781113+00:00",
+          "market_brier_score": 0.1225,
+          "market_probability": 0.35,
+          "model_probability": 0.32,
+          "platform": "polymarket",
+          "resolved_at": "2026-10-26T10:05:00.542182+00:00",
+          "resolved_outcome": 0,
+          "ticker": "will-ben-shelton-win-the-2026-mens-us-open"
+        },
         {
           "brier_score": 0.021316,
           "forecast_ts": "2026-09-08T04:18:13.878601+00:00",
@@ -8507,21 +8518,10 @@
           "resolved_at": "2026-10-26T08:04:57.142115+00:00",
           "resolved_outcome": 0,
           "ticker": "KXHIGHNY-26SEP08-T80"
-        },
-        {
-          "brier_score": 0.055225,
-          "forecast_ts": "2026-09-08T08:46:55.552563+00:00",
-          "market_brier_score": 0.0064,
-          "market_probability": 0.08,
-          "model_probability": 0.235,
-          "platform": "kalshi",
-          "resolved_at": "2026-10-26T08:04:57.142115+00:00",
-          "resolved_outcome": 0,
-          "ticker": "KXHIGHNY-26SEP08-T80"
         }
       ],
       "recorded_forecasts": 430,
-      "resolved_forecasts": 100,
+      "resolved_forecasts": 101,
       "status": "learning",
       "weather_calibration": [
         {
@@ -8535,7 +8535,7 @@
       ]
     }
   },
-  "generated_at": "2026-10-26T08:06:27.852725+00:00",
+  "generated_at": "2026-10-26T10:06:44.796790+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -8651,7 +8651,7 @@
       "won_count": 5
     },
     {
-      "account_value": 9758.422833,
+      "account_value": 9754.585733,
       "agent_id": "glm-5-3-flash",
       "cash": 9139.766004,
       "fees_paid": 51.258668,
@@ -8680,13 +8680,13 @@
         {
           "avg_entry_price": 0.943433,
           "cost_basis": 362.0045,
-          "current_price": 0.46,
+          "current_price": 0.45,
           "ident": "KXMLBDEBUT-JMADE-26NOV01",
           "indicative_price": null,
           "platform": "kalshi",
           "quantity": 383.71,
           "side": "NO",
-          "unrealized_pnl": -185.4979,
+          "unrealized_pnl": -189.335,
           "valuation_status": "bid_liquidation"
         },
         {
@@ -8729,20 +8729,20 @@
       "partially_filled_count": 26,
       "realized_count": 71,
       "realized_pnl": -111.750685,
-      "return_pct": -2.4158,
+      "return_pct": -2.4541,
       "rule_exit_count": 43,
       "settled_count": 7,
       "sized_trade_count": 36,
       "starting_cash": 10000.0,
-      "total_pnl": -241.577167,
+      "total_pnl": -245.414267,
       "trade_count": 93,
-      "unrealized_pnl": -96.376859,
+      "unrealized_pnl": -100.213959,
       "updated_at": "2026-10-25T16:04:13.706229+00:00",
       "win_rate": 0.3803,
       "won_count": 27
     },
     {
-      "account_value": 9509.173697,
+      "account_value": 9509.974357,
       "agent_id": "qwen3-8-27b",
       "cash": 8309.7654,
       "fees_paid": 221.522361,
@@ -8807,27 +8807,27 @@
         {
           "avg_entry_price": 0.35,
           "cost_basis": 280.231147,
-          "current_price": 0.16,
+          "current_price": 0.161,
           "ident": "will-the-milwaukee-brewers-win-the-2026-world-series",
           "indicative_price": null,
           "platform": "polymarket",
           "quantity": 800.660419,
           "side": "NO",
-          "unrealized_pnl": -152.12548,
+          "unrealized_pnl": -151.324819,
           "valuation_status": "bid_liquidation"
         }
       ],
       "partially_filled_count": 25,
       "realized_count": 117,
       "realized_pnl": -426.367238,
-      "return_pct": -4.9083,
+      "return_pct": -4.9003,
       "rule_exit_count": 90,
       "settled_count": 7,
       "sized_trade_count": 37,
       "starting_cash": 10000.0,
-      "total_pnl": -490.826303,
+      "total_pnl": -490.025643,
       "trade_count": 147,
-      "unrealized_pnl": 70.511036,
+      "unrealized_pnl": 71.311696,
       "updated_at": "2026-10-16T16:20:44.430364+00:00",
       "win_rate": 0.6581,
       "won_count": 77
@@ -9062,18 +9062,18 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 770437,
+      "cycle_age_seconds": 777654,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 502.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-10-19T20:03:33.953963+00:00",
       "last_action_at": "2026-10-19T20:03:33.955026+00:00",
-      "last_attempt_at": "2026-10-26T08:03:30.538827+00:00",
+      "last_attempt_at": "2026-10-26T10:03:33.264905+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": "2026-10-17T10:05:49.733788+00:00",
       "last_cycle_id": "30m:995684",
-      "last_duration_ms": 4287,
+      "last_duration_ms": 3814,
       "last_failure_detail": "Upstream provider returned HTTP 502.",
       "last_failure_kind": "cycle_error",
       "last_forecast_records": 0,
@@ -9088,18 +9088,18 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 770350,
+      "cycle_age_seconds": 777567,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 502.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-10-24T10:03:51.982652+00:00",
       "last_action_at": "2026-10-24T10:03:51.983340+00:00",
-      "last_attempt_at": "2026-10-26T08:03:43.025227+00:00",
+      "last_attempt_at": "2026-10-26T10:03:42.595994+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": "2026-10-17T10:07:17.503260+00:00",
       "last_cycle_id": "30m:995684",
-      "last_duration_ms": 4477,
+      "last_duration_ms": 3502,
       "last_failure_detail": "Upstream provider returned HTTP 502.",
       "last_failure_kind": "cycle_error",
       "last_forecast_records": 0,
@@ -9114,18 +9114,18 @@
       "store_present": true
     },
     "glm-5-3": {
-      "cycle_age_seconds": 770075,
+      "cycle_age_seconds": 777292,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 502.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-10-16T02:09:56.602185+00:00",
       "last_action_at": "2026-10-17T06:12:44.476149+00:00",
-      "last_attempt_at": "2026-10-26T08:03:54.015810+00:00",
+      "last_attempt_at": "2026-10-26T10:03:52.525799+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": "2026-10-17T10:11:51.655470+00:00",
       "last_cycle_id": "30m:995684",
-      "last_duration_ms": 3833,
+      "last_duration_ms": 3607,
       "last_failure_detail": "Upstream provider returned HTTP 502.",
       "last_failure_kind": "cycle_error",
       "last_forecast_records": 0,
@@ -9140,18 +9140,18 @@
       "store_present": true
     },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 769960,
+      "cycle_age_seconds": 777177,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 502.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-10-25T16:04:13.706229+00:00",
       "last_action_at": "2026-10-25T16:04:13.706823+00:00",
-      "last_attempt_at": "2026-10-26T08:04:05.606072+00:00",
+      "last_attempt_at": "2026-10-26T10:04:04.330232+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": "2026-10-17T10:13:46.594055+00:00",
       "last_cycle_id": "30m:995684",
-      "last_duration_ms": 3864,
+      "last_duration_ms": 3978,
       "last_failure_detail": "Upstream provider returned HTTP 502.",
       "last_failure_kind": "cycle_error",
       "last_forecast_records": 0,
@@ -9166,18 +9166,18 @@
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 769895,
+      "cycle_age_seconds": 777112,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 502.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-10-16T08:13:57.884116+00:00",
       "last_action_at": "2026-10-17T08:12:13.992067+00:00",
-      "last_attempt_at": "2026-10-26T08:04:17.575088+00:00",
+      "last_attempt_at": "2026-10-26T10:04:18.075016+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": "2026-10-17T10:14:52.266230+00:00",
       "last_cycle_id": "30m:995684",
-      "last_duration_ms": 3266,
+      "last_duration_ms": 3555,
       "last_failure_detail": "Upstream provider returned HTTP 502.",
       "last_failure_kind": "cycle_error",
       "last_forecast_records": 0,
@@ -9192,18 +9192,18 @@
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 769812,
+      "cycle_age_seconds": 777029,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 502.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-22T00:13:51.380730+00:00",
       "last_action_at": "2026-10-17T08:13:13.732040+00:00",
-      "last_attempt_at": "2026-10-26T08:04:33.849975+00:00",
+      "last_attempt_at": "2026-10-26T10:04:36.795896+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": "2026-10-17T10:16:15.375801+00:00",
       "last_cycle_id": "30m:995684",
-      "last_duration_ms": 3841,
+      "last_duration_ms": 3800,
       "last_failure_detail": "Upstream provider returned HTTP 502.",
       "last_failure_kind": "cycle_error",
       "last_forecast_records": 0,
@@ -9218,18 +9218,18 @@
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 769757,
+      "cycle_age_seconds": 776974,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 502.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-10-17T18:17:00.968038+00:00",
       "last_action_at": "2026-10-17T18:17:00.968975+00:00",
-      "last_attempt_at": "2026-10-26T08:04:45.086947+00:00",
+      "last_attempt_at": "2026-10-26T10:04:47.847505+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": "2026-10-17T10:17:10.512886+00:00",
       "last_cycle_id": "30m:995684",
-      "last_duration_ms": 2828,
+      "last_duration_ms": 3092,
       "last_failure_detail": "Upstream provider returned HTTP 502.",
       "last_failure_kind": "cycle_error",
       "last_forecast_records": 0,
@@ -9244,18 +9244,18 @@
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 769702,
+      "cycle_age_seconds": 776919,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 502.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-10-16T16:20:44.430364+00:00",
       "last_action_at": "2026-10-16T16:20:44.431284+00:00",
-      "last_attempt_at": "2026-10-26T08:04:55.215257+00:00",
+      "last_attempt_at": "2026-10-26T10:04:58.334395+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": "2026-10-17T10:18:05.454786+00:00",
       "last_cycle_id": "30m:995684",
-      "last_duration_ms": 4510,
+      "last_duration_ms": 3667,
       "last_failure_detail": "Upstream provider returned HTTP 502.",
       "last_failure_kind": "cycle_error",
       "last_forecast_records": 0,
@@ -9898,6 +9898,166 @@
     {
       "agent_id": "qwen3-8-27b",
       "candidate_count": null,
+      "cycle_id": "30m:996116",
+      "duration_ms": 3667,
+      "failure_detail": "Upstream provider returned HTTP 502.",
+      "failure_kind": "cycle_error",
+      "finished_at": "2026-10-26T10:05:02.001919+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "56408b4f38424dbc969144ed71dedcf7",
+      "settled_count": null,
+      "started_at": "2026-10-26T10:04:58.334395+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "minimax-m3",
+      "candidate_count": null,
+      "cycle_id": "30m:996116",
+      "duration_ms": 3092,
+      "failure_detail": "Upstream provider returned HTTP 502.",
+      "failure_kind": "cycle_error",
+      "finished_at": "2026-10-26T10:04:50.940913+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "fb27c1c2e13d4a039fae4cde88f1e5b8",
+      "settled_count": null,
+      "started_at": "2026-10-26T10:04:47.847505+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "candidate_count": null,
+      "cycle_id": "30m:996116",
+      "duration_ms": 3800,
+      "failure_detail": "Upstream provider returned HTTP 502.",
+      "failure_kind": "cycle_error",
+      "finished_at": "2026-10-26T10:04:40.597313+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "50c4325803814b5582aa8ec2dea618fa",
+      "settled_count": null,
+      "started_at": "2026-10-26T10:04:36.795896+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "candidate_count": null,
+      "cycle_id": "30m:996116",
+      "duration_ms": 3555,
+      "failure_detail": "Upstream provider returned HTTP 502.",
+      "failure_kind": "cycle_error",
+      "finished_at": "2026-10-26T10:04:21.631416+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "543d7ba00afe4991b278f8eed7d12d9f",
+      "settled_count": null,
+      "started_at": "2026-10-26T10:04:18.075016+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "glm-5-3-flash",
+      "candidate_count": null,
+      "cycle_id": "30m:996116",
+      "duration_ms": 3978,
+      "failure_detail": "Upstream provider returned HTTP 502.",
+      "failure_kind": "cycle_error",
+      "finished_at": "2026-10-26T10:04:08.309245+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "a622b80795e14e099be1ad84559e1b45",
+      "settled_count": null,
+      "started_at": "2026-10-26T10:04:04.330232+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "glm-5-3",
+      "candidate_count": null,
+      "cycle_id": "30m:996116",
+      "duration_ms": 3607,
+      "failure_detail": "Upstream provider returned HTTP 502.",
+      "failure_kind": "cycle_error",
+      "finished_at": "2026-10-26T10:03:56.133664+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "14512a7f822f4e5c980a5af1647b46a6",
+      "settled_count": null,
+      "started_at": "2026-10-26T10:03:52.525799+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "candidate_count": null,
+      "cycle_id": "30m:996116",
+      "duration_ms": 3502,
+      "failure_detail": "Upstream provider returned HTTP 502.",
+      "failure_kind": "cycle_error",
+      "finished_at": "2026-10-26T10:03:46.098866+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "a81209041d3847218e5e645ff39fc195",
+      "settled_count": null,
+      "started_at": "2026-10-26T10:03:42.595994+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "deepseek-v4-flash",
+      "candidate_count": null,
+      "cycle_id": "30m:996116",
+      "duration_ms": 3814,
+      "failure_detail": "Upstream provider returned HTTP 502.",
+      "failure_kind": "cycle_error",
+      "finished_at": "2026-10-26T10:03:37.080319+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "0eac49dcbe384eb08ec84502127bf3ce",
+      "settled_count": null,
+      "started_at": "2026-10-26T10:03:33.264905+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "qwen3-8-27b",
+      "candidate_count": null,
       "cycle_id": "30m:996112",
       "duration_ms": 4510,
       "failure_detail": "Upstream provider returned HTTP 502.",
@@ -10530,166 +10690,6 @@
       "run_id": "dcbb8e2d59a646728f8af45929faf9be",
       "settled_count": null,
       "started_at": "2026-10-26T02:03:39.964856+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "candidate_count": null,
-      "cycle_id": "30m:996096",
-      "duration_ms": 3826,
-      "failure_detail": "Upstream provider returned HTTP 502.",
-      "failure_kind": "cycle_error",
-      "finished_at": "2026-10-26T00:05:41.224044+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "1d83c5acb4fb40bf8bcbd122fc68ed1d",
-      "settled_count": null,
-      "started_at": "2026-10-26T00:05:37.397522+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "minimax-m3",
-      "candidate_count": null,
-      "cycle_id": "30m:996096",
-      "duration_ms": 3425,
-      "failure_detail": "Upstream provider returned HTTP 502.",
-      "failure_kind": "cycle_error",
-      "finished_at": "2026-10-26T00:05:30.575604+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "a866fbe9b7454273bd0c3a62700e7783",
-      "settled_count": null,
-      "started_at": "2026-10-26T00:05:27.149516+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "candidate_count": null,
-      "cycle_id": "30m:996096",
-      "duration_ms": 4190,
-      "failure_detail": "Upstream provider returned HTTP 502.",
-      "failure_kind": "cycle_error",
-      "finished_at": "2026-10-26T00:05:20.716254+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "f34d290a2ee144eaac0442bb4cb4d1a2",
-      "settled_count": null,
-      "started_at": "2026-10-26T00:05:16.525057+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "candidate_count": null,
-      "cycle_id": "30m:996096",
-      "duration_ms": 3468,
-      "failure_detail": "Upstream provider returned HTTP 502.",
-      "failure_kind": "cycle_error",
-      "finished_at": "2026-10-26T00:04:59.701787+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "b97477784eb54f3e978362861bd09780",
-      "settled_count": null,
-      "started_at": "2026-10-26T00:04:56.232169+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "glm-5-3-flash",
-      "candidate_count": null,
-      "cycle_id": "30m:996096",
-      "duration_ms": 4092,
-      "failure_detail": "Upstream provider returned HTTP 502.",
-      "failure_kind": "cycle_error",
-      "finished_at": "2026-10-26T00:04:47.357044+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "f4015d2a46db4bed8ae17f9953ee43a5",
-      "settled_count": null,
-      "started_at": "2026-10-26T00:04:43.264366+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "glm-5-3",
-      "candidate_count": null,
-      "cycle_id": "30m:996096",
-      "duration_ms": 389,
-      "failure_detail": "SCADS status check reports zai-org/GLM-5.3 as down.",
-      "failure_kind": "provider_paused",
-      "finished_at": "2026-10-26T00:04:36.549586+00:00",
-      "forecast_records": 0,
-      "outcome": "deferred",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "725fe89c0e06473bb861af3d94c9b265",
-      "settled_count": null,
-      "started_at": "2026-10-26T00:04:36.159751+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "candidate_count": null,
-      "cycle_id": "30m:996096",
-      "duration_ms": 3722,
-      "failure_detail": "Upstream provider returned HTTP 502.",
-      "failure_kind": "cycle_error",
-      "finished_at": "2026-10-26T00:04:28.587211+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "80b7a8b7149f4759a311268c523da0ac",
-      "settled_count": null,
-      "started_at": "2026-10-26T00:04:24.864160+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "candidate_count": null,
-      "cycle_id": "30m:996096",
-      "duration_ms": 4259,
-      "failure_detail": "Upstream provider returned HTTP 502.",
-      "failure_kind": "cycle_error",
-      "finished_at": "2026-10-26T00:04:17.853609+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "cbfbc553ddaa41cba3847d16ffe1d81f",
-      "settled_count": null,
-      "started_at": "2026-10-26T00:04:13.593317+00:00",
       "thesis_published": false,
       "tool_steps": null,
       "weather_candidates_offered": 0,
