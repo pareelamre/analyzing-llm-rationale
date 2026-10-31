@@ -3166,6 +3166,35 @@ print(f"Probability: {forecast.get('probability', 0):.1%}")</code></pre>
             </div>
           </div>
         </details>
+        <details class="model-form" style="margin-top:6px" id="kiteAccountPanel" ontoggle="this.open ? kiteAccountAction('status') : clearKiteAccount()">
+          <summary style="cursor:pointer;font-size:12px;font-weight:600">
+            Zerodha Kite <span id="kiteChip" style="font-size:10px">Read-only · Not connected</span>
+          </summary>
+          <p style="font-size:11px;line-height:1.5;margin-top:8px">
+            View your holdings, positions, funds and today's orders with free Kite Personal.
+            Tokens are encrypted with your Foresea account. Renew after expiry at 6 AM IST the next day.
+            Kite tokens can authorize trades; Foresea uses them only for account reads.
+            <a href="https://kite.trade/docs/connect/v3/user/" target="_blank" rel="noopener noreferrer">Get a daily access token</a>.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label for="kiteApiKey" class="text-xs">Kite API key</label>
+            <input id="kiteApiKey" class="variant-select text-xs" autocomplete="off" spellcheck="false" />
+            <label for="kiteAccessToken" class="text-xs">Daily access token</label>
+            <input id="kiteAccessToken" type="password" class="variant-select text-xs" autocomplete="off" spellcheck="false" />
+            <div class="model-form-actions">
+              <button type="button" class="model-save" onclick="kiteAccountAction('connect')">Connect securely</button>
+              <button type="button" class="model-cancel" onclick="kiteAccountAction('disconnect')">Disconnect</button>
+            </div>
+            <label for="kiteResource" class="text-xs">Account view</label>
+            <select id="kiteResource" class="variant-select text-xs">
+              <option value="holdings">Holdings</option><option value="positions">Positions</option>
+              <option value="funds">Funds (INR)</option><option value="orders">Today's orders</option>
+            </select>
+            <button type="button" class="model-save" onclick="kiteAccountAction('read')">Refresh account view</button>
+            <div id="kiteAccountMessage" class="text-xs" role="status" aria-live="polite"></div>
+            <div id="kiteAccountData" style="overflow:auto;max-height:300px;font-size:11px" aria-label="Private Kite account data"></div>
+          </div>
+        </details>
         <div id="venueErr" class="model-form-error" hidden></div>
         <button type="button" class="model-add-btn ui-icon-label" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></button>
       </section>
@@ -10012,6 +10041,87 @@ function _initVenueAccounts() {
   _loadVenueConnections();
 }
 
+// Private Kite data stays in this panel, outside chat context and browser storage.
+let _kiteRequestVersion = 0;
+function clearKiteAccount() {
+  _kiteRequestVersion++;
+  for (const id of ['kiteApiKey', 'kiteAccessToken']) { const input = document.getElementById(id); if (input) input.value = ''; }
+  const data = document.getElementById('kiteAccountData');
+  if (data) data.textContent = '';
+  const message = document.getElementById('kiteAccountMessage');
+  if (message) message.textContent = '';
+  const chip = document.getElementById('kiteChip');
+  if (chip) chip.textContent = 'Read-only · Not connected';
+}
+function renderKiteAccount(resource, data) {
+  const target = document.getElementById('kiteAccountData');
+  target.replaceChildren();
+  let columns, rows;
+  if (resource === 'funds') {
+    columns = ['Segment', 'Net (INR)', 'Cash (INR)', 'Collateral (INR)'];
+    rows = Object.entries(data).map(([segment, funds]) => [segment, funds?.net, funds?.available?.cash, funds?.available?.collateral]);
+  } else {
+    const items = resource === 'positions'
+      ? [...(data.net || []).map(item => ({...item, segment: 'Net'})), ...(data.day || []).map(item => ({...item, segment: 'Day'}))] : data;
+    columns = resource === 'orders'
+      ? ['Symbol', 'Exchange', 'Side', 'Quantity', 'Filled', 'Status']
+      : ['Symbol', 'Exchange', 'Quantity', 'Average (INR)', 'Last (INR)', 'P&L (INR)'];
+    rows = items.map(item => resource === 'orders'
+      ? [item.tradingsymbol, item.exchange, item.transaction_type, item.quantity, item.filled_quantity, item.status]
+      : [item.tradingsymbol, item.exchange, item.quantity, item.average_price, item.last_price, item.pnl]);
+    if (resource === 'positions') { columns.unshift('View'); rows.forEach((row, i) => row.unshift(items[i].segment)); }
+  }
+  if (!rows.length) { target.textContent = 'No ' + resource + ' to show.'; return; }
+  const table = document.createElement('table');
+  const head = table.createTHead().insertRow();
+  columns.forEach(label => { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = label; cell.style.padding = '6px'; head.append(cell); });
+  const body = table.createTBody();
+  rows.forEach(values => {
+    const row = body.insertRow();
+    values.forEach(value => { const cell = row.insertCell(); cell.textContent = value == null ? '—' : String(value); cell.style.padding = '6px'; });
+  });
+  target.append(table);
+}
+async function kiteAccountAction(action) {
+  const version = ++_kiteRequestVersion;
+  const session = authHeaders().Authorization;
+  const message = document.getElementById('kiteAccountMessage');
+  if (!session) { clearKiteAccount(); message.textContent = 'Sign in to connect your Kite account.'; return; }
+  const current = () => version === _kiteRequestVersion && session === authHeaders().Authorization;
+  const resource = document.getElementById('kiteResource').value;
+  const options = { headers: { ...authHeaders(), 'Content-Type': 'application/json' }, cache: 'no-store' };
+  if (action === 'connect') {
+    options.method = 'PUT';
+    options.body = JSON.stringify({ api_key: document.getElementById('kiteApiKey').value.trim(), access_token: document.getElementById('kiteAccessToken').value.trim() });
+  } else if (action === 'disconnect') options.method = 'DELETE';
+  document.getElementById('kiteApiKey').value = '';
+  document.getElementById('kiteAccessToken').value = '';
+  document.getElementById('kiteAccountData').replaceChildren();
+  message.textContent = 'Loading Kite account…';
+  try {
+    const response = await fetch('/integrations/kite' + (action === 'read' ? '/' + resource : ''), options);
+    const data = await response.json();
+    if (!current()) return;
+    if (!response.ok) {
+      if (response.status === 409) document.getElementById('kiteChip').textContent = 'Read-only · Reconnect required';
+      throw new Error(typeof data.detail === 'string' ? data.detail : 'Kite account request failed.');
+    }
+    if (action === 'read') {
+      renderKiteAccount(resource, data.data);
+      message.textContent = 'Updated ' + new Date(data.fetched_at).toLocaleTimeString() + '. Account values in INR.';
+      document.getElementById('kiteChip').textContent = 'Read-only · Connected';
+    } else {
+      document.getElementById('kiteChip').textContent = data.connected ? 'Read-only · Session stored' : 'Read-only · Not connected';
+      message.textContent = action === 'connect' ? 'Connected. Choose an account view and refresh.'
+        : action === 'disconnect' ? 'Stored session removed from Foresea.'
+        : data.enabled === false ? 'Kite Personal is not enabled on this server.'
+        : data.connected ? 'Session stored. Refresh to check it is still valid.' : 'Connect a daily Kite session to view your account.';
+    }
+  } catch (error) {
+    if (current()) message.textContent = error.message || 'Kite account is unavailable.';
+  }
+}
+
 // ── BYO Model Providers Manager ───────────────────────────────────────────────
 const _DEFAULT_MODEL_PROVIDERS = [
   {
@@ -12176,6 +12286,7 @@ function _loadStoredSession() {
 }
 
 function _saveSession(token, user) {
+  if (token !== authHeaders().Authorization?.replace(/^Bearer /, '')) clearKiteAccount();
   try {
     localStorage.setItem('foresea_session', token);
     localStorage.setItem('foresea_user', JSON.stringify(user));
@@ -12203,6 +12314,7 @@ async function _afterSignIn(user, source = 'auth') {
 }
 
 function _clearSession() {
+  clearKiteAccount();
   localStorage.removeItem('foresea_session');
   localStorage.removeItem('foresea_user');
   currentUser = null;

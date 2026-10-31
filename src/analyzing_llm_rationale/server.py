@@ -11807,6 +11807,152 @@ async def delete_trading_connection(platform: str, request: Request) -> TradingC
             raise _trading_http_exception(exc) from exc
 
 
+# Kite Personal stays separate from prediction-market execution and public MCP.
+_kite_slots = threading.BoundedSemaphore(4)
+
+
+def _kite_connection_mutation(
+    user_id: str, action: str, credentials: Any = None, intent: Optional[str] = None,
+) -> Any:
+    """Persist ordering across replicas; disconnect supersedes pending connects."""
+    from analyzing_llm_rationale import datastore_backend as ds
+
+    client = _get_datastore()
+    if client is None:
+        raise HTTPException(503, "Secure durable account storage is not configured.")
+    key = client.key("User", user_id, "KiteConnectionIntent", "current")
+    if action == "begin":
+        generation = uuid.uuid4().hex
+        entity = ds.Entity(key=key)
+        entity.update(generation=generation)
+        client.put(entity)
+        return generation
+    with client.transaction():
+        if action == "save":
+            current = client.get(key)
+            if not current or current.get("generation") != intent:
+                raise HTTPException(409, "Kite connection changed. Reconnect if you still want to save it.")
+            return _put_trading_connection(user_id, "kite", credentials).model_dump()
+        entity = ds.Entity(key=key)
+        entity.update(generation=uuid.uuid4().hex)
+        client.put(entity)
+        _delete_trading_connection(user_id, "kite")
+        return {"platform": "kite", "connected": False}
+
+
+def _kite_operation(user_id: str, action: str, payload: Any = None) -> Dict[str, Any]:
+    if action not in {"status", "disconnect"} and not _trading_guardrail_env_bool("FORESEA_ENABLE_KITE_PERSONAL", False):
+        raise HTTPException(503, "Kite Personal is not enabled on this server.")
+    # Reject excess work without occupying the shared threadpool waiting for slots.
+    if not _kite_slots.acquire(blocking=False):
+        raise HTTPException(429, "Kite account is busy. Wait before refreshing.")
+    try:
+        with _tracer.start_as_current_span("kite.account.operation", record_exception=False) as span:
+            span.set_attributes({"user.id": user_id, "kite.action": action})
+            try:
+                result = _kite_operation_inner(user_id, action, payload)
+            except HTTPException as exc:
+                span.set_attributes({"outcome": "error", "http.response.status_code": exc.status_code})
+                span.set_status(Status(StatusCode.ERROR))
+                logger.info("Kite account access: user_id=%s action=%s status=%s", user_id, action, exc.status_code)
+                raise
+            span.set_attribute("outcome", "success")
+            logger.info("Kite account access: user_id=%s action=%s status=success", user_id, action)
+            return result
+    finally:
+        _kite_slots.release()
+
+
+def _kite_operation_inner(user_id: str, action: str, payload: Any = None) -> Dict[str, Any]:
+    from analyzing_llm_rationale import kite_account
+
+    try:
+        if action == "status":
+            return {
+                **_connection_status(user_id, "kite").model_dump(),
+                "encryption_configured": _secure_connection_configured(),
+                "enabled": _trading_guardrail_env_bool("FORESEA_ENABLE_KITE_PERSONAL", False),
+                "read_only": True,
+            }
+        if action == "disconnect":
+            return {**_kite_connection_mutation(user_id, "disconnect"), "read_only": True}
+        if action == "connect":
+            credentials = kite_account.validate_credentials(payload)
+            if not _secure_connection_configured() or _get_datastore() is None:
+                raise HTTPException(503, "Secure durable account storage is not configured.")
+            intent = _kite_connection_mutation(user_id, "begin")
+            kite_account.read_account(credentials, "profile")
+            return {**_kite_connection_mutation(user_id, "save", credentials, intent), "read_only": True}
+        credentials = _stored_trading_credentials(user_id, "kite")
+        if credentials is None:
+            raise HTTPException(409, "Connect your Kite account in Settings first.")
+        data = kite_account.read_account(credentials, action)
+        return {
+            "platform": "kite", "resource": action, "read_only": True,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "data": data,
+        }
+    except kite_account.KiteAccountError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from None
+    except HTTPException:
+        raise
+    except Exception as exc:  # aqg: top-level boundary; suppress storage/KMS exception details
+        logger.warning("Kite account operation failed: action=%s kind=%s", action, type(exc).__name__)
+        raise HTTPException(503, "Kite connection is unavailable. Try again or reconnect.") from None
+
+
+@app.get("/integrations/kite", tags=["Kite Personal"], summary="Private Kite connection status")
+async def kite_connection_status(request: Request) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "status")
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.put("/integrations/kite", tags=["Kite Personal"], summary="Validate and encrypt a daily Kite session")
+async def kite_connect(request: Request) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    # Parse here so validation errors cannot echo credential input in a 422 body.
+    try:
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 2048:
+                raise HTTPException(413, "Kite connection request exceeds 2 KB.")
+            body.extend(chunk)
+        payload = json.loads(body)
+    except ValueError:
+        raise HTTPException(422, "Provide a JSON object with api_key and access_token.") from None
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "connect", payload)
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.delete("/integrations/kite", tags=["Kite Personal"], summary="Remove your stored Kite session")
+async def kite_disconnect(request: Request) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "disconnect")
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/integrations/kite/{resource}", tags=["Kite Personal"], summary="Read private Kite account data")
+async def kite_account_resource(
+    resource: Literal["holdings", "positions", "funds", "orders"], request: Request,
+) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], resource)
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
 # ── BYO Model Providers Endpoints ─────────────────────────────────────────────
 
 @app.get(
