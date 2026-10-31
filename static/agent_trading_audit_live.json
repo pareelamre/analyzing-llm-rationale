@@ -39159,6 +39159,88 @@
     ],
     "glm-5-3-flash": [
       {
+        "action_id": "2653d57a-418f-415d-bb67-718b83af1f3c",
+        "agent_id": "glm-5-3-flash",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_filled_partial",
+            "filled_quantity": 14.0
+          },
+          "initiated_by": "pre_expiry_exit_rule",
+          "quote": {
+            "lead_days": 732.1638002533565,
+            "marketable": true,
+            "observed_ask": 0.57,
+            "observed_bid": 0.0,
+            "source": "live_venue_quote",
+            "spread": null,
+            "spread_status": "unknown_no_bid",
+            "status": "shadow_price_from_live_quote"
+          },
+          "requested_order": {
+            "price": null,
+            "quantity": null
+          },
+          "risk": {
+            "allowed": true,
+            "blocked_category": null,
+            "cash_before": 9151.325608,
+            "cash_required": 0.0,
+            "concentration_cap": 1500.0,
+            "cycle_id": "30m:996356",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3000.0,
+            "drawdown_after": 0.034879,
+            "fee": 6.102916,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_credible_edge": 0.1,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 202.7547,
+            "open_markets_after": 4,
+            "per_cycle_spend_limit": 2000.0,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:996356",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 5.779802,
+          "cash_required": 0.0,
+          "fee": 0.240198,
+          "netting_payout": 14.0,
+          "notional": 7.9799999999999995,
+          "price": 0.57,
+          "quantity": 14.0,
+          "realized_pnl": -7.42825356279482,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXMLBDEBUT-JMADE-26NOV01"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "67514f1a5006662b423ba556cd5a743446b6a06a34b4c4a6d1d877c6ed1938c2",
+        "recorded_at": "2026-10-31T10:04:08.089772+00:00"
+      },
+      {
         "action_id": "11d23050-ce62-49af-9656-87680e273e89",
         "agent_id": "glm-5-3-flash",
         "audit": {
@@ -129133,7 +129215,7 @@
       }
     ]
   },
-  "generated_at": "2026-10-31T08:06:04.934180+00:00",
+  "generated_at": "2026-10-31T10:06:28.238674+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
