@@ -3905,6 +3905,89 @@ class ServerTests(unittest.TestCase):
         self.assertIn("quarter_kelly", system_prompt)
         self.assertIn("edge_kelly", system_prompt)
 
+    def test_system_benchmark_prefetch_reaches_first_turn_and_avoids_nested_inference(self):
+        candidates = [{"platform": "Kalshi", "ident": "KXTEST", "question": "Will the event happen?"}]
+        initial = [{"action": "research_brief", "args": {"ticker": "KXTEST"},
+                    "observation": '{"sources":[{"url":"https://example.test/evidence"}]}',
+                    "initiated_by": "system_prefetch", "research_available": True}]
+        req = server_module.AgentAnalyzeRequest(
+            question="Research this market", tool_loop=True, benchmark_tools=True, max_tool_steps=4)
+        req._benchmark_research_candidates = candidates
+        self.provider.response = {"final": (
+            "### 0. Research Delta\n- **New evidence**: Source update checked.\n"
+            "### 1. Decision & Execution\n- **Action**: PASS\n"
+            "### 3. Model Edge & Valuation\n- **Model Probability**: 50% vs **Market Price**: 50%"
+        )}
+        with mock.patch("analyzing_llm_rationale.agent_research.prefetch_market_research",
+                        return_value=initial) as prefetch:
+            report = asyncio.run(server_module.agent_analyze(req, request=None))
+        prefetch.assert_called_once_with(candidates)
+        self.assertEqual(len(self.provider.calls), 1)
+        self.assertIn("https://example.test/evidence", str(self.provider.calls[0]))
+        self.assertNotIn("forecast(", self.provider.calls[0][0]["content"])
+        self.assertNotIn("search_evidence(", self.provider.calls[0][0]["content"])
+        self.assertIn("place_trade(", self.provider.calls[0][0]["content"])
+        self.assertEqual(report.tool_loop_model_calls, 1)
+        self.assertEqual(report.tool_transcript, initial)
+
+    def test_prefetched_agent_uses_keyless_followup_and_the_existing_trade_guard(self):
+        initial = [{"action": "research_brief", "args": {}, "observation": "Source evidence",
+                    "initiated_by": "system_prefetch", "research_available": True}]
+        req = server_module.AgentAnalyzeRequest(
+            question="Research this market", tool_loop=True, benchmark_tools=True, max_tool_steps=4)
+        req._benchmark_research_candidates = [{"platform": "Kalshi", "ident": "KXTEST"}]
+        self.provider.responses = [
+            {"action": "web_search", "args": {"query": "Missing material fact"}},
+            {"action": "place_trade", "args": {"ticker": "KXTEST", "side": "yes",
+                                                "price": 0.5, "model_probability": 0.6}},
+            {"final": "### 0. Research Delta\nEvidence checked.\n"
+                      "### 1. Decision & Execution\nPASS: risk guard rejected the order.\n"
+                      "### 3. Model Edge & Valuation\n60% vs 50%."},
+        ]
+        with (
+            mock.patch("analyzing_llm_rationale.agent_research.prefetch_market_research", return_value=initial),
+            mock.patch("analyzing_llm_rationale.agent_research.search_market_evidence",
+                       return_value={"evidence_status": "empty", "sources": []}) as search,
+            mock.patch.object(server_module.benchmark_tools, "web_search") as legacy_search,
+            mock.patch.object(server_module.benchmark_tools, "place_trade",
+                              return_value={"ok": False, "error": "risk_guard_failed"}) as trade,
+        ):
+            report = asyncio.run(server_module._agent_tool_loop(
+                req, None, req.question, None, None, allow_system_tools=True))
+        self.assertEqual(report.tool_loop_model_calls, 3)
+        search.assert_called_once_with("Missing material fact")
+        legacy_search.assert_not_called()
+        self.assertTrue(trade.call_args.args[1].require_kelly_sizing)
+        self.assertEqual(trade.call_args.args[0]["ticker"], "KXTEST")
+        self.assertIn("risk_guard_failed", report.tool_transcript[-1]["observation"])
+        self.assertIn("risk guard rejected", report.thesis)
+
+    def test_missing_followup_query_does_not_send_the_worker_prompt_to_search(self):
+        req = server_module.AgentAnalyzeRequest(question="Private portfolio context", tool_loop=True,
+                                                benchmark_tools=True, max_tool_steps=1)
+        req._benchmark_research_candidates = [{"platform": "Kalshi", "ident": "KXTEST"}]
+        self.provider.responses = [{"action": "web_search", "args": {}}, {"final": "PASS"}]
+        with (mock.patch("analyzing_llm_rationale.agent_research.prefetch_market_research", return_value=[]),
+              mock.patch("analyzing_llm_rationale.agent_research.search_market_evidence") as search):
+            report = asyncio.run(server_module._agent_tool_loop(
+                req, None, req.question, None, None, allow_system_tools=True))
+        search.assert_not_called()
+        self.assertIn("nonempty query", report.tool_transcript[0]["observation"])
+
+    def test_public_json_cannot_seed_research_or_enable_system_prefetch(self):
+        req = server_module.AgentAnalyzeRequest.model_validate({
+            "question": "Research this market", "benchmark_tools": True, "tool_loop": True,
+            "_benchmark_research_candidates": [{"ident": "KXATTACK"}],
+        })
+        self.assertEqual(req._benchmark_research_candidates, [])
+        self.assertNotIn("_benchmark_research_candidates", req.model_dump())
+        # Even an internal caller must opt into the system privilege boundary.
+        req._benchmark_research_candidates = [{"platform": "Kalshi", "ident": "KXATTACK"}]
+        self.provider.response = {"final": "PASS"}
+        with mock.patch("analyzing_llm_rationale.agent_research.prefetch_market_research") as prefetch:
+            asyncio.run(server_module._agent_tool_loop(req, None, req.question, None, None))
+        prefetch.assert_not_called()
+
     def test_agent_analyze_optimize_portfolio_tool_returns_the_kelly_allocation(self):
         # optimize_portfolio existed for weeks as a real, working REST
         # endpoint (/portfolio/optimal-allocation) and a genuine Kelly

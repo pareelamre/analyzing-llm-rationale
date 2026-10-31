@@ -5,6 +5,18 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-10-31 — Edge Board agent research before inference (Codex)
+
+The scheduled Edge Board agent now prepares bounded orderbook/news packets for
+up to two candidates before its first model turn. Query planning, model summaries
+and embeddings are disabled for this path, including follow-up `web_search`;
+nested `forecast` and `search_evidence` tools are omitted. Public API request JSON
+cannot enable the internal prefetch context. The default is four orchestration
+turns plus one terminal finalization, with the existing `MAX_TOOL_STEPS` override.
+Keep guarded paper execution and thesis reconciliation intact. Details and call
+count boundaries: `docs/edge_board_agent_workflow.md`. This does not replace the
+discontinued model provider or change deployed schedules/model credentials.
+
 ### 2026-10-18 — Completed ARR research archive (Codex)
 
 `docs/research/arr_2026_10/README.md` indexes the completed prompt-selection,

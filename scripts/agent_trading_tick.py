@@ -21,7 +21,7 @@ Env:
   FORESEA_AGENT_NOTES_PATH         local notes JSON path (GCS-synced by the workflow)
   FORESEA_AGENT_PLACE_TRADE_MODE   must be "shadow" (the default) -- hard-checked
   CANDIDATE_COUNT                  new markets to consider per cycle (default 12)
-  MAX_TOOL_STEPS                   tool-loop step cap per cycle (default 10, 12 for flash/minimax)
+  MAX_TOOL_STEPS                   model-turn cap per cycle (default 4, plus terminal finalization)
   AGENT_TRADING_MIN_CLOSE_DAYS     candidate discovery window, days (default 1)
   AGENT_TRADING_MAX_CLOSE_DAYS     candidate discovery window, days (default 90)
   AGENT_TRADING_WEATHER_CANDIDATE_QUOTA  source-verified NWS weather candidates
@@ -194,8 +194,8 @@ VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 # rather than more noise -- and the merit gate still decides what is worth
 # trading, so nothing here forces a position.
 CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "12")))
-# Flash and MiniMax models have higher output TPM (30,000) and can sustain deeper 12-step cycles
-_DEFAULT_MAX_TOOL_STEPS = 12 if any(k in MODEL.lower() for k in ("flash", "minimax")) else 8
+# Routine research is prefetched; reserve turns for gaps, guarded execution and the thesis.
+_DEFAULT_MAX_TOOL_STEPS = 4
 MAX_TOOL_STEPS = max(1, int(os.environ.get("MAX_TOOL_STEPS", str(_DEFAULT_MAX_TOOL_STEPS))))
 MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
 # Kalshi Research measures Brier at ~0.02 by close but 0.08-0.09 at a 3-month
@@ -2561,7 +2561,7 @@ def _current_account_value(conn, agent_id: str, held_quotes: List[Dict[str, Any]
     return summary["cash"] + liquidation_value
 
 
-async def _call_agent_analyze(question: str):
+async def _call_agent_analyze(question: str, *, research_candidates=None):
     from analyzing_llm_rationale.server import AgentAnalyzeRequest, agent_analyze
 
     req = AgentAnalyzeRequest(
@@ -2575,6 +2575,7 @@ async def _call_agent_analyze(question: str):
         max_tool_steps=MAX_TOOL_STEPS,
         max_tokens=AGENT_MAX_TOKENS,
     )
+    req._benchmark_research_candidates = list(research_candidates or ())
     last_exc: Optional[Exception] = None
     max_attempts = max(AGENT_ANALYZE_RETRIES, AGENT_ANALYZE_UNAVAILABLE_RETRIES)
     for attempt in range(max_attempts):
@@ -4512,7 +4513,9 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         portfolio_block, _build_candidates_block(held_quotes, new_quotes), agent_id,
     )
 
-    report = asyncio.run(_call_agent_analyze(question))
+    report = asyncio.run(_call_agent_analyze(
+        question, research_candidates=[*new_quotes, *held_quotes],
+    ))
     # The durable transcript retains raw tool output. Store only reader-ready
     # final copy in the cycle field so tool envelopes cannot masquerade as a
     # model thesis on the public board.
@@ -4529,6 +4532,11 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     )
     selected_strategy = _selected_strategy(report.thesis)
     weather_candidates_researched = _weather_research_call_count(report.tool_transcript)
+    tool_steps = sum(step.get("initiated_by") != "system_prefetch" for step in report.tool_transcript)
+    model_calls = getattr(report, "tool_loop_model_calls", None)
+    truncated = getattr(report, "tool_loop_truncated", None)
+    if truncated is None:
+        truncated = model_calls > MAX_TOOL_STEPS if isinstance(model_calls, int) else tool_steps >= MAX_TOOL_STEPS
     with tracer.start_as_current_span("agent_trading.record_strategy_selection") as span:
         outcome = "reported" if selected_strategy != "unreported" else "unreported"
         span.set_attributes({
@@ -4559,9 +4567,10 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
                     "candidates_offered": candidates_offered,
                     "selected_strategy": selected_strategy,
                     "tool_transcript": report.tool_transcript,
+                    "model_calls": model_calls,
                 }),
-                len(report.tool_transcript),
-                1 if len(report.tool_transcript) >= MAX_TOOL_STEPS else 0,
+                tool_steps,
+                int(bool(truncated)),
             ),
         )
         # A gateway can answer with a different model than the one requested.
@@ -4599,13 +4608,14 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
 
     print(
         f"agent-trading-tick done model={model} cycle={cycle_id} "
-        f"steps={len(report.tool_transcript)} candidates={len(candidates_offered)} "
+        f"steps={tool_steps} model_turns={getattr(report, 'tool_loop_model_calls', None)} "
+        f"candidates={len(candidates_offered)} "
         f"weather_candidates={weather_candidates_offered} weather_researched={weather_candidates_researched} "
         f"settled={len(settled)}"
     )
     return {
         "candidate_count": len(candidates_offered),
-        "tool_steps": len(report.tool_transcript),
+        "tool_steps": tool_steps,
         "settled_count": len(settled),
         "thesis_published": bool(str(report.thesis or "").strip()),
         "forecast_records": forecast_records,
