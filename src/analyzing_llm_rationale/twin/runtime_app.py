@@ -551,7 +551,7 @@ def _stage_strategy_continuation(
     run = strategy_run_store.get(cycle_id)
     if run is None:
         raise WorkerJobError("strategy run is unavailable for research continuation")
-    return jobs.add(WorkerJob(
+    continuation = WorkerJob(
         _stable_id("strategy-continuation-", run.id, research_job_id),
         run.account_scope_id, WorkerJobKind.STRATEGY,
         {
@@ -560,7 +560,22 @@ def _stage_strategy_continuation(
             "account_epoch_id": str(run.account_epoch),
         },
         now + timedelta(minutes=10), created_at=now,
-    ))
+    )
+    try:
+        existing = jobs.add(continuation)
+    except WorkerJobError:
+        # Finalization, its completion callback and delivery recovery may race.
+        # Preserve the first deadline; duplicate delivery cannot extend work.
+        existing = jobs.get(continuation.id)
+    if (
+        existing.account_scope_id != continuation.account_scope_id
+        or existing.kind is not continuation.kind
+        or existing.payload != continuation.payload
+        or existing.schema_version != continuation.schema_version
+        or existing.not_before != continuation.not_before
+    ):
+        raise WorkerJobError("strategy continuation identity changed")
+    return existing
 
 
 def _required(name: str) -> str:

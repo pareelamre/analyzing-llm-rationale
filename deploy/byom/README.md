@@ -4,6 +4,12 @@ This bundle replaces the twin's SCADS research model with an operator-supplied
 OpenAI-compatible endpoint. It changes no public chat or forecasting model and
 contains no credential. The twin remains in shadow mode with zero live capital.
 
+Start with the [delivery acceptance and limitations](../../docs/autonomous-twin/BYOM_DELIVERY.md).
+Its network-disabled Linux image check runs a synthetic model-to-shadow-order
+cycle, verifies accounting and accepted-result recovery, and needs no SCADS or
+other model subscription. Passing it establishes the shadow package's software
+contract; real-provider/venue and live-trading evidence are separate milestones.
+
 1. Copy `twin.yaml` and `models.yaml` to a private directory outside the repo.
    Set `models.yaml`'s `local_model_name`, `router_model_name`, and
    `api_base_url` to the exact model identity and endpoint you operate. Both

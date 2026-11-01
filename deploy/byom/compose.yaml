@@ -13,7 +13,10 @@ x-worker: &worker
   restart: unless-stopped
   init: true
   read_only: true
-  tmpfs: [/tmp]
+  # Imported provider libraries create cache directories even with all model
+  # downloads disabled. They must not write into the read-only image layer.
+  # No model assets are baked at these paths; keep empty caches memory-bounded.
+  tmpfs: [/tmp, /app/.cache:size=64m, /app/.hf_cache:size=64m]
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
   pids_limit: 256
