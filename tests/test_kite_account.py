@@ -329,3 +329,63 @@ assert.equal(body.children[1].children[1].textContent, '<img onerror=attack()>')
 """
         result = subprocess.run(["node", "-e", script], cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+class KiteSourcePickerTests(unittest.TestCase):
+    def test_selectable_source_reuses_panel_and_clears_on_venue_switch(self):
+        import subprocess
+        from pathlib import Path
+
+        script = r"""
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const html = fs.readFileSync('frontend/index.html', 'utf8');
+function declaration(name) {
+  const start = html.indexOf('function ' + name + '(');
+  assert.notEqual(start, -1, 'missing ' + name);
+  const rest = html.slice(start + 1);
+  const next = rest.search(/\n(?:async )?function /);
+  return html.slice(start, start + next + 1);
+}
+class Element {
+  constructor(id) { this.id = id; this.children = []; this.open = false; this.parentElement = null; this.innerHTML = ''; }
+  appendChild(child) {
+    if (child.parentElement) child.parentElement.children = child.parentElement.children.filter(n => n !== child);
+    this.children.push(child); child.parentElement = this;
+  }
+}
+const elements = new Map(['kiteAccountPanel','kiteSettingsHome','eb-kite-source','eb-board-section','edgeOverlay'].map(id => [id,new Element(id)]));
+const panel = elements.get('kiteAccountPanel'), home = elements.get('kiteSettingsHome'), target = elements.get('eb-kite-source');
+elements.get('edgeOverlay').classList = {contains: () => true};
+home.appendChild(panel);
+let clears = 0;
+const sandbox = {
+  document: {getElementById: id => elements.get(id)},
+  _ebVenueFilter: 'all', _ebView: 'markets', _ebPage: 0, _ebBoardData: [],
+  clearKiteAccount: () => { clears++; },
+  console,
+};
+const context = vm.createContext(sandbox);
+const names = ['_kiteSourceControls','_restoreKiteSourcePanel','_mountKiteSourcePanel','_renderBoardContainer','_onEbVenueFilter','_renderBoardPage'];
+vm.runInContext(names.map(declaration).join('\n'),context);
+const empty = context._renderBoardPage([],0);
+assert.ok(empty.includes("_onEbVenueFilter('kalshi')"));
+assert.ok(empty.includes("_onEbVenueFilter('kite')"));
+context._onEbVenueFilter('kite');
+assert.equal(sandbox._ebVenueFilter,'kite');
+assert.equal(panel.parentElement,target);
+assert.equal(panel.open,true);
+assert.ok(elements.get('eb-board-section').innerHTML.includes('Private account source'));
+assert.ok(!elements.get('eb-board-section').innerHTML.includes('Edge (Highest)'));
+context._onEbVenueFilter('kalshi');
+assert.equal(panel.parentElement,home);
+assert.equal(panel.open,false);
+assert.ok(clears >= 2);
+assert.equal(home.children.length,1);
+assert.equal(home.children[0],panel);
+assert.equal(target.children.length,0);
+assert.ok(!elements.get('eb-board-section').innerHTML.includes('Private account source'));
+assert.ok(!html.includes("fetch('/integrations/kite/quote"));
+"""
+        result = subprocess.run(["node", "-e", script], cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -1,9 +1,17 @@
 # Zerodha Kite Personal
 
 Foresea supports private, read-only account access with Kite Personal in
-**Settings → Exchange → Zerodha Kite**. This supports the free Personal tier;
+**Edge board → Markets → Source → Zerodha Kite**, alongside Kalshi and Polymarket.
+The same account panel is also available at **Settings → Exchange → Zerodha Kite**.
+This supports the free Personal tier;
 live market quotes, historical candles and streaming require the paid Connect
 plan and are outside this integration. See [official pricing](https://zerodha.com/products/api/).
+
+Choosing Kite displays your private holdings, positions, funds and today's orders.
+The All prediction markets source and its pricing/edge calculations continue to
+use prediction-market contracts. Kite account values are not converted into binary
+probabilities, added to the public board, or sent into chat. Leaving the Kite source
+clears its temporary display and returns the single account panel to Settings.
 
 ## Connect
 

@@ -5,6 +5,14 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-01 — Kite is selectable as a private account source (Codex)
+
+Edge Board → Markets → Source now lists Zerodha Kite alongside Kalshi and
+Polymarket. It mounts the same Kite Personal account panel used by Settings;
+it does not add paid market-data calls or feed private values into binary edge
+calculations. Restore the single panel before replacing its parent DOM, and
+clear its transient contents when leaving the source.
+
 ### 2026-10-26 — Kite Personal account reads (Codex)
 
 Kite Personal uses separate authenticated `/integrations/kite` routes and the

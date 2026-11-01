@@ -3167,6 +3167,7 @@ print(f"Probability: {forecast.get('probability', 0):.1%}")</code></pre>
             </div>
           </div>
         </details>
+        <div id="kiteSettingsHome">
         <details class="model-form" style="margin-top:6px" id="kiteAccountPanel" ontoggle="this.open ? kiteAccountAction('status') : clearKiteAccount()">
           <summary style="cursor:pointer;font-size:12px;font-weight:600">
             Zerodha Kite <span id="kiteChip" style="font-size:10px">Read-only · Not connected</span>
@@ -3196,6 +3197,7 @@ print(f"Probability: {forecast.get('probability', 0):.1%}")</code></pre>
             <div id="kiteAccountData" style="overflow:auto;max-height:300px;font-size:11px" aria-label="Private Kite account data"></div>
           </div>
         </details>
+        </div>
         <div id="venueErr" class="model-form-error" hidden></div>
         <button type="button" class="model-add-btn ui-icon-label" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></button>
       </section>
@@ -6258,6 +6260,7 @@ function _mtmModelColor(model, i = 0) {
 }
 
 async function refreshEdgeForecasts() {
+  if (_ebView === 'markets' && _ebVenueFilter === 'kite') return;
   try {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) return;
@@ -6270,10 +6273,10 @@ async function refreshEdgeForecasts() {
       if (previousPage > 0 && _ebBoardData.length) {
         const pages = Math.ceil(_ebBoardData.length / _EB_PAGE_SIZE);
         _ebPage = Math.max(0, Math.min(previousPage, pages - 1));
-        const boardSection = document.getElementById('eb-board-section');
-        if (boardSection) boardSection.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+        _renderBoardContainer();
       }
       _attachEdgeBoardChartHovers(host);
+      _mountKiteSourcePanel();
       _edgeBoardScrollTop = scrollTop;
       _restoreEdgeBoardScroll();
       refreshEdgePrices();
@@ -6624,6 +6627,7 @@ async function openForecastDrift() {
 // while fading" and so deliberately leaves the overlay open -- stranding the
 // board on screen over the view we just navigated to.
 function closeEdgeBoard({ updateHistory = true, immediate = false } = {}) {
+  _restoreKiteSourcePanel();
   _captureEdgeBoardScroll();
   _saveEdgeBoardScrollToHistory();
   _stopEdgeTimers();
@@ -6675,6 +6679,7 @@ function _ebAskQuestion(ident) {
 }
 
 async function loadEdgeBoard() {
+  _restoreKiteSourcePanel();
   const host = document.getElementById('edgeBody');
   host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading edge board…</p></div>';
   try {
@@ -6692,6 +6697,7 @@ async function loadEdgeBoard() {
     }
     if (!r || !r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
+    _mountKiteSourcePanel();
     _attachEdgeBoardChartHovers(host);
     // Deep link / refresh straight into the Agentic panel: renderEdgeBoard() only
     // emits a placeholder for it since its data isn't part of this payload.
@@ -8108,8 +8114,7 @@ let _ebLastData = null;
 
 function _ebGoPage(n) {
   _ebPage = n;
-  const sec = document.getElementById('eb-board-section');
-  if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+  _renderBoardContainer();
 }
 
 function _ebSetView(view) {
@@ -8125,6 +8130,7 @@ function _ebSetView(view) {
   }
   _captureEdgeBoardScroll();
   host.innerHTML = renderEdgeBoard(_ebLastData);
+  _mountKiteSourcePanel();
   _attachEdgeBoardChartHovers(host);
   _restoreEdgeBoardScroll();
   refreshEdgePrices();
@@ -8817,15 +8823,53 @@ function _onEbSort(sortKey) {
   _renderBoardContainer();
 }
 
+function _kiteSourceControls() {
+  return `<span style="font-size:11px;color:var(--text-dim);margin-left:4px">Source:</span>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'all' ? 'active' : ''}" onclick="_onEbVenueFilter('all')">All prediction markets</button>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'polymarket' ? 'active' : ''}" onclick="_onEbVenueFilter('polymarket')">Polymarket</button>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kalshi' ? 'active' : ''}" onclick="_onEbVenueFilter('kalshi')">Kalshi</button>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kite' ? 'active' : ''}" onclick="_onEbVenueFilter('kite')">Zerodha Kite</button>`;
+}
+
+function _restoreKiteSourcePanel() {
+  const panel = document.getElementById('kiteAccountPanel');
+  const home = document.getElementById('kiteSettingsHome');
+  if (home && panel?.parentElement?.id === 'eb-kite-source') {
+    clearKiteAccount();
+    panel.open = false;
+    home.appendChild(panel);
+  }
+}
+
+function _mountKiteSourcePanel() {
+  const target = document.getElementById('eb-kite-source');
+  const panel = document.getElementById('kiteAccountPanel');
+  if (target && panel && _ebView === 'markets' && _ebVenueFilter === 'kite' && document.getElementById('edgeOverlay')?.classList.contains('open')) {
+    if (panel.parentElement !== target) {
+      clearKiteAccount();
+      target.appendChild(panel);
+      panel.open = true;
+    }
+  }
+}
+
 function _renderBoardContainer() {
   const container = document.getElementById('eb-board-section');
   if (container && _ebBoardData) {
+    _restoreKiteSourcePanel();
     container.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+    _mountKiteSourcePanel();
   }
 }
 
 function _renderBoardPage(board, page) {
-  if (!board || !board.length) return '<p class="text-sm text-gray-500">No open markets tracked yet.</p>';
+  const sources = _kiteSourceControls();
+  if (_ebVenueFilter === 'kite') {
+    return `<div class="eb-toolbar"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${sources}</div></div>
+      <p class="tr-method">Private account source · Free Kite Personal. Holdings, positions, funds and today's orders are visible only to your signed-in account.</p>
+      <div id="eb-kite-source"></div>`;
+  }
+  if (!board || !board.length) return `<div class="eb-toolbar">${sources}</div><p class="text-sm text-gray-500">No open markets tracked yet.</p>`;
   const displayList = _filterAndSortBoard(board);
   const totalMatches = displayList.length;
   const pages = Math.max(1, Math.ceil(totalMatches / _EB_PAGE_SIZE));
@@ -8835,10 +8879,7 @@ function _renderBoardPage(board, page) {
   const toolbarHtml = `<div class="eb-toolbar">
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
       <input type="text" class="eb-search-input" placeholder="Search markets…" value="${escAttr(_ebSearchQuery)}" oninput="_onEbSearch(this.value)" />
-      <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Venue:</span>
-      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'all' ? 'active' : ''}" onclick="_onEbVenueFilter('all')">All</button>
-      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'polymarket' ? 'active' : ''}" onclick="_onEbVenueFilter('polymarket')">Polymarket</button>
-      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kalshi' ? 'active' : ''}" onclick="_onEbVenueFilter('kalshi')">Kalshi</button>
+      ${sources}
       <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Quality:</span>
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'all' ? 'active' : ''}" onclick="_onEbQualityFilter('all')">All</button>
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'credible' ? 'active' : ''}" onclick="_onEbQualityFilter('credible')" title="Grade A or B credibility only">Grade A/B</button>
@@ -9258,6 +9299,7 @@ function _renderMtmPage(d) {
 }
 
 function renderEdgeBoard(d) {
+  _restoreKiteSourcePanel();
   const board = d.edge_board || [], comp = d.models_comparison || [];
   _ebLastData = d;
   _ebBoardData = board;
@@ -12522,6 +12564,7 @@ function closeAuthModal({ preserveLedgerIntent = false } = {}) {
 
 // ── Settings modal ───────────────────────────────────────────────────────────
 function openSettingsModal(section) {
+  _restoreKiteSourcePanel();
   _closeAcctMenu();
   _showSettingsSection(section || 'connections');
   renderVenueStatus();
@@ -12535,6 +12578,7 @@ function closeSettingsModal() {
   const overlay = document.getElementById('settingsOverlay');
   overlay.classList.remove('show');
   overlay.setAttribute('aria-hidden', 'true');
+  _mountKiteSourcePanel();
 }
 
 function _showSettingsSection(name) {
