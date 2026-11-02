@@ -4780,6 +4780,12 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["info"]["title"], "Foresea Intelligence API")
 
+    def test_api_docs_do_not_link_the_source_repository(self):
+        """The owner asked (2026-11-02) to keep the repo out of /docs and /redoc."""
+        info = self.client.get("/openapi.json").json()["info"]
+        self.assertNotIn("github.com", info.get("description", ""))
+        self.assertNotIn("github.com", info.get("contact", {}).get("url", ""))
+
     def test_track_record_tick_endpoint_removed(self):
         # The compute-bearing tick now runs in a GitHub Action, not on Cloud Run.
         r = self.client.post("/track-record/tick")
