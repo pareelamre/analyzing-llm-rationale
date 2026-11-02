@@ -5,6 +5,38 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-02 — Paid Kite Connect market data source (Codex)
+
+The owner expanded the Kite scope to paid Connect quotes and history.
+The Zerodha source now offers exchange:symbol quote lookup, an IST candle range,
+a closing-price chart and an OHLCV/OI table. Private authenticated routes
+`/integrations/kite/quotes` and `/integrations/kite/history` reuse the owner's
+encrypted connection; `FORESEA_ENABLE_KITE_PERSONAL` remains the default-off
+switch for all Kite reads. History resolves the current token from a fresh quote,
+with bounded interval windows. No streaming, public redistribution, binary-odds
+conversion or broker execution. This supersedes the earlier account-only source
+scope; free Personal still covers the account views. See `docs/kite-personal.md`.
+
+### 2026-11-01 — Kite is selectable as a private account source (Codex)
+
+Edge Board → Markets → Source now lists Zerodha Kite alongside Kalshi and
+Polymarket. It mounts the same Kite Personal account panel used by Settings;
+it does not add paid market-data calls or feed private values into binary edge
+calculations. Restore the single panel before replacing its parent DOM, and
+clear its transient contents when leaving the source.
+
+### 2026-10-26 — Kite Personal account reads (Codex)
+
+Kite Personal uses separate authenticated `/integrations/kite` routes and the
+Settings Exchange panel for holdings, net/day positions, funds and today's
+orders. It is not a prediction-market execution venue or public MCP tool.
+Credentials reuse owner-bound KMS envelopes; `KiteConnectionIntent` generations
+prevent a pending connect from restoring a disconnected credential across replicas.
+Access defaults off via `FORESEA_ENABLE_KITE_PERSONAL`; broker/platform prerequisites
+and audit-log retention must be checked before enabling. Kite tokens can trade,
+although Foresea only reads; disconnect removes local credentials without broker
+revocation. See `docs/kite-personal.md` for setup and renewal.
+
 ### 2026-10-18 — Completed ARR research archive (Codex)
 
 `docs/research/arr_2026_10/README.md` indexes the completed prompt-selection,

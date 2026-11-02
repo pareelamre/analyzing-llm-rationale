@@ -3166,6 +3166,37 @@ print(f"Probability: {forecast.get('probability', 0):.1%}")</code></pre>
             </div>
           </div>
         </details>
+        <div id="kiteSettingsHome">
+        <details class="model-form" style="margin-top:6px" id="kiteAccountPanel" ontoggle="this.open ? kiteAccountAction('status') : clearKiteAccount()">
+          <summary style="cursor:pointer;font-size:12px;font-weight:600">
+            Zerodha Kite <span id="kiteChip" style="font-size:10px">Read-only · Not connected</span>
+          </summary>
+          <p style="font-size:11px;line-height:1.5;margin-top:8px">
+            Connect Kite for market quotes and history (paid Kite Connect), plus holdings, positions, funds and today's orders.
+            Tokens are encrypted with your Foresea account. Renew after expiry at 6 AM IST the next day.
+            Kite tokens can authorize trades; Foresea uses them only for read access.
+            <a href="https://kite.trade/docs/connect/v3/user/" target="_blank" rel="noopener noreferrer">Get a daily access token</a>.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label for="kiteApiKey" class="text-xs">Kite API key</label>
+            <input id="kiteApiKey" class="variant-select text-xs" autocomplete="off" spellcheck="false" style="box-sizing:border-box;max-width:100%;min-width:0" />
+            <label for="kiteAccessToken" class="text-xs">Daily access token</label>
+            <input id="kiteAccessToken" type="password" class="variant-select text-xs" autocomplete="off" spellcheck="false" style="box-sizing:border-box;max-width:100%;min-width:0" />
+            <div class="model-form-actions">
+              <button type="button" class="model-save" onclick="kiteAccountAction('connect')">Connect securely</button>
+              <button type="button" class="model-cancel" onclick="kiteAccountAction('disconnect')">Disconnect</button>
+            </div>
+            <label for="kiteResource" class="text-xs">Account view</label>
+            <select id="kiteResource" class="variant-select text-xs">
+              <option value="holdings">Holdings</option><option value="positions">Positions</option>
+              <option value="funds">Funds (INR)</option><option value="orders">Today's orders</option>
+            </select>
+            <button type="button" class="model-save" onclick="kiteAccountAction('read')">Refresh account view</button>
+            <div id="kiteAccountMessage" class="text-xs" role="status" aria-live="polite"></div>
+            <div id="kiteAccountData" style="overflow:auto;max-height:300px;font-size:11px" aria-label="Private Kite account data"></div>
+          </div>
+        </details>
+        </div>
         <div id="venueErr" class="model-form-error" hidden></div>
         <button type="button" class="model-add-btn ui-icon-label" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></button>
       </section>
@@ -6228,6 +6259,7 @@ function _mtmModelColor(model, i = 0) {
 }
 
 async function refreshEdgeForecasts() {
+  if (_ebView === 'markets' && _ebVenueFilter === 'kite') return;
   try {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) return;
@@ -6240,10 +6272,10 @@ async function refreshEdgeForecasts() {
       if (previousPage > 0 && _ebBoardData.length) {
         const pages = Math.ceil(_ebBoardData.length / _EB_PAGE_SIZE);
         _ebPage = Math.max(0, Math.min(previousPage, pages - 1));
-        const boardSection = document.getElementById('eb-board-section');
-        if (boardSection) boardSection.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+        _renderBoardContainer();
       }
       _attachEdgeBoardChartHovers(host);
+      _mountKiteSourcePanel();
       _edgeBoardScrollTop = scrollTop;
       _restoreEdgeBoardScroll();
       refreshEdgePrices();
@@ -6594,6 +6626,7 @@ async function openForecastDrift() {
 // while fading" and so deliberately leaves the overlay open -- stranding the
 // board on screen over the view we just navigated to.
 function closeEdgeBoard({ updateHistory = true, immediate = false } = {}) {
+  _restoreKiteSourcePanel();
   _captureEdgeBoardScroll();
   _saveEdgeBoardScrollToHistory();
   _stopEdgeTimers();
@@ -6645,6 +6678,7 @@ function _ebAskQuestion(ident) {
 }
 
 async function loadEdgeBoard() {
+  _restoreKiteSourcePanel();
   const host = document.getElementById('edgeBody');
   host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading edge board…</p></div>';
   try {
@@ -6662,6 +6696,7 @@ async function loadEdgeBoard() {
     }
     if (!r || !r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
+    _mountKiteSourcePanel();
     _attachEdgeBoardChartHovers(host);
     // Deep link / refresh straight into the Agentic panel: renderEdgeBoard() only
     // emits a placeholder for it since its data isn't part of this payload.
@@ -8078,8 +8113,7 @@ let _ebLastData = null;
 
 function _ebGoPage(n) {
   _ebPage = n;
-  const sec = document.getElementById('eb-board-section');
-  if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+  _renderBoardContainer();
 }
 
 function _ebSetView(view) {
@@ -8095,6 +8129,7 @@ function _ebSetView(view) {
   }
   _captureEdgeBoardScroll();
   host.innerHTML = renderEdgeBoard(_ebLastData);
+  _mountKiteSourcePanel();
   _attachEdgeBoardChartHovers(host);
   _restoreEdgeBoardScroll();
   refreshEdgePrices();
@@ -8787,15 +8822,64 @@ function _onEbSort(sortKey) {
   _renderBoardContainer();
 }
 
+function _kiteSourceControls() {
+  return `<span style="font-size:11px;color:var(--text-dim);margin-left:4px">Source:</span>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'all' ? 'active' : ''}" onclick="_onEbVenueFilter('all')">All prediction markets</button>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'polymarket' ? 'active' : ''}" onclick="_onEbVenueFilter('polymarket')">Polymarket</button>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kalshi' ? 'active' : ''}" onclick="_onEbVenueFilter('kalshi')">Kalshi</button>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kite' ? 'active' : ''}" onclick="_onEbVenueFilter('kite')">Zerodha Kite</button>`;
+}
+
+function _restoreKiteSourcePanel() {
+  clearKiteMarketData();
+  const panel = document.getElementById('kiteAccountPanel');
+  const home = document.getElementById('kiteSettingsHome');
+  if (home && panel?.parentElement?.id === 'eb-kite-source') {
+    clearKiteAccount();
+    panel.open = false;
+    home.appendChild(panel);
+  }
+}
+
+function _mountKiteSourcePanel() {
+  const target = document.getElementById('eb-kite-source');
+  const panel = document.getElementById('kiteAccountPanel');
+  if (target && panel && _ebView === 'markets' && _ebVenueFilter === 'kite' && document.getElementById('edgeOverlay')?.classList.contains('open')) {
+    if (panel.parentElement !== target) {
+      clearKiteAccount();
+      target.appendChild(panel);
+      panel.open = true;
+    }
+  }
+}
+
 function _renderBoardContainer() {
   const container = document.getElementById('eb-board-section');
   if (container && _ebBoardData) {
+    _restoreKiteSourcePanel();
     container.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+    _mountKiteSourcePanel();
   }
 }
 
 function _renderBoardPage(board, page) {
-  if (!board || !board.length) return '<p class="text-sm text-gray-500">No open markets tracked yet.</p>';
+  const sources = _kiteSourceControls();
+  if (_ebVenueFilter === 'kite') {
+    return `<div class="eb-toolbar"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${sources}</div></div>
+      <p class="tr-method">Market quotes and history · Paid Kite Connect. Connect below, then look up an exchange:symbol. Prices use exchange units; dates use IST. Data is private to your signed-in account.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:12px">
+        <label class="text-xs">Exchange:symbol<br><input id="kiteMarketSymbol" class="variant-select" value="NSE:INFY" maxlength="120" spellcheck="false" style="max-width:100%;width:180px"></label>
+        <button type="button" class="model-save" onclick="kiteMarketAction('quotes')">Get quote</button>
+        <label class="text-xs">Interval<br><select id="kiteMarketInterval" class="variant-select"><option value="day">Daily</option><option value="minute">1 minute</option><option value="3minute">3 minutes</option><option value="5minute">5 minutes</option><option value="10minute">10 minutes</option><option value="15minute">15 minutes</option><option value="30minute">30 minutes</option><option value="60minute">Hourly</option></select></label>
+        <label class="text-xs">From (IST)<br><input id="kiteMarketFrom" type="date" class="variant-select" value="${new Date(Date.now() + 19800000 - 29 * 86400000).toISOString().slice(0, 10)}"></label>
+        <label class="text-xs">To (IST)<br><input id="kiteMarketTo" type="date" class="variant-select" value="${new Date(Date.now() + 19800000).toISOString().slice(0, 10)}"></label>
+        <button type="button" class="model-save" onclick="kiteMarketAction('history')">Load history</button>
+      </div>
+      <div id="kiteMarketMessage" class="text-xs" role="status" aria-live="polite"></div>
+      <div id="kiteMarketData" style="overflow:auto;max-height:500px;margin:12px 0;font-size:12px" aria-label="Private Kite market data"></div>
+      <div id="eb-kite-source"></div>`;
+  }
+  if (!board || !board.length) return `<div class="eb-toolbar">${sources}</div><p class="text-sm text-gray-500">No open markets tracked yet.</p>`;
   const displayList = _filterAndSortBoard(board);
   const totalMatches = displayList.length;
   const pages = Math.max(1, Math.ceil(totalMatches / _EB_PAGE_SIZE));
@@ -8805,10 +8889,7 @@ function _renderBoardPage(board, page) {
   const toolbarHtml = `<div class="eb-toolbar">
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
       <input type="text" class="eb-search-input" placeholder="Search markets…" value="${escAttr(_ebSearchQuery)}" oninput="_onEbSearch(this.value)" />
-      <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Venue:</span>
-      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'all' ? 'active' : ''}" onclick="_onEbVenueFilter('all')">All</button>
-      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'polymarket' ? 'active' : ''}" onclick="_onEbVenueFilter('polymarket')">Polymarket</button>
-      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kalshi' ? 'active' : ''}" onclick="_onEbVenueFilter('kalshi')">Kalshi</button>
+      ${sources}
       <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Quality:</span>
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'all' ? 'active' : ''}" onclick="_onEbQualityFilter('all')">All</button>
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'credible' ? 'active' : ''}" onclick="_onEbQualityFilter('credible')" title="Grade A or B credibility only">Grade A/B</button>
@@ -9228,6 +9309,7 @@ function _renderMtmPage(d) {
 }
 
 function renderEdgeBoard(d) {
+  _restoreKiteSourcePanel();
   const board = d.edge_board || [], comp = d.models_comparison || [];
   _ebLastData = d;
   _ebBoardData = board;
@@ -10010,6 +10092,174 @@ function _initVenueAccounts() {
   renderVenueStatus();
   if (removedLegacy) _venueErr('Security update: browser-stored exchange credentials were removed. Reconnect securely to trade.');
   _loadVenueConnections();
+}
+
+// Private Kite data stays in this panel, outside chat context and browser storage.
+let _kiteMarketVersion = 0;
+function clearKiteMarketData() {
+  _kiteMarketVersion++;
+  for (const id of ['kiteMarketData', 'kiteMarketMessage']) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = '';
+  }
+}
+function renderKiteMarket(resource, data, target) {
+  let columns, rows;
+  if (resource === 'quotes') {
+    columns = ['Symbol', 'Last price', 'Open', 'High', 'Low', 'Previous close', 'Volume', 'Quote time (IST)'];
+    rows = Object.entries(data.quotes).map(([symbol, quote]) => [symbol, quote.last_price, quote.ohlc?.open, quote.ohlc?.high, quote.ohlc?.low, quote.ohlc?.close, quote.volume, quote.timestamp]);
+    if (data.missing_instruments.length) {
+      const missing = document.createElement('p');
+      missing.textContent = 'No quote returned for: ' + data.missing_instruments.join(', ');
+      target.append(missing);
+    }
+  } else {
+    const candles = data.candles;
+    const caption = document.createElement('p');
+    caption.textContent = data.instrument + ' · ' + candles.length + ' candles · ' + data.interval + ' · IST. Latest 200 rows shown, newest first.';
+    target.append(caption);
+    if (candles.length > 1) {
+      // Bound chart work while retaining the first and last close; table retains exact values.
+      const points = candles.filter((_, i) => i % Math.max(1, Math.ceil(candles.length / 800)) === 0 || i === candles.length - 1);
+      const times = points.map(row => Date.parse(row[0]));
+      const prices = points.map(row => row[4]);
+      let low = Infinity, high = -Infinity;
+      for (const candle of candles) { low = Math.min(low, candle[4]); high = Math.max(high, candle[4]); }
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 800 180');
+      svg.setAttribute('role', 'img');
+      svg.setAttribute('aria-label', 'Closing price over time in exchange units. Range ' + low + ' to ' + high + (candles.length > 800 ? '. Sampled for display.' : '.'));
+      svg.style.cssText = 'display:block;width:100%;min-width:250px;max-height:180px';
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      line.setAttribute('fill', 'none');
+      line.setAttribute('stroke', 'currentColor');
+      line.setAttribute('stroke-width', '2');
+      line.setAttribute('points', prices.map((price, i) => (10 + (times[i] - times[0]) / (times.at(-1) - times[0]) * 780) + ',' + (170 - (price - low) / (high - low || 1) * 160)).join(' '));
+      svg.append(line);
+      target.append(svg);
+      const range = document.createElement('p');
+      range.textContent = 'Close: ' + low + '–' + high + ' · ' + candles[0][0] + ' to ' + candles.at(-1)[0] + (candles.length > 800 ? ' · Chart sampled for display.' : '');
+      target.append(range);
+    }
+    columns = ['Time (IST)', 'Open', 'High', 'Low', 'Close', 'Volume', 'Open interest'];
+    rows = candles.slice(-200).reverse();
+  }
+  if (!rows.length) {
+    const empty = document.createElement('p'); empty.textContent = 'No data for this selection.'; target.append(empty); return;
+  }
+  const table = document.createElement('table'); table.className = 'eb-table';
+  const header = table.createTHead().insertRow();
+  columns.forEach(label => { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = label; header.append(cell); });
+  const body = table.createTBody();
+  rows.forEach(values => { const row = body.insertRow(); columns.forEach((_, i) => { row.insertCell().textContent = values[i] == null ? '—' : String(values[i]); }); });
+  target.append(table);
+}
+async function kiteMarketAction(resource) {
+  clearKiteMarketData();
+  const version = _kiteMarketVersion, session = authHeaders().Authorization;
+  const target = document.getElementById('kiteMarketData'), message = document.getElementById('kiteMarketMessage');
+  if (!target || !message) return;
+  if (!session) { message.textContent = 'Sign in and connect Kite below to load market data.'; return; }
+  const current = () => version === _kiteMarketVersion && session === authHeaders().Authorization && target.isConnected && _ebVenueFilter === 'kite' && _ebView === 'markets';
+  const symbol = document.getElementById('kiteMarketSymbol').value.trim();
+  const params = new URLSearchParams(resource === 'quotes' ? {i: symbol} : {
+    instrument: symbol, interval: document.getElementById('kiteMarketInterval').value,
+    from: document.getElementById('kiteMarketFrom').value, to: document.getElementById('kiteMarketTo').value,
+  });
+  message.textContent = 'Loading Kite market data…';
+  try {
+    const response = await fetch('/integrations/kite/' + resource + '?' + params, {headers: authHeaders(), cache: 'no-store'});
+    const reply = await response.json();
+    if (!current()) return;
+    if (!response.ok) throw new Error(typeof reply.detail === 'string' ? reply.detail : 'Kite market-data request failed.');
+    renderKiteMarket(resource, reply.data, target);
+    message.textContent = 'Fetched ' + new Date(reply.fetched_at).toLocaleTimeString() + '. Snapshot data in exchange units; quote time may be earlier when the market is closed.';
+  } catch (error) {
+    if (current()) { target.replaceChildren(); message.textContent = error.message || 'Kite market data is unavailable.'; }
+  }
+}
+let _kiteRequestVersion = 0;
+function clearKiteAccount() {
+  _kiteRequestVersion++;
+  for (const id of ['kiteApiKey', 'kiteAccessToken']) { const input = document.getElementById(id); if (input) input.value = ''; }
+  const data = document.getElementById('kiteAccountData');
+  if (data) data.textContent = '';
+  const message = document.getElementById('kiteAccountMessage');
+  if (message) message.textContent = '';
+  const chip = document.getElementById('kiteChip');
+  if (chip) chip.textContent = 'Read-only · Not connected';
+}
+function renderKiteAccount(resource, data) {
+  const target = document.getElementById('kiteAccountData');
+  target.replaceChildren();
+  let columns, rows;
+  if (resource === 'funds') {
+    columns = ['Segment', 'Net (INR)', 'Cash (INR)', 'Collateral (INR)'];
+    rows = Object.entries(data).map(([segment, funds]) => [segment, funds?.net, funds?.available?.cash, funds?.available?.collateral]);
+  } else {
+    const items = resource === 'positions'
+      ? [...(data.net || []).map(item => ({...item, segment: 'Net'})), ...(data.day || []).map(item => ({...item, segment: 'Day'}))] : data;
+    columns = resource === 'orders'
+      ? ['Symbol', 'Exchange', 'Side', 'Quantity', 'Filled', 'Status']
+      : ['Symbol', 'Exchange', 'Quantity', 'Average (INR)', 'Last (INR)', 'P&L (INR)'];
+    rows = items.map(item => resource === 'orders'
+      ? [item.tradingsymbol, item.exchange, item.transaction_type, item.quantity, item.filled_quantity, item.status]
+      : [item.tradingsymbol, item.exchange, item.quantity, item.average_price, item.last_price, item.pnl]);
+    if (resource === 'positions') { columns.unshift('View'); rows.forEach((row, i) => row.unshift(items[i].segment)); }
+  }
+  if (!rows.length) { target.textContent = 'No ' + resource + ' to show.'; return; }
+  const table = document.createElement('table');
+  const head = table.createTHead().insertRow();
+  columns.forEach(label => { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = label; cell.style.padding = '6px'; head.append(cell); });
+  const body = table.createTBody();
+  rows.forEach(values => {
+    const row = body.insertRow();
+    values.forEach(value => { const cell = row.insertCell(); cell.textContent = value == null ? '—' : String(value); cell.style.padding = '6px'; });
+  });
+  target.append(table);
+}
+async function kiteAccountAction(action) {
+  if (action === 'connect' || action === 'disconnect') clearKiteMarketData();
+  const version = ++_kiteRequestVersion;
+  const session = authHeaders().Authorization;
+  const message = document.getElementById('kiteAccountMessage');
+  if (!session) { clearKiteAccount(); message.textContent = 'Sign in to connect your Kite account.'; return; }
+  const current = () => version === _kiteRequestVersion && session === authHeaders().Authorization;
+  const resource = document.getElementById('kiteResource').value;
+  const options = { headers: { ...authHeaders(), 'Content-Type': 'application/json' }, cache: 'no-store' };
+  if (action === 'connect') {
+    options.method = 'PUT';
+    options.body = JSON.stringify({ api_key: document.getElementById('kiteApiKey').value.trim(), access_token: document.getElementById('kiteAccessToken').value.trim() });
+  } else if (action === 'disconnect') options.method = 'DELETE';
+  document.getElementById('kiteApiKey').value = '';
+  document.getElementById('kiteAccessToken').value = '';
+  document.getElementById('kiteAccountData').replaceChildren();
+  message.textContent = 'Loading Kite account…';
+  try {
+    const response = await fetch('/integrations/kite' + (action === 'read' ? '/' + resource : ''), options);
+    const data = await response.json();
+    if (!current()) return;
+    if (!response.ok) {
+      if (response.status === 409) document.getElementById('kiteChip').textContent = 'Read-only · Reconnect required';
+      throw new Error(typeof data.detail === 'string' ? data.detail : 'Kite account request failed.');
+    }
+    if (action === 'read') {
+      renderKiteAccount(resource, data.data);
+      message.textContent = 'Updated ' + new Date(data.fetched_at).toLocaleTimeString() + '. Account values in INR.';
+      document.getElementById('kiteChip').textContent = 'Read-only · Connected';
+    } else {
+      document.getElementById('kiteChip').textContent = data.connected ? 'Read-only · Session stored' : 'Read-only · Not connected';
+      message.textContent = action === 'connect' ? 'Connected. Choose an account view and refresh.'
+        : action === 'disconnect' ? 'Stored session removed from Foresea.'
+        : data.enabled === false ? 'Kite is not enabled on this server.'
+        : data.connected ? 'Session stored. Refresh to check it is still valid.' : 'Connect a daily Kite session to view your account.';
+    }
+  } catch (error) {
+    if (current()) message.textContent = error.message || 'Kite account is unavailable.';
+  } finally {
+    // Status/account reads may supersede this UI request while a connection change is pending.
+    if ((action === 'connect' || action === 'disconnect') && session === authHeaders().Authorization) clearKiteMarketData();
+  }
 }
 
 // ── BYO Model Providers Manager ───────────────────────────────────────────────
@@ -12176,6 +12426,7 @@ function _loadStoredSession() {
 }
 
 function _saveSession(token, user) {
+  if (token !== authHeaders().Authorization?.replace(/^Bearer /, '')) { clearKiteAccount(); clearKiteMarketData(); }
   try {
     localStorage.setItem('foresea_session', token);
     localStorage.setItem('foresea_user', JSON.stringify(user));
@@ -12203,6 +12454,8 @@ async function _afterSignIn(user, source = 'auth') {
 }
 
 function _clearSession() {
+  clearKiteAccount();
+  clearKiteMarketData();
   localStorage.removeItem('foresea_session');
   localStorage.removeItem('foresea_user');
   currentUser = null;
@@ -12409,6 +12662,7 @@ function closeAuthModal({ preserveLedgerIntent = false } = {}) {
 
 // ── Settings modal ───────────────────────────────────────────────────────────
 function openSettingsModal(section) {
+  _restoreKiteSourcePanel();
   _closeAcctMenu();
   _showSettingsSection(section || 'connections');
   renderVenueStatus();
@@ -12422,6 +12676,7 @@ function closeSettingsModal() {
   const overlay = document.getElementById('settingsOverlay');
   overlay.classList.remove('show');
   overlay.setAttribute('aria-hidden', 'true');
+  _mountKiteSourcePanel();
 }
 
 function _showSettingsSection(name) {
