@@ -1,4 +1,4 @@
-"""Read-only Kite Personal account access; no execution or market-data API."""
+"""Read-only Kite account access and shared authenticated GET transport."""
 from __future__ import annotations
 
 import logging
@@ -15,6 +15,8 @@ tracer = trace.get_tracer(__name__)
 meter = metrics.get_meter(__name__)
 reads = meter.create_counter("kite.account.reads", unit="1")
 duration = meter.create_histogram("kite.account.read.duration", unit="s")
+market_reads = meter.create_counter("kite.market.reads", unit="1")
+market_duration = meter.create_histogram("kite.market.read.duration", unit="s")
 
 _PATHS = {
     "profile": "/user/profile",
@@ -48,24 +50,34 @@ def read_account(credentials: dict[str, str], resource: str) -> Any:
     """Read one fixed endpoint, without redirects, retries or response caching."""
     if resource not in _PATHS:
         raise KiteAccountError("Unsupported Kite account resource.")
+    expected = list if resource in ("holdings", "orders") else dict
+    return request_data(credentials, _PATHS[resource], resource, expected=expected)
+
+
+def request_data(credentials: dict[str, str], path: str, resource: str, *, params: Any = None, expected: type = dict) -> Any:
+    """Internal fixed-host GET transport; callers construct allowlisted paths."""
     credentials = validate_credentials(credentials)
     started = time.perf_counter()
     outcome = "error"
-    with tracer.start_as_current_span("kite.account.read", record_exception=False) as span:
+    is_market = resource in {"quotes", "history"}
+    with tracer.start_as_current_span("kite.market.read" if is_market else "kite.account.read", record_exception=False) as span:
         span.set_attribute("kite.resource", resource)
         try:
             try:
                 response = requests.get(
-                    "https://api.kite.trade" + _PATHS[resource],
+                    "https://api.kite.trade" + path,
                     headers={
                         "X-Kite-Version": "3",
                         "Authorization": "token {api_key}:{access_token}".format(**credentials),
                     },
                     timeout=(3.05, 10),
                     allow_redirects=False,
+                    **({"params": params} if params is not None else {}),
                 )
             except requests.RequestException:
                 raise KiteAccountError("Kite is unavailable. Try again later.", 502) from None
+            if response.status_code == 403 and is_market:
+                raise KiteAccountError("Kite denied market-data access. Check your paid Kite Connect subscription and session.", 403)
             if response.status_code in (401, 403):
                 raise KiteAccountError("Kite session expired or was denied. Reconnect with a new daily token.", 409)
             if response.status_code == 429:
@@ -76,7 +88,6 @@ def read_account(credentials: dict[str, str], resource: str) -> Any:
                 payload = response.json()
             except ValueError:
                 raise KiteAccountError("Kite returned an invalid account response.", 502) from None
-            expected = list if resource in ("holdings", "orders") else dict
             if (
                 not isinstance(payload, dict)
                 or payload.get("status") != "success"
@@ -88,10 +99,10 @@ def read_account(credentials: dict[str, str], resource: str) -> Any:
         except KiteAccountError as exc:
             span.record_exception(exc)
             span.set_status(Status(StatusCode.ERROR))
-            logger.warning("Kite account read failed: resource=%s status=%s", resource, exc.status_code)
+            logger.warning("Kite read failed: resource=%s status=%s", resource, exc.status_code)
             raise
         finally:
             span.set_attribute("outcome", outcome)
             attrs = {"resource": resource, "outcome": outcome}
-            reads.add(1, attrs)
-            duration.record(time.perf_counter() - started, attrs)
+            (market_reads if is_market else reads).add(1, attrs)
+            (market_duration if is_market else duration).record(time.perf_counter() - started, attrs)

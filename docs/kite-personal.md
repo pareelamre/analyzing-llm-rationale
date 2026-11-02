@@ -1,21 +1,28 @@
-# Zerodha Kite Personal
+# Zerodha Kite Connect source
 
-Foresea supports private, read-only account access with Kite Personal in
+Foresea supports private, read-only market data and account access in
 **Edge board → Markets → Source → Zerodha Kite**, alongside Kalshi and Polymarket.
 The same account panel is also available at **Settings → Exchange → Zerodha Kite**.
-This supports the free Personal tier;
-live market quotes, historical candles and streaming require the paid Connect
-plan and are outside this integration. See [official pricing](https://zerodha.com/products/api/).
+Quote snapshots and historical candles require a paid Kite Connect subscription.
+Free Kite Personal supports the account views only. Streaming is not implemented.
+See [official pricing](https://zerodha.com/products/api/).
 
-Choosing Kite displays your private holdings, positions, funds and today's orders.
+Choosing Kite displays a symbol lookup (for example `NSE:INFY`), quote snapshots,
+a closing-price chart and an OHLCV/open-interest table. Choose an interval and
+IST date range to load history. The table shows the latest 200 candles; charts
+sample ranges above 800 candles. Account views remain available below.
+The displayed closing-price range uses every returned candle, including unsampled
+points. Connection changes clear the market display when they finish, so
+overlapping reads cannot restore an old display afterward.
 The All prediction markets source and its pricing/edge calculations continue to
-use prediction-market contracts. Kite account values are not converted into binary
+use prediction-market contracts. Kite prices and account values are not converted into binary
 probabilities, added to the public board, or sent into chat. Leaving the Kite source
 clears its temporary display and returns the single account panel to Settings.
 
 ## Connect
 
-1. Create a Personal app in the [Kite developer console](https://developers.kite.trade/).
+1. Create an app in the [Kite developer console](https://developers.kite.trade/), with
+   an active Connect subscription for market data.
 2. Generate a daily access token using the [official login flow](https://kite.trade/docs/connect/v3/user/).
    Open `https://kite.zerodha.com/connect/login?v=3&api_key=YOUR_API_KEY`, sign in,
    and exchange the resulting `request_token` **locally** for an `access_token`.
@@ -23,7 +30,8 @@ clears its temporary display and returns the single account panel to Settings.
    `SHA256(api_key + request_token + api_secret)` to `POST https://api.kite.trade/session/token`.
    Use the official SDK or a local script; keep the API secret off Foresea and chat.
 3. Sign in to Foresea and enter only the API key and access token in Settings.
-4. Choose holdings, positions, funds or today's orders, then refresh.
+4. In the Zerodha source, enter an exchange:symbol and choose **Get quote** or
+   **Load history**. Account views have a separate refresh control.
 
 Kite access tokens expire at **6 AM IST the next day** and can be invalidated
 earlier through Kite logout. Reconnect with a new token after expiry. “Session
@@ -47,16 +55,30 @@ rate limited. The API key/token are not accepted through query parameters.
 | `GET /integrations/kite/positions` | `/portfolio/positions` (net and day) |
 | `GET /integrations/kite/funds` | `/user/margins` (equity and commodity segments) |
 | `GET /integrations/kite/orders` | `/orders` (open and executed orders for today) |
+| `GET /integrations/kite/quotes?i=NSE:INFY&i=BSE:SENSEX` | `/quote`; 1–500 identifiers, missing symbols explicitly listed |
+| `GET /integrations/kite/history?instrument=NSE:INFY&interval=day&from=2026-11-01&to=2026-11-01` | Fresh quote resolves current token, then `/instruments/historical/{token}/{interval}` |
 
 Reads return `platform`, `resource`, `read_only`, `fetched_at` and `data`.
-Values retain Kite's field names, quantities and INR amounts. `409` means connect
+Quotes retain price/OHLC, volume, open interest and timestamps in native exchange units.
+History returns normalized IST timestamps and six/seven-field OHLCV/OI candles.
+Dates cover the full IST day; naive datetimes use IST and offset-aware datetimes
+are converted to IST. Single-request ranges must be shorter than 60 days for
+`minute`, 100 for `3minute`/`5minute`/`10minute`, 200 for `15minute`/`30minute`,
+365 for `60minute`, or 2,000 for `day`. These are conservative client limits;
+broker limits still apply. No continuous-futures or expired-instrument lookup is
+provided. See the [quote](https://kite.trade/docs/connect/v3/market-quotes/) and
+[history](https://kite.trade/docs/connect/v3/historical/) contracts.
+
+Account values retain Kite's field names, quantities and INR amounts. `409` means connect
 or renew the Kite session; `429` means wait; `502` means an upstream failure;
-`503` means connection storage is unavailable. A Kite error does not invalidate
+`403` on market reads means check the paid subscription and session; `503` means
+the feature or connection storage is unavailable. A Kite error does not invalidate
 the user's Foresea session. Successful responses use `Cache-Control: no-store`.
 
 ## Deployment prerequisites and boundaries
 
-Disabled by default. Set `FORESEA_ENABLE_KITE_PERSONAL=true` only after the
+Disabled by default. The existing `FORESEA_ENABLE_KITE_PERSONAL=true` switch
+governs both Personal account reads and paid Connect market reads. Set it only after the
 operator has completed the deployment prerequisites below. No production rollout
 or platform approval is implied by this change.
 
@@ -64,7 +86,7 @@ Uses the existing `FORESEA_TRADING_KMS_KEY_NAME`, Cloud KMS IAM and durable
 Datastore backend. Saving fails closed without secure, durable storage; there is
 no shared server-account credential fallback. KMS envelopes bind credentials to
 the signed-in Foresea user and the `kite` namespace. The API secret is never
-accepted or stored. Account data is fetched on demand and is not stored in
+accepted or stored. Market and account data are fetched on demand and are not stored in
 browser storage, sent into chat, published through MCP or added to shared data.
 One private `KiteConnectionIntent/current` entity under each user serializes
 credential mutations across replicas. Disconnect replaces that intent and removes

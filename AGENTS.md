@@ -5,6 +5,18 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-02 — Paid Kite Connect market data source (Codex)
+
+The owner expanded the Kite scope to paid Connect quotes and history.
+The Zerodha source now offers exchange:symbol quote lookup, an IST candle range,
+a closing-price chart and an OHLCV/OI table. Private authenticated routes
+`/integrations/kite/quotes` and `/integrations/kite/history` reuse the owner's
+encrypted connection; `FORESEA_ENABLE_KITE_PERSONAL` remains the default-off
+switch for all Kite reads. History resolves the current token from a fresh quote,
+with bounded interval windows. No streaming, public redistribution, binary-odds
+conversion or broker execution. This supersedes the earlier account-only source
+scope; free Personal still covers the account views. See `docs/kite-personal.md`.
+
 ### 2026-11-01 — Kite is selectable as a private account source (Codex)
 
 Edge Board → Markets → Source now lists Zerodha Kite alongside Kalshi and

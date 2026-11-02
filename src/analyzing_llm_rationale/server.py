@@ -27,7 +27,7 @@ from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Literal, Optional
+from typing import Annotated, Any, Callable, Dict, Iterable, List, Literal, Optional
 from urllib.parse import quote as url_quote
 from urllib.parse import urlparse
 
@@ -11886,7 +11886,12 @@ def _kite_operation_inner(user_id: str, action: str, payload: Any = None) -> Dic
         credentials = _stored_trading_credentials(user_id, "kite")
         if credentials is None:
             raise HTTPException(409, "Connect your Kite account in Settings first.")
-        data = kite_account.read_account(credentials, action)
+        if action in {"quotes", "history"}:
+            from analyzing_llm_rationale import kite_market_data
+
+            data = kite_market_data.quotes(credentials, payload) if action == "quotes" else kite_market_data.history(credentials, **payload)
+        else:
+            data = kite_account.read_account(credentials, action)
         return {
             "platform": "kite", "resource": action, "read_only": True,
             "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -11938,6 +11943,29 @@ async def kite_disconnect(request: Request) -> JSONResponse:
     _check_rate_limit(request)
     claims = _require_session(request)
     result = await run_in_threadpool(_kite_operation, claims["sub"], "disconnect")
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/integrations/kite/quotes", tags=["Kite Connect"], summary="Read your subscribed Kite market snapshots")
+async def kite_market_quotes(request: Request, instruments: Annotated[List[str], Query(alias="i", min_length=1, max_length=500)]) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "quotes", instruments)
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/integrations/kite/history", tags=["Kite Connect"], summary="Read your subscribed Kite OHLCV candles")
+async def kite_market_history(
+    request: Request, instrument: str = Query(..., max_length=120), interval: str = Query("day", max_length=10),
+    start: str = Query(..., alias="from", max_length=40), end: str = Query(..., alias="to", max_length=40),
+) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "history", {"instrument": instrument, "interval": interval, "start": start, "end": end})
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 

@@ -363,6 +363,7 @@ const sandbox = {
   document: {getElementById: id => elements.get(id)},
   _ebVenueFilter: 'all', _ebView: 'markets', _ebPage: 0, _ebBoardData: [],
   clearKiteAccount: () => { clears++; },
+  clearKiteMarketData: () => {},
   console,
 };
 const context = vm.createContext(sandbox);
@@ -375,7 +376,7 @@ context._onEbVenueFilter('kite');
 assert.equal(sandbox._ebVenueFilter,'kite');
 assert.equal(panel.parentElement,target);
 assert.equal(panel.open,true);
-assert.ok(elements.get('eb-board-section').innerHTML.includes('Private account source'));
+assert.ok(elements.get('eb-board-section').innerHTML.includes('Market quotes and history'));
 assert.ok(!elements.get('eb-board-section').innerHTML.includes('Edge (Highest)'));
 context._onEbVenueFilter('kalshi');
 assert.equal(panel.parentElement,home);
@@ -384,8 +385,8 @@ assert.ok(clears >= 2);
 assert.equal(home.children.length,1);
 assert.equal(home.children[0],panel);
 assert.equal(target.children.length,0);
-assert.ok(!elements.get('eb-board-section').innerHTML.includes('Private account source'));
-assert.ok(!html.includes("fetch('/integrations/kite/quote"));
+assert.ok(!elements.get('eb-board-section').innerHTML.includes('Market quotes and history'));
+assert.ok(html.includes('Paid Kite Connect'));
 """
         result = subprocess.run(["node", "-e", script], cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
