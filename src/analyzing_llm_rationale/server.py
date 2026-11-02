@@ -108,6 +108,10 @@ _MCP_ENDPOINT = f"{_CANONICAL}/mcp/"
 _PAGE_CONTEXT_SCRIPT_ID = "foresea-page-context"
 
 _REQUIRED_API_KEY: Optional[str] = os.environ.get("API_KEY")
+#: Opens the registered-account list. Separate from API_KEY because setting
+#: API_KEY also makes /predict require sign-in, so it stays unset in
+#: production; unset here means the account list is closed to everyone.
+_OPERATOR_API_KEY: Optional[str] = (os.environ.get("OPERATOR_API_KEY") or "").strip() or None
 _GOOGLE_CLIENT_ID: Optional[str] = os.environ.get("GOOGLE_CLIENT_ID")
 _GITHUB_CLIENT_ID: Optional[str] = os.environ.get("GITHUB_CLIENT_ID")
 _GITHUB_CLIENT_SECRET: Optional[str] = os.environ.get("GITHUB_CLIENT_SECRET")
@@ -2492,7 +2496,6 @@ def _refuse_to_serve_with_the_default_session_secret() -> None:
 # service with these. The startup warning makes the state visible instead of
 # leaving it to be discovered by request.
 _API_KEY_GUARDED_ENDPOINTS = (
-    "/analytics/users",
     "/analytics/dashboard",
     "/analytics/export",
     "/analytics/summary",
@@ -2502,10 +2505,13 @@ _API_KEY_GUARDED_ENDPOINTS = (
     "/market/forecast/stream",
 )
 
-#: The subset that returns personal data, called out separately because an
-#: open traffic counter and an open list of registered users are not the same
-#: kind of open.
-_API_KEY_GUARDED_PERSONAL_DATA = ("/analytics/users",)
+#: Endpoints that return personal data (registered accounts, their email
+#: addresses and last login). They call _require_operator_key, which fails
+#: closed, because an open traffic counter and an open list of registered
+#: users are not the same kind of open. /analytics/export is not listed: it
+#: stays behind _check_api_key and writes its account rows only for the
+#: operator key.
+_OPERATOR_ONLY_ENDPOINTS = ("/analytics/users",)
 
 
 def _warn_if_api_key_guard_is_inert() -> None:
@@ -2514,13 +2520,42 @@ def _warn_if_api_key_guard_is_inert() -> None:
         return
     logger.warning(
         "API_KEY is not set, so _check_api_key passes every request and these "
-        "%d endpoints are public: %s. Of those, %s return personal data "
-        "(registered accounts, their email addresses and last login). Set the "
-        "API_KEY environment variable to close them.",
+        "%d endpoints are public: %s. The personal data endpoints (%s) are not "
+        "among them: they need OPERATOR_API_KEY and refuse every request while "
+        "it is unset, and /analytics/export adds account rows only for that "
+        "key. Set the API_KEY environment variable to close the rest.",
         len(_API_KEY_GUARDED_ENDPOINTS),
         ", ".join(_API_KEY_GUARDED_ENDPOINTS),
-        ", ".join(_API_KEY_GUARDED_PERSONAL_DATA),
+        ", ".join(_OPERATOR_ONLY_ENDPOINTS),
     )
+
+
+#: A static header secret on a public service is only as strong as its
+#: entropy; `openssl rand -hex 32` gives 64 characters.
+_OPERATOR_KEY_MIN_LENGTH = 32
+
+
+def _report_operator_key_state() -> None:
+    """Say at startup whether the account list is reachable, and how well kept."""
+    key = _OPERATOR_API_KEY
+    if not key:
+        logger.info(
+            "OPERATOR_API_KEY is not set: /analytics/users returns 403 and "
+            "/analytics/export omits account rows."
+        )
+        return
+    if not (key.isascii() and key.isprintable()):
+        logger.warning(
+            "OPERATOR_API_KEY contains non-ASCII or non-printable characters; "
+            "an HTTP header cannot carry it reliably, so it will never match."
+        )
+    elif len(key) < _OPERATOR_KEY_MIN_LENGTH:
+        logger.warning(
+            "OPERATOR_API_KEY is %d characters; use at least %d random ones "
+            "(openssl rand -hex 32), since it alone guards every account.",
+            len(key),
+            _OPERATOR_KEY_MIN_LENGTH,
+        )
 
 
 @asynccontextmanager
@@ -2547,6 +2582,7 @@ async def lifespan(app: FastAPI):
     _refuse_to_serve_with_the_default_session_secret()
     _warn_if_the_analytics_salt_is_the_published_one()
     _warn_if_api_key_guard_is_inert()
+    _report_operator_key_state()
     logger.info("foresea server starting up")
     async with AsyncExitStack() as stack:
         if _PUBLIC_MCP is not None:
@@ -6368,6 +6404,10 @@ def _check_api_key(request: Request) -> None:
     server_security.check_api_key(request, _REQUIRED_API_KEY)
 
 
+def _require_operator_key(request: Request) -> None:
+    server_security.require_operator_key(request, _OPERATOR_API_KEY)
+
+
 def _check_rate_limit(request: Request) -> None:
     server_security.check_rate_limit(
         request,
@@ -8650,11 +8690,19 @@ async def recent_analytics_events(
 )
 async def list_registered_users(
     request: Request,
+    response: Response,
     limit: int = Query(500, ge=1, le=1000, description="Max users to return"),
 ) -> RegisteredUsersResponse:
     """Return the list of registered accounts and verified email IDs for operators."""
-    _check_api_key(request)
+    _require_operator_key(request)
+    # Same URL, different body per header: keep it out of any shared cache.
+    response.headers["Cache-Control"] = "no-store"
     lim = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else 500
+    return await _registered_users(lim)
+
+
+async def _registered_users(lim: int) -> RegisteredUsersResponse:
+    """Read the account list. Callers must have checked the operator key."""
     if _get_datastore() is not None:
         try:
             users = await asyncio.get_running_loop().run_in_executor(
@@ -8695,12 +8743,16 @@ def _csv_cell(value: Any) -> str:
     summary="Export aggregate privacy-preserving analytics summary and registered users in CSV format",
 )
 async def export_analytics_csv(request: Request) -> Response:
-    """Export 30-day aggregate traffic, event counts, and registered users in CSV format."""
+    """Export 30-day aggregate traffic, event counts, and (for operators) registered users in CSV format."""
     _check_api_key(request)
-    visits_task = analytics_summary(request)
-    events_task = analytics_events_summary(request)
-    users_task = list_registered_users(request, limit=500)
-    visits, events, users = await asyncio.gather(visits_task, events_task, users_task)
+    visits, events = await asyncio.gather(
+        analytics_summary(request), analytics_events_summary(request)
+    )
+    # The aggregates above are public on their own endpoints; the account
+    # list is not, so it is only written for a request with the operator key.
+    users = None
+    if server_security.operator_key_matches(request, _OPERATOR_API_KEY):
+        users = await _registered_users(500)
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
@@ -8742,24 +8794,33 @@ async def export_analytics_csv(request: Request) -> Response:
     for row in events.by_model:
         writer.writerow([_csv_cell(row.get("model")), row.get("count", 0)])
     writer.writerow([])
-    writer.writerow(["User ID", "Email", "Name", "Created At", "Last Login"])
-    for u in users.users:
-        writer.writerow(
-            [
-                _csv_cell(u.user_id),
-                _csv_cell(u.email),
-                _csv_cell(u.name),
-                _csv_cell(u.created_at),
-                _csv_cell(u.last_login),
-            ]
-        )
+    if users is None:
+        writer.writerow(["# Registered users omitted: send X-Operator-Key to include them."])
+    else:
+        writer.writerow(["User ID", "Email", "Name", "Created At", "Last Login"])
+        for u in users.users:
+            writer.writerow(
+                [
+                    _csv_cell(u.user_id),
+                    _csv_cell(u.email),
+                    _csv_cell(u.name),
+                    _csv_cell(u.created_at),
+                    _csv_cell(u.last_login),
+                ]
+            )
 
     csv_content = buf.getvalue()
     filename = f"foresea_analytics_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
     return Response(
         content=csv_content,
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # The body differs by X-Operator-Key; a cache keyed on the URL
+            # alone could hand an operator's copy to the next caller.
+            "Cache-Control": "no-store",
+            "Vary": "X-Operator-Key",
+        },
     )
 
 
@@ -9164,6 +9225,8 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
         const events = await eRes.json();
         const recents = rRes.ok ? await rRes.json() : { events: [] };
         const usersData = uRes.ok ? await uRes.json() : { total: 0, users: [] };
+        // 401/403: the list needs X-Operator-Key, which this page never sends.
+        const usersLocked = uRes.status === 401 || uRes.status === 403;
 
         // 1. Stats
         const regTotal = events.attribution && events.attribution.total_registered_users != null
@@ -9297,6 +9360,9 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
               <td style="text-align:right; color:var(--emerald); font-size:12px; font-weight:500;">${lDate}</td>
             </tr>`;
           }).join('');
+        } else if (usersLocked) {
+          countBadge.innerText = 'operator only';
+          userTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-dim)">The account list is operator-only: request /analytics/users with the X-Operator-Key header.</td></tr>';
         } else {
           countBadge.innerText = '0 accounts';
           userTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-dim)">No registered users found</td></tr>';

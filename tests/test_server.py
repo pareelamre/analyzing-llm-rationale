@@ -2275,7 +2275,56 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["events"][0]["attribution"], "anonymous")
         self.assertEqual(payload["events"][0]["metadata"]["model"], "test-model")
 
+    def _operator_get(self, path):
+        """GET with OPERATOR_API_KEY configured and the matching header sent."""
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", "op-key"):
+            return self.client.get(path, headers={"X-Operator-Key": "op-key"})
+
+    def test_registered_users_are_refused_when_no_operator_key_is_configured(self):
+        """covers: R1 (S1.1). Production ran with no key and served every account.
+
+        On 2026-11-02 an anonymous GET returned all registered emails,
+        because the only guard was _check_api_key, which admits everyone
+        when API_KEY is unset. An unset operator key must mean closed.
+        """
+        server_module._sync_user_duckdb(
+            "user_closed_1",
+            "closed@example.com",
+            "Closed",
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", None), \
+                mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
+            response = self.client.get("/analytics/users")
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("closed@example.com", response.text)
+
+    def test_registered_users_reject_a_wrong_operator_key(self):
+        """covers: R1 (S1.2)."""
+        server_module._sync_user_duckdb(
+            "user_closed_2",
+            "wrongkey@example.com",
+            "Wrong Key",
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", "op-key"):
+            missing = self.client.get("/analytics/users")
+            wrong = self.client.get("/analytics/users", headers={"X-Operator-Key": "nope"})
+            # Raw latin-1 bytes reach the app as a non-ASCII str, which
+            # hmac.compare_digest rejects with TypeError if handed str.
+            non_ascii = self.client.get(
+                "/analytics/users", headers={"X-Operator-Key": "op-kéy".encode("latin-1")}
+            )
+        for response in (missing, wrong, non_ascii):
+            self.assertEqual(response.status_code, 401)
+            self.assertNotIn("wrongkey@example.com", response.text)
+
     def test_registered_users_endpoint_returns_user_list(self):
+        """covers: R1 (S1.3)."""
         server_module._sync_user_duckdb(
             "user_test_123",
             "trader@example.com",
@@ -2284,7 +2333,7 @@ class ServerTests(unittest.TestCase):
             datetime.now(timezone.utc),
             datetime.now(timezone.utc),
         )
-        response = self.client.get("/analytics/users?limit=50")
+        response = self._operator_get("/analytics/users?limit=50")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("users", payload)
@@ -2293,6 +2342,7 @@ class ServerTests(unittest.TestCase):
         self.assertIsNotNone(user)
         self.assertEqual(user["name"], "Test Trader")
         self.assertEqual(user["user_id"], "user_test_123")
+        self.assertEqual(response.headers.get("cache-control"), "no-store")
 
     def test_analytics_export_returns_csv(self):
         server_module._sync_user_duckdb(
@@ -2311,7 +2361,7 @@ class ServerTests(unittest.TestCase):
             "/analytics/event",
             json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test", "model": "gpt-oss-120b"}},
         )
-        response = self.client.get("/analytics/export")
+        response = self._operator_get("/analytics/export")
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/csv", response.headers.get("content-type", ""))
         self.assertIn("attachment;", response.headers.get("content-disposition", ""))
@@ -2319,7 +2369,66 @@ class ServerTests(unittest.TestCase):
         self.assertIn("forecast_completed", response.text)
         self.assertIn("gpt-oss-120b", response.text)
         self.assertIn("Total Registered Users", response.text)
+        # covers: R2 (S2.2)
         self.assertIn("export_trader@example.com", response.text)
+        self.assertEqual(response.headers.get("cache-control"), "no-store")
+        self.assertEqual(response.headers.get("vary"), "X-Operator-Key")
+
+    def test_analytics_export_omits_accounts_without_the_operator_key(self):
+        """covers: R2 (S2.1). The dashboard's Export button sends no key.
+
+        It should still get the traffic numbers, which are public on
+        /analytics/summary anyway, but not the list of accounts.
+        """
+        server_module._sync_user_duckdb(
+            "user_export_anon",
+            "anon_export@example.com",
+            "Anon Export",
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", None), \
+                mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
+            response = self.client.get("/analytics/export")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Total Visits (30d)", response.text)
+        self.assertNotIn("anon_export@example.com", response.text)
+        self.assertNotIn("user_export_anon", response.text)
+
+    def test_analytics_export_omits_accounts_for_a_wrong_operator_key(self):
+        """covers: R2 (S2.1) once a key is configured -- the realistic attack."""
+        server_module._sync_user_duckdb(
+            "user_export_wrong",
+            "wrong_export@example.com",
+            "Wrong Export",
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", "op-key"), \
+                mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
+            responses = [
+                self.client.get("/analytics/export"),
+                self.client.get("/analytics/export", headers={"X-Operator-Key": "nope"}),
+                self.client.get(
+                    "/analytics/export", headers={"X-Operator-Key": "op-kéy".encode("latin-1")}
+                ),
+            ]
+        for response in responses:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Total Visits (30d)", response.text)
+            self.assertNotIn("wrong_export@example.com", response.text)
+            self.assertNotIn("user_export_wrong", response.text)
+            self.assertEqual(response.headers.get("vary"), "X-Operator-Key")
+
+    def test_dashboard_says_the_account_list_is_operator_only(self):
+        """The page cannot send the key; an empty table would look like no users."""
+        with mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
+            response = self.client.get("/analytics/dashboard")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("uRes.status === 401 || uRes.status === 403", response.text)
+        self.assertIn("The account list is operator-only", response.text)
 
     def test_analytics_export_survives_a_hostile_display_name(self):
         """The export is parsed back, not substring-matched.
@@ -2341,7 +2450,7 @@ class ServerTests(unittest.TestCase):
             datetime.now(timezone.utc),
             datetime.now(timezone.utc),
         )
-        response = self.client.get("/analytics/export")
+        response = self._operator_get("/analytics/export")
         self.assertEqual(response.status_code, 200)
 
         rows = list(csv.reader(io.StringIO(response.text)))
@@ -2364,7 +2473,7 @@ class ServerTests(unittest.TestCase):
             datetime.now(timezone.utc),
             datetime.now(timezone.utc),
         )
-        response = self.client.get("/analytics/export")
+        response = self._operator_get("/analytics/export")
         rows = list(csv.reader(io.StringIO(response.text)))
         row = next((r for r in rows if r and r[0] == "user_formula_790"), None)
         self.assertIsNotNone(row)
