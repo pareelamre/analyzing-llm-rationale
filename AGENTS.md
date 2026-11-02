@@ -57,6 +57,25 @@ of Capella access. Do not relabel the planned protocol as completed results or
 automatically restart old enrichment jobs. The user authorized committing and
 pushing this completed research archive to main; other worktrees stay preserved.
 
+### 2026-11-02 — Account list is operator-only and fails closed (Claude)
+
+`GET /analytics/users` served every registered account (email, name, Google
+id, last login) to anonymous requests in production: its only guard was
+`_check_api_key`, which admits everyone while `API_KEY` is unset. `API_KEY`
+cannot be the fix, because setting it makes `/predict` require sign-in.
+
+- New `OPERATOR_API_KEY` env var, sent as `X-Operator-Key`.
+  `server_security.require_operator_key` returns 403 while it is unset and
+  401 for a missing/wrong key (constant-time bytes compare).
+- `/analytics/users` calls `_require_operator_key`; `/analytics/export`
+  keeps its public aggregate rows and writes account rows only for the key.
+- To read the list: put a long random value in Secret Manager, add
+  `OPERATOR_API_KEY` to the deploy's `--update-secrets`, and send the header.
+
+Do not move a personal-data endpoint back behind `_check_api_key`.
+`test_no_personal_data_endpoint_relies_on_the_fail_open_guard` and
+`test_the_operator_list_matches_the_call_sites` enforce it.
+
 ### 2026-10-13 — Validated horizons are significance-driven, not hardcoded (Copilot)
 
 The published track record's 7-14d horizon crossed into significance
