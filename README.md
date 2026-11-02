@@ -744,7 +744,7 @@ Open your coding agent or IDE (Cursor, Windsurf, Cline, Roo Code, Antigravity, C
 ##### 1-Line CLI Commands
 ```bash
 # Claude Code (Anthropic CLI)
-claude mcp add --transport sse foresea https://foresea.ink/mcp/
+claude mcp add --transport http foresea https://foresea.ink/mcp/
 
 # Google Antigravity (AGY CLI)
 agy mcp add foresea https://foresea.ink/mcp/
