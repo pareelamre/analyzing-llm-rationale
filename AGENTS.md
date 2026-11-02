@@ -57,6 +57,24 @@ of Capella access. Do not relabel the planned protocol as completed results or
 automatically restart old enrichment jobs. The user authorized committing and
 pushing this completed research archive to main; other worktrees stay preserved.
 
+### 2026-11-02 — Model-dependent workflows disabled while no model is hosted (Claude)
+
+The SCADS AI key now gets 403, so every hosted-model call fails. These
+workflows ran anyway (about 2,300 Actions minutes a day) and produced nothing,
+so they are disabled in GitHub (`gh workflow disable`), not deleted:
+
+- `track-record-forecast.yml` (Track record forecast snapshots)
+- `agent-trading-board-publish.yml` (Agent trading board publish)
+- `metaculus-futureeval.yml` (Metaculus FutureEval bots: examined=0 forecasted=0)
+- `headline-arena-runner.yml` (Headline Arena Forecast Runner)
+
+Still running: the MTM tick and resolved-quality jobs (they value and settle
+open paper positions without a model), reconciliation, backups, digest.
+The VPS cron (`deploy/vps/cron/foresea-cron.sh`) still dispatches the
+forecast and agent-trading jobs; GitHub rejects those dispatches while the
+workflows are disabled. Re-enable with `gh workflow enable <file>` once a
+working model provider is configured, not before.
+
 ### 2026-11-02 — Account list is operator-only and fails closed (Claude)
 
 `GET /analytics/users` served every registered account (email, name, Google
