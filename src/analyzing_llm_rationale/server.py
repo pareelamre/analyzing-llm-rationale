@@ -710,12 +710,6 @@ X-API-Key: <your-key>
 The `/health` endpoint is always unauthenticated. Per-user endpoints such as
 RAG, chat history, and trading require an `Authorization: Bearer <session-token>`
 header returned by the sign-in endpoints.
-
----
-
-## Source code
-
-[github.com/pareelamle/analyzing-llm-rationale](https://github.com/pareelamre/analyzing-llm-rationale)
 """
 
 _TAGS = [
@@ -2603,7 +2597,7 @@ app = FastAPI(
     contact={
         "name": "Pareel Amre",
         "email": "pareel.amre@gmail.com",
-        "url": "https://github.com/pareelamre/analyzing-llm-rationale",
+        "url": _CANONICAL,
     },
     license_info={
         "name": "MIT",
