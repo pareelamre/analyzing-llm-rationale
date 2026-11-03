@@ -79,6 +79,7 @@ from analyzing_llm_rationale import (
     live_track_record as live_track_record_support,
 )
 from analyzing_llm_rationale.config import (
+    load_model_configs,
     scads_agent_trading_identities,
     scads_chat_model_options,
     scads_hosted_model_allowlist,
@@ -1640,6 +1641,9 @@ _evidence_prefetch_inflight: set[str] = set()
 _LOCAL_CACHE_MAX = int(os.environ.get("LOCAL_CACHE_MAX", "1024"))
 _EVIDENCE_CACHE_TTL = int(os.environ.get("EVIDENCE_CACHE_TTL", "900"))
 _EVIDENCE_PREFETCH_TOP_N = int(os.environ.get("EVIDENCE_PREFETCH_TOP_N", "3"))
+# Upper bound on articles per forecast. A small self-hosted model reads ~800
+# prompt tokens per article, so 20-40 articles can blow its time budget.
+_EVIDENCE_TOP_K_MAX = max(1, min(int(os.environ.get("EVIDENCE_TOP_K_MAX", "100")), 100))
 _EVIDENCE_TIMEOUT_S = float(os.environ.get("EVIDENCE_TIMEOUT_S", "0"))
 _EVIDENCE_MAX_CONCURRENCY = max(1, int(os.environ.get("EVIDENCE_MAX_CONCURRENCY", "4")))
 _evidence_fetch_slots = threading.BoundedSemaphore(_EVIDENCE_MAX_CONCURRENCY)
@@ -7046,7 +7050,7 @@ async def _fetch_evidence_with_cache(
             _forecast_evidence_requests.add(1, {**attrs, "outcome": "unconfigured"})
             return [], f"Evidence pipeline is not configured on this server: {exc}", "unconfigured"
 
-    top_k = max(1, min(top_k, 100))
+    top_k = max(1, min(top_k, _EVIDENCE_TOP_K_MAX))
     evidence_cache_key = _cache_key("evidence", evidence_question, top_k)
     cached = _cache_get(evidence_cache_key)
     if cached is not None:
@@ -13389,7 +13393,7 @@ async def chat_models(request: Request) -> Dict[str, Any]:
             "fallbacks": list(cfg.fallback_model_chain),
             "default": cfg.name == default_key,
         }
-        for cfg in _SCADS_CHAT_MODEL_OPTIONS
+        for cfg in _chat_model_options()
     ]
     user_models = []
     user_id = _optional_user_id(request)
@@ -14912,6 +14916,30 @@ except Exception as exc:  # pragma: no cover - defensive production fallback.
         "glm-5-3": 6000,
         "llama-3.3-70b-instruct": 6000,
     }
+try:
+    _SERVER_MODEL_CONFIGS = load_model_configs(_REPO_ROOT / "configs" / "models.yaml")
+except Exception as exc:  # pragma: no cover - defensive production fallback.
+    logger.warning("failed to load model configs: %s", exc)
+    _SERVER_MODEL_CONFIGS = {}
+
+
+def _chat_model_options() -> List[Any]:
+    """Server-hosted models for the chat selector.
+
+    The server's own default comes first when it is not a SCADS model (e.g. a
+    self-hosted endpoint). SCADS options are offered only while the server holds
+    a SCADS key; without one every request to them fails.
+    """
+    default_key = _state.get("model_key") or "gpt-oss-120b"
+    options = list(_SCADS_CHAT_MODEL_OPTIONS) if os.environ.get("SCADS_AI_API_KEY") else []
+    default_cfg = _SERVER_MODEL_CONFIGS.get(default_key)
+    if (
+        default_cfg is not None
+        and default_cfg.chat_interface_enabled
+        and all(cfg.name != default_key for cfg in options)
+    ):
+        options.insert(0, default_cfg)
+    return options
 
 
 def _scads_alt_provider(

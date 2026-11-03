@@ -19,6 +19,20 @@ models:
     api_base_url: http://localhost:8001/v1
     api_key_env_var: VLLM_API_KEY
     access: self-hosted
+  qwen3.5-9b-selfhosted:
+    result_label: Qwen3.5-9B
+    provider: openai-compatible
+    local_model_name: mlx-community/Qwen3.5-9B-4bit
+    router_model_name: mlx-community/Qwen3.5-9B-4bit
+    # Served from the owner's Mac (mlx-lm behind an API-key gate). This is the
+    # local address; production sets FORESEA_MODEL_API_BASE_URL to the public
+    # HTTPS tunnel instead.
+    api_base_url: http://127.0.0.1:8090/v1/chat/completions
+    api_key_env_var: SELF_HOSTED_LLM_API_KEY
+    access: self-hosted
+    chat_interface_enabled: true
+    agent_trading_enabled: false
+    track_record_enabled: false
   llama-3.3-70b-instruct:
     result_label: Llama-3.3-70B-Instruct
     provider: openai-compatible

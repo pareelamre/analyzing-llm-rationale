@@ -4699,6 +4699,29 @@ class ServerTests(unittest.TestCase):
         self.assertIn("application/json", r.headers.get("content-type", ""))
         self.assertNotIn("<html", r.text.lower())
 
+    def test_chat_models_lists_self_hosted_default_without_scads_key(self):
+        env = {k: v for k, v in os.environ.items() if k != "SCADS_AI_API_KEY"}
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.dict(server_module._state, {"model_key": "qwen3.5-9b-selfhosted"}),
+        ):
+            body = self.client.get("/chat/models").json()
+
+        self.assertEqual(body["default_model"], "qwen3.5-9b-selfhosted")
+        self.assertEqual([m["key"] for m in body["models"]], ["qwen3.5-9b-selfhosted"])
+        self.assertTrue(body["models"][0]["default"])
+
+    def test_chat_models_keeps_scads_options_with_scads_key(self):
+        with (
+            mock.patch.dict(os.environ, {"SCADS_AI_API_KEY": "test-key"}, clear=False),
+            mock.patch.dict(server_module._state, {"model_key": "gpt-oss-120b"}),
+        ):
+            body = self.client.get("/chat/models").json()
+
+        keys = [m["key"] for m in body["models"]]
+        self.assertIn("gpt-oss-120b", keys)
+        self.assertNotIn("qwen3.5-9b-selfhosted", keys)
+
     def test_agent_manifest(self):
         r = self.client.get("/.well-known/agent.json")
         self.assertEqual(r.status_code, 200)
