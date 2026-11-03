@@ -2372,7 +2372,8 @@ class ServerTests(unittest.TestCase):
         # covers: R2 (S2.2)
         self.assertIn("export_trader@example.com", response.text)
         self.assertEqual(response.headers.get("cache-control"), "no-store")
-        self.assertEqual(response.headers.get("vary"), "X-Operator-Key")
+        # CORSMiddleware appends "Origin"; the operator key must still be a Vary token.
+        self.assertIn("X-Operator-Key", [v.strip() for v in response.headers.get("vary", "").split(",")])
 
     def test_analytics_export_omits_accounts_without_the_operator_key(self):
         """covers: R2 (S2.1). The dashboard's Export button sends no key.
@@ -2420,7 +2421,7 @@ class ServerTests(unittest.TestCase):
             self.assertIn("Total Visits (30d)", response.text)
             self.assertNotIn("wrong_export@example.com", response.text)
             self.assertNotIn("user_export_wrong", response.text)
-            self.assertEqual(response.headers.get("vary"), "X-Operator-Key")
+            self.assertIn("X-Operator-Key", [v.strip() for v in response.headers.get("vary", "").split(",")])
 
     def test_dashboard_says_the_account_list_is_operator_only(self):
         """The page cannot send the key; an empty table would look like no users."""
