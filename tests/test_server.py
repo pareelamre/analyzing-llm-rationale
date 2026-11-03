@@ -2372,7 +2372,8 @@ class ServerTests(unittest.TestCase):
         # covers: R2 (S2.2)
         self.assertIn("export_trader@example.com", response.text)
         self.assertEqual(response.headers.get("cache-control"), "no-store")
-        self.assertEqual(response.headers.get("vary"), "X-Operator-Key")
+        # CORSMiddleware appends "Origin"; the operator key must still be a Vary token.
+        self.assertIn("X-Operator-Key", [v.strip() for v in response.headers.get("vary", "").split(",")])
 
     def test_analytics_export_omits_accounts_without_the_operator_key(self):
         """covers: R2 (S2.1). The dashboard's Export button sends no key.
@@ -2420,7 +2421,7 @@ class ServerTests(unittest.TestCase):
             self.assertIn("Total Visits (30d)", response.text)
             self.assertNotIn("wrong_export@example.com", response.text)
             self.assertNotIn("user_export_wrong", response.text)
-            self.assertEqual(response.headers.get("vary"), "X-Operator-Key")
+            self.assertIn("X-Operator-Key", [v.strip() for v in response.headers.get("vary", "").split(",")])
 
     def test_dashboard_says_the_account_list_is_operator_only(self):
         """The page cannot send the key; an empty table would look like no users."""
@@ -4698,6 +4699,29 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("application/json", r.headers.get("content-type", ""))
         self.assertNotIn("<html", r.text.lower())
+
+    def test_chat_models_lists_self_hosted_default_without_scads_key(self):
+        env = {k: v for k, v in os.environ.items() if k != "SCADS_AI_API_KEY"}
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.dict(server_module._state, {"model_key": "qwen3.5-9b-selfhosted"}),
+        ):
+            body = self.client.get("/chat/models").json()
+
+        self.assertEqual(body["default_model"], "qwen3.5-9b-selfhosted")
+        self.assertEqual([m["key"] for m in body["models"]], ["qwen3.5-9b-selfhosted"])
+        self.assertTrue(body["models"][0]["default"])
+
+    def test_chat_models_keeps_scads_options_with_scads_key(self):
+        with (
+            mock.patch.dict(os.environ, {"SCADS_AI_API_KEY": "test-key"}, clear=False),
+            mock.patch.dict(server_module._state, {"model_key": "gpt-oss-120b"}),
+        ):
+            body = self.client.get("/chat/models").json()
+
+        keys = [m["key"] for m in body["models"]]
+        self.assertIn("gpt-oss-120b", keys)
+        self.assertNotIn("qwen3.5-9b-selfhosted", keys)
 
     def test_agent_manifest(self):
         r = self.client.get("/.well-known/agent.json")

@@ -28,7 +28,7 @@ ENV HF_HOME=/app/.hf_cache
 ENV MODEL_DEVICE=cuda
 ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 EXPOSE 8000
-CMD ["analyze-llm-rationale", "serve", "--model", "gpt-oss-120b", "--variant", "variant0_neutral_baseline", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["analyze-llm-rationale", "serve", "--model", "qwen3.5-9b-selfhosted", "--variant", "variant0_neutral_baseline", "--host", "0.0.0.0", "--port", "8000"]
 
 # ── cpu target: slim Python, CPU-only torch (default) ─────────────────────────
 FROM python:3.11-slim AS cpu
@@ -54,4 +54,4 @@ ENV HF_HOME=/app/.hf_cache
 ENV MODEL_DEVICE=cpu
 ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 EXPOSE 8000
-CMD ["analyze-llm-rationale", "serve", "--model", "gpt-oss-120b", "--variant", "variant0_neutral_baseline", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["analyze-llm-rationale", "serve", "--model", "qwen3.5-9b-selfhosted", "--variant", "variant0_neutral_baseline", "--host", "0.0.0.0", "--port", "8000"]

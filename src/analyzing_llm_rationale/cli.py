@@ -223,7 +223,8 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--provider", choices=REMOTE_PROVIDER_CHOICES, default=None)
     serve_parser.add_argument("--local-model-name", default=None)
     serve_parser.add_argument("--router-model-name", default=None)
-    serve_parser.add_argument("--api-base-url", default=None)
+    # Lets a deploy point a self-hosted model at its current tunnel without a code change.
+    serve_parser.add_argument("--api-base-url", default=os.environ.get("FORESEA_MODEL_API_BASE_URL") or None)
     serve_parser.add_argument("--api-key-env-var", default=None)
     serve_parser.add_argument("--api-key-file", default=None)
     serve_parser.add_argument("--device", default=os.environ.get("MODEL_DEVICE", "cuda"))
