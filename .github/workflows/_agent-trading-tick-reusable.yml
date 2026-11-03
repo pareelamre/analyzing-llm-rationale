@@ -1,5 +1,10 @@
 name: Agent trading tick (reusable)
 
+# SCADS access ended for good on 2026-11-03 and every model here is SCADS-hosted.
+# The scheduled path is off (AGENT_TRADING_TICK_ENABLED in
+# agent-trading-board-publish.yml); manual runs fail at the provider until the
+# roster moves to a provider that is still reachable.
+#
 # Called by the scheduled reserved-capacity dispatcher and by the manual per-model
 # workflows. Each caller drives one or more isolated shadow-trading cycles via
 # scripts/agent_trading_tick.py, which gives the model real tool access

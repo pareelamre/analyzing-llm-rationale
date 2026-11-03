@@ -59,7 +59,12 @@ jobs:
     # Use this workflow's proven heartbeat as the agent dispatcher. The other
     # two quarterly-hour publishes stay aggregation-only, keeping the board
     # fresh without starting an extra trading pass.
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_agent_tick == true }}
+    #
+    # Every agent model is SCADS-hosted, and SCADS access ended for good on
+    # 2026-11-03, so the scheduler's run_agent_tick dispatches only publish
+    # until AGENT_TRADING_TICK_ENABLED is set to 'true' for a working roster.
+    # The board still publishes, so the retired models' history stays visible.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_agent_tick == true && vars.AGENT_TRADING_TICK_ENABLED == 'true' }}
     uses: ./.github/workflows/agent-trading-tick.yml
     secrets: inherit
 

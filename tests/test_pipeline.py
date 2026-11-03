@@ -619,8 +619,10 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(models["gpt-5"].api_key_env_var, "OPENAI_API_KEY")
         self.assertEqual(models["gpt-5"].api_key_file, "OPEN_AI_API_KEY.txt")
         scads_models = scads_hosted_model_allowlist(repo_root / "configs" / "models.yaml")
-        self.assertIn("scads-alias-code", scads_models)
-        self.assertIn("scads-alias-reasoning", scads_models)
+        # The aliases sit on no board roster, so retiring them after SCADS
+        # access ended hides no historical account.
+        self.assertNotIn("scads-alias-code", scads_models)
+        self.assertNotIn("scads-alias-reasoning", scads_models)
         track_model_labels = scads_track_model_labels(repo_root / "configs" / "models.yaml")
         self.assertIn("qwen3-8-27b", track_model_labels)
         self.assertIn("gemma-4-26b-a4b-it", track_model_labels)
