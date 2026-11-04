@@ -2952,7 +2952,10 @@ _SECURITY_HEADERS = {
         "img-src 'self' data: https:; "
         "font-src 'self' https://fonts.gstatic.com data:; "
         "connect-src 'self' https://api.openai.com https://openrouter.ai https://accounts.google.com "
-        "https://www.gstatic.com; "
+        "https://www.gstatic.com "
+        # A model on the visitor's own computer, called from their browser
+        # (Settings → On this device).
+        "http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*; "
         "frame-src https://accounts.google.com; "
         "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
     ),
@@ -14351,6 +14354,110 @@ async def _finalize_predict_response(
             }])
         except Exception:
             pass
+
+
+# ── Models on the user's own device ──────────────────────────────────────────
+# foresea.ink cannot reach a model on a visitor's laptop (Ollama, LM Studio,
+# llama.cpp, MLX), but their browser can. The server does the research and
+# builds the prompt; the browser sends it to the local model and posts the
+# reply back to be parsed. The model's address and any key never reach us.
+
+_THINK_RE = re.compile(r"<think>.*?(?:</think>|$)\s*", re.DOTALL)
+
+
+class DevicePrepareResponse(BaseModel):
+    """The forecast prompt for a model on the user's device."""
+
+    messages: List[Dict[str, str]] = Field(..., description="Chat messages to send to the local model.")
+    temperature: float
+    max_tokens: int
+    request: Dict[str, Any] = Field(
+        ..., description="The request after preparation (a pasted market link fills its market fields). "
+        "Send it back unchanged to /predict/device/finish."
+    )
+    evidence_articles: List[Dict[str, Any]] = Field(default_factory=list)
+    evidence_error: Optional[str] = None
+
+
+class DeviceFinishRequest(BaseModel):
+    """A local model's reply to a prompt from /predict/device/prepare."""
+
+    request: PredictRequest
+    content: str = Field(..., max_length=200_000, description="The model's full reply.")
+    evidence_articles: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
+    evidence_error: Optional[str] = Field(None, max_length=2000)
+    served_model_name: Optional[str] = Field(None, max_length=200, description="The local model's name.")
+
+
+@app.post(
+    "/predict/device/prepare",
+    tags=["Inference"],
+    summary="Build the forecast prompt for a model on your own device",
+    response_model=DevicePrepareResponse,
+)
+async def predict_device_prepare(req: PredictRequest, request: Request) -> DevicePrepareResponse:
+    """Gather evidence and build the forecast prompt without calling a model.
+
+    Send the returned `messages` to your own model (any OpenAI-compatible
+    `/v1/chat/completions` server), then post its reply with the returned
+    `request` and evidence to `/predict/device/finish`.
+    """
+    _check_rate_limit(request)
+    _check_predict_rate_limit(request)
+    claims = _optional_predict_claims(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+    if req.variant not in _state["variants"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown variant '{req.variant}'. Valid: {sorted(_state['variants'])}",
+        )
+    # Fields that pick a server-side model mean nothing here, and a key must not
+    # be echoed back in `request`.
+    req = req.model_copy(update={
+        "model": None, "openrouter_model": None, "openrouter_api_key": None,
+        "provider_base_url": None, "ollama_base_url": None,
+    })
+    messages, evidence_articles, evidence_error = await _prepare_predict_messages(
+        req, claims.get("sub") if claims else None
+    )
+    return DevicePrepareResponse(
+        messages=messages,
+        temperature=0.7,
+        max_tokens=_max_tokens_for_request(req),
+        request=req.model_dump(mode="json"),
+        evidence_articles=evidence_articles,
+        evidence_error=evidence_error,
+    )
+
+
+@app.post(
+    "/predict/device/finish",
+    tags=["Inference"],
+    summary="Turn your device model's reply into a forecast",
+    response_model=PredictResponse,
+)
+async def predict_device_finish(body: DeviceFinishRequest, request: Request) -> PredictResponse:
+    """Parse a local model's reply into the same `PredictResponse` that `/predict` returns.
+
+    Nothing is cached, scored or added to the track record: the reply comes
+    from the caller's own model.
+    """
+    _check_rate_limit(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+    req = body.request
+    content = _THINK_RE.sub("", body.content).strip()
+    model_name = (body.served_model_name or "").strip() or "Your device model"
+    if req.chat_mode:
+        response = _build_chat_response(req, content, body.evidence_articles, body.evidence_error, model_name)
+    else:
+        response = _build_typed_response(
+            req, _parse_json_dict(content), content, body.evidence_articles, body.evidence_error, model_name
+        )
+    response.model_key = response.served_model_name = f"{model_name} (your device)"
+    _append_chat_source_attribution(response)
+    return response
 
 
 def _sse_event(event: str, data: Dict[str, Any]) -> str:

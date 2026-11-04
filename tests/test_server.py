@@ -1474,6 +1474,49 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((analysis["market_probability"], analysis["model_probability"]), (0.6, 0.7))
         self.assertEqual(analysis["stance"], "model_above_market")
 
+    def test_device_prepare_returns_the_prompt_without_calling_a_model(self):
+        response = self.client.post(
+            "/predict/device/prepare",
+            json={
+                "question": "Will the Fed cut rates before July 31, 2026?",
+                "chat_mode": True,
+                "attach_evidence": False,
+                "openrouter_model": "some/model",
+                "openrouter_api_key": "sk-should-not-echo",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.provider.calls, [])
+        payload = response.json()
+        self.assertIn("Will the Fed cut rates", payload["messages"][-1]["content"])
+        self.assertEqual(payload["request"]["question"], "Will the Fed cut rates before July 31, 2026?")
+        self.assertNotIn("sk-should-not-echo", response.text)
+
+    def test_device_finish_parses_the_reply_of_a_local_model(self):
+        response = self.client.post(
+            "/predict/device/finish",
+            json={
+                "request": {
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "chat_mode": True,
+                    "market_probability": 0.4,
+                    "market_outcome": "Yes",
+                },
+                "content": "<think>Base rates first.</think>A cut looks likely.\n[p:0.7]",
+                "served_model_name": "llama3.2",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.provider.calls, [])
+        payload = response.json()
+        self.assertEqual(payload["model_probability"], 0.7)
+        self.assertNotIn("Base rates first", payload["rationale"])
+        self.assertIn("A cut looks likely.", payload["rationale"])
+        self.assertEqual(payload["model_key"], "llama3.2 (your device)")
+        self.assertEqual(payload["market_analysis"]["stance"], "model_above_market")
+
     def test_a_market_link_pasted_mid_conversation_is_searched_by_its_title(self):
         # A bare link is one word, which used to count as a short follow-up:
         # the search ran on the previous question plus the URL.

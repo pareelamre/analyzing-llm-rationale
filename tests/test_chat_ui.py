@@ -132,6 +132,18 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertNotIn("_allVenueCreds", self.index_html)
         self.assertIn("localStorage.removeItem('foresea_venue_creds')", self.index_html)
 
+    def test_visitors_can_add_a_model_running_on_their_own_device(self) -> None:
+        # The picker offers it, Settings has the form, and the forecast goes
+        # through the browser (prepare, local model, finish), never a server call
+        # to the visitor's machine.
+        self.assertIn('<option value="device:add">Add a model on this device…</option>', self.index_html)
+        self.assertIn('id="settingsSectionDeviceModels"', self.index_html)
+        self.assertIn("data-settings-section=\"device-models\"", self.index_html)
+        self.assertIn("fetch('/predict/device/prepare'", self.index_html)
+        self.assertIn("fetch(`${baseUrl}/v1/chat/completions`", self.index_html)
+        self.assertIn("fetch('/predict/device/finish'", self.index_html)
+        self.assertIn("? _deviceForecastResponse(body, deviceModel, signal)", self.index_html)
+
     def test_settings_modal_hosts_connections_and_copied_agents_with_no_duplicate_ids(self) -> None:
         self.assertIn("function openSettingsModal", self.index_html)
         self.assertIn("function closeSettingsModal", self.index_html)
