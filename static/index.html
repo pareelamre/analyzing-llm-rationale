@@ -9794,18 +9794,17 @@ function renderBuiltinChatModelSelect() {
     const suffix = (m.fallbacks || []).length ? ` (fallbacks: ${(m.fallbacks || []).join(' -> ')})` : '';
     return `<option value="${escAttr(m.key)}" title="${escAttr((m.model || m.key) + suffix)}">${escHtml(m.label || m.key)}</option>`;
   });
+  let groups = `<optgroup label="Foresea Hosted">${options.join('')}</optgroup>`;
   if (userChatModels && userChatModels.length) {
     const userOpts = userChatModels.map(m => {
       return `<option value="${escAttr(m.key)}" title="${escAttr(m.model || m.key)}">${escHtml(m.label || m.key)}</option>`;
     });
-    select.innerHTML = `<optgroup label="Foresea Hosted">${options.join('')}</optgroup><optgroup label="Your Connected Models">${userOpts.join('')}</optgroup>`;
-  } else {
-    select.innerHTML = `<optgroup label="Foresea Hosted">${options.join('')}</optgroup>`;
+    groups += `<optgroup label="Your Connected Models">${userOpts.join('')}</optgroup>`;
   }
   const deviceOpts = _deviceModels().map(m =>
     `<option value="device:${escAttr(m.id)}" title="${escAttr(m.baseUrl)}">${escHtml(m.model)}</option>`);
   deviceOpts.push('<option value="device:add">Add a model on this device…</option>');
-  select.insertAdjacentHTML('beforeend', `<optgroup label="On this device">${deviceOpts.join('')}</optgroup>`);
+  select.innerHTML = groups + `<optgroup label="On this device">${deviceOpts.join('')}</optgroup>`;
   const device = getActiveDeviceModel();
   select.value = device ? `device:${device.id}` : active;
 }
