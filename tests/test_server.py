@@ -345,6 +345,9 @@ class ServerTests(unittest.TestCase):
             side_effect=fake_require_auth
         )
         self._require_auth_mock = self._require_auth_patch.start()
+        # Most tests count provider calls; the consensus estimates have their own tests.
+        self._estimate_patch = mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 0)
+        self._estimate_patch.start()
         _local_cache.clear()
         _rate_limiter._log.clear()
         _predict_rate_limiter._log.clear()
@@ -370,6 +373,7 @@ class ServerTests(unittest.TestCase):
     def tearDown(self):
         self._logger_patch.stop()
         self._require_auth_patch.stop()
+        self._estimate_patch.stop()
         self._datastore_patch.stop()
         server_module._ANALYTICS_DB = self._original_analytics_db
         _state.clear()
@@ -1460,6 +1464,89 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Keep the whole reply under 102 words, so it ends with the marker line.",
                       self.provider.calls[0][0]["content"])
+
+    def test_chat_forecast_is_the_median_of_quick_estimates(self):
+        # One greedy reply from the 9B swung from 15% to 95% on the same link;
+        # the median of several sampled estimates holds steady.
+        self.provider.responses = [
+            "[p:0.20]", "[p:0.80]", "[p:0.25]", "[p:0.30]", "[p:0.22]",
+            "Rain looks likely to me.\n[p:0.90]",
+        ]
+        with mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 5):
+            response = self.client.post(
+                "/predict",
+                json={"question": "Will it rain in Tampa today?", "market_probability": 0.24,
+                      "chat_mode": True, "attach_evidence": False},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.provider.calls), 6)
+        self.assertEqual(self.provider.max_tokens[:5], [12] * 5)
+        self.assertIn("reply with only your probability", self.provider.calls[0][-1]["content"])
+        reply_prompt = self.provider.calls[5][-1]["content"]
+        self.assertIn("Your forecast for this question is 25%", reply_prompt)
+        self.assertIn("end with the marker line [p:0.25]", reply_prompt)
+        # The reply's own number doesn't override the median.
+        self.assertEqual(response.json()["model_probability"], 0.25)
+        self.assertTrue(response.json()["rationale"].startswith("**Forecast: 25%**"))
+
+    def test_chat_without_a_market_skips_the_estimates(self):
+        # Without a market price the quick estimates drift to ~50%, so only a
+        # market's forecast is a median; other questions get the single reply.
+        self.provider.response = "A hike looks more likely than a cut.\n[p:0.15]"
+        with mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 5):
+            for question in ("Will the Fed cut rates in December 2026?",
+                             "What are the main stories in the news right now?"):
+                response = self.client.post(
+                    "/predict", json={"question": question, "chat_mode": True, "attach_evidence": False},
+                )
+                self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(len(self.provider.calls), 2)
+        self.assertEqual(response.json()["model_probability"], 0.15)
+
+    def test_estimates_stop_when_the_model_gives_no_probability(self):
+        self.provider.responses = ["I can't put a number on that.", "Hard to say.\n[p:0.40]"]
+        with mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 5):
+            response = self.client.post(
+                "/predict",
+                json={"question": "Will the bill pass?", "market_probability": 0.4, "chat_mode": True,
+                      "attach_evidence": False},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.provider.calls), 2)
+        self.assertNotIn("Your forecast for this question", self.provider.calls[1][-1]["content"])
+
+    def test_a_question_about_a_pasted_page_gets_no_forecast(self):
+        def forecast(question):
+            req = server_module.PredictRequest(question=question, chat_mode=True)
+            return server_module._build_chat_response(req, "The budget leads.\n[p:0.92]", [], None)
+
+        news = forecast("What are the main stories on https://www.bbc.com/news right now?")
+        self.assertIsNone(news.model_probability)
+        self.assertNotIn("Forecast:", news.rationale)
+        # Forecast questions keep it, with or without a page.
+        self.assertEqual(forecast("Fed cut in December?").model_probability, 0.92)
+        self.assertEqual(forecast("Will this pass? https://example.com/bill").model_probability, 0.92)
+
+    def test_streamed_chat_forecast_uses_the_median_of_quick_estimates(self):
+        self.provider.responses = ["[p:0.40]", "[p:0.30]", "[p:0.35]"]
+        self.provider.stream_response = "It could go either way.\n[p:0.90]"
+        with (
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 3),
+            mock.patch.object(server_module, "_INTERACTIVE_DEFAULT_MODEL", ""),
+        ):
+            response = self.client.post(
+                "/predict/stream",
+                json={"question": "Will it rain in Tampa today?", "market_probability": 0.3,
+                      "chat_mode": True, "attach_evidence": False},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        done = json.loads(response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0])
+        self.assertEqual(done["response"]["model_probability"], 0.35)
+        self.assertIn("Your forecast for this question is 35%", self.provider.calls[3][-1]["content"])
 
     def test_predict_reads_a_kalshi_link_pasted_into_the_question(self):
         import analyzing_llm_rationale.market_data as md

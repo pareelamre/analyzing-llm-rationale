@@ -17,6 +17,7 @@ import random
 import re
 import secrets
 import smtplib
+import statistics
 import threading
 import time
 import traceback
@@ -392,6 +393,10 @@ _INTERACTIVE_DEFAULT_MODEL = os.environ.get("INTERACTIVE_DEFAULT_MODEL", "gemma-
 _INTERACTIVE_MAX_TOKENS = int(os.environ.get("INTERACTIVE_MAX_TOKENS", "768"))
 _CHAT_PROVIDER_TIMEOUT_S = float(os.environ.get("CHAT_PROVIDER_TIMEOUT_S", "15"))
 _CHAT_PROVIDER_MAX_RETRIES = int(os.environ.get("CHAT_PROVIDER_MAX_RETRIES", "1"))
+# Quick probability estimates taken before a chat forecast; their median is the
+# forecast (see _chat_consensus). 0 turns this off.
+_CHAT_ESTIMATE_SAMPLES = int(os.environ.get("CHAT_ESTIMATE_SAMPLES", "7"))
+_CHAT_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_ESTIMATE_BUDGET_S", "20"))
 # A "deep"-tier question is deliberately allowed to reason harder (see
 # _REASONING_EFFORT_BY_TIER below), which routinely exceeds the 15s chat
 # budget above -- give it a bigger one instead of just timing out more often.
@@ -449,6 +454,13 @@ _CHAT_SYSTEM_PROMPT = (
 )
 
 _CHAT_PROB_RE = re.compile(r"\[p:(0(?:\.\d+)?|1(?:\.0+)?)\]\s*$", re.MULTILINE)
+# Any sign that a question is about an outcome. A first question about a pasted
+# page with none of these gets no forecast, even if the reply carries a marker.
+_FORECAST_TALK_RE = re.compile(
+    r"\b(?:will|won't|going\s+to|odds|chances?|likel(?:y|ihood)|probab\w*|forecast\w*|predict\w*"
+    r"|bets?|betting|markets?|prices?|priced|edge)\b",
+    re.IGNORECASE,
+)
 
 # Defense-in-depth for the tool-loop path: build_grounding_note()'s text is
 # meant as background context, never a quotable answer -- strip it if a model
@@ -6905,6 +6917,17 @@ def _build_chat_response(
         except ValueError:
             pass
         text = _CHAT_PROB_RE.sub("", text).rstrip()
+    if (
+        chat_prob is not None
+        and not req.history
+        and req.market_probability is None
+        and not req.market_url
+        and web_page.find_links(req.question or "")
+        and not _FORECAST_TALK_RE.search(req.question or "")
+    ):
+        # A question about a pasted page isn't a forecast, but the 9B tags it
+        # anyway ("what are the main stories on bbc.com/news?" came back 92%).
+        chat_prob = None
     if chat_prob is not None:
         text = f"**Forecast: {chat_prob:.0%}**\n\n{text}"
 
@@ -6981,6 +7004,89 @@ def _chat_length_budget(req: "PredictRequest") -> str:
     """
     words = _max_tokens_for_request(req) * 2 // 5
     return f"\n\nKeep the whole reply under {words} words, so it ends with the marker line."
+
+
+_CHAT_ESTIMATE_ASK = (
+    "Before you explain anything: reply with only your probability for Yes, as [p:0.XX]. No other text."
+)
+_CHAT_ESTIMATE_RE = re.compile(r"\[p:\s*(0(?:\.\d+)?|1(?:\.0+)?)\s*\]")
+
+
+async def _chat_consensus(
+    req: "PredictRequest", provider, messages: List[Dict[str, str]]
+) -> tuple[List[Dict[str, str]], Optional[float]]:
+    """Make a forecast on a market the median of several quick estimates.
+
+    One greedy reply from the self-hosted 9B swings with trivial prompt
+    changes, and a market's prompt changes on every price tick: moving the
+    timestamp by 21 seconds took one forecast from 35% to 25%, and replies to
+    the same Kalshi link ranged from 15% to 95%. Sampled estimates of one
+    prompt scatter around a stable centre; the median of 7 stayed within a
+    few points of the market across perturbed prompts. The estimates share
+    the reply's prompt, so a server with a prefix cache (mlx-lm) answers each
+    in under a second.
+
+    Only questions with a market (a pasted link or a price) qualify. Without
+    one, the quick estimates drift to ~50% (a December Fed cut came out at
+    45-52% beside a reply expecting a hike), while the single greedy reply,
+    whose prompt barely changes, gave 15% every time. The model can't be
+    asked whether it's a forecast either: offered a "none" answer, it gives
+    that for a bare market link.
+
+    Returns the messages for the reply, told to explain the median, and the
+    median; or the messages unchanged and None.
+    """
+    if not req.chat_mode or _CHAT_ESTIMATE_SAMPLES < 3 or provider is not _state.get("provider"):
+        return messages, None
+    if req.market_probability is None and not req.market_url:
+        return messages, None
+    ask = [*messages, {"role": "user", "content": _CHAT_ESTIMATE_ASK}]
+    deadline = time.monotonic() + _CHAT_ESTIMATE_BUDGET_S
+    attempts = 0
+    estimates: List[float] = []
+    while attempts < _CHAT_ESTIMATE_SAMPLES and deadline - time.monotonic() > 1:
+        attempts += 1
+        try:
+            reply = await _provider_chat(
+                provider, ask, 0.8, 12,
+                timeout_s=deadline - time.monotonic(), max_retries=0, max_timeout_retries=0,
+                call_site="chat_estimate",
+            )
+        except Exception as exc:
+            logger.warning("chat forecast estimate failed; answering without it error=%s", type(exc).__name__)
+            break
+        match = _CHAT_ESTIMATE_RE.search(reply or "")
+        if match:
+            estimates.append(float(match.group(1)))
+        elif attempts == 1:
+            # No number: the model won't give one for this question.
+            logger.info("chat forecast estimates skipped: the model gave no probability")
+            return messages, None
+    if len(estimates) < 3 or len(estimates) * 2 <= attempts:
+        logger.info("chat forecast estimates unused: %d of %d parsed", len(estimates), attempts)
+        return messages, None
+    median = round(statistics.median(estimates), 2)
+    logger.info("chat forecast estimates median=%.2f from %s", median, sorted(estimates))
+    otel_trace.get_current_span().set_attributes({
+        "forecast.estimate.samples": len(estimates),
+        "forecast.estimate.median": median,
+        "forecast.estimate.spread": round(max(estimates) - min(estimates), 2),
+    })
+    # Appended to the last message, so the reply reuses the estimates' cached prompt.
+    explain = (
+        f"\n\nYour forecast for this question is {median:.0%}: the median of several estimates you "
+        "made from this same evidence. Explain this forecast without giving a different number, "
+        f"and end with the marker line [p:{median:.2f}]."
+    )
+    return [*messages[:-1], {**messages[-1], "content": messages[-1]["content"] + explain}], median
+
+
+def _pin_chat_probability(content: str, probability: Optional[float]) -> str:
+    """Make the reply's [p:] marker the consensus forecast, even if the model
+    wrote another number or was cut off before writing one."""
+    if probability is None:
+        return content
+    return f"{_CHAT_PROB_RE.sub('', content).rstrip()}\n[p:{probability:.2f}]"
 
 
 def _fetch_live_odds(
@@ -14298,6 +14404,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         return response
 
     provider, temperature, max_tokens = _select_predict_provider(req)
+    messages, consensus = await _chat_consensus(req, provider, messages)
 
     try:
         content, served_provider = await _provider_chat_with_chat_fallbacks(
@@ -14313,7 +14420,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     if req.chat_mode:
         response = _build_chat_response(
             req,
-            content,
+            _pin_chat_probability(content, consensus),
             evidence_articles,
             evidence_error,
             _provider_served_model_name(served_provider),
@@ -14641,6 +14748,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             yield _sse_event("done", {"response": response.model_dump(mode="json")})
             return
 
+        messages, consensus = await _chat_consensus(req, provider, messages)
         chunks: List[str] = []
         first_delta_sent = False
         used_provider_ref: Dict[str, Any] = {"provider": provider}
@@ -14720,7 +14828,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
         if req.chat_mode:
             response = _build_chat_response(
                 req,
-                text,
+                _pin_chat_probability(text, consensus),
                 evidence_articles,
                 evidence_error,
                 served_model_name,
@@ -16332,6 +16440,7 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
             "evidence_error": evidence_error,
         })
 
+        messages, consensus = await _chat_consensus(pred_req, provider, messages)
         chunks: List[str] = []
         try:
             async for chunk in _provider_stream_chat(provider, messages, temperature, max_tokens):
@@ -16360,7 +16469,9 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         # never becomes "chat", and the frontend renders full report chrome
         # (probability tag, grounding note) around what should be a plain reply.
         if pred_req.chat_mode:
-            result = _build_chat_response(pred_req, text, evidence_articles, evidence_error)
+            result = _build_chat_response(
+                pred_req, _pin_chat_probability(text, consensus), evidence_articles, evidence_error
+            )
         else:
             parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
                                                  "rationale", "options", "p10", "p50", "p90", "unit"))
