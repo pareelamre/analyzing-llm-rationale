@@ -1445,6 +1445,98 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Already supplied venue background.", prompt)
         self.assertIn("Already supplied venue rules.", prompt)
 
+    def test_predict_reads_a_kalshi_link_pasted_into_the_question(self):
+        import analyzing_llm_rationale.market_data as md
+
+        with mock.patch.object(md, "fetch_kalshi", return_value={
+            "platform": "Kalshi", "ident": "KXNATO-99-B", "question": "Will Bob be the next NATO chief?",
+            "market_url": "https://kalshi.com/markets/kxnato", "outcome": "Yes", "probability": 0.6,
+            "resolution_criteria": "Resolves Yes if Bob is appointed.",
+        }) as fetch_kalshi:
+            self.provider.response = "Bob is the favourite.\n[p:0.7]"
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "thoughts? https://kalshi.com/markets/kxnato/next-nato-chief/kxnato-99",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fetch_kalshi.assert_called_once_with("kxnato-99")
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Linked market: Will Bob be the next NATO chief?", prompt)
+        self.assertIn("Resolves Yes if Bob is appointed.", prompt)
+        # The forecast is compared with the linked market's price (this used
+        # to raise a validation error and return 500).
+        analysis = response.json()["market_analysis"]
+        self.assertEqual((analysis["market_probability"], analysis["model_probability"]), (0.6, 0.7))
+        self.assertEqual(analysis["stance"], "model_above_market")
+
+    def test_a_market_link_pasted_mid_conversation_is_searched_by_its_title(self):
+        # A bare link is one word, which used to count as a short follow-up:
+        # the search ran on the previous question plus the URL.
+        import analyzing_llm_rationale.market_data as md
+
+        with (
+            mock.patch.object(md, "fetch_polymarket", return_value={
+                "platform": "Polymarket", "ident": "will-bvb-win", "question": "Will Dortmund win on 2026-11-04?",
+                "market_url": "https://polymarket.com/market/will-bvb-win", "outcome": "Yes", "probability": 0.8,
+            }) as fetch_polymarket,
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ) as fetch_evidence,
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "https://polymarket.com/event/ucl-bvb-bet-2026-11-04",
+                    "history": [{"role": "user", "content": "Will it rain in Tampa today?"},
+                                {"role": "assistant", "content": "Probably not."}],
+                    "chat_mode": True,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fetch_polymarket.assert_called_once_with(slug="ucl-bvb-bet-2026-11-04")
+        self.assertEqual(fetch_evidence.call_args.args[0], "Will Dortmund win on 2026-11-04?")
+
+    def test_predict_reads_article_links_pasted_into_the_question(self):
+        from analyzing_llm_rationale import web_page
+
+        def read_page(url, timeout_s=12.0):
+            if "blocked" in url:
+                raise web_page.PageFetchError("The page returned HTTP 403.")
+            return {"title": "Fed holds rates", "text": "The Fed held rates steady on Wednesday.",
+                    "source": "news.example", "url": url, "publish_date": "2026-11-04"}
+
+        with mock.patch.object(web_page, "read_page", side_effect=read_page) as reader:
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Does https://news.example/fed-story change the odds? See also https://blocked.example/x.",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(reader.call_count, 2)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("The Fed held rates steady on Wednesday.", prompt)
+        self.assertIn(
+            "Note: the linked page https://blocked.example/x could not be read (The page returned HTTP 403).",
+            prompt,
+        )
+        self.assertEqual(response.json()["evidence_sources"][0]["url"], "https://news.example/fed-story")
+
+    def test_extract_refuses_urls_the_page_reader_rejects(self):
+        response = self.client.post("/extract", data={"url": "http://169.254.169.254/computeMetadata/v1/"})
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Only public web pages can be read.", response.json()["detail"])
+
     def test_markets_kalshi_not_found_maps_to_404(self):
         import analyzing_llm_rationale.market_data as md
 
@@ -6255,6 +6347,15 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(
             _parse_market_url("check https://kalshi.com/markets/KXFED-26SEP now"),
             ("kalshi", "ticker", "KXFED-26SEP"),
+        )
+        # Kalshi web links: /markets/{series}/{slug}/{event or market ticker}.
+        self.assertEqual(
+            _parse_market_url("odds? https://kalshi.com/markets/kxfeddecision/fed-meeting/kxfeddecision-26dec)."),
+            ("kalshi", "ticker", "kxfeddecision-26dec"),
+        )
+        self.assertEqual(
+            _parse_market_url("https://kalshi.com/markets/kxfeddecision/fed-meeting"),
+            ("kalshi", "ticker", "kxfeddecision"),
         )
         self.assertIsNone(_parse_market_url("just text"))
 
