@@ -6973,6 +6973,16 @@ def _max_tokens_for_request(req: "PredictRequest") -> int:
     return server_max
 
 
+def _chat_length_budget(req: "PredictRequest") -> str:
+    """Tell a chat reply its length, so it ends before the token cap.
+
+    A reply cut off at the cap loses its final [p:] marker, and with it the
+    forecast. About 2.5 tokens per word leaves room for the marker.
+    """
+    words = _max_tokens_for_request(req) * 2 // 5
+    return f"\n\nKeep the whole reply under {words} words, so it ends with the marker line."
+
+
 def _fetch_live_odds(
     platform: Optional[str], ident: Optional[str], market_url: Optional[str]
 ) -> Optional[Dict[str, Any]]:
@@ -7210,7 +7220,7 @@ async def _prepare_predict_messages(
             "rules_present": "false",
             "outcome": "skipped_simple_chat",
         })
-        system_prompt = _CHAT_SYSTEM_PROMPT + _greeting_system_prompt_addition(req)
+        system_prompt = _CHAT_SYSTEM_PROMPT + _greeting_system_prompt_addition(req) + _chat_length_budget(req)
         user_prompt = build_user_prompt(record, "[question]", "full")
         steering = (req.conversation_steer or "").strip()
         if steering:
@@ -7467,6 +7477,7 @@ async def _prepare_predict_messages(
                     "edge board order context unavailable; replying without it",
                     exc_info=True,
                 )
+        system_prompt += _chat_length_budget(req)
         user_prompt = build_user_prompt(record, "[question]", "full")
     else:
         user_prompt = build_user_prompt(record, prompt_text, req.evidence_detail)
