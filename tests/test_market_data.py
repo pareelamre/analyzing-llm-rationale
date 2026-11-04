@@ -401,6 +401,7 @@ class MarketDataTests(unittest.TestCase):
         quote = fetch_kalshi("kxrain-01")
 
         self.assertEqual(quote["ident"], "KXRAIN-02-NYC")
+        self.assertEqual(quote["replaced_closed_event"], "Rain on Nov 1?")
         self.assertEqual(quote["description"], (
             'The linked event "Rain on Nov 1?" has closed. Settled Yes: Miami. Settled No: New York. '
             'The market below is from the series\' current event, "Rain on Nov 2?". '

@@ -1453,6 +1453,7 @@ class ServerTests(unittest.TestCase):
             "market_url": "https://kalshi.com/markets/kxnato", "outcome": "Yes", "probability": 0.6,
             "resolution_criteria": "Resolves Yes if Bob is appointed.",
         }) as fetch_kalshi:
+            self.provider.response = "Bob is the favourite.\n[p:0.7]"
             response = self.client.post(
                 "/predict",
                 json={
@@ -1467,6 +1468,11 @@ class ServerTests(unittest.TestCase):
         prompt = self.provider.calls[0][-1]["content"]
         self.assertIn("Linked market: Will Bob be the next NATO chief?", prompt)
         self.assertIn("Resolves Yes if Bob is appointed.", prompt)
+        # The forecast is compared with the linked market's price (this used
+        # to raise a validation error and return 500).
+        analysis = response.json()["market_analysis"]
+        self.assertEqual((analysis["market_probability"], analysis["model_probability"]), (0.6, 0.7))
+        self.assertEqual(analysis["stance"], "model_above_market")
 
     def test_predict_reads_article_links_pasted_into_the_question(self):
         from analyzing_llm_rationale import web_page

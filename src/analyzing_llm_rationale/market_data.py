@@ -736,12 +736,13 @@ def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
     """
     event = _kalshi_event(ticker)
     ranked = _kalshi_open_markets(event)
-    closed_note = None
+    closed_note = replaced_title = None
     if not ranked:
         closed_note = _kalshi_settled_note(event, ticker)
         series = str(event.get("series_ticker") or "").strip()
         current = _kalshi_series_open_event(series) if series else None
         if current is not None:
+            replaced_title = event.get("title") or ticker
             event, ranked = current, _kalshi_open_markets(current)
             closed_note += f' The market below is from the series\' current event, "{current.get("title")}".'
         elif event.get("markets"):
@@ -762,6 +763,8 @@ def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
     parts = [part.strip().rstrip(".") for part in parts if part and part.strip()]
     if parts:
         result["description"] = ". ".join(parts) + "."
+    if replaced_title:
+        result["replaced_closed_event"] = replaced_title
     return result
 
 

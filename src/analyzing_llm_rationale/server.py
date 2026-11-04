@@ -6891,17 +6891,12 @@ def _build_chat_response(
     if chat_prob is not None:
         text = f"**Forecast: {chat_prob:.0%}**\n\n{text}"
 
-    chat_market_analysis: Optional[MarketAnalysis] = None
-    if chat_prob is not None:
-        _purl = _parse_market_url(req.question or "")
-        _url_m = re.search(r"https?://\S+", req.question or "")
-        if _purl and _url_m:
-            _venue, _kind, _mid = _purl
-            chat_market_analysis = MarketAnalysis(
-                platform=_venue,
-                market_url=_url_m.group(0).rstrip("),."),
-                model_probability=chat_prob,
-            )
+    # The chat forecast is a probability for the market's Yes side. A pasted
+    # market link fills req.market_* during preparation; without a market
+    # price there is nothing to compare.
+    chat_market_analysis = (
+        _build_market_analysis(req, "binary", "Yes", chat_prob, []) if chat_prob is not None else None
+    )
 
     return PredictResponse(
         question_type="chat",
@@ -7280,6 +7275,15 @@ async def _prepare_predict_messages(
             )
     if pasted_market and quote and quote.get("question"):
         record["question"] = f"{req.question.strip()}\n\nLinked market: {quote['question']}"
+        if quote.get("replaced_closed_event"):
+            record["question"] += (
+                f' (The linked event, "{quote["replaced_closed_event"]}", has already closed; how it settled is'
+                " in the market description. This is the same series' current market.)"
+            )
+        # Let the response compare the forecast with this market's price.
+        for field in ("market_probability", "market_platform", "market_url", "market_outcome"):
+            if getattr(req, field) is None and record.get(field) is not None:
+                setattr(req, field, record[field])
     venue_articles = (
         quote.get("venue_news_articles") or []
         if quote
