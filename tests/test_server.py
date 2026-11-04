@@ -1445,6 +1445,29 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Already supplied venue background.", prompt)
         self.assertIn("Already supplied venue rules.", prompt)
 
+    def test_predict_reads_a_kalshi_link_pasted_into_the_question(self):
+        import analyzing_llm_rationale.market_data as md
+
+        with mock.patch.object(md, "fetch_kalshi", return_value={
+            "platform": "Kalshi", "ident": "KXNATO-99-B", "question": "Will Bob be the next NATO chief?",
+            "market_url": "https://kalshi.com/markets/kxnato", "outcome": "Yes", "probability": 0.6,
+            "resolution_criteria": "Resolves Yes if Bob is appointed.",
+        }) as fetch_kalshi:
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "thoughts? https://kalshi.com/markets/kxnato/next-nato-chief/kxnato-99",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fetch_kalshi.assert_called_once_with("kxnato-99")
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Linked market: Will Bob be the next NATO chief?", prompt)
+        self.assertIn("Resolves Yes if Bob is appointed.", prompt)
+
     def test_markets_kalshi_not_found_maps_to_404(self):
         import analyzing_llm_rationale.market_data as md
 
@@ -6255,6 +6278,15 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(
             _parse_market_url("check https://kalshi.com/markets/KXFED-26SEP now"),
             ("kalshi", "ticker", "KXFED-26SEP"),
+        )
+        # Kalshi web links: /markets/{series}/{slug}/{event or market ticker}.
+        self.assertEqual(
+            _parse_market_url("odds? https://kalshi.com/markets/kxfeddecision/fed-meeting/kxfeddecision-26dec)."),
+            ("kalshi", "ticker", "kxfeddecision-26dec"),
+        )
+        self.assertEqual(
+            _parse_market_url("https://kalshi.com/markets/kxfeddecision/fed-meeting"),
+            ("kalshi", "ticker", "kxfeddecision"),
         )
         self.assertIsNone(_parse_market_url("just text"))
 

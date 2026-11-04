@@ -646,7 +646,11 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     if "/" in ticker:
         ticker = ticker.rsplit("/", 1)[-1]
     ticker = ticker.upper()
-    data = _kalshi_market_detail(ticker)
+    try:
+        data = _kalshi_market_detail(ticker)
+    except MarketDataNotFound:
+        # Kalshi web links name an event or a whole series, not one contract.
+        return _fetch_kalshi_event(ticker)
     market = data.get("market") if isinstance(data, dict) else None
     if not market:
         raise MarketDataError("Kalshi market not found.")
@@ -666,6 +670,52 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     event_category = event.get("category") if isinstance(event, dict) else None
     quote["category"] = _market_category(quote.get("question"), event_category)
     return quote
+
+
+def _kalshi_open_event(ticker: str) -> Dict[str, Any]:
+    """The event `ticker` names, else the soonest-closing open event of the series it names."""
+    try:
+        data = _get_json(f"{KALSHI_EVENTS_URL}/{quote(ticker, safe='')}", params={"with_nested_markets": "true"})
+        event = data.get("event") if isinstance(data, dict) else None
+        if isinstance(event, dict) and event.get("markets"):
+            return event
+    except MarketDataNotFound:
+        pass
+    data = _get_json(KALSHI_EVENTS_URL, params={
+        "series_ticker": ticker, "status": "open", "with_nested_markets": "true", "limit": 200,
+    })
+    events = [e for e in (data.get("events") or [] if isinstance(data, dict) else []) if e.get("markets")]
+    if not events:
+        raise MarketDataNotFound("Kalshi market not found.")
+    return min(events, key=lambda e: min(str(m.get("close_time") or "9999") for m in e["markets"]))
+
+
+def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
+    """Quote the leading open market of an event (or series) ticker.
+
+    A multi-outcome event lists every outcome's price in the description, so a
+    forecast made from the leading contract still sees the whole field.
+    """
+    event = _kalshi_open_event(ticker)
+    ranked: List[tuple] = []
+    for market in event.get("markets") or []:
+        market_status = str(market.get("status") or "").strip().lower()
+        if market.get("mve_collection_ticker") or (market_status and market_status not in {"active", "open", "trading"}):
+            continue
+        prob = _kalshi_quote(market, event)["probability"]
+        ranked.append((prob if prob is not None else -1.0, market))
+    if not ranked:
+        raise MarketDataNotFound("Kalshi market not found.")
+    ranked.sort(key=lambda r: r[0], reverse=True)
+    result = fetch_kalshi(ranked[0][1]["ticker"])
+    if len(ranked) > 1:
+        field = "; ".join(
+            f"{m.get('yes_sub_title') or m.get('ticker')} {p:.0%}" for p, m in ranked[:10] if p >= 0
+        )
+        result["description"] = ". ".join(filter(None, [
+            (result.get("description") or "").rstrip("."), f"Outcomes in this event (market price): {field}.",
+        ]))
+    return result
 
 
 def list_kalshi(limit: int = 5, query: Optional[str] = None,

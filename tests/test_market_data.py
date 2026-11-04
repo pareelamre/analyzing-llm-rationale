@@ -323,6 +323,65 @@ class MarketDataTests(unittest.TestCase):
         with self.assertRaises(MarketDataError):
             fetch_kalshi("")
 
+    @staticmethod
+    def _kalshi_venue(routes):
+        """Fake Kalshi API: (path suffix, series_ticker param) -> payload; anything else 404s."""
+        def fake_get(url, params=None, headers=None, timeout=None):
+            key = (url.split("/trade-api/v2")[-1], (params or {}).get("series_ticker"))
+            return FakeResponse(routes[key]) if key in routes else FakeResponse({}, 404)
+
+        return SimpleNamespace(get=fake_get)
+
+    def test_kalshi_series_link_resolves_to_the_leading_open_market(self):
+        # A pasted kalshi.com/markets/{series} link names no single contract.
+        markets = [
+            {"ticker": "KXNATO-99-A", "status": "active", "yes_sub_title": "Alice",
+             "yes_bid_dollars": "0.18", "yes_ask_dollars": "0.22"},
+            {"ticker": "KXNATO-99-B", "status": "active", "yes_sub_title": "Bob",
+             "yes_bid_dollars": "0.58", "yes_ask_dollars": "0.62"},
+            {"ticker": "KXNATO-99-C", "status": "closed", "yes_sub_title": "Carol",
+             "yes_bid_dollars": "0.90", "yes_ask_dollars": "0.95"},
+        ]
+        event = {"event_ticker": "KXNATO-99", "sub_title": "Before 2099", "markets": markets}
+        sys.modules["requests"] = self._kalshi_venue({
+            ("/events", "KXNATO"): {"events": [event]},
+            ("/markets/KXNATO-99-B", None): {"market": {
+                "ticker": "KXNATO-99-B", "event_ticker": "KXNATO-99",
+                "title": "Will Bob be the next NATO chief?", "last_price_dollars": "0.60",
+            }},
+            ("/events/KXNATO-99", None): {"event": event},
+        })
+
+        quote = fetch_kalshi("kxnato")
+
+        self.assertEqual(quote["ident"], "KXNATO-99-B")
+        self.assertEqual(quote["question"], "Will Bob be the next NATO chief?")
+        self.assertEqual(
+            quote["description"],
+            "Before 2099. Outcomes in this event (market price): Bob 60%; Alice 20%.",
+        )
+
+    def test_kalshi_event_link_with_one_market_quotes_it_unchanged(self):
+        market = {"ticker": "KXMARS-99", "event_ticker": "KXMARS-99", "status": "active",
+                  "title": "Will Elon Musk visit Mars?", "last_price_dollars": "0.09"}
+        event = {"event_ticker": "KXMARS", "sub_title": "Before 2099", "markets": [market]}
+        sys.modules["requests"] = self._kalshi_venue({
+            ("/events/KXMARS", None): {"event": event, "markets": []},
+            ("/markets/KXMARS-99", None): {"market": market},
+        })
+
+        quote = fetch_kalshi("KXMARS")
+
+        self.assertEqual(quote["ident"], "KXMARS-99")
+        self.assertAlmostEqual(quote["probability"], 0.09)
+        self.assertIsNone(quote["description"])
+
+    def test_kalshi_unknown_ticker_is_still_not_found(self):
+        sys.modules["requests"] = self._kalshi_venue({("/events", "KXNOPE"): {"events": []}})
+
+        with self.assertRaisesRegex(MarketDataError, "not found"):
+            fetch_kalshi("KXNOPE")
+
     def test_list_polymarket_keeps_priced_binary_only(self):
         payload = [
             {"question": "A?", "slug": "a", "outcomes": '["Yes","No"]', "outcomePrices": '["0.3","0.7"]'},

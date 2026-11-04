@@ -6964,16 +6964,16 @@ def _fetch_live_odds(
     platform: Optional[str], ident: Optional[str], market_url: Optional[str]
 ) -> Optional[Dict[str, Any]]:
     """Fetch the current quote for a referenced market (for live-odds context).
-    Resolves a Polymarket slug from the URL when no ident is given."""
+    Resolves a Polymarket slug or Kalshi ticker from the URL when no ident is given."""
     from analyzing_llm_rationale import market_data as _md
 
     plat = (platform or "").lower()
     ident = (ident or "").strip()
     url = (market_url or "").strip()
     if not ident and url:
-        tail = url.rstrip("/").split("/")[-1]
-        if "polymarket" in url.lower():
-            plat, ident = "polymarket", tail
+        parsed = _parse_market_url(url)
+        if parsed:
+            plat, _kind, ident = parsed
     if "poly" in plat and ident:
         return _md.fetch_polymarket(slug=ident)
     if "kalshi" in plat and ident:
@@ -7143,6 +7143,15 @@ async def _prepare_predict_messages(
     system_prompt = _state["system_prompt"]
 
     record = req.model_dump()
+    # A market link pasted into the question is the market reference, so the
+    # model sees the contract and its price instead of a bare URL.
+    pasted_market = (
+        None if (record.get("market_url") or record.get("market_ident"))
+        else _parse_market_url(req.question)
+    )
+    if pasted_market:
+        record["market_platform"] = record.get("market_platform") or pasted_market[0].capitalize()
+        record["market_ident"] = pasted_market[2]
     simple_chat_has_market_context = any((
         record.get("market_url"),
         record.get("market_platform"),
@@ -7260,6 +7269,8 @@ async def _prepare_predict_messages(
                 record.get("market_platform"), record.get("market_ident"),
                 exc_info=True,
             )
+    if pasted_market and quote and quote.get("question"):
+        record["question"] = f"{req.question.strip()}\n\nLinked market: {quote['question']}"
     venue_articles = (
         quote.get("venue_news_articles") or []
         if quote
@@ -15491,11 +15502,13 @@ def _parse_market_url(text: str) -> Optional[tuple]:
     """Extract (venue, kind, identifier) from a Polymarket/Kalshi URL in `text`.
 
     Polymarket: the slug is the last path segment
-    (e.g. .../lpl/lol-al-we-2026-06-01 -> slug). Kalshi: the segment after
-    /markets/ is the ticker. Returns None if no recognised URL is present.
+    (e.g. .../lpl/lol-al-we-2026-06-01 -> slug). Kalshi web links are
+    /markets/{series}[/{slug}[/{event or market ticker}]]: the last segment
+    that extends the series ticker is the most specific one, else the series.
+    Returns None if no recognised URL is present.
     """
     for token in re.findall(r"https?://\S+", text or ""):
-        parsed = urlparse(token)
+        parsed = urlparse(token.rstrip(").,;"))
         host = (parsed.hostname or "").lower()
         parts = [p for p in parsed.path.split("/") if p]
         if not parts:
@@ -15503,9 +15516,10 @@ def _parse_market_url(text: str) -> Optional[tuple]:
         if "polymarket.com" in host:
             return ("polymarket", "slug", parts[-1])
         if "kalshi.com" in host and "markets" in parts:
-            i = parts.index("markets")
-            if i + 1 < len(parts):
-                return ("kalshi", "ticker", parts[i + 1])
+            rest = parts[parts.index("markets") + 1:]
+            if rest:
+                series = rest[0].lower()
+                return ("kalshi", "ticker", next((p for p in reversed(rest) if p.lower().startswith(series)), rest[0]))
     return None
 
 
