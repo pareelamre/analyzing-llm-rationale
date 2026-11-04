@@ -1,3 +1,14 @@
+# SCADS AI access ended for good on 2026-11-03. Every SCADS_AI_API_KEY entry
+# below stays so historical records still render; none is reachable.
+# Production deploys without the key, which hides them from the chat picker and
+# makes /predict answer 503, and the scheduled jobs that called them are off.
+#
+# The eight Agentic-board models (chat_interface_enabled, agent_trading_enabled)
+# deliberately keep forecasting_enabled and track_record_enabled. Those flags
+# also pick the canonical roster that build_agent_trading_board.py,
+# build_agent_trading_audit.py and the track_record_tick.py MTM board render, so
+# turning them off would remove those models' paper accounts from the public
+# boards rather than freeze them. The aliases are on no roster and are retired.
 models:
   qwen2.5-7b-instruct:
     result_label: Qwen2.5-7b-instruct
@@ -92,6 +103,9 @@ models:
     # this provider mapping for historical records, but do not expose it.
     agent_trading_enabled: false
     agent_model_identity: Qwen/Qwen3.8-27B
+    # SCADS access ended 2026-11-03. Kept for historical records only.
+    forecasting_enabled: false
+    track_record_enabled: false
     fallback_model_chain:
       - openai/gpt-oss-120b
       - google/gemma-4-26B-A4B-it
@@ -108,6 +122,9 @@ models:
     chat_interface_enabled: false
     agent_trading_enabled: false
     agent_model_identity: meta-llama/Llama-3.3-70B-Instruct
+    # SCADS access ended 2026-11-03. Kept for historical records only.
+    forecasting_enabled: false
+    track_record_enabled: false
     fallback_model_chain:
       - google/gemma-4-26B-A4B-it
       - openai/gpt-oss-120b
@@ -125,6 +142,9 @@ models:
     chat_interface_enabled: false
     agent_trading_enabled: false
     agent_model_identity: google/gemma-4-26B-A4B-it
+    # SCADS access ended 2026-11-03. Kept for historical records only.
+    forecasting_enabled: false
+    track_record_enabled: false
     fallback_model_chain:
       - openai/gpt-oss-120b
       - MiniMaxAI/MiniMax-M3
@@ -139,6 +159,8 @@ models:
     access: hosted
     chat_interface_enabled: false
     agent_trading_enabled: false
+    # SCADS access ended 2026-11-03. Kept for historical records only.
+    forecasting_enabled: false
     track_record_enabled: false
   scads-alias-huge-no-thinking:
     result_label: SCADS Alias Huge No Thinking
@@ -151,6 +173,8 @@ models:
     access: hosted
     chat_interface_enabled: false
     agent_trading_enabled: false
+    # SCADS access ended 2026-11-03. Kept for historical records only.
+    forecasting_enabled: false
     track_record_enabled: false
   qwen3-vl-8b-instruct:
     result_label: Qwen3-VL-8B-Instruct

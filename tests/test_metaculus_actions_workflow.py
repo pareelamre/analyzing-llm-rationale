@@ -57,7 +57,9 @@ class MetaculusActionsWorkflowTests(unittest.TestCase):
     def test_four_isolated_profiles_and_write_ahead_audit(self):
         data = yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
         triggers = data["on"]
-        self.assertIn("schedule", triggers)
+        # Every profile is SCADS-hosted and SCADS access ended on 2026-11-03,
+        # so no cron may start a live cycle that can only fail.
+        self.assertNotIn("schedule", triggers)
         self.assertIn("workflow_dispatch", triggers)
         self.assertEqual(triggers["workflow_dispatch"]["inputs"]["submit"]["type"], "boolean")
         self.assertEqual(triggers["workflow_dispatch"]["inputs"]["submit"]["default"], "false")
