@@ -376,6 +376,47 @@ class MarketDataTests(unittest.TestCase):
         self.assertAlmostEqual(quote["probability"], 0.09)
         self.assertIsNone(quote["description"])
 
+    def test_kalshi_closed_event_link_reports_results_and_quotes_the_current_event(self):
+        # Yesterday's "where will it rain" link: say how it settled, then
+        # forecast today's event. Its contracts are independent, so the most
+        # contested city is quoted, not one already priced near certain.
+        closed = {"event_ticker": "KXRAIN-01", "series_ticker": "KXRAIN", "title": "Rain on Nov 1?", "markets": [
+            {"ticker": "KXRAIN-01-MIA", "status": "finalized", "result": "yes", "yes_sub_title": "Miami"},
+            {"ticker": "KXRAIN-01-NYC", "status": "finalized", "result": "no", "yes_sub_title": "New York"},
+        ]}
+        today = {"event_ticker": "KXRAIN-02", "title": "Rain on Nov 2?", "mutually_exclusive": False, "markets": [
+            {"ticker": "KXRAIN-02-MIA", "status": "active", "yes_sub_title": "Miami", "last_price_dollars": "0.99",
+             "close_time": "2099-01-02"},
+            {"ticker": "KXRAIN-02-NYC", "status": "active", "yes_sub_title": "New York",
+             "last_price_dollars": "0.40", "close_time": "2099-01-02"},
+        ]}
+        sys.modules["requests"] = self._kalshi_venue({
+            ("/events/KXRAIN-01", None): {"event": closed},
+            ("/events", "KXRAIN"): {"events": [today]},
+            ("/markets/KXRAIN-02-NYC", None): {"market": {
+                "ticker": "KXRAIN-02-NYC", "title": "Will it rain in New York on Nov 2?", "last_price_dollars": "0.40",
+            }},
+        })
+
+        quote = fetch_kalshi("kxrain-01")
+
+        self.assertEqual(quote["ident"], "KXRAIN-02-NYC")
+        self.assertEqual(quote["description"], (
+            'The linked event "Rain on Nov 1?" has closed. Settled Yes: Miami. Settled No: New York. '
+            'The market below is from the series\' current event, "Rain on Nov 2?". '
+            "Outcomes in this event (market price): Miami 99%; New York 40%."
+        ))
+
+    def test_kalshi_settled_market_says_it_settled(self):
+        sys.modules["requests"] = _fake_requests({"market": {
+            "ticker": "KXRAIN-01-MIA", "title": "Will it rain in Miami on Nov 1?", "status": "finalized",
+            "result": "yes", "last_price_dollars": "0.99",
+        }})
+
+        quote = fetch_kalshi("KXRAIN-01-MIA")
+
+        self.assertEqual(quote["description"], "This market has closed and settled Yes.")
+
     def test_kalshi_unknown_ticker_is_still_not_found(self):
         sys.modules["requests"] = self._kalshi_venue({("/events", "KXNOPE"): {"events": []}})
 

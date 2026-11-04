@@ -669,10 +669,27 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     event = (market.get("events") or [{}])[0]
     event_category = event.get("category") if isinstance(event, dict) else None
     quote["category"] = _market_category(quote.get("question"), event_category)
+    result = str(market.get("result") or "").strip().lower()
+    if str(market.get("status") or "").strip().lower() in ("settled", "finalized") and result in ("yes", "no"):
+        # The last price of a settled contract reads like a live forecast.
+        quote["description"] = " ".join(filter(None, [
+            f"This market has closed and settled {result.capitalize()}.", quote.get("description"),
+        ]))
     return quote
 
 
-def _kalshi_open_event(ticker: str) -> Dict[str, Any]:
+def _kalshi_series_open_event(series_ticker: str) -> Optional[Dict[str, Any]]:
+    """The soonest-closing open event of a series, if it has one."""
+    data = _get_json(KALSHI_EVENTS_URL, params={
+        "series_ticker": series_ticker, "status": "open", "with_nested_markets": "true", "limit": 200,
+    })
+    events = [e for e in (data.get("events") or [] if isinstance(data, dict) else []) if e.get("markets")]
+    if not events:
+        return None
+    return min(events, key=lambda e: min(str(m.get("close_time") or "9999") for m in e["markets"]))
+
+
+def _kalshi_event(ticker: str) -> Dict[str, Any]:
     """The event `ticker` names, else the soonest-closing open event of the series it names."""
     try:
         data = _get_json(f"{KALSHI_EVENTS_URL}/{quote(ticker, safe='')}", params={"with_nested_markets": "true"})
@@ -681,22 +698,14 @@ def _kalshi_open_event(ticker: str) -> Dict[str, Any]:
             return event
     except MarketDataNotFound:
         pass
-    data = _get_json(KALSHI_EVENTS_URL, params={
-        "series_ticker": ticker, "status": "open", "with_nested_markets": "true", "limit": 200,
-    })
-    events = [e for e in (data.get("events") or [] if isinstance(data, dict) else []) if e.get("markets")]
-    if not events:
+    event = _kalshi_series_open_event(ticker)
+    if event is None:
         raise MarketDataNotFound("Kalshi market not found.")
-    return min(events, key=lambda e: min(str(m.get("close_time") or "9999") for m in e["markets"]))
+    return event
 
 
-def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
-    """Quote the leading open market of an event (or series) ticker.
-
-    A multi-outcome event lists every outcome's price in the description, so a
-    forecast made from the leading contract still sees the whole field.
-    """
-    event = _kalshi_open_event(ticker)
+def _kalshi_open_markets(event: Dict[str, Any]) -> List[tuple]:
+    """(price, market) for the event's tradable non-parlay markets, highest price first."""
     ranked: List[tuple] = []
     for market in event.get("markets") or []:
         market_status = str(market.get("status") or "").strip().lower()
@@ -704,17 +713,55 @@ def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
             continue
         prob = _kalshi_quote(market, event)["probability"]
         ranked.append((prob if prob is not None else -1.0, market))
+    return sorted(ranked, key=lambda r: r[0], reverse=True)
+
+
+def _kalshi_settled_note(event: Dict[str, Any], ticker: str) -> str:
+    settled: Dict[str, List[str]] = {"yes": [], "no": []}
+    for market in event.get("markets") or []:
+        result = str(market.get("result") or "").strip().lower()
+        if result in settled:
+            settled[result].append(str(market.get("yes_sub_title") or market.get("ticker")))
+    outcome = " ".join(f"Settled {r.capitalize()}: {', '.join(names)}." for r, names in settled.items() if names)
+    return f'The linked event "{event.get("title") or ticker}" has closed. {outcome}'.strip()
+
+
+def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
+    """Quote one open market of an event (or series) ticker.
+
+    A multi-outcome event lists every outcome's price in the description, so a
+    forecast made from one contract still sees the whole field. A closed event
+    (yesterday's weather, a finished game) says how it settled, then quotes the
+    series' current event when there is one.
+    """
+    event = _kalshi_event(ticker)
+    ranked = _kalshi_open_markets(event)
+    closed_note = None
+    if not ranked:
+        closed_note = _kalshi_settled_note(event, ticker)
+        series = str(event.get("series_ticker") or "").strip()
+        current = _kalshi_series_open_event(series) if series else None
+        if current is not None:
+            event, ranked = current, _kalshi_open_markets(current)
+            closed_note += f' The market below is from the series\' current event, "{current.get("title")}".'
+        elif event.get("markets"):
+            ranked = [(-1.0, min(event["markets"], key=lambda m: str(m.get("result") or "").lower() != "yes"))]
     if not ranked:
         raise MarketDataNotFound("Kalshi market not found.")
-    ranked.sort(key=lambda r: r[0], reverse=True)
-    result = fetch_kalshi(ranked[0][1]["ticker"])
-    if len(ranked) > 1:
-        field = "; ".join(
-            f"{m.get('yes_sub_title') or m.get('ticker')} {p:.0%}" for p, m in ranked[:10] if p >= 0
-        )
-        result["description"] = ". ".join(filter(None, [
-            (result.get("description") or "").rstrip("."), f"Outcomes in this event (market price): {field}.",
-        ]))
+    if event.get("mutually_exclusive") is False:
+        # Independent contracts (rain in each city): the most contested one is
+        # the informative forecast, not one already priced at 99%.
+        leader = min(ranked, key=lambda r: abs(r[0] - 0.5))[1]
+    else:
+        leader = ranked[0][1]
+    result = fetch_kalshi(leader["ticker"])
+    field = "; ".join(
+        f"{m.get('yes_sub_title') or m.get('ticker')} {p:.0%}" for p, m in ranked[:40] if p >= 0
+    ) if len(ranked) > 1 else ""
+    parts = [closed_note, result.get("description"), field and f"Outcomes in this event (market price): {field}"]
+    parts = [part.strip().rstrip(".") for part in parts if part and part.strip()]
+    if parts:
+        result["description"] = ". ".join(parts) + "."
     return result
 
 
