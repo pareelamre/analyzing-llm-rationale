@@ -73,6 +73,7 @@ from analyzing_llm_rationale import (
     rag,
     server_security,
     venue_mcp,
+    web_page,
     webhooks,
 )
 from analyzing_llm_rationale import (
@@ -7152,6 +7153,13 @@ async def _prepare_predict_messages(
     if pasted_market:
         record["market_platform"] = record.get("market_platform") or pasted_market[0].capitalize()
         record["market_ident"] = pasted_market[2]
+    # Any other pasted link (a news article, a report) is read as evidence the
+    # user supplied.
+    attached_urls = {str(article.url or "").strip() for article in req.news_articles}
+    linked_urls = [
+        url for url in web_page.find_links(req.question)
+        if not _parse_market_url(url) and url not in attached_urls
+    ][:_MAX_LINKED_PAGES]
     simple_chat_has_market_context = any((
         record.get("market_url"),
         record.get("market_platform"),
@@ -7170,6 +7178,7 @@ async def _prepare_predict_messages(
         req.chat_mode
         and not req.attach_evidence
         and not req.news_articles
+        and not linked_urls
         and not rag_user_id
         and not simple_chat_has_market_context
         and not _detect_trading_intent(req.question)
@@ -7277,6 +7286,11 @@ async def _prepare_predict_messages(
         else []
     )
     caller_articles = [article.model_dump() for article in req.news_articles]
+    if linked_urls:
+        linked_articles, unreadable = await _linked_page_articles(linked_urls)
+        caller_articles = linked_articles + caller_articles
+        for url, reason in unreadable:
+            record["question"] = f"{record['question']}\n\nNote: the linked page {url} could not be read ({reason})."
     supplied_articles = _merge_evidence_articles(venue_articles, caller_articles)
     retrieved_articles: List[Dict[str, Any]] = []
     evidence_articles = list(supplied_articles)
@@ -7524,24 +7538,47 @@ def _extract_pdf_bytes(content: bytes) -> str:
         raise HTTPException(status_code=422, detail=f"PDF extraction failed: {exc}") from exc
 
 
-def _extract_url_sync(url: str) -> Dict[str, Any]:
-    import re
-    from urllib.parse import urlparse
-    try:
-        import requests as _req
-        from bs4 import BeautifulSoup
-        resp = _req.get(url, timeout=20, headers={"User-Agent": "Foresea/1.0"}, allow_redirects=True)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
-            tag.decompose()
-        title = (soup.title.string or "").strip() if soup.title else urlparse(url).netloc
-        text = re.sub(r"\n{3,}", "\n\n", soup.get_text(separator="\n", strip=True))
-        return {"title": title, "text": text[:20000], "source": urlparse(url).netloc, "url": url}
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"URL extraction failed: {exc}") from exc
+async def _read_linked_page(url: str) -> Dict[str, Any]:
+    """Text of a public page a user linked, cached; raises web_page.PageFetchError.
+
+    web_page refuses private, loopback, link-local and metadata addresses on
+    every redirect hop, so a pasted or attached link cannot probe the server's
+    own network.
+    """
+    cache_key = _cache_key("extract_url", url)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    page = await asyncio.get_running_loop().run_in_executor(None, web_page.read_page, url)
+    _cache_set(cache_key, page, _EXTRACT_CACHE_TTL)
+    return page
+
+
+_MAX_LINKED_PAGES = 3
+# ~1.5k tokens per page: enough for an article body without slowing prefill on
+# the self-hosted model.
+_LINKED_PAGE_CHARS = 6000
+
+
+async def _linked_page_articles(urls: List[str]) -> tuple[List[Dict[str, Any]], List[tuple[str, str]]]:
+    """Read pasted links in parallel -> (evidence articles, [(url, why unreadable)])."""
+    results = await asyncio.gather(*(_read_linked_page(url) for url in urls), return_exceptions=True)
+    articles: List[Dict[str, Any]] = []
+    unreadable: List[tuple[str, str]] = []
+    for url, result in zip(urls, results):
+        if isinstance(result, web_page.PageFetchError):
+            unreadable.append((url, str(result).rstrip(".")))
+        elif isinstance(result, Exception):
+            logger.warning("linked page read failed url=%s", url, exc_info=result)
+            unreadable.append((url, "unexpected error"))
+        elif isinstance(result, BaseException):
+            raise result
+        elif not result.get("text"):
+            unreadable.append((url, "no readable text"))
+        else:
+            text = result["text"][:_LINKED_PAGE_CHARS]
+            articles.append({**result, "text": text, "summary": text[:800]})
+    return articles, unreadable
 
 
 def _analytics_conn():
@@ -12996,13 +13033,10 @@ async def extract_attachment(  # noqa: B008
         url = url.strip()
         if not url.startswith(("http://", "https://")):
             raise HTTPException(status_code=422, detail="URL must start with http:// or https://")
-        url_cache_key = _cache_key("extract_url", url)
-        cached = _cache_get(url_cache_key)
-        if cached is not None:
-            return cached
-        extracted = await loop.run_in_executor(None, _extract_url_sync, url)
-        _cache_set(url_cache_key, extracted, _EXTRACT_CACHE_TTL)
-        return extracted
+        try:
+            return await _read_linked_page(url)
+        except web_page.PageFetchError as exc:
+            raise HTTPException(status_code=422, detail=f"URL extraction failed: {exc}") from exc
     raise HTTPException(status_code=400, detail="Provide either a PDF file or a url.")
 
 
@@ -13870,7 +13904,10 @@ async def rag_ingest(req: RagIngestRequest, request: Request) -> Dict[str, Any]:
     if not text and url:
         if not url.startswith(("http://", "https://")):
             raise HTTPException(status_code=422, detail="url must start with http:// or https://")
-        extracted = await loop.run_in_executor(None, _extract_url_sync, url)
+        try:
+            extracted = await _read_linked_page(url)
+        except web_page.PageFetchError as exc:
+            raise HTTPException(status_code=422, detail=f"URL extraction failed: {exc}") from exc
         text = (extracted or {}).get("text") or ""
         title = title or (extracted or {}).get("title") or url
         source = (extracted or {}).get("source") or url

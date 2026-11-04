@@ -1468,6 +1468,41 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Linked market: Will Bob be the next NATO chief?", prompt)
         self.assertIn("Resolves Yes if Bob is appointed.", prompt)
 
+    def test_predict_reads_article_links_pasted_into_the_question(self):
+        from analyzing_llm_rationale import web_page
+
+        def read_page(url, timeout_s=12.0):
+            if "blocked" in url:
+                raise web_page.PageFetchError("The page returned HTTP 403.")
+            return {"title": "Fed holds rates", "text": "The Fed held rates steady on Wednesday.",
+                    "source": "news.example", "url": url, "publish_date": "2026-11-04"}
+
+        with mock.patch.object(web_page, "read_page", side_effect=read_page) as reader:
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Does https://news.example/fed-story change the odds? See also https://blocked.example/x.",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(reader.call_count, 2)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("The Fed held rates steady on Wednesday.", prompt)
+        self.assertIn(
+            "Note: the linked page https://blocked.example/x could not be read (The page returned HTTP 403).",
+            prompt,
+        )
+        self.assertEqual(response.json()["evidence_sources"][0]["url"], "https://news.example/fed-story")
+
+    def test_extract_refuses_urls_the_page_reader_rejects(self):
+        response = self.client.post("/extract", data={"url": "http://169.254.169.254/computeMetadata/v1/"})
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Only public web pages can be read.", response.json()["detail"])
+
     def test_markets_kalshi_not_found_maps_to_404(self):
         import analyzing_llm_rationale.market_data as md
 
