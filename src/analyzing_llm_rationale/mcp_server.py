@@ -192,6 +192,9 @@ def build_predict_payload(
         "market_url": market_url,
         "market_outcome": market_outcome,
         "market_probability": market_probability,
+        # /predict defaults to chat mode (plain prose); MCP tools promise a
+        # structured forecast with predicted_answer and confidence.
+        "chat_mode": False,
     })
 
 

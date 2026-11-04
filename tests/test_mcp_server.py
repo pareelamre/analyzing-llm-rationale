@@ -59,6 +59,7 @@ class PayloadTests(unittest.TestCase):
         self.assertEqual(payload["market_platform"], "Polymarket")
         self.assertEqual(payload["market_probability"], 42)
         self.assertEqual(payload["attach_evidence"], False)
+        self.assertIs(payload["chat_mode"], False)
         self.assertNotIn("options", payload)
         self.assertEqual(payload["categories"], ["Economics"])
 
@@ -803,6 +804,7 @@ class NewMcpCapabilitiesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(payload["items"]), 2)
         self.assertEqual(payload["items"][0]["question"], "Will X happen?")
         self.assertEqual(payload["items"][1]["question"], "Will Y happen?")
+        self.assertTrue(all(item["chat_mode"] is False for item in payload["items"]))
 
     def test_build_batch_predict_payload_from_items(self):
         payload = mcp.build_batch_predict_payload(
