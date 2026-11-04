@@ -1474,6 +1474,34 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((analysis["market_probability"], analysis["model_probability"]), (0.6, 0.7))
         self.assertEqual(analysis["stance"], "model_above_market")
 
+    def test_a_market_link_pasted_mid_conversation_is_searched_by_its_title(self):
+        # A bare link is one word, which used to count as a short follow-up:
+        # the search ran on the previous question plus the URL.
+        import analyzing_llm_rationale.market_data as md
+
+        with (
+            mock.patch.object(md, "fetch_polymarket", return_value={
+                "platform": "Polymarket", "ident": "will-bvb-win", "question": "Will Dortmund win on 2026-11-04?",
+                "market_url": "https://polymarket.com/market/will-bvb-win", "outcome": "Yes", "probability": 0.8,
+            }) as fetch_polymarket,
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ) as fetch_evidence,
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "https://polymarket.com/event/ucl-bvb-bet-2026-11-04",
+                    "history": [{"role": "user", "content": "Will it rain in Tampa today?"},
+                                {"role": "assistant", "content": "Probably not."}],
+                    "chat_mode": True,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fetch_polymarket.assert_called_once_with(slug="ucl-bvb-bet-2026-11-04")
+        self.assertEqual(fetch_evidence.call_args.args[0], "Will Dortmund win on 2026-11-04?")
+
     def test_predict_reads_article_links_pasted_into_the_question(self):
         from analyzing_llm_rationale import web_page
 

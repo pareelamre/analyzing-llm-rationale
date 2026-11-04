@@ -165,6 +165,48 @@ class MarketDataTests(unittest.TestCase):
         with self.assertRaises(MarketDataError):
             fetch_polymarket(slug="missing")
 
+    @staticmethod
+    def _polymarket_venue(event):
+        """Fake Gamma API: no market has the slug, and /events returns `event`."""
+        def fake_get(url, params=None, headers=None, timeout=None):
+            return FakeResponse([event] if url.endswith("/events") else [])
+
+        return SimpleNamespace(get=fake_get)
+
+    def test_polymarket_event_link_resolves_to_the_leading_open_market(self):
+        # polymarket.com/event/{slug} names an event; its markets have their own slugs.
+        def market(slug, name, yes, active=True):
+            return {"slug": slug, "question": f"Will {name} win?", "groupItemTitle": name, "active": active,
+                    "closed": False, "outcomes": '["Yes", "No"]', "outcomePrices": f'["{yes}", "{1 - yes:.3f}"]'}
+
+        sys.modules["requests"] = self._polymarket_venue({
+            "slug": "nominee", "title": "Nominee", "negRisk": True, "description": "Who will be the nominee?",
+            "markets": [market("n-alice", "Alice", 0.2), market("n-bob", "Bob", 0.6),
+                        market("n-placeholder", "Person X", 0.49, active=False)],
+        })
+
+        quote = fetch_polymarket(slug="nominee")
+
+        self.assertEqual(quote["question"], "Will Bob win?")
+        self.assertEqual(quote["market_url"], "https://polymarket.com/market/n-bob")
+        self.assertAlmostEqual(quote["probability"], 0.6)
+        self.assertEqual(quote["description"], (
+            "Who will be the nominee? Outcomes in this event (market price): Bob 60%; Alice 20%."
+        ))
+
+    def test_polymarket_closed_event_link_says_how_it_resolved(self):
+        sys.modules["requests"] = self._polymarket_venue({"slug": "game", "title": "A vs. B", "markets": [
+            {"slug": "game-a", "question": "Will A win?", "groupItemTitle": "A", "active": True, "closed": True,
+             "outcomes": '["Yes", "No"]', "outcomePrices": '["1", "0"]'},
+            {"slug": "game-b", "question": "Will B win?", "groupItemTitle": "B", "active": True, "closed": True,
+             "outcomes": '["Yes", "No"]', "outcomePrices": '["0", "1"]'},
+        ]})
+
+        quote = fetch_polymarket(slug="game")
+
+        self.assertEqual(quote["question"], "Will A win?")
+        self.assertEqual(quote["description"], 'The linked event "A vs. B" has closed. Resolved Yes: A.')
+
     def test_kalshi_reads_dollar_price(self):
         market_payload = {"market": {
             "ticker": "KXTEST",

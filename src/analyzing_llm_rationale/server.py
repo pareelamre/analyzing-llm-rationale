@@ -7308,7 +7308,10 @@ async def _prepare_predict_messages(
     # A short follow-up in an ongoing thread ("WE is 90+", "why?") is a poor
     # standalone search query. Keep retrieval on, but anchor it to the latest
     # substantive user question so the forecast still receives raw evidence.
-    short_followup = bool(req.history) and len(req.question.split()) <= 6
+    # A pasted market link is a new question, searched by the market's title.
+    short_followup = (
+        bool(req.history) and not (pasted_market and quote) and len(req.question.split()) <= 6
+    )
     evidence_top_k = req.evidence_top_k
     if short_followup:
         previous_user_questions = [
