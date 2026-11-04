@@ -28,6 +28,7 @@ tracer = trace.get_tracer(__name__)
 venue_requests = metrics.get_meter(__name__).create_counter("market_data.requests", unit="1")
 
 POLYMARKET_GAMMA_URL = "https://gamma-api.polymarket.com/markets"
+POLYMARKET_EVENTS_URL = "https://gamma-api.polymarket.com/events"
 POLYMARKET_TAGS_URL = "https://gamma-api.polymarket.com/tags"
 # Gamma caps /tags at 100 rows per page and defaults to 50.
 POLYMARKET_TAGS_PAGE_LIMIT = 100
@@ -382,8 +383,60 @@ def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None
     else:
         market = None
     if not market:
+        if slug and not market_id:
+            # polymarket.com/event/... links name an event, not one market.
+            return _fetch_polymarket_event(slug)
         raise MarketDataError("Polymarket market not found.")
     return _polymarket_quote(market)
+
+
+def _fetch_polymarket_event(slug: str) -> Dict[str, Any]:
+    """Quote one market of a Polymarket event.
+
+    An event holds one market per outcome (each candidate, or win/draw/win).
+    As for Kalshi events, the description lists every open outcome's price,
+    and a closed event says how it resolved.
+    """
+    data = _get_json(POLYMARKET_EVENTS_URL, params={"slug": slug})
+    event = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else {}
+    # _polymarket_quote reads the description and resolution source from the
+    # market's parent event, which nested markets don't carry.
+    parent = {k: v for k, v in event.items() if k != "markets"}
+    quoted = [
+        (m, _polymarket_quote({**m, "events": [parent]}))
+        for m in event.get("markets") or [] if isinstance(m, dict)
+    ]
+    if not quoted:
+        raise MarketDataError("Polymarket market not found.")
+
+    def label(m: Dict[str, Any], q: Dict[str, Any]) -> str:
+        return str(m.get("groupItemTitle") or q["question"])
+
+    # Inactive markets are placeholders for candidates not yet listed.
+    ranked = sorted(
+        ((q["probability"], m, q) for m, q in quoted
+         if m.get("active") and not m.get("closed") and q["probability"] is not None),
+        key=lambda r: r[0], reverse=True,
+    )
+    closed_note = None
+    if not ranked:
+        won = [label(m, q) for m, q in quoted if (q["probability"] or 0) >= 0.99]
+        closed_note = f'The linked event "{event.get("title") or slug}" has closed.'
+        if won:
+            closed_note += f" Resolved Yes: {', '.join(won)}."
+        ranked = [max(((q["probability"] or 0, m, q) for m, q in quoted), key=lambda r: r[0])]
+    if event.get("negRisk") is False:
+        # Independent markets (each state in a map): the most contested one
+        # is the informative forecast, not one already priced at 99%.
+        result = min(ranked, key=lambda r: abs(r[0] - 0.5))[2]
+    else:
+        result = ranked[0][2]
+    field = "; ".join(f"{label(m, q)} {p:.0%}" for p, m, q in ranked[:40]) if len(ranked) > 1 else ""
+    parts = [closed_note, result.get("description"), field and f"Outcomes in this event (market price): {field}"]
+    parts = [part.strip() for part in parts if part and part.strip()]
+    if parts:
+        result["description"] = " ".join(p if p[-1] in ".?!" else f"{p}." for p in parts)
+    return result
 
 
 _CATEGORY_KEYWORDS = {
