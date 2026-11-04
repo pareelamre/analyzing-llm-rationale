@@ -40,6 +40,9 @@ models:
     # HTTPS tunnel instead.
     api_base_url: http://127.0.0.1:8090/v1/chat/completions
     api_key_env_var: SELF_HOSTED_LLM_API_KEY
+    # Match PROVIDER_TIMEOUT_S: the socket closes when Foresea gives up, and
+    # the Mac's server stops generating an answer nobody will read.
+    request_timeout_cap_s: 90
     access: self-hosted
     chat_interface_enabled: true
     agent_trading_enabled: false

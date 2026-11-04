@@ -123,6 +123,20 @@ class ProviderRetryUnitTests(unittest.TestCase):
             ))
         self.assertEqual(provider.calls, 2)
 
+    def test_env_timeout_retry_cap_applies_when_the_call_sets_none(self):
+        # A single self-hosted model that timed out is overloaded; a retry
+        # would queue behind the abandoned request. Transient statuses (a
+        # tunnel 502) keep the general budget.
+        with mock.patch.object(server, "_PROVIDER_MAX_TIMEOUT_RETRIES", 0):
+            timing_out = FlakyProvider(fail_times=99, error=asyncio.TimeoutError())
+            with self.assertRaises(asyncio.TimeoutError):
+                asyncio.run(_provider_chat(timing_out, [], 0.0, 64))
+            flaky = FlakyProvider(fail_times=2, error=RetryableProviderError("502"))
+            out = asyncio.run(_provider_chat(flaky, [], 0.0, 64))
+        self.assertEqual(timing_out.calls, 1)
+        self.assertIn("predicted_answer", out)
+        self.assertEqual(flaky.calls, 3)
+
     def test_provider_retry_after_hint_is_respected(self):
         provider = FlakyProvider(
             fail_times=1,

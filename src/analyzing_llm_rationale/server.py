@@ -290,6 +290,15 @@ logger = logging.getLogger("foresea")
 # the live /predict + agent paths up to the same standard.
 _PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "2"))      # attempts = retries + 1
 _PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "90"))       # per-attempt wall-clock budget
+# Cap on timeout retries when a call sets none. A single self-hosted model that
+# times out is overloaded, not flaky: the retry queues behind the abandoned
+# request, because asyncio cannot cancel the executor thread still waiting on
+# it. Unset keeps timeouts on the general retry budget.
+_PROVIDER_MAX_TIMEOUT_RETRIES = (
+    int(os.environ["PROVIDER_MAX_TIMEOUT_RETRIES"])
+    if os.environ.get("PROVIDER_MAX_TIMEOUT_RETRIES", "").strip()
+    else None
+)
 # Long enough to clear a one-minute token quota window, with a little margin.
 _TOKEN_RATE_LIMIT_COOLDOWN_S = float(
     os.environ.get("PROVIDER_TOKEN_RATE_LIMIT_COOLDOWN_S", "65")
@@ -3061,8 +3070,13 @@ async def _provider_chat(
         if max_retries is None and policy is None
         else (policy[0] if max_retries is None else max(0, max_retries))
     )
+    default_max_timeout_retries = (
+        effective_max_retries
+        if _PROVIDER_MAX_TIMEOUT_RETRIES is None
+        else min(effective_max_retries, max(0, _PROVIDER_MAX_TIMEOUT_RETRIES))
+    )
     effective_max_timeout_retries = (
-        (policy[1] if policy is not None else effective_max_retries)
+        (policy[1] if policy is not None else default_max_timeout_retries)
         if max_timeout_retries is None
         else max(0, max_timeout_retries)
     )
