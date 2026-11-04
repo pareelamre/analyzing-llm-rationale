@@ -1259,7 +1259,10 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.json()["question_type"], "chat")
         system_message = self.provider.calls[0][0]["content"]
         user_message = self.provider.calls[0][-1]["content"]
-        self.assertEqual(system_message, _CHAT_SYSTEM_PROMPT)
+        self.assertEqual(
+            system_message,
+            _CHAT_SYSTEM_PROMPT + "\n\nKeep the whole reply under 102 words, so it ends with the marker line.",
+        )
         # No forecast/JSON typing instruction is appended in chat mode.
         self.assertNotIn("Only binary questions", user_message)
         self.assertNotIn('"type":', user_message)
@@ -1444,6 +1447,19 @@ class ServerTests(unittest.TestCase):
         prompt = self.provider.calls[0][-1]["content"]
         self.assertIn("Already supplied venue background.", prompt)
         self.assertIn("Already supplied venue rules.", prompt)
+
+    def test_chat_forecasts_are_told_to_fit_the_token_cap(self):
+        # Replies cut off at the cap lost the [p:] marker, so the forecast had
+        # no probability. The test server's cap is 256 tokens.
+        response = self.client.post(
+            "/predict",
+            json={"question": "Will the Fed cut rates before July 31, 2026?", "chat_mode": True,
+                  "attach_evidence": False},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Keep the whole reply under 102 words, so it ends with the marker line.",
+                      self.provider.calls[0][0]["content"])
 
     def test_predict_reads_a_kalshi_link_pasted_into_the_question(self):
         import analyzing_llm_rationale.market_data as md
