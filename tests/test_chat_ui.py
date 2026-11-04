@@ -144,6 +144,25 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("fetch('/predict/device/finish'", self.index_html)
         self.assertIn("? _deviceForecastResponse(body, deviceModel, signal)", self.index_html)
 
+    def test_signed_out_visitors_get_the_forecast_answer(self) -> None:
+        # The agent pipeline needs a session. Signed-out visitors used to try it,
+        # get 401, recover the answer from /predict, and then have that answer
+        # replaced by an empty agent report: only "Curious if there's an edge?"
+        # was shown.
+        self.assertIn(
+            "const useAgent = !deviceModel && (options.forceAgent || "
+            "(_agentEnabled() && !!_loadStoredSession().token));",
+            self.index_html,
+        )
+        self.assertIn("    if (useAgent) {\n      const copiedAgent = _activeCopiedAgent();", self.index_html)
+        self.assertIn(
+            "      } else {\n        typingEl.remove();\n"
+            "        // Only an agent report goes through the report formatter; the\n"
+            "        // /predict retry above already holds the answer.\n"
+            "        data = _agentReportData(report);",
+            self.index_html,
+        )
+
     def test_settings_modal_hosts_connections_and_copied_agents_with_no_duplicate_ids(self) -> None:
         self.assertIn("function openSettingsModal", self.index_html)
         self.assertIn("function closeSettingsModal", self.index_html)

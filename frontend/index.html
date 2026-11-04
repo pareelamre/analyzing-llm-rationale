@@ -4987,7 +4987,9 @@ async function sendQuestion(options = {}) {
   }
 
   const deviceModel = getActiveDeviceModel();
-  const typingEl = _agentEnabled() && !deviceModel
+  // The agent pipeline needs a session; signed-out visitors get the streamed forecast.
+  const useAgent = !deviceModel && (options.forceAgent || (_agentEnabled() && !!_loadStoredSession().token));
+  const typingEl = useAgent
     ? addAgentProgress([
         'Resolving the market',
         'Gathering evidence',
@@ -5077,7 +5079,7 @@ async function sendQuestion(options = {}) {
       }
       return;
     }
-    if (_agentEnabled() || options.forceAgent) {
+    if (useAgent) {
       const copiedAgent = _activeCopiedAgent();
       const agentBody = {
         question,
@@ -5160,10 +5162,12 @@ async function sendQuestion(options = {}) {
         return;
       } else {
         typingEl.remove();
+        // Only an agent report goes through the report formatter; the
+        // /predict retry above already holds the answer.
+        data = _agentReportData(report);
+        if (data.live_trade_intent) data.source_conversation_id = request.convId;
+        if (data.agent_run) syncAgentRunsFromServer();
       }
-      data = _agentReportData(report);
-      if (data.live_trade_intent) data.source_conversation_id = request.convId;
-      if (data.agent_run) syncAgentRunsFromServer();
     } else {
       const streamed = await streamPredict(body, variant, request.convId, typingEl, request.controller.signal);
       if (streamed.ok) return;
