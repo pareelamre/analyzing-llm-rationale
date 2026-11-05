@@ -1687,6 +1687,8 @@ class ServerTests(unittest.TestCase):
             ],
             "forecast_day_periods": [
                 {"name": "Monday", "detailed_forecast": "Showers likely. High near 84.", "precipitation_probability": 80},
+                {"name": "Monday Night", "detailed_forecast": "Showers. Chance of precipitation is 60%.",
+                 "precipitation_probability": 55},
             ],
             # A rain contract isn't priced on the day's high.
             "model_forecast": {"provider": "open-meteo", "projected_high_f": 84.0, "projected_low_f": 75.0},
@@ -1714,6 +1716,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(weather["source"], "National Weather Service")
         self.assertTrue(weather["summary"].startswith(
             "NWS forecast for KMIA: Monday: Showers likely. High near 84 (chance of precipitation 80%)."
+            " Monday Night: Showers. Chance of precipitation is 60%."
         ))
         self.assertIn("in any one hour peaks at 70% around 14:00; temperatures 83-84°F; Showers", weather["summary"])
         self.assertIn("Latest NWS observation at KMIA", weather["summary"])

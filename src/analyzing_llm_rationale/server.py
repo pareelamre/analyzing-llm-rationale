@@ -7397,10 +7397,13 @@ def _weather_evidence_article(
     sources = ["National Weather Service"]
     days = [p for p in research.get("forecast_day_periods") or [] if p.get("detailed_forecast")]
     if days:
+        # The NWS text can state its own chance: "Chance of precipitation is
+        # 20%" sat beside the grid's 15% when both were given.
         facts.append(f"NWS forecast for {station}: " + " ".join(
             f"{p.get('name')}: {p['detailed_forecast'].rstrip('. ')}"
             + (f" (chance of precipitation {p['precipitation_probability']:.0f}%)"
-               if isinstance(p.get("precipitation_probability"), (int, float)) else "") + "."
+               if isinstance(p.get("precipitation_probability"), (int, float))
+               and "chance of precipitation" not in p["detailed_forecast"].lower() else "") + "."
             for p in days
         ))
     periods = [p for p in research.get("forecast_periods") or [] if isinstance(p, dict)]
