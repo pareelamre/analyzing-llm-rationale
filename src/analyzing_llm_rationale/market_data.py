@@ -395,7 +395,8 @@ def _fetch_polymarket_event(slug: str) -> Dict[str, Any]:
 
     An event holds one market per outcome (each candidate, or win/draw/win).
     As for Kalshi events, the description lists every open outcome's price,
-    and a closed event says how it resolved.
+    `event_options` lists them for a forecast per option, and a closed event
+    says how it resolved.
     """
     data = _get_json(POLYMARKET_EVENTS_URL, params={"slug": slug})
     event = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else {}
@@ -431,6 +432,13 @@ def _fetch_polymarket_event(slug: str) -> Dict[str, Any]:
         result = min(ranked, key=lambda r: abs(r[0] - 0.5))[2]
     else:
         result = ranked[0][2]
+    if closed_note is None and len(ranked) > 1:
+        result["event_title"] = str(event.get("title") or slug)
+        result["event_exclusive"] = event.get("negRisk") if isinstance(event.get("negRisk"), bool) else None
+        result["event_options"] = [
+            {"label": label(m, q), "question": q["question"], "probability": p, "quoted": q is result}
+            for p, m, q in ranked
+        ]
     field = "; ".join(f"{label(m, q)} {p:.0%}" for p, m, q in ranked[:40]) if len(ranked) > 1 else ""
     parts = [closed_note, result.get("description"), field and f"Outcomes in this event (market price): {field}"]
     parts = [part.strip() for part in parts if part and part.strip()]
@@ -783,7 +791,8 @@ def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
     """Quote one open market of an event (or series) ticker.
 
     A multi-outcome event lists every outcome's price in the description, so a
-    forecast made from one contract still sees the whole field. A closed event
+    forecast made from one contract still sees the whole field, and in
+    `event_options` for a forecast per option. A closed event
     (yesterday's weather, a finished game) says how it settled, then quotes the
     series' current event when there is one.
     """
@@ -809,6 +818,16 @@ def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
     else:
         leader = ranked[0][1]
     result = fetch_kalshi(leader["ticker"])
+    options = [
+        {"label": str(m.get("yes_sub_title") or m.get("ticker")), "question": str(m.get("title") or ""),
+         "probability": p, "quoted": m is leader}
+        for p, m in ranked if p >= 0
+    ]
+    if len(options) > 1:
+        result["event_title"] = str(event.get("title") or ticker)
+        exclusive = event.get("mutually_exclusive")
+        result["event_exclusive"] = exclusive if isinstance(exclusive, bool) else None
+        result["event_options"] = options
     field = "; ".join(
         f"{m.get('yes_sub_title') or m.get('ticker')} {p:.0%}" for p, m in ranked[:40] if p >= 0
     ) if len(ranked) > 1 else ""

@@ -193,6 +193,13 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(quote["description"], (
             "Who will be the nominee? Outcomes in this event (market price): Bob 60%; Alice 20%."
         ))
+        # Each open option, for a forecast per option.
+        self.assertEqual(quote["event_title"], "Nominee")
+        self.assertIs(quote["event_exclusive"], True)
+        self.assertEqual(quote["event_options"], [
+            {"label": "Bob", "question": "Will Bob win?", "probability": 0.6, "quoted": True},
+            {"label": "Alice", "question": "Will Alice win?", "probability": 0.2, "quoted": False},
+        ])
 
     def test_polymarket_closed_event_link_says_how_it_resolved(self):
         sys.modules["requests"] = self._polymarket_venue({"slug": "game", "title": "A vs. B", "markets": [
@@ -206,6 +213,7 @@ class MarketDataTests(unittest.TestCase):
 
         self.assertEqual(quote["question"], "Will A win?")
         self.assertEqual(quote["description"], 'The linked event "A vs. B" has closed. Resolved Yes: A.')
+        self.assertNotIn("event_options", quote)
 
     def test_kalshi_reads_dollar_price(self):
         market_payload = {"market": {
@@ -402,6 +410,9 @@ class MarketDataTests(unittest.TestCase):
             quote["description"],
             "Before 2099. Outcomes in this event (market price): Bob 60%; Alice 20%.",
         )
+        self.assertIsNone(quote["event_exclusive"])
+        self.assertEqual([(o["label"], o["probability"], o["quoted"]) for o in quote["event_options"]],
+                         [("Bob", 0.6, True), ("Alice", 0.2, False)])
 
     def test_kalshi_event_link_with_one_market_quotes_it_unchanged(self):
         market = {"ticker": "KXMARS-99", "event_ticker": "KXMARS-99", "status": "active",
@@ -417,6 +428,7 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(quote["ident"], "KXMARS-99")
         self.assertAlmostEqual(quote["probability"], 0.09)
         self.assertIsNone(quote["description"])
+        self.assertNotIn("event_options", quote)
 
     def test_kalshi_closed_event_link_reports_results_and_quotes_the_current_event(self):
         # Yesterday's "where will it rain" link: say how it settled, then
@@ -449,6 +461,11 @@ class MarketDataTests(unittest.TestCase):
             'The market below is from the series\' current event, "Rain on Nov 2?". '
             "Outcomes in this event (market price): Miami 99%; New York 40%."
         ))
+        # The options are the current event's.
+        self.assertEqual(quote["event_title"], "Rain on Nov 2?")
+        self.assertIs(quote["event_exclusive"], False)
+        self.assertEqual([(o["label"], o["quoted"]) for o in quote["event_options"]],
+                         [("Miami", False), ("New York", True)])
 
     def test_kalshi_settled_market_says_it_settled(self):
         sys.modules["requests"] = _fake_requests({"market": {

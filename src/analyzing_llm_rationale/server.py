@@ -59,7 +59,7 @@ from fastapi.staticfiles import StaticFiles
 from opentelemetry import metrics as otel_metrics
 from opentelemetry import trace as otel_trace
 from opentelemetry.trace import Status, StatusCode
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from analyzing_llm_rationale import (
     agent_capabilities,
@@ -397,6 +397,12 @@ _CHAT_PROVIDER_MAX_RETRIES = int(os.environ.get("CHAT_PROVIDER_MAX_RETRIES", "1"
 # forecast (see _chat_consensus). 0 turns this off.
 _CHAT_ESTIMATE_SAMPLES = int(os.environ.get("CHAT_ESTIMATE_SAMPLES", "7"))
 _CHAT_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_ESTIMATE_BUDGET_S", "20"))
+# A pasted event link (one market per option) gets a forecast per option: the
+# median of this many estimates of all its options at once (see
+# _chat_option_consensus).
+_CHAT_OPTION_ESTIMATE_SAMPLES = int(os.environ.get("CHAT_OPTION_ESTIMATE_SAMPLES", "5"))
+_CHAT_OPTION_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_OPTION_ESTIMATE_BUDGET_S", "35"))
+_CHAT_EVENT_OPTIONS_MAX = 8
 # A "deep"-tier question is deliberately allowed to reason harder (see
 # _REASONING_EFFORT_BY_TIER below), which routinely exceeds the 15s chat
 # budget above -- give it a bigger one instead of just timing out more often.
@@ -5360,6 +5366,12 @@ class PredictRequest(BaseModel):
             raise ValueError("ollama_base_url host is not allowed.")
         return value
 
+    # A pasted multi-option event link: the options to forecast (set while
+    # preparing the prompt) and their forecasts (set by _chat_option_consensus).
+    # Server state, never read from the request body.
+    _event_options: Optional[Dict[str, Any]] = PrivateAttr(default=None)
+    _option_forecasts: Optional[Dict[str, Any]] = PrivateAttr(default=None)
+
 
 class OptionProb(BaseModel):
     """A single option and its probability in a multiple-choice forecast."""
@@ -5435,6 +5447,13 @@ class MarketQuote(BaseModel):
     )
     series_ticker: Optional[str] = Field(None, description="Kalshi series ticker -- the 'extra' id /market/batch needs for candlesticks.")
     token_id: Optional[str] = Field(None, description="Polymarket YES-outcome CLOB token id -- the 'extra' id /market/batch needs for order book/price history.")
+    event_title: Optional[str] = Field(None, description="For an event link (one market per option): the event's title.")
+    event_exclusive: Optional[bool] = Field(None, description="For an event link: whether exactly one option can win.")
+    event_options: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="For an event link: each open option's `label`, market `question` and `probability`; "
+        "the quoted market has `quoted` set.",
+    )
 
 
 class VenueCredentials(BaseModel):
@@ -5891,6 +5910,9 @@ class LiveTradeIntent(BaseModel):
 class AgentReport(BaseModel):
     """End-to-end analysis of a live question produced by the agent."""
     question: str
+    options: List[OptionProb] = Field(
+        default_factory=list, description="Per-option forecasts, for an event link with several options."
+    )
     served_model_name: Optional[str] = Field(
         None,
         description="Exact upstream model that served the final agent response, when reported by the provider.",
@@ -6928,7 +6950,10 @@ def _build_chat_response(
         # A question about a pasted page isn't a forecast, but the 9B tags it
         # anyway ("what are the main stories on bbc.com/news?" came back 92%).
         chat_prob = None
-    if chat_prob is not None:
+    option_forecasts = req._option_forecasts if chat_prob is not None else None
+    if option_forecasts:
+        text = f"{_option_forecast_table(option_forecasts)}\n\n{text}"
+    elif chat_prob is not None:
         text = f"**Forecast: {chat_prob:.0%}**\n\n{text}"
 
     # The chat forecast is a probability for the market's Yes side. A pasted
@@ -6950,7 +6975,27 @@ def _build_chat_response(
         evidence_articles=_news_articles(evidence_articles),
         evidence_error=evidence_error,
         market_analysis=chat_market_analysis,
+        options=[
+            OptionProb(label=o["label"], probability=o["forecast"])
+            for o in (option_forecasts or {}).get("options", []) if o.get("forecast") is not None
+        ],
     )
+
+
+def _option_forecast_table(event: Dict[str, Any]) -> str:
+    """Each option's forecast beside its market price, as a markdown table."""
+    rows = "\n".join(
+        f"| {o['label'].replace('|', '/')} | "
+        f"{'—' if o.get('forecast') is None else format(o['forecast'], '.0%')} | {o['probability']:.0%} |"
+        for o in event["options"]
+    )
+    table = f"**Forecast by option**\n\n| Option | Foresea | Market |\n|---|---|---|\n{rows}"
+    if event["total"] > len(event["options"]):
+        table += (
+            f"\n\nShowing {len(event['options'])} of {event['total']} options. "
+            "Name another in your question to include it."
+        )
+    return table
 
 
 def _interactive_default_model_for_request(req: "PredictRequest") -> Optional[str]:
@@ -7040,6 +7085,8 @@ async def _chat_consensus(
         return messages, None
     if req.market_probability is None and not req.market_url:
         return messages, None
+    if req._event_options:
+        return await _chat_option_consensus(req, provider, messages, req._event_options)
     ask = [*messages, {"role": "user", "content": _CHAT_ESTIMATE_ASK}]
     deadline = time.monotonic() + _CHAT_ESTIMATE_BUDGET_S
     attempts = 0
@@ -7079,6 +7126,147 @@ async def _chat_consensus(
         f"and end with the marker line [p:{median:.2f}]."
     )
     return [*messages[:-1], {**messages[-1], "content": messages[-1]["content"] + explain}], median
+
+
+# The quoted market's fields describe one option. In an event's prompt they
+# would make the reply about that option alone.
+_OPTION_MARKET_FIELDS = (
+    "market_probability", "market_outcome", "market_bid", "market_ask", "market_last_trade_price",
+    "market_volume", "market_liquidity", "market_price_change_24h", "market_price_change_7d",
+    "market_no_sub_title", "market_floor_strike", "market_cap_strike",
+)
+
+
+def _chat_event_options(
+    req: "PredictRequest", quote: Dict[str, Any], asked: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """The options of an event link to forecast one by one, or None.
+
+    At most _CHAT_EVENT_OPTIONS_MAX: the quoted market (the reply's [p:] is its
+    forecast, compared with its price), those the question names, then the
+    likeliest of exclusive options (candidates) or the most contested of
+    independent ones (rain in each city). Listed by market price.
+    """
+    options = [o for o in quote.get("event_options") or [] if o.get("probability") is not None]
+    if not req.chat_mode or len(options) < 2:
+        return None
+    asked = (req.question if asked is None else asked).lower()
+    named = [o for o in options if re.search(rf"\b{re.escape(o['label'].lower())}\b", asked)]
+    if quote.get("event_exclusive") is False:
+        rest = sorted(options, key=lambda o: abs(o["probability"] - 0.5))
+    else:
+        rest = sorted(options, key=lambda o: -o["probability"])
+    chosen: List[Dict[str, Any]] = []
+    for option in [*(o for o in options if o.get("quoted")), *named, *rest]:
+        if option not in chosen and len(chosen) < _CHAT_EVENT_OPTIONS_MAX:
+            chosen.append(option)
+    chosen.sort(key=lambda o: -o["probability"])
+    return {
+        "title": str(quote.get("event_title") or quote.get("question") or ""),
+        "quoted_question": str(quote.get("question") or ""),
+        "options": [dict(o) for o in chosen],
+        "total": len(options),
+        "exclusive": quote.get("event_exclusive") is True,
+    }
+
+
+_CHAT_OPTION_ESTIMATE_ASK = (
+    "Options, each its own Yes/No market:\n{options}\n\n"
+    "Before you explain anything: reply with only your probability for Yes on each option, "
+    'one line each, like "{example}: 0.42". No other text.'
+)
+_CHAT_OPTION_ESTIMATE_RE = re.compile(
+    r"(?m)^[\s*•-]*(?:\d+[.)]\s+)?(.+?)\**\s*:\s*\**\s*(?:\[p:\s*)?(0(?:\.\d+)?|1(?:\.0+)?)(?![\d.])"
+)
+
+
+def _option_key(label: str) -> str:
+    """An option's label, matched however the model formats it ("**Boston** (market 38%)")."""
+    return re.sub(r"[^a-z0-9]", "", re.sub(r"\(.*?\)", "", label.lower()))
+
+
+async def _chat_option_consensus(
+    req: "PredictRequest", provider, messages: List[Dict[str, str]], event: Dict[str, Any]
+) -> tuple[List[Dict[str, str]], Optional[float]]:
+    """Forecast each option of a pasted event link: the median of several
+    estimates of all its options at once.
+
+    One prompt for every option keeps the estimates in mlx-lm's prompt cache.
+    Qwen3.5's recurrent layers can't reuse a cached prefix, so a prompt per
+    option would cost a full prefill each (8 s for a weather event). Asked
+    for a bare list of numbers, the 9B misaligned them with the options;
+    asked for a labelled line per option, it kept each near its own market.
+
+    Sets req._option_forecasts and returns the reply's messages, told to
+    explain the forecasts, with the quoted market's forecast; or the messages
+    unchanged and None.
+    """
+    options = event["options"]
+    estimates: Dict[str, List[float]] = {_option_key(o["label"]): [] for o in options}
+    ask_text = _CHAT_OPTION_ESTIMATE_ASK.format(
+        options="\n".join(f"- {o['label']}" for o in options),
+        example=options[-1]["label"],
+    )
+    ask = [*messages, {"role": "user", "content": ask_text}]
+    deadline = time.monotonic() + _CHAT_OPTION_ESTIMATE_BUDGET_S
+    attempts = 0
+    while attempts < _CHAT_OPTION_ESTIMATE_SAMPLES and deadline - time.monotonic() > 1:
+        attempts += 1
+        try:
+            reply = await _provider_chat(
+                provider, ask, 0.8, 12 * len(options) + 16,
+                timeout_s=deadline - time.monotonic(), max_retries=0, max_timeout_retries=0,
+                call_site="chat_option_estimate",
+            )
+        except Exception as exc:
+            logger.warning("chat option estimate failed; answering without it error=%s", type(exc).__name__)
+            break
+        found: Dict[str, float] = {}
+        for label, value in _CHAT_OPTION_ESTIMATE_RE.findall(reply or ""):
+            key = _option_key(label)
+            if key in estimates and key not in found:
+                found[key] = float(value)
+        if not found and attempts == 1:
+            logger.info("chat option estimates skipped: the model gave no probabilities")
+            return messages, None
+        for key, value in found.items():
+            estimates[key].append(value)
+    forecasts = {
+        key: statistics.median(values)
+        for key, values in estimates.items() if len(values) >= 3 and len(values) * 2 > attempts
+    }
+    quoted = next((_option_key(o["label"]) for o in options if o.get("quoted")), None)
+    if quoted not in forecasts or len(forecasts) < 2:
+        logger.info("chat option estimates unused: %d of %d options after %d attempts",
+                    len(forecasts), len(options), attempts)
+        return messages, None
+    total = sum(forecasts.values())
+    if event["exclusive"] and total > 0 and (total > 1 or len(forecasts) == event["total"]):
+        # Exactly one option wins: the forecasts can't add up past 1, and
+        # add up to 1 when every option is listed.
+        forecasts = {key: value / total for key, value in forecasts.items()}
+    for option in options:
+        value = forecasts.get(_option_key(option["label"]))
+        option["forecast"] = round(value, 2) if value is not None else None
+    req._option_forecasts = event
+    lead = round(forecasts[quoted], 2)
+    logger.info("chat option forecasts %s after %d attempts",
+                {o["label"]: o["forecast"] for o in options}, attempts)
+    otel_trace.get_current_span().set_attributes({
+        "forecast.estimate.samples": attempts,
+        "forecast.estimate.options": len(forecasts),
+        "forecast.estimate.median": lead,
+    })
+    listing = "; ".join(f"{o['label']} {o['forecast']:.0%}" for o in options if o["forecast"] is not None)
+    # Told only not to give "different numbers", the reply still said "I
+    # estimate 20%" for an option the table put at its 26% market price.
+    explain = (
+        f"\n\nYour forecasts for these options are: {listing}. Each is the median of several estimates "
+        "you made from this same evidence. Explain them briefly. These are your final numbers: do not state "
+        "any other probability or estimate for these options, and where a forecast equals its market price, "
+        f"say you agree with the market. End with the marker line [p:{lead:.2f}]."
+    )
+    return [*messages[:-1], {**messages[-1], "content": messages[-1]["content"] + explain}], lead
 
 
 def _pin_chat_probability(content: str, probability: Optional[float]) -> str:
@@ -7417,6 +7605,28 @@ async def _prepare_predict_messages(
         for field in ("market_probability", "market_platform", "market_url", "market_outcome"):
             if getattr(req, field) is None and record.get(field) is not None:
                 setattr(req, field, record[field])
+        req._event_options = _chat_event_options(req, quote)
+    if req._event_options:
+        # A forecast per option: the prompt names the event, and the
+        # description lists every option's price.
+        event = req._event_options
+        linked = (
+            f"Linked event: {event['title']}. Each option is its own Yes/No market; "
+            "their prices are in the description."
+        )
+        if f"Linked market: {event['quoted_question']}" in record["question"]:
+            record["question"] = record["question"].replace(f"Linked market: {event['quoted_question']}", linked, 1)
+        elif record["question"].strip() == event["quoted_question"].strip():
+            # The agent asks the quoted market's question when given only a link.
+            record["question"] = linked
+        else:
+            record["question"] = f"{record['question']}\n\n{linked}"
+        for field in _OPTION_MARKET_FIELDS:
+            record.pop(field, None)
+        if record.get("resolution_criteria"):
+            record["resolution_criteria"] = (
+                "(One option's market; the others follow the same template.) " + record["resolution_criteria"]
+            )
     venue_articles = (
         quote.get("venue_news_articles") or []
         if quote
@@ -7432,11 +7642,9 @@ async def _prepare_predict_messages(
     retrieved_articles: List[Dict[str, Any]] = []
     evidence_articles = list(supplied_articles)
     evidence_error = None
-    evidence_question = (
-        str(quote.get("question") or "").strip()
-        if quote
-        else ""
-    ) or req.question
+    evidence_question = str(
+        (req._event_options or {}).get("title") or (quote or {}).get("question") or ""
+    ).strip() or req.question
 
     # A short follow-up in an ongoing thread ("WE is 90+", "why?") is a poor
     # standalone search query. Keep retrieval on, but anchor it to the latest
@@ -16000,6 +16208,8 @@ def _agent_prediction_request(
     question: str,
     quote: Optional[MarketQuote],
     grounding_note: Optional[str],
+    *,
+    market_chat: bool = False,
 ) -> PredictRequest:
     has_market_context = bool(
         quote
@@ -16024,7 +16234,7 @@ def _agent_prediction_request(
     # caps at 12 -- truncate here (keeping the most recent turns, so an appended
     # grounding_note always survives) or construction below raises a ValidationError.
     history = history[-12:]
-    return PredictRequest(
+    pred_req = PredictRequest(
         question=question,
         description=(
             req.description
@@ -16046,7 +16256,9 @@ def _agent_prediction_request(
         # hatch, and either hallucinates a fake Yes/No forecast about "hello"
         # or breaks format in a way nothing downstream is designed to expect.
         attach_evidence=not is_greeting,
-        chat_mode=is_greeting,
+        # market_chat: a market forecast as a chat reply, the median of quick
+        # estimates (see _chat_consensus), the same as /predict gives.
+        chat_mode=is_greeting or (market_chat and quote is not None),
         effort_tier=req.effort_tier,
         evidence_top_k=req.evidence_top_k,
         variant=req.variant,
@@ -16071,6 +16283,9 @@ def _agent_prediction_request(
         model=req.model,
         provider_base_url=req.provider_base_url,
     )
+    if quote is not None and quote.event_options:
+        pred_req._event_options = _chat_event_options(pred_req, quote.model_dump(), asked=req.question)
+    return pred_req
 
 
 def _select_agent_provider(req: "AgentAnalyzeRequest"):
@@ -16142,7 +16357,7 @@ async def _run_agent_skills(
     pred_req: PredictRequest,
     result: PredictResponse,
 ) -> tuple[List[AgentSkillResult], bool, Optional[str]]:
-    if pred_req.chat_mode:
+    if pred_req.chat_mode and pred_req.market_probability is None and not pred_req.market_url:
         # A greeting/meta reply never tried to forecast anything -- running a
         # research skill (base rate, red team, ...) against "hello" makes no
         # sense and would be pure wasted LLM spend.
@@ -16165,10 +16380,14 @@ async def _run_agent_skills(
     sources_txt = "\n".join(
         f"- {s.source}: {s.title}" for s in result.evidence_sources[:8]
     ) or "(no evidence retrieved)"
+    answer, confidence = result.predicted_answer, result.confidence
+    if answer is None and result.model_probability is not None:
+        # A chat forecast is a probability for Yes.
+        answer, confidence = "Yes", result.model_probability
     context = (
         f"Question: {question}\n"
-        f"Forecast: {result.predicted_answer} "
-        f"(confidence {result.confidence if result.confidence is not None else 'n/a'})\n"
+        f"Forecast: {answer} "
+        f"(confidence {confidence if confidence is not None else 'n/a'})\n"
         f"Market-implied probability: {pred_req.market_probability}\n"
         f"Thesis: {result.model_rationale or result.rationale or ''}\n"
         f"Evidence:\n{sources_txt}"
@@ -16195,6 +16414,10 @@ async def _agent_report_from_prediction(
     model_probability = analysis.model_probability if analysis else _model_probability_from_prediction(result)
     stance = analysis.stance if analysis else None
     outcome = (quote.outcome if quote else None) or "Yes"
+    option_forecasts = pred_req._option_forecasts
+    if option_forecasts:
+        # The edge is on the quoted option's market; "Yes" alone wouldn't say which.
+        outcome = next((o["label"] for o in option_forecasts["options"] if o.get("quoted")), outcome)
     recommendation, detail = _agent_recommendation(edge, outcome)
     if analysis is not None:
         pipeline.append("price_edge")
@@ -16223,6 +16446,7 @@ async def _agent_report_from_prediction(
     )
     report = AgentReport(
         question=question,
+        options=list(result.options) if option_forecasts else [],
         served_model_name=result.served_model_name,
         pipeline=pipeline,
         platform=market_platform,
@@ -16351,7 +16575,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         )
 
     # 2. Evidence + forecast + edge — reuse the /predict pipeline.
-    pred_req = _agent_prediction_request(req, question, quote, grounding_note)
+    pred_req = _agent_prediction_request(req, question, quote, grounding_note, market_chat=True)
     _agent_counter.add(1, {"agent.platform": req.platform or "unknown"})
     result = await predict(pred_req, kb_user_id=(claims.get("sub") if claims else None))
     return await _agent_report_from_prediction(
@@ -16409,7 +16633,7 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
                 "question": question,
                 "pipeline": pipeline,
             })
-            pred_req = _agent_prediction_request(req, question, quote, grounding_note)
+            pred_req = _agent_prediction_request(req, question, quote, grounding_note, market_chat=True)
             rag_user_id = claims.get("sub")
             messages, evidence_articles, evidence_error = await _prepare_predict_messages(
                 pred_req, rag_user_id
