@@ -1723,7 +1723,7 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn("Open-Meteo", weather["summary"])
         self.assertIn("Weather forecast for KMIA", self.provider.calls[0][-2]["content"])
         # Half the estimates copied the market against the station forecast.
-        self.assertIn("such as an official weather forecast", self.provider.calls[0][-1]["content"])
+        self.assertIn("official weather forecast for an option", self.provider.calls[0][-1]["content"])
 
     def test_estimates_weigh_a_station_forecast_only_when_there_is_one(self):
         import analyzing_llm_rationale.market_data as md
@@ -1748,7 +1748,7 @@ class ServerTests(unittest.TestCase):
         # for Tampa was compared with the quoted market, Providence.
         import analyzing_llm_rationale.market_data as md
 
-        self.provider.responses = ["I can't say.", "Showers are likely in Miami.\n[p:0.35]"]
+        self.provider.responses = ["I can't say.", "No idea.", "Showers are likely in Miami.\n[p:0.35]"]
         with (
             mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
             mock.patch.object(
@@ -1799,6 +1799,38 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(lead, 0.5)
         self.assertEqual([o["forecast"] for o in req._option_forecasts["options"]], [0.5, 0.5])
+
+    def test_option_estimates_survive_a_sample_without_numbers_and_inline_lists(self):
+        event = {"title": "Who wins?", "quoted_question": "Will A win?", "total": 3, "exclusive": False,
+                 "options": [{"label": "A", "question": "Will A win?", "probability": 0.5, "quoted": True},
+                             {"label": "B", "question": "Will B win?", "probability": 0.4, "quoted": False},
+                             {"label": "C", "question": "Will C win?", "probability": 0.1, "quoted": False}]}
+        req = server_module.PredictRequest(question="Who will win the race?", chat_mode=True)
+        self.provider.responses = [
+            "Let me weigh the evidence first.", "A: 0.60 | B: 0.40 | C: 0.10", "A: 0.62; B: 0.42; C: 0.12",
+            "A: 0.64\nB: 0.44\nC: 0.14",
+        ]
+        with mock.patch.object(server_module, "_CHAT_OPTION_ESTIMATE_SAMPLES", 4):
+            _, lead = asyncio.run(server_module._chat_option_consensus(
+                req, self.provider, [{"role": "user", "content": "Who wins?"}], event,
+            ))
+
+        self.assertEqual(lead, 0.62)
+        self.assertEqual([o["forecast"] for o in req._option_forecasts["options"]], [0.62, 0.42, 0.12])
+
+    def test_option_estimates_stop_after_two_samples_without_numbers(self):
+        event = {"title": "Who wins?", "quoted_question": "Will A win?", "total": 2, "exclusive": False,
+                 "options": [{"label": "A", "question": "Will A win?", "probability": 0.5, "quoted": True},
+                             {"label": "B", "question": "Will B win?", "probability": 0.4, "quoted": False}]}
+        req = server_module.PredictRequest(question="Who will win the race?", chat_mode=True)
+        self.provider.responses = ["I can't say.", "No idea.", "A: 0.6\nB: 0.4"]
+        with mock.patch.object(server_module, "_CHAT_OPTION_ESTIMATE_SAMPLES", 5):
+            _, lead = asyncio.run(server_module._chat_option_consensus(
+                req, self.provider, [{"role": "user", "content": "Who wins?"}], event,
+            ))
+
+        self.assertIsNone(lead)
+        self.assertEqual(len(self.provider.calls), 2)
 
     def test_streamed_chat_forecast_uses_the_median_of_quick_estimates(self):
         self.provider.responses = ["[p:0.40]", "[p:0.30]", "[p:0.35]"]
