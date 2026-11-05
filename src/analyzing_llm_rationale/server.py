@@ -7208,9 +7208,14 @@ async def _chat_option_consensus(
     """
     options = event["options"]
     estimates: Dict[str, List[float]] = {_option_key(o["label"]): [] for o in options}
+    # With the asked-about option as the example ("will it rain in tampa?",
+    # like "Tampa: 0.42"), half the samples gave only "Tampa: 0.26". With
+    # the first listed one, every sample covered every option.
+    named = set(event.get("named") or [])
+    example = next((o["label"] for o in options if o.get("question") not in named), options[0]["label"])
     ask_text = _CHAT_OPTION_ESTIMATE_ASK.format(
         options="\n".join(f"- {o['label']}" for o in options),
-        example=options[-1]["label"],
+        example=example,
     )
     ask = [*messages, {"role": "user", "content": ask_text}]
     deadline = time.monotonic() + _CHAT_OPTION_ESTIMATE_BUDGET_S
@@ -7265,11 +7270,15 @@ async def _chat_option_consensus(
     listing = "; ".join(f"{o['label']} {o['forecast']:.0%}" for o in options if o["forecast"] is not None)
     # Told only not to give "different numbers", the reply still said "I
     # estimate 20%" for an option the table put at its 26% market price.
+    # Shown the quoted option's [p:] (Providence 43%), a reply about the
+    # option asked for said "I estimate 43%" for Tampa (23% in the table).
+    # The marker is pinned anyway, so the reply sees only the table's numbers.
+    # Told not to write one, it wrote a bare "[0.23]", which isn't stripped.
     explain = (
         f"\n\nYour forecasts for these options are: {listing}. Each is the median of several estimates "
         "you made from this same evidence. Explain them briefly. These are your final numbers: do not state "
         "any other probability or estimate for these options, and where a forecast equals its market price, "
-        f"say you agree with the market. End with the marker line [p:{lead:.2f}]."
+        "say you agree with the market."
     )
     return [*messages[:-1], {**messages[-1], "content": messages[-1]["content"] + explain}], lead
 
