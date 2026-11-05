@@ -209,13 +209,18 @@ def _extract_coordinates(
 
 
 def _fetch_google_weather_forecast(
-    http_get: Callable[..., Any], lat: float, lon: float, api_key: str
+    http_get: Callable[..., Any], lat: float, lon: float, api_key: str, target_day: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
-    """Fetch hourly forecast from Google Maps Platform Weather API (DeepMind WeatherNext / MetNet)."""
+    """Fetch hourly forecast from Google Maps Platform Weather API (DeepMind WeatherNext / MetNet).
+
+    Without a target day the high/low span the next 24 hours. With one, they
+    span that local calendar day, or None when fewer than 20 of its hours are
+    still ahead (the day's high may already have passed).
+    """
     try:
         url = (
             f"{_GOOGLE_WEATHER_API}?location.latitude={lat:.4f}&location.longitude={lon:.4f}&"
-            f"hours=24&unitsSystem=IMPERIAL&key={api_key}"
+            f"hours={48 if target_day else 24}&unitsSystem=IMPERIAL&key={api_key}"
         )
         response = http_get(url, timeout=_REQUEST_TIMEOUT_S)
         if hasattr(response, "raise_for_status"):
@@ -248,14 +253,23 @@ def _fetch_google_weather_forecast(
                         pass
             elif isinstance(temp_obj, (int, float)):
                 temp_f = float(temp_obj)
+            if target_day:
+                local = fh.get("displayDateTime")
+                try:
+                    local_day = f"{int(local['year']):04d}-{int(local['month']):02d}-{int(local['day']):02d}"
+                except (KeyError, TypeError, ValueError):
+                    local_day = None
+                if local_day != target_day:
+                    continue
             if time_str and temp_f is not None:
                 valid_pairs.append((time_str, temp_f))
-        if not valid_pairs:
+        if not valid_pairs or (target_day and len(valid_pairs) < 20):
             return None
         valid_temps = [p[1] for p in valid_pairs]
         return {
             "provider": "google_maps_weather",
             "model": "google_deepmind_weathernext_metnet",
+            **({"forecast_day_local": target_day} if target_day else {}),
             "forecast_start": valid_pairs[0][0],
             "forecast_end": valid_pairs[-1][0],
             "projected_high_f": round(max(valid_temps), 1),
@@ -275,14 +289,15 @@ def _fetch_google_weather_forecast(
 
 
 def _fetch_open_meteo_forecast(
-    http_get: Callable[..., Any], lat: float, lon: float
+    http_get: Callable[..., Any], lat: float, lon: float, target_day: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """Fetch high-resolution global numerical / AI forecast via Open-Meteo.
 
     Requests station-local time (``timezone=auto``) and groups hours by local
     calendar day, so the reported high/low is the max/min over one local day
     rather than an arbitrary 24-hour UTC slice that can span two local days
-    and miss the afternoon peak entirely.
+    and miss the afternoon peak entirely. That day is ``target_day`` when
+    given (None if the window lacks it), else the first full day.
     """
     try:
         url = (
@@ -310,6 +325,10 @@ def _fetch_open_meteo_forecast(
         for t, temp in valid_pairs:
             by_day.setdefault(str(t)[:10], []).append(temp)
         full_days = [(day, vals) for day, vals in sorted(by_day.items()) if len(vals) >= 20]
+        if target_day:
+            full_days = [(day, vals) for day, vals in full_days if day == target_day]
+            if not full_days:
+                return None
         if not full_days:
             full_days = sorted(by_day.items())[:1]
         target_day, target_vals = full_days[0]
@@ -341,7 +360,7 @@ _ENSEMBLE_MIN_MEMBERS = 12
 
 
 def _fetch_ensemble_forecast(
-    http_get: Callable[..., Any], lat: float, lon: float
+    http_get: Callable[..., Any], lat: float, lon: float, target_day: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """Fetch a member ensemble and derive per-day high-temperature probabilities.
 
@@ -380,6 +399,8 @@ def _fetch_ensemble_forecast(
                     member_maxima.append(max(vals))
             if len(member_maxima) >= _ENSEMBLE_MIN_MEMBERS:
                 by_day[day] = member_maxima
+        if target_day:
+            by_day = {target_day: by_day[target_day]} if target_day in by_day else {}
         if not by_day:
             return None
         target_day, maxima = sorted(by_day.items())[0]
@@ -453,19 +474,21 @@ def _fetch_model_forecast(
     lat: float,
     lon: float,
     station: Optional[str] = None,
+    target_day: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Fetch predictive numerical / neural AI forecast and calibrate with station bias.
 
     Checks Google Maps Platform Weather API first if GOOGLE_WEATHER_API_KEY / GMP_API_KEY
     is set, falling back to Open-Meteo multi-model. Applies empirical microclimate station bias
-    if the station is recognized.
+    if the station is recognized. With ``target_day`` the forecast covers that
+    local day or is None.
     """
     gmp_key = os.environ.get("GOOGLE_WEATHER_API_KEY") or os.environ.get("GMP_API_KEY")
     data = None
     if gmp_key:
-        data = _fetch_google_weather_forecast(http_get, lat, lon, gmp_key)
+        data = _fetch_google_weather_forecast(http_get, lat, lon, gmp_key, target_day)
     if data is None:
-        data = _fetch_open_meteo_forecast(http_get, lat, lon)
+        data = _fetch_open_meteo_forecast(http_get, lat, lon, target_day)
     if data is None:
         return None
 
@@ -535,6 +558,16 @@ def parse_market_strike(quote: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
             }
         except (ValueError, TypeError):
             pass
+
+    # Less than or equal: e.g. "53° or below" (a Kalshi event's bottom bracket; its
+    # market title says "<54°", matched above)
+    below_or_equal_match = re.search(
+        r"(\d+(?:\.\d+)?)\s*(?:°|deg)?\s*(?:or below|or lower|or less)",
+        full_text,
+        re.IGNORECASE,
+    )
+    if below_or_equal_match:
+        return {"strike_type": "less_than_or_equal", "strike_f": float(below_or_equal_match.group(1))}
 
     # Greater than or equal: e.g. "77.5° or above", "77.5° or higher", "77.5° and above"
     above_or_equal_match = re.search(
@@ -610,23 +643,86 @@ def calculate_bracket_probability(
     }
 
 
+def _whole_degree_range(spec: Mapping[str, Any]) -> Tuple[float, float]:
+    """The forecast temperatures a strike pays on. The NWS reports whole
+    degrees, so "56° to 57°" pays from 55.5°F to 57.5°F and "<54°" below
+    53.5°F: read literally, a 57.3°F high fell between two brackets."""
+    kind = spec["strike_type"]
+    if kind == "between":
+        return float(spec["strike_low_f"]) - 0.5, float(spec["strike_high_f"]) + 0.5
+    strike = float(spec["strike_f"])
+    return {
+        "less_than": (-math.inf, strike - 0.5),
+        "less_than_or_equal": (-math.inf, strike + 0.5),
+        "greater_than": (strike + 0.5, math.inf),
+        "greater_than_or_equal": (strike - 0.5, math.inf),
+    }[kind]
+
+
+def contract_probabilities(
+    research: Mapping[str, Any], subjects: List[str], *, daily_low: bool = False
+) -> Dict[str, Optional[float]]:
+    """Each temperature contract's chance of Yes from one station's research,
+    keyed by its subject ("56° to 57°", "Will the high be <54° on Nov 5?"):
+    the share of ensemble members (station bias applied) whose day's high
+    lands in it, else the model forecast with a 1.8°F error. A daily-low
+    contract uses the model's low (the ensemble holds only highs)."""
+    ensemble = research.get("ensemble_forecast") or {}
+    maxima = ensemble.get("member_maxima_f") if not daily_low else None
+    station = str((research.get("weather_market") or {}).get("station") or "").upper()
+    bias = float((_STATION_BIAS_PROFILES.get(station) or {}).get("bias_offset_f") or 0.0)
+    model = research.get("model_forecast") or {}
+    center = model.get("projected_low_f" if daily_low else "projected_high_f")
+
+    def cdf(x: float) -> float:
+        if math.isinf(x):
+            return 0.0 if x < 0 else 1.0
+        return 0.5 * (1.0 + math.erf((x - float(center)) / (1.8 * math.sqrt(2.0))))
+
+    out: Dict[str, Optional[float]] = {}
+    for subject in subjects:
+        spec = parse_market_strike({"question": subject})
+        try:
+            low, high = _whole_degree_range(spec) if spec else (None, None)
+        except (KeyError, TypeError, ValueError):
+            low = high = None
+        if low is None:
+            out[subject] = None
+        elif isinstance(maxima, list) and len(maxima) >= _ENSEMBLE_MIN_MEMBERS:
+            out[subject] = sum(1 for m in maxima if low <= m + bias < high) / len(maxima)
+        elif isinstance(center, (int, float)):
+            out[subject] = max(0.0, cdf(high) - cdf(low))
+        else:
+            out[subject] = None
+    return out
+
+
 def _forecast_periods(
-    http_get: Callable[..., Any], geometry: Mapping[str, Any], station: Optional[str] = None
-) -> List[Dict[str, Any]]:
+    http_get: Callable[..., Any],
+    geometry: Mapping[str, Any],
+    station: Optional[str] = None,
+    target_day: Optional[str] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """The next 8 NWS hourly periods, or with ``target_day`` that local day's
+    hours within the next 48 and its day/night forecasts ("Thursday: Sunny,
+    with a high near 84"), whose chance of precipitation is the day's, unlike
+    an hour's."""
     coords = _extract_coordinates(geometry, station)
     if not coords:
-        return []
+        return [], []
     lat, lon = coords
     try:
         point = _json_get(http_get, f"{_NWS_API}/points/{lat:.4f},{lon:.4f}")
         hourly_url = (point.get("properties") or {}).get("forecastHourly")
         if not isinstance(hourly_url, str) or not hourly_url.startswith("https://"):
-            return []
+            return [], []
         hourly = _json_get(http_get, hourly_url)
         periods = (hourly.get("properties") or {}).get("periods") or []
         result: List[Dict[str, Any]] = []
-        for period in periods[:8]:
+        for period in periods[:48] if target_day else periods[:8]:
             if not isinstance(period, Mapping):
+                continue
+            if target_day and str(period.get("startTime") or "")[:10] != target_day:
                 continue
             precip = period.get("probabilityOfPrecipitation") or {}
             result.append({
@@ -635,33 +731,76 @@ def _forecast_periods(
                 "short_forecast": period.get("shortForecast"),
                 "precipitation_probability": precip.get("value") if isinstance(precip, Mapping) else None,
             })
-        return result
     except Exception as exc:
         logger.debug("NWS forecast periods unavailable: %s", exc)
-        return []
+        return [], []
+    day_periods: List[Dict[str, Any]] = []
+    day_url = (point.get("properties") or {}).get("forecast")
+    if target_day and isinstance(day_url, str) and day_url.startswith("https://"):
+        try:
+            for period in (_json_get(http_get, day_url).get("properties") or {}).get("periods") or []:
+                if not isinstance(period, Mapping):
+                    continue
+                # "Tonight" from 8 pm on the 4th covers the 5th's early hours.
+                if not str(period.get("startTime") or "")[:10] <= target_day <= str(period.get("endTime") or "")[:10]:
+                    continue
+                precip = period.get("probabilityOfPrecipitation") or {}
+                day_periods.append({
+                    "name": period.get("name"),
+                    "start_time": period.get("startTime"),
+                    "detailed_forecast": period.get("detailedForecast"),
+                    "precipitation_probability": precip.get("value") if isinstance(precip, Mapping) else None,
+                })
+        except Exception as exc:
+            logger.debug("NWS day forecast unavailable: %s", exc)
+    return result, day_periods
 
 
-def _cached_nws_research(station: str) -> Optional[Dict[str, Any]]:
+def _cached_nws_research(key: str) -> Optional[Dict[str, Any]]:
+    """A station's cached NWS/model data (not a market's result: each strike
+    is priced per call)."""
     now = time.monotonic()
     with _runtime_lock:
-        entry = _nws_cache.get(station)
+        entry = _nws_cache.get(key)
         if entry is None or entry[0] <= now:
             if entry is not None:
-                _nws_cache.pop(station, None)
+                _nws_cache.pop(key, None)
             return None
-        result = copy.deepcopy(entry[1])
-    result["research_cached"] = True
-    return result
+        return copy.deepcopy(entry[1])
 
 
-def _cache_nws_research(station: str, result: Dict[str, Any]) -> None:
+def _cache_nws_research(key: str, data: Dict[str, Any]) -> None:
     with _runtime_lock:
         if len(_nws_cache) >= _CACHE_MAX_ENTRIES:
             oldest = min(_nws_cache, key=lambda key: _nws_cache[key][0])
             _nws_cache.pop(oldest, None)
-        stored = copy.deepcopy(result)
-        stored["research_cached"] = False
-        _nws_cache[station] = (time.monotonic() + _CACHE_TTL_S, stored)
+        _nws_cache[key] = (time.monotonic() + _CACHE_TTL_S, copy.deepcopy(data))
+
+
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+_CONTRACT_DATE_RE = re.compile(
+    r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d\d)\b",
+    re.IGNORECASE,
+)
+_KALSHI_DATE_RE = re.compile(r"-(\d\d)(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d\d)(?:-|$)")
+
+
+def contract_day(quote: Mapping[str, Any]) -> Optional[str]:
+    """The local date a daily weather contract is about ("Will it rain in
+    Tampa on Nov 5, 2026?", KXRAIN-26NOV05-TPA) as YYYY-MM-DD, or None."""
+    text = " ".join(str(quote.get(k) or "") for k in ("question", "title", "subtitle"))
+    match = _CONTRACT_DATE_RE.search(text)
+    if match:
+        month, day, year = _MONTHS.index(match.group(1).lower()) + 1, int(match.group(2)), int(match.group(3))
+    else:
+        ticker = str(quote.get("ticker") or quote.get("ident") or "").upper()
+        match = _KALSHI_DATE_RE.search(ticker)
+        if not match:
+            return None
+        year, month, day = 2000 + int(match.group(1)), _MONTHS.index(match.group(2).lower()) + 1, int(match.group(3))
+    if not 1 <= day <= 31:
+        return None
+    return f"{year:04d}-{month:02d}-{day:02d}"
 
 
 def _nws_circuit_is_open() -> bool:
@@ -695,15 +834,146 @@ def _reset_runtime_state_for_test() -> None:
         _nws_circuit_open_until = 0.0
 
 
+def _fetch_station_research(
+    http_get: Callable[..., Any], station: str, target_day: Optional[str]
+) -> Dict[str, Any]:
+    """A station's NWS observation and forecasts, shared by every market it settles."""
+    payload = _json_get(http_get, f"{_NWS_API}/stations/{station}/observations/latest")
+    props = payload.get("properties") or {}
+    geometry = payload.get("geometry") or {}
+    geometry = geometry if isinstance(geometry, Mapping) else {}
+    coords = _extract_coordinates(geometry, station)
+    return {
+        "observation": {
+            "source": "NWS station observation",
+            "station": station,
+            "timestamp": props.get("timestamp"),
+            "temperature_f": _celsius_to_fahrenheit(_value(props, "temperature")),
+            "dewpoint_f": _celsius_to_fahrenheit(_value(props, "dewpoint")),
+            "wind_speed_mps": _value(props, "windSpeed"),
+            "precipitation_last_hour_mm": _value(props, "precipitationLastHour"),
+            "authority": "preliminary_observation_not_final_daily_settlement",
+        },
+        **dict(zip(("periods", "day_periods"), _forecast_periods(http_get, geometry, station, target_day))),
+        "model_forecast": (
+            _fetch_model_forecast(http_get, coords[0], coords[1], station=station, target_day=target_day)
+            if coords
+            else None
+        ),
+        # Primary decision input: ensemble member histogram. It yields a
+        # native probability distribution over the day's high, which is
+        # exactly what a strike bracket settles on.
+        "ensemble": _fetch_ensemble_forecast(http_get, coords[0], coords[1], target_day) if coords else None,
+    }
+
+
+def _station_research_result(
+    quote: Mapping[str, Any], brief: Any, data: Mapping[str, Any], *, cached: bool
+) -> Dict[str, Any]:
+    """One market's research from its station's data. The strike probabilities
+    are this market's own: when the whole result was cached per station, every
+    Denver bracket got the first one's strike and probability."""
+    observation = data["observation"]
+    periods = data["periods"]
+    model_forecast = data["model_forecast"]
+    ensemble = data["ensemble"]
+    strike_spec = parse_market_strike(quote)
+    bias_offset = 0.0
+    if brief.station:
+        profile = _STATION_BIAS_PROFILES.get(brief.station.upper())
+        if profile:
+            bias_offset = float(profile.get("bias_offset_f") or 0.0)
+
+    ensemble_prob = (
+        _ensemble_strike_probability(ensemble, strike_spec, bias_offset)
+        if ensemble and strike_spec
+        else None
+    )
+
+    # Secondary reference: deterministic best_match with a Gaussian read.
+    # Kept for continuity and as a divergence check against the ensemble.
+    bracket_prob = None
+    if model_forecast and isinstance(model_forecast.get("projected_high_f"), (int, float)):
+        if strike_spec:
+            bracket_prob = calculate_bracket_probability(
+                float(model_forecast["projected_high_f"]),
+                strike_spec,
+                uncertainty_std_f=1.8,
+            )
+            for price_key in ("price", "yes_ask", "yes_bid", "last_price"):
+                val = quote.get(price_key)
+                if isinstance(val, (int, float)) and 0.0 <= float(val) <= 1.0:
+                    bracket_prob["market_implied_probability"] = round(float(val), 3)
+                    bracket_prob["model_edge"] = round(
+                        bracket_prob["model_probability"] - float(val), 3
+                    )
+                    break
+                elif isinstance(val, (int, float)) and 1.0 < float(val) <= 100.0:
+                    prob_val = float(val) / 100.0
+                    bracket_prob["market_implied_probability"] = round(prob_val, 3)
+                    bracket_prob["model_edge"] = round(
+                        bracket_prob["model_probability"] - prob_val, 3
+                    )
+                    break
+
+    # Cross-source divergence: when the deterministic read and the ensemble
+    # mean sit on opposite sides of the strike, the sources disagree and this
+    # is a no-trade signal, not an edge.
+    divergence = None
+    if (
+        ensemble_prob
+        and bracket_prob
+        and strike_spec
+        and isinstance(ensemble_prob.get("model_probability"), (int, float))
+        and isinstance(bracket_prob.get("model_probability"), (int, float))
+    ):
+        p_ens = float(ensemble_prob["model_probability"])
+        p_det = float(bracket_prob["model_probability"])
+        divergence = {
+            "ensemble_probability": p_ens,
+            "deterministic_probability": p_det,
+            "abs_disagreement": round(abs(p_ens - p_det), 3),
+            "sources_straddle_strike": (p_ens - 0.5) * (p_det - 0.5) < 0,
+        }
+        ensemble_prob["deterministic_cross_check"] = {
+            "model_probability": p_det,
+            "sources_straddle_strike": divergence["sources_straddle_strike"],
+        }
+        if divergence["sources_straddle_strike"]:
+            ensemble_prob["trade_signal"] = "sources_disagree_no_trade"
+        else:
+            ensemble_prob["trade_signal"] = "sources_agree"
+    result = {
+        "weather_market": brief.as_dict(),
+        "source_status": "nws_observation_available",
+        "observations": [observation],
+        "forecast_periods": periods,
+        "forecast_day_periods": data.get("day_periods") or [],
+        "model_forecast": model_forecast,
+        "ensemble_forecast": ensemble,
+        "ensemble_probability": ensemble_prob,
+        "cross_source_divergence": divergence,
+        "bracket_probability": bracket_prob,
+        "research_cached": cached,
+        "notice": (
+            "NWS observations and forecast are source-matched research inputs. The final NWS Daily "
+            "Climate Report named in the contract remains the settlement authority."
+        ),
+    }
+    return result
+
+
 def research_weather_market(
     quote: Mapping[str, Any],
     *,
     http_get: Optional[Callable[..., Any]] = None,
+    target_day: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Return bounded weather evidence with explicit source authority.
 
     For an NWS-settled contract with a named ICAO station, the output includes
-    the current NWS station observation and nearby NWS hourly forecast.  The
+    the current NWS station observation and nearby NWS hourly forecast (with
+    ``target_day``, that local day's hours and model forecasts).  The
     daily climate report remains the settlement authority and can differ from
     preliminary observations.  Weather Company contracts are not queried
     because Foresea has no licensed Weather Company data-feed integration.
@@ -764,14 +1034,16 @@ def research_weather_market(
                 }
                 outcome = reason
             else:
-                cached = _cached_nws_research(brief.station)
-                if cached is not None:
-                    span.set_attributes({"weather.source_status": cached["source_status"], "outcome": "cache_hit"})
+                cache_key = f"{brief.station}|{target_day or ''}"
+                cached_data = _cached_nws_research(cache_key)
+                if cached_data is not None:
+                    result = _station_research_result(quote, brief, cached_data, cached=True)
+                    span.set_attributes({"weather.source_status": result["source_status"], "outcome": "cache_hit"})
                     weather_research_requests.add(1, {
                         "settlement_source": brief.settlement_source,
                         "outcome": "cache_hit",
                     })
-                    return cached
+                    return result
                 if _nws_circuit_is_open():
                     result = {
                         "weather_market": brief.as_dict(),
@@ -797,120 +1069,10 @@ def research_weather_market(
                     import requests
                     http_get = requests.get
                 try:
-                    payload = _json_get(http_get, f"{_NWS_API}/stations/{brief.station}/observations/latest")
-                    props = payload.get("properties") or {}
-                    geometry = payload.get("geometry") or {}
-                    observation = {
-                        "source": "NWS station observation",
-                        "station": brief.station,
-                        "timestamp": props.get("timestamp"),
-                        "temperature_f": _celsius_to_fahrenheit(_value(props, "temperature")),
-                        "dewpoint_f": _celsius_to_fahrenheit(_value(props, "dewpoint")),
-                        "wind_speed_mps": _value(props, "windSpeed"),
-                        "precipitation_last_hour_mm": _value(props, "precipitationLastHour"),
-                        "authority": "preliminary_observation_not_final_daily_settlement",
-                    }
-                    periods = _forecast_periods(http_get, geometry if isinstance(geometry, Mapping) else {}, brief.station)
-                    coords = _extract_coordinates(geometry if isinstance(geometry, Mapping) else {}, brief.station)
-                    model_forecast = (
-                        _fetch_model_forecast(http_get, coords[0], coords[1], station=brief.station)
-                        if coords
-                        else None
-                    )
-                    strike_spec = parse_market_strike(quote)
-                    bias_offset = 0.0
-                    if brief.station:
-                        profile = _STATION_BIAS_PROFILES.get(brief.station.upper())
-                        if profile:
-                            bias_offset = float(profile.get("bias_offset_f") or 0.0)
-
-                    # Primary decision input: ensemble member histogram. It
-                    # yields a native probability distribution over the day's
-                    # high, which is exactly what a strike bracket settles on.
-                    ensemble = (
-                        _fetch_ensemble_forecast(http_get, coords[0], coords[1])
-                        if coords
-                        else None
-                    )
-                    ensemble_prob = (
-                        _ensemble_strike_probability(ensemble, strike_spec, bias_offset)
-                        if ensemble and strike_spec
-                        else None
-                    )
-
-                    # Secondary reference: deterministic best_match with a
-                    # Gaussian read. Kept for continuity and as a divergence
-                    # check against the ensemble.
-                    bracket_prob = None
-                    if model_forecast and isinstance(model_forecast.get("projected_high_f"), (int, float)):
-                        if strike_spec:
-                            bracket_prob = calculate_bracket_probability(
-                                float(model_forecast["projected_high_f"]),
-                                strike_spec,
-                                uncertainty_std_f=1.8,
-                            )
-                            for price_key in ("price", "yes_ask", "yes_bid", "last_price"):
-                                val = quote.get(price_key)
-                                if isinstance(val, (int, float)) and 0.0 <= float(val) <= 1.0:
-                                    bracket_prob["market_implied_probability"] = round(float(val), 3)
-                                    bracket_prob["model_edge"] = round(
-                                        bracket_prob["model_probability"] - float(val), 3
-                                    )
-                                    break
-                                elif isinstance(val, (int, float)) and 1.0 < float(val) <= 100.0:
-                                    prob_val = float(val) / 100.0
-                                    bracket_prob["market_implied_probability"] = round(prob_val, 3)
-                                    bracket_prob["model_edge"] = round(
-                                        bracket_prob["model_probability"] - prob_val, 3
-                                    )
-                                    break
-
-                    # Cross-source divergence: when the deterministic read and
-                    # the ensemble mean sit on opposite sides of the strike,
-                    # the sources disagree and this is a no-trade signal, not
-                    # an edge.
-                    divergence = None
-                    if (
-                        ensemble_prob
-                        and bracket_prob
-                        and strike_spec
-                        and isinstance(ensemble_prob.get("model_probability"), (int, float))
-                        and isinstance(bracket_prob.get("model_probability"), (int, float))
-                    ):
-                        p_ens = float(ensemble_prob["model_probability"])
-                        p_det = float(bracket_prob["model_probability"])
-                        divergence = {
-                            "ensemble_probability": p_ens,
-                            "deterministic_probability": p_det,
-                            "abs_disagreement": round(abs(p_ens - p_det), 3),
-                            "sources_straddle_strike": (p_ens - 0.5) * (p_det - 0.5) < 0,
-                        }
-                        ensemble_prob["deterministic_cross_check"] = {
-                            "model_probability": p_det,
-                            "sources_straddle_strike": divergence["sources_straddle_strike"],
-                        }
-                        if divergence["sources_straddle_strike"]:
-                            ensemble_prob["trade_signal"] = "sources_disagree_no_trade"
-                        else:
-                            ensemble_prob["trade_signal"] = "sources_agree"
-                    result = {
-                        "weather_market": brief.as_dict(),
-                        "source_status": "nws_observation_available",
-                        "observations": [observation],
-                        "forecast_periods": periods,
-                        "model_forecast": model_forecast,
-                        "ensemble_forecast": ensemble,
-                        "ensemble_probability": ensemble_prob,
-                        "cross_source_divergence": divergence,
-                        "bracket_probability": bracket_prob,
-                        "research_cached": False,
-                        "notice": (
-                            "NWS observations and forecast are source-matched research inputs. The final NWS Daily "
-                            "Climate Report named in the contract remains the settlement authority."
-                        ),
-                    }
+                    data = _fetch_station_research(http_get, brief.station, target_day)
+                    result = _station_research_result(quote, brief, data, cached=False)
                     _record_nws_success()
-                    _cache_nws_research(brief.station, result)
+                    _cache_nws_research(cache_key, data)
                     outcome = "available"
                 except Exception as exc:
                     circuit_opened = _record_nws_failure()

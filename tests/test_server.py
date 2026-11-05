@@ -1535,7 +1535,7 @@ class ServerTests(unittest.TestCase):
         """A Kalshi "where will it rain" event link, quoted on its most contested city."""
         options = [
             {"label": label, "question": f"Will it rain in {label} on Nov 2?", "probability": p,
-             "quoted": label == "Boston"}
+             "quoted": label == "Boston", "ticker": f"KXRAIN-02-{label[:3].upper()}"}
             for label, p in (("Miami", 0.9), ("Boston", 0.4), ("Denver", 0.1))
         ]
         return {
@@ -1667,6 +1667,102 @@ class ServerTests(unittest.TestCase):
         # Given the named option as the example line, the 9B often answered
         # only that option.
         self.assertIn('like "Boston: 0.42"', self.provider.calls[0][-1]["content"])
+
+    def test_a_weather_market_gets_its_stations_forecast(self):
+        # The NWS / WeatherNext research only reached the trading agents and
+        # the weather radar: a pasted rain market got news about Dresden.
+        import analyzing_llm_rationale.market_data as md
+        import analyzing_llm_rationale.weather_research as wr
+
+        research = {
+            "source_status": "nws_observation_available",
+            "weather_market": {"station": "KMIA", "market_type": "precipitation",
+                               "settlement_source_label": "NWS Daily Climate Report"},
+            "observations": [{"timestamp": "2026-11-02T12:00:00Z", "temperature_f": 81.0}],
+            "forecast_periods": [
+                {"start_time": "2026-11-02T14:00:00-05:00", "temperature_f": 84, "short_forecast": "Showers",
+                 "precipitation_probability": 70},
+                {"start_time": "2026-11-02T15:00:00-05:00", "temperature_f": 83, "short_forecast": "Showers",
+                 "precipitation_probability": 60},
+            ],
+            "forecast_day_periods": [
+                {"name": "Monday", "detailed_forecast": "Showers likely. High near 84.", "precipitation_probability": 80},
+            ],
+            # A rain contract isn't priced on the day's high.
+            "model_forecast": {"provider": "open-meteo", "projected_high_f": 84.0, "projected_low_f": 75.0},
+        }
+        self.provider.responses = [*self._RAIN_ESTIMATES, "Showers are likely in Miami.\n[p:0.99]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()) as fetch_kalshi,
+            mock.patch.object(wr, "research_weather_market", return_value=research) as research_market,
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "will it rain in miami? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+                "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        # The named option's own market, not the one the link was quoted on.
+        self.assertEqual(fetch_kalshi.call_args_list[-1].args, ("KXRAIN-02-MIA",))
+        self.assertEqual(research_market.call_count, 1)
+        weather = response.json()["evidence_articles"][0]
+        self.assertEqual(weather["title"], "Weather forecast for KMIA")
+        self.assertEqual(weather["source"], "National Weather Service")
+        self.assertTrue(weather["summary"].startswith(
+            "NWS forecast for KMIA: Monday: Showers likely. High near 84 (chance of precipitation 80%)."
+        ))
+        self.assertIn("in any one hour peaks at 70% around 14:00; temperatures 83-84°F; Showers", weather["summary"])
+        self.assertIn("Latest NWS observation at KMIA", weather["summary"])
+        self.assertNotIn("Open-Meteo", weather["summary"])
+        self.assertIn("Weather forecast for KMIA", self.provider.calls[0][-2]["content"])
+        # Half the estimates copied the market against the station forecast.
+        self.assertIn("such as an official weather forecast", self.provider.calls[0][-1]["content"])
+
+    def test_estimates_weigh_a_station_forecast_only_when_there_is_one(self):
+        import analyzing_llm_rationale.market_data as md
+
+        self.provider.responses = [*self._RAIN_ESTIMATES, "Showers are likely in Miami.\n[p:0.99]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02", "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("official weather forecast", self.provider.calls[0][-1]["content"])
+
+    def test_an_event_reply_without_option_forecasts_has_no_lone_forecast(self):
+        # Its number is for whichever option it discussed: "Forecast: 35%"
+        # for Tampa was compared with the quoted market, Providence.
+        import analyzing_llm_rationale.market_data as md
+
+        self.provider.responses = ["I can't say.", "Showers are likely in Miami.\n[p:0.35]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "will it rain in miami? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+                "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIsNone(body["model_probability"])
+        self.assertEqual(body["options"], [])
+        self.assertTrue(body["rationale"].startswith("Showers are likely in Miami."))
 
     def test_event_options_are_the_quoted_named_and_most_informative(self):
         def options(event_exclusive, asked):
