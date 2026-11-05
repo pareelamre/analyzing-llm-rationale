@@ -7072,11 +7072,13 @@ _CHAT_ESTIMATE_RE = re.compile(r"\[p:\s*(0(?:\.\d+)?|1(?:\.0+)?)\s*\]")
 # With an NWS forecast for the contract's station in the evidence, half the
 # estimates still copied the market (Tampa rain 28% against an 11% forecast)
 # and the reply then argued for the forecast. Told to weigh "the station
-# forecast", 3 of 6 still copied it; told this, 0 of 6 did (median 10%), and
-# the cities without a forecast stayed at their prices.
+# forecast", 3 of 6 still copied it; told to weigh "the evidence, such as an
+# official weather forecast", 0 of 6 did, but 4 of 10 moved every city, with
+# or without a forecast. Scoped to the options a forecast covers, the other
+# cities kept their prices in 10 of 10, and Denver's brackets still moved.
 _CHAT_STATION_FORECAST_ASK = (
-    " Weigh the evidence, such as an official weather forecast, against each market price"
-    " instead of copying the price."
+    " Where the evidence has an official weather forecast for an option, weigh it against that option's"
+    " market price instead of copying the price; keep the other options at their prices."
 )
 
 
@@ -7254,13 +7256,18 @@ async def _chat_option_consensus(
             logger.warning("chat option estimate failed; answering without it error=%s", type(exc).__name__)
             break
         found: Dict[str, float] = {}
-        for label, value in _CHAT_OPTION_ESTIMATE_RE.findall(reply or ""):
+        # One sample in ten put them on one line: "Chicago: 0.68 | Milwaukee: 0.55".
+        for label, value in _CHAT_OPTION_ESTIMATE_RE.findall(re.sub(r"\s*[|;]\s*", "\n", reply or "")):
             key = _option_key(label)
             if key in estimates and key not in found:
                 found[key] = float(value)
-        if not found and attempts == 1:
-            logger.info("chat option estimates skipped: the model gave no probabilities")
-            return messages, None
+        if not found and not any(estimates.values()):
+            # A live Tampa answer lost its table to one sample without numbers;
+            # two in a row is a model that won't give them.
+            if attempts == 2:
+                logger.info("chat option estimates skipped: the model gave no probabilities")
+                return messages, None
+            continue
         for key, value in found.items():
             estimates[key].append(value)
     forecasts = {
