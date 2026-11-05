@@ -23,7 +23,7 @@ import threading
 import time
 import traceback
 import uuid
-from collections import OrderedDict, defaultdict
+from collections import Counter, OrderedDict, defaultdict
 from contextlib import AsyncExitStack, asynccontextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -400,12 +400,17 @@ _CHAT_ESTIMATE_SAMPLES = int(os.environ.get("CHAT_ESTIMATE_SAMPLES", "7"))
 _CHAT_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_ESTIMATE_BUDGET_S", "20"))
 # A pasted event link (one market per option) gets a forecast per option: the
 # median of this many estimates of all its options at once (see
-# _chat_option_consensus).
+# _chat_option_consensus). The first pays the whole prompt's prefill (14-19 s
+# with a station forecast in the evidence), the rest ~7 s each: at 35 s the
+# fifth timed out and too few were left for a table.
 _CHAT_OPTION_ESTIMATE_SAMPLES = int(os.environ.get("CHAT_OPTION_ESTIMATE_SAMPLES", "5"))
-_CHAT_OPTION_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_OPTION_ESTIMATE_BUDGET_S", "35"))
+_CHAT_OPTION_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_OPTION_ESTIMATE_BUDGET_S", "45"))
 _CHAT_EVENT_OPTIONS_MAX = 8
 # Options a question names are also searched for evidence, up to this many.
 _CHAT_NAMED_OPTION_SEARCHES = 2
+# A weather market's station forecasts (NWS, WeatherNext / Open-Meteo) are
+# fetched beside the news searches, within this many seconds.
+_WEATHER_EVIDENCE_TIMEOUT_S = float(os.environ.get("WEATHER_EVIDENCE_TIMEOUT_S", "15"))
 # A "deep"-tier question is deliberately allowed to reason harder (see
 # _REASONING_EFFORT_BY_TIER below), which routinely exceeds the 15s chat
 # budget above -- give it a bigger one instead of just timing out more often.
@@ -5374,6 +5379,7 @@ class PredictRequest(BaseModel):
     # Server state, never read from the request body.
     _event_options: Optional[Dict[str, Any]] = PrivateAttr(default=None)
     _option_forecasts: Optional[Dict[str, Any]] = PrivateAttr(default=None)
+    _station_forecast: bool = PrivateAttr(default=False)
 
 
 class OptionProb(BaseModel):
@@ -6953,6 +6959,11 @@ def _build_chat_response(
         # A question about a pasted page isn't a forecast, but the 9B tags it
         # anyway ("what are the main stories on bbc.com/news?" came back 92%).
         chat_prob = None
+    if req._event_options and not req._option_forecasts:
+        # The per-option estimates fell short, so the reply's lone number is
+        # for whichever option it discussed: "Forecast: 35%" for Tampa was
+        # compared with the price of Providence, the market quoted.
+        chat_prob = None
     option_forecasts = req._option_forecasts if chat_prob is not None else None
     if option_forecasts:
         text = f"{_option_forecast_table(option_forecasts)}\n\n{text}"
@@ -7058,6 +7069,15 @@ _CHAT_ESTIMATE_ASK = (
     "Before you explain anything: reply with only your probability for Yes, as [p:0.XX]. No other text."
 )
 _CHAT_ESTIMATE_RE = re.compile(r"\[p:\s*(0(?:\.\d+)?|1(?:\.0+)?)\s*\]")
+# With an NWS forecast for the contract's station in the evidence, half the
+# estimates still copied the market (Tampa rain 28% against an 11% forecast)
+# and the reply then argued for the forecast. Told to weigh "the station
+# forecast", 3 of 6 still copied it; told this, 0 of 6 did (median 10%), and
+# the cities without a forecast stayed at their prices.
+_CHAT_STATION_FORECAST_ASK = (
+    " Weigh the evidence, such as an official weather forecast, against each market price"
+    " instead of copying the price."
+)
 
 
 async def _chat_consensus(
@@ -7090,7 +7110,8 @@ async def _chat_consensus(
         return messages, None
     if req._event_options:
         return await _chat_option_consensus(req, provider, messages, req._event_options)
-    ask = [*messages, {"role": "user", "content": _CHAT_ESTIMATE_ASK}]
+    ask = [*messages, {"role": "user", "content": _CHAT_ESTIMATE_ASK
+                       + (_CHAT_STATION_FORECAST_ASK if req._station_forecast else "")}]
     deadline = time.monotonic() + _CHAT_ESTIMATE_BUDGET_S
     attempts = 0
     estimates: List[float] = []
@@ -7149,7 +7170,7 @@ def _chat_event_options(
     forecast, compared with its price), those the question names, then the
     likeliest of exclusive options (candidates) or the most contested of
     independent ones (rain in each city). Listed by market price. "named"
-    holds the named options' own questions, searched for evidence too.
+    holds the options named, whose own markets are searched for evidence too.
     """
     options = [o for o in quote.get("event_options") or [] if o.get("probability") is not None]
     if not req.chat_mode or len(options) < 2:
@@ -7169,7 +7190,7 @@ def _chat_event_options(
         "title": str(quote.get("event_title") or quote.get("question") or ""),
         "quoted_question": str(quote.get("question") or ""),
         "options": [dict(o) for o in chosen],
-        "named": [str(o["question"]) for o in named if o.get("question")],
+        "named": [dict(o) for o in named],
         "total": len(options),
         "exclusive": quote.get("event_exclusive") is True,
     }
@@ -7211,13 +7232,14 @@ async def _chat_option_consensus(
     # With the asked-about option as the example ("will it rain in tampa?",
     # like "Tampa: 0.42"), half the samples gave only "Tampa: 0.26". With
     # the first listed one, every sample covered every option.
-    named = set(event.get("named") or [])
-    example = next((o["label"] for o in options if o.get("question") not in named), options[0]["label"])
+    named = {o["label"] for o in event.get("named") or []}
+    example = next((o["label"] for o in options if o["label"] not in named), options[0]["label"])
     ask_text = _CHAT_OPTION_ESTIMATE_ASK.format(
         options="\n".join(f"- {o['label']}" for o in options),
         example=example,
     )
-    ask = [*messages, {"role": "user", "content": ask_text}]
+    ask = [*messages, {"role": "user", "content": ask_text
+                       + (_CHAT_STATION_FORECAST_ASK if req._station_forecast else "")}]
     deadline = time.monotonic() + _CHAT_OPTION_ESTIMATE_BUDGET_S
     attempts = 0
     while attempts < _CHAT_OPTION_ESTIMATE_SAMPLES and deadline - time.monotonic() > 1:
@@ -7355,6 +7377,156 @@ async def _fetch_market_context(
             {"market.venue": venue, "outcome": outcome},
         )
         return quote
+
+
+def _weather_evidence_article(
+    research: Dict[str, Any], day: Optional[str], subjects: Optional[List[str]] = None, *, daily_low: bool = False
+) -> Optional[Dict[str, Any]]:
+    """One weather contract's station research (weather_research) as an
+    evidence item, or None when there was no source-matched lookup.
+    ``subjects`` are the temperature contracts to price from it: the market
+    itself, or every option of its event ("56° to 57°")."""
+    from analyzing_llm_rationale.weather_research import contract_probabilities
+
+    if research.get("source_status") != "nws_observation_available":
+        return None
+    brief = research.get("weather_market") or {}
+    station = brief.get("station") or "the station"
+    temperature = "temperature" in str(brief.get("market_type") or "")
+    facts: List[str] = []
+    sources = ["National Weather Service"]
+    days = [p for p in research.get("forecast_day_periods") or [] if p.get("detailed_forecast")]
+    if days:
+        facts.append(f"NWS forecast for {station}: " + " ".join(
+            f"{p.get('name')}: {p['detailed_forecast'].rstrip('. ')}"
+            + (f" (chance of precipitation {p['precipitation_probability']:.0f}%)"
+               if isinstance(p.get("precipitation_probability"), (int, float)) else "") + "."
+            for p in days
+        ))
+    periods = [p for p in research.get("forecast_periods") or [] if isinstance(p, dict)]
+    if periods:
+        peak = max(periods, key=lambda p: p.get("precipitation_probability") or 0)
+        temps = [p["temperature_f"] for p in periods if isinstance(p.get("temperature_f"), (int, float))]
+        skies = [sky for sky, _ in Counter(p.get("short_forecast") for p in periods if p.get("short_forecast")).most_common(2)]
+        facts.append(
+            f"NWS hourly forecast for {station} {f'on {day}' if day else 'for the next hours'} "
+            f"({len(periods)} hours from {str(periods[0].get('start_time'))[11:16]} local): the chance of "
+            f"precipitation in any one hour peaks at {peak.get('precipitation_probability') or 0:.0f}% around "
+            f"{str(peak.get('start_time'))[11:16]}"
+            + (f"; temperatures {min(temps)}-{max(temps)}°F" if temps else "")
+            + (f"; {' then '.join(skies)}" if skies else "") + "."
+        )
+    observation = next(iter(research.get("observations") or []), {})
+    if isinstance(observation.get("temperature_f"), (int, float)):
+        rain = observation.get("precipitation_last_hour_mm")
+        facts.append(
+            f"Latest NWS observation at {station} ({observation.get('timestamp')}): "
+            f"{observation['temperature_f']:.0f}°F"
+            + (f", {rain} mm of precipitation in the last hour" if isinstance(rain, (int, float)) else "") + "."
+        )
+    model = research.get("model_forecast") or {}
+    if temperature and isinstance(model.get("projected_high_f"), (int, float)):
+        name = {
+            "google_maps_weather": "Google DeepMind WeatherNext/MetNet",
+            "open-meteo": "Open-Meteo multi-model",
+        }.get(model.get("provider"), str(model.get("provider")))
+        sources.append(name)
+        offset = model.get("station_bias_offset_f") or 0
+        facts.append(
+            f"{name} forecast {'for ' + model['forecast_day_local'] if model.get('forecast_day_local') else 'for the next 24 hours'}: "
+            f"high {model['projected_high_f']}°F, low {model.get('projected_low_f')}°F"
+            + (f" (with a {offset:+.1f}°F correction for this station)" if offset else "") + "."
+        )
+    ensemble = research.get("ensemble_forecast") or {}
+    members = temperature and not daily_low and ensemble.get("member_count")
+    if members:
+        ensemble_name = {"gfs025": "NOAA GFS"}.get(ensemble.get("model"), str(ensemble.get("model")))
+        sources.append(f"{ensemble_name} ensemble")
+        facts.append(
+            f"{members}-member {ensemble_name} ensemble: the day's high averages "
+            f"{ensemble.get('ensemble_mean_high_f')}°F (members range {ensemble.get('ensemble_min_high_f')}-"
+            f"{ensemble.get('ensemble_max_high_f')}°F)."
+        )
+    if temperature and subjects:
+        chances = contract_probabilities(research, subjects, daily_low=daily_low)
+        method = (
+            f"share of the {members} ensemble members, in the whole degrees the NWS reports" if members
+            else "the model forecast with a 1.8°F error, in the whole degrees the NWS reports"
+        )
+        priced = [(subject, p) for subject, p in chances.items() if p is not None]
+        if len(subjects) == 1 and priced:
+            facts.append(f"Weather-model chance this contract resolves Yes: {priced[0][1]:.0%} ({method}).")
+        elif priced:
+            facts.append(
+                f"Weather-model chance for each option ({method}): "
+                + "; ".join(f"{subject} {p:.0%}" for subject, p in priced) + "."
+            )
+    if not facts:
+        return None
+    facts.append(
+        f"The contract settles on the {brief.get('settlement_source_label') or 'source in its rules'} for "
+        f"{station}; these are forecasts, not that report."
+    )
+    return {
+        "title": f"Weather forecast for {station}" + (f" on {day}" if day else ""),
+        "source": ", ".join(sources),
+        "url": f"https://www.weather.gov/wrh/timeseries?site={station}",
+        "publish_date": datetime.now(timezone.utc).isoformat(),
+        "summary": " ".join(facts),
+        "text": " ".join(facts),
+    }
+
+
+async def _weather_evidence(req: "PredictRequest", quote: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Station forecasts for a weather market: the NWS forecasts and the
+    WeatherNext / Open-Meteo models of weather_research, which until now only
+    the trading agents and the weather radar read. On an event link they are
+    for the options the question names (each its own station), else for the
+    market itself, priced for every option of a temperature event. [] for any
+    other market."""
+    from analyzing_llm_rationale.weather_markets import classify_weather_market
+
+    market = quote or {
+        "question": req.question,
+        "description": req.description,
+        "resolution_criteria": req.resolution_criteria,
+        "ticker": req.market_ident,
+    }
+    brief = classify_weather_market(market)
+    if not brief.is_weather:
+        return []
+    event = req._event_options or {}
+    tickers = [o["ticker"] for o in event.get("named") or [] if o.get("ticker")][:_CHAT_NAMED_OPTION_SEARCHES]
+    subject = " ".join(str(market.get(k) or "") for k in ("question", "subtitle")).strip()
+    subjects = [o["label"] for o in event.get("options") or []] or [subject]
+    daily_low = bool(re.search(r"\b(?:lowest|minimum|low temp)", subject, re.IGNORECASE))
+
+    def research(ticker: Optional[str]) -> Optional[Dict[str, Any]]:
+        from analyzing_llm_rationale import market_data as md
+        from analyzing_llm_rationale.weather_research import contract_day, research_weather_market
+
+        contract = md.fetch_kalshi(ticker) if ticker else market
+        day = contract_day(contract)
+        return _weather_evidence_article(
+            research_weather_market(contract, target_day=day), day,
+            None if ticker else subjects, daily_low=daily_low,
+        )
+
+    loop = asyncio.get_running_loop()
+    try:
+        found = await asyncio.wait_for(
+            asyncio.gather(*(loop.run_in_executor(None, research, t) for t in tickers or [None]),
+                           return_exceptions=True),
+            timeout=_WEATHER_EVIDENCE_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("weather evidence timed out after %.0f s", _WEATHER_EVIDENCE_TIMEOUT_S)
+        return []
+    for error in (f for f in found if isinstance(f, BaseException)):
+        logger.warning("weather evidence unavailable: %s", type(error).__name__)
+    articles = [a for a in found if isinstance(a, dict)]
+    otel_trace.get_current_span().set_attribute("forecast.evidence.weather", len(articles))
+    return articles
 
 
 async def _fetch_evidence_with_cache(
@@ -7686,11 +7858,18 @@ async def _prepare_predict_messages(
         # searched by its own market's question: the event's title ("Where
         # will it rain on Nov 5?") finds rain in Dresden. The searches run
         # together and share the article budget, so the prompt is no longer.
-        option_questions = ((req._event_options or {}).get("named") or [])[:_CHAT_NAMED_OPTION_SEARCHES]
+        option_questions = [
+            str(o["question"]) for o in (req._event_options or {}).get("named") or [] if o.get("question")
+        ][:_CHAT_NAMED_OPTION_SEARCHES]
+        weather = asyncio.ensure_future(_weather_evidence(req, quote))
         searches = await asyncio.gather(*(
             _fetch_evidence_with_cache(question, evidence_top_k, source="forecast")
             for question in [evidence_question, *option_questions]
         ))
+        # Station forecasts come first, beside the venue's own context.
+        station_forecasts = await weather
+        req._station_forecast = bool(station_forecasts)
+        supplied_articles = _merge_evidence_articles(station_forecasts, supplied_articles)
         retrieved_articles, evidence_error, _ = searches[0]
         if option_questions:
             found = [s[0] for s in [*searches[1:], searches[0]]]

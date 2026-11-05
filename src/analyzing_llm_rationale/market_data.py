@@ -820,7 +820,7 @@ def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
     result = fetch_kalshi(leader["ticker"])
     options = [
         {"label": str(m.get("yes_sub_title") or m.get("ticker")), "question": str(m.get("title") or ""),
-         "probability": p, "quoted": m is leader}
+         "probability": p, "quoted": m is leader, "ticker": m.get("ticker")}
         for p, m in ranked if p >= 0
     ]
     if len(options) > 1:
