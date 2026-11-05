@@ -1530,6 +1530,136 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(forecast("Fed cut in December?").model_probability, 0.92)
         self.assertEqual(forecast("Will this pass? https://example.com/bill").model_probability, 0.92)
 
+    @staticmethod
+    def _rain_event_quote():
+        """A Kalshi "where will it rain" event link, quoted on its most contested city."""
+        options = [
+            {"label": label, "question": f"Will it rain in {label} on Nov 2?", "probability": p,
+             "quoted": label == "Boston"}
+            for label, p in (("Miami", 0.9), ("Boston", 0.4), ("Denver", 0.1))
+        ]
+        return {
+            "platform": "Kalshi", "ident": "KXRAIN-02-BOS", "question": "Will it rain in Boston on Nov 2?",
+            "market_url": "https://kalshi.com/markets/kxrain", "outcome": "Yes", "probability": 0.4,
+            "yes_bid": 0.39, "yes_ask": 0.41,
+            "description": "Outcomes in this event (market price): Miami 90%; Boston 40%; Denver 10%.",
+            "resolution_criteria": "If it rains in Boston on Nov 2, Yes.",
+            "event_title": "Rain on Nov 2?", "event_exclusive": False, "event_options": options,
+        }
+
+    _RAIN_ESTIMATES = [
+        "Miami: 0.80\nBoston: 0.30\nDenver: 0.10",
+        "- **Miami**: 0.90\n- **Boston**: 0.50\n- **Denver** (market 10%): 0.20",
+        "Miami: 0.85\nBoston: 0.35",
+        "Boston: [p:0.40]\nMiami: 0.95\nDenver: 0.05",
+        "Miami: 0.70\nBoston: 0.20\nDenver: 0.10",
+    ]
+
+    def test_an_event_link_gets_a_forecast_per_option(self):
+        import analyzing_llm_rationale.market_data as md
+
+        self.provider.responses = [*self._RAIN_ESTIMATES, "Showers are likely in Miami.\n[p:0.99]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ) as fetch_evidence,
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+                "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.provider.calls), 6)
+        self.assertEqual(self.provider.max_tokens[:5], [52] * 5)
+        # The prompt is about the event, not the one market the link was quoted on.
+        prompt = self.provider.calls[0][-2]["content"]
+        self.assertIn("Linked event: Rain on Nov 2?. Each option is its own Yes/No market", prompt)
+        self.assertNotIn("Market-Implied Probability", prompt)
+        self.assertIn("(One option's market; the others follow the same template.) If it rains", prompt)
+        self.assertEqual(fetch_evidence.call_args.args[0], "Rain on Nov 2?")
+        ask = self.provider.calls[0][-1]["content"]
+        self.assertIn("- Miami\n- Boston\n- Denver\n", ask)
+        self.assertIn('like "Denver: 0.42"', ask)
+        reply_prompt = self.provider.calls[5][-1]["content"]
+        self.assertIn("Your forecasts for these options are: Miami 85%; Boston 35%; Denver 10%.", reply_prompt)
+        self.assertIn("do not state any other probability", reply_prompt)
+        self.assertIn("End with the marker line [p:0.35]", reply_prompt)
+        body = response.json()
+        # The reply's [p:] is the quoted market's forecast, compared with its price.
+        self.assertEqual(body["model_probability"], 0.35)
+        self.assertEqual(body["market_analysis"]["market_probability"], 0.4)
+        self.assertEqual(body["options"], [
+            {"label": "Miami", "probability": 0.85}, {"label": "Boston", "probability": 0.35},
+            {"label": "Denver", "probability": 0.1},
+        ])
+        self.assertTrue(body["rationale"].startswith(
+            "**Forecast by option**\n\n| Option | Foresea | Market |\n|---|---|---|\n"
+            "| Miami | 85% | 90% |\n| Boston | 35% | 40% |\n| Denver | 10% | 10% |\n\nShowers are likely"
+        ))
+
+    def test_signed_in_market_questions_get_the_same_forecast(self):
+        # The research agent wrote one greedy JSON forecast, so neither the
+        # median nor the per-option table reached signed-in users.
+        import analyzing_llm_rationale.market_data as md
+
+        self.provider.responses = list(self._RAIN_ESTIMATES)
+        self.provider.stream_response = "Showers are likely in Miami.\n[p:0.99]"
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/agent/analyze/stream", json={
+                "question": "will it rain in denver? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        report = json.loads(response.text.rsplit("event: done\ndata: ", 1)[1])["report"]
+        self.assertEqual(report["question_type"], "chat")
+        self.assertEqual(report["model_probability"], 0.35)
+        self.assertEqual(report["outcome"], "Boston")
+        self.assertEqual([o["label"] for o in report["options"]], ["Miami", "Boston", "Denver"])
+        self.assertTrue(report["thesis"].startswith("**Forecast by option**"))
+        self.assertIn("Linked event: Rain on Nov 2?", self.provider.calls[0][-2]["content"])
+
+    def test_event_options_are_the_quoted_named_and_most_informative(self):
+        def options(event_exclusive, asked):
+            labels = ["Alice", "Bob", "Carol", "Dan", "Eve", "Fay", "Gus", "Hal", "Ida", "Jo"]
+            prices = [0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.01]
+            quote = {"question": "Will Gus?", "event_title": "Who?", "event_exclusive": event_exclusive,
+                     "event_options": [{"label": label, "question": f"Will {label}?", "probability": p,
+                                        "quoted": label == "Gus"} for label, p in zip(labels, prices)]}
+            req = server_module.PredictRequest(question="Who will win the race?", chat_mode=True)
+            event = server_module._chat_event_options(req, quote, asked=asked)
+            return [o["label"] for o in event["options"]], event["total"]
+
+        # Candidates: the likeliest, plus the quoted market and any named one.
+        self.assertEqual(options(True, "what about jo?"),
+                         (["Alice", "Bob", "Carol", "Dan", "Eve", "Fay", "Gus", "Jo"], 10))
+        # Independent markets (rain in each city): the most contested.
+        self.assertEqual(options(False, ""), (["Bob", "Carol", "Dan", "Eve", "Fay", "Gus", "Hal", "Ida"], 10))
+        # A label inside a longer word isn't a mention.
+        self.assertNotIn("Jo", options(True, "the jobs report")[0])
+
+    def test_exclusive_option_forecasts_add_up_to_one(self):
+        event = {"title": "Who wins?", "quoted_question": "Will A win?", "total": 2, "exclusive": True,
+                 "options": [{"label": "A", "question": "Will A win?", "probability": 0.5, "quoted": True},
+                             {"label": "B", "question": "Will B win?", "probability": 0.5, "quoted": False}]}
+        req = server_module.PredictRequest(question="Who will win the race?", chat_mode=True)
+        self.provider.responses = ["A: 0.60\nB: 0.60"] * 3
+        with mock.patch.object(server_module, "_CHAT_OPTION_ESTIMATE_SAMPLES", 3):
+            _, lead = asyncio.run(server_module._chat_option_consensus(
+                req, self.provider, [{"role": "user", "content": "Who wins?"}], event,
+            ))
+
+        self.assertEqual(lead, 0.5)
+        self.assertEqual([o["forecast"] for o in req._option_forecasts["options"]], [0.5, 0.5])
+
     def test_streamed_chat_forecast_uses_the_median_of_quick_estimates(self):
         self.provider.responses = ["[p:0.40]", "[p:0.30]", "[p:0.35]"]
         self.provider.stream_response = "It could go either way.\n[p:0.90]"

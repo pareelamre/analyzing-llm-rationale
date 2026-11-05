@@ -4350,7 +4350,7 @@ function makeAIBubble(data, variant, options = {}) {
     }
     div.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
-        ${isChatForecast ? `<div class="market-lens mb-3"><div class="market-lens-grid"><div class="market-lens-cell"><div class="k">Forecast probability</div><div class="v">${fmtPct01(chatForecastProbability)}</div><div class="sub">Foresea estimate</div></div></div></div>` : ''}
+        ${isChatForecast && !(data.options || []).length ? `<div class="market-lens mb-3"><div class="market-lens-grid"><div class="market-lens-cell"><div class="k">Forecast probability</div><div class="v">${fmtPct01(chatForecastProbability)}</div><div class="sub">Foresea estimate</div></div></div></div>` : ''}
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
         ${isChatForecast && options.includeActions !== false ? forecastActionsHtml(data, { ledgerOnly: true }) : ''}
@@ -12313,6 +12313,7 @@ function _agentReportData(report) {
   return {
     question_type: 'chat',
     question: d.question || '',
+    options: d.options || [],
     thesis: d.thesis || '',
     rationale: _agentReportToMarkdown(d, { includeSources: false }),
     model_key: 'agent',

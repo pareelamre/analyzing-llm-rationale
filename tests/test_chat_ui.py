@@ -80,7 +80,9 @@ class ChatUiTests(unittest.TestCase):
         )
         self.assertIn("const isChatForecast = chatForecastProbability != null;", chat_reply)
         self.assertNotIn("ledgerProbability(data)", chat_reply)
-        self.assertIn("isChatForecast ? `<div class=\"market-lens", chat_reply)
+        # An event's per-option forecasts come as a table in the reply instead.
+        self.assertIn("isChatForecast && !(data.options || []).length ? `<div class=\"market-lens", chat_reply)
+        self.assertIn("options: d.options || [],", self.index_html)
         self.assertIn("isChatForecast && options.includeActions !== false", chat_reply)
         self.assertIn("function normalizedProbability", self.index_html)
         self.assertIn("function statedForecastProbability", self.index_html)
