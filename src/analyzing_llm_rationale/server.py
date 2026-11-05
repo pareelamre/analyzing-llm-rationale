@@ -8,6 +8,7 @@ import hmac
 import html
 import io
 import ipaddress
+import itertools
 import json
 import logging
 import math
@@ -403,6 +404,8 @@ _CHAT_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_ESTIMATE_BUDGET_S", "20"))
 _CHAT_OPTION_ESTIMATE_SAMPLES = int(os.environ.get("CHAT_OPTION_ESTIMATE_SAMPLES", "5"))
 _CHAT_OPTION_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_OPTION_ESTIMATE_BUDGET_S", "35"))
 _CHAT_EVENT_OPTIONS_MAX = 8
+# Options a question names are also searched for evidence, up to this many.
+_CHAT_NAMED_OPTION_SEARCHES = 2
 # A "deep"-tier question is deliberately allowed to reason harder (see
 # _REASONING_EFFORT_BY_TIER below), which routinely exceeds the 15s chat
 # budget above -- give it a bigger one instead of just timing out more often.
@@ -7145,7 +7148,8 @@ def _chat_event_options(
     At most _CHAT_EVENT_OPTIONS_MAX: the quoted market (the reply's [p:] is its
     forecast, compared with its price), those the question names, then the
     likeliest of exclusive options (candidates) or the most contested of
-    independent ones (rain in each city). Listed by market price.
+    independent ones (rain in each city). Listed by market price. "named"
+    holds the named options' own questions, searched for evidence too.
     """
     options = [o for o in quote.get("event_options") or [] if o.get("probability") is not None]
     if not req.chat_mode or len(options) < 2:
@@ -7165,6 +7169,7 @@ def _chat_event_options(
         "title": str(quote.get("event_title") or quote.get("question") or ""),
         "quoted_question": str(quote.get("question") or ""),
         "options": [dict(o) for o in chosen],
+        "named": [str(o["question"]) for o in named if o.get("question")],
         "total": len(options),
         "exclusive": quote.get("event_exclusive") is True,
     }
@@ -7668,11 +7673,27 @@ async def _prepare_predict_messages(
             evidence_top_k = max(evidence_top_k, 5)
 
     if req.attach_evidence:
-        retrieved_articles, evidence_error, _ = await _fetch_evidence_with_cache(
-            evidence_question,
-            evidence_top_k,
-            source="forecast",
-        )
+        # An option the question names ("will it rain in tampa?") is also
+        # searched by its own market's question: the event's title ("Where
+        # will it rain on Nov 5?") finds rain in Dresden. The searches run
+        # together and share the article budget, so the prompt is no longer.
+        option_questions = ((req._event_options or {}).get("named") or [])[:_CHAT_NAMED_OPTION_SEARCHES]
+        searches = await asyncio.gather(*(
+            _fetch_evidence_with_cache(question, evidence_top_k, source="forecast")
+            for question in [evidence_question, *option_questions]
+        ))
+        retrieved_articles, evidence_error, _ = searches[0]
+        if option_questions:
+            found = [s[0] for s in [*searches[1:], searches[0]]]
+            interleaved = [a for row in itertools.zip_longest(*found) for a in row if a]
+            retrieved_articles = _merge_evidence_articles([], interleaved)[
+                :min(evidence_top_k, _EVIDENCE_TOP_K_MAX)
+            ]
+            if retrieved_articles:
+                evidence_error = None
+            otel_trace.get_current_span().set_attribute(
+                "forecast.evidence.option_searches", len(option_questions)
+            )
 
     evidence_articles = _merge_evidence_articles(supplied_articles, retrieved_articles)
     evidence_articles = [_clean_article(a) for a in evidence_articles]
