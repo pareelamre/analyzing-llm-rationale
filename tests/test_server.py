@@ -1627,6 +1627,41 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(report["thesis"].startswith("**Forecast by option**"))
         self.assertIn("Linked event: Rain on Nov 2?", self.provider.calls[0][-2]["content"])
 
+    def test_a_named_option_is_searched_by_its_own_question(self):
+        # The event's title ("Where will it rain on Nov 5?") found rain in
+        # Dresden; the named city's own market finds its forecast.
+        import analyzing_llm_rationale.market_data as md
+
+        def search(question, top_k, *, source):
+            place = "Denver" if "Denver" in question else "Event"
+            articles = [{"title": f"{place} {i}", "url": f"https://news.test/{place}/{i}", "summary": "Rain."}
+                        for i in range(top_k)]
+            return articles, None, "fresh_nonempty"
+
+        self.provider.responses = [*self._RAIN_ESTIMATES, "Showers are likely in Miami.\n[p:0.99]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(side_effect=search),
+            ) as fetch_evidence,
+            mock.patch.object(server_module, "_EVIDENCE_TOP_K_MAX", 4),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "will it rain in denver? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+                "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [c.args[0] for c in fetch_evidence.call_args_list],
+            ["Rain on Nov 2?", "Will it rain in Denver on Nov 2?"],
+        )
+        # The searches share the article budget, the named option's first.
+        self.assertEqual(
+            [a["title"] for a in response.json()["evidence_articles"]],
+            ["Denver 0", "Event 0", "Denver 1", "Event 1"],
+        )
+
     def test_event_options_are_the_quoted_named_and_most_informative(self):
         def options(event_exclusive, asked):
             labels = ["Alice", "Bob", "Carol", "Dan", "Eve", "Fay", "Gus", "Hal", "Ida", "Jo"]
