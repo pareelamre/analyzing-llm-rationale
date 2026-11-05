@@ -1582,11 +1582,13 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(fetch_evidence.call_args.args[0], "Rain on Nov 2?")
         ask = self.provider.calls[0][-1]["content"]
         self.assertIn("- Miami\n- Boston\n- Denver\n", ask)
-        self.assertIn('like "Denver: 0.42"', ask)
+        self.assertIn('like "Miami: 0.42"', ask)
         reply_prompt = self.provider.calls[5][-1]["content"]
         self.assertIn("Your forecasts for these options are: Miami 85%; Boston 35%; Denver 10%.", reply_prompt)
         self.assertIn("do not state any other probability", reply_prompt)
-        self.assertIn("End with the marker line [p:0.35]", reply_prompt)
+        # The quoted option's [p:] is pinned, not shown: a reply about another
+        # option took it for that option's forecast.
+        self.assertNotIn("0.35", reply_prompt)
         body = response.json()
         # The reply's [p:] is the quoted market's forecast, compared with its price.
         self.assertEqual(body["model_probability"], 0.35)
@@ -1633,7 +1635,7 @@ class ServerTests(unittest.TestCase):
         import analyzing_llm_rationale.market_data as md
 
         def search(question, top_k, *, source):
-            place = "Denver" if "Denver" in question else "Event"
+            place = "Miami" if "Miami" in question else "Event"
             articles = [{"title": f"{place} {i}", "url": f"https://news.test/{place}/{i}", "summary": "Rain."}
                         for i in range(top_k)]
             return articles, None, "fresh_nonempty"
@@ -1645,22 +1647,26 @@ class ServerTests(unittest.TestCase):
                 server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(side_effect=search),
             ) as fetch_evidence,
             mock.patch.object(server_module, "_EVIDENCE_TOP_K_MAX", 4),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
         ):
             response = self.client.post("/predict", json={
-                "question": "will it rain in denver? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+                "question": "will it rain in miami? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
                 "chat_mode": True,
             })
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             [c.args[0] for c in fetch_evidence.call_args_list],
-            ["Rain on Nov 2?", "Will it rain in Denver on Nov 2?"],
+            ["Rain on Nov 2?", "Will it rain in Miami on Nov 2?"],
         )
         # The searches share the article budget, the named option's first.
         self.assertEqual(
             [a["title"] for a in response.json()["evidence_articles"]],
-            ["Denver 0", "Event 0", "Denver 1", "Event 1"],
+            ["Miami 0", "Event 0", "Miami 1", "Event 1"],
         )
+        # Given the named option as the example line, the 9B often answered
+        # only that option.
+        self.assertIn('like "Boston: 0.42"', self.provider.calls[0][-1]["content"])
 
     def test_event_options_are_the_quoted_named_and_most_informative(self):
         def options(event_exclusive, asked):
