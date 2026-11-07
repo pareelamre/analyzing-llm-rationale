@@ -133,6 +133,27 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(ledger, [])
         self.assertIs(payload["indices"][0]["recorded"], False)
 
+    def test_the_month_ahead_shape_pools_every_index_and_shorter_horizons_keep_their_own(self):
+        calm = _series(seed=1)
+        # A second index with fat tails: a 5% jump every 40 sessions.
+        rng = np.random.default_rng(2)
+        jumps = np.where(np.arange(len(calm)) % 40 == 0, rng.choice([-0.05, 0.05], len(calm)), 0.0)
+        wild = list(zip([d for d, _ in calm], np.exp(np.log(20000) + np.cumsum(rng.normal(0, 0.01, len(calm)) + jumps)).tolist()))
+        data = {"levels": {"Nifty 50": calm, "Nifty Bank": wild}, "vix": _vix([d for d, _ in calm]), "holidays": []}
+        evening = datetime.combine(calm[-1][0], datetime.min.time(), tzinfo=IST) + timedelta(hours=19)
+
+        payload, _ = ixf.run(data, [], evening)
+        in_run = {hz["h"]: hz for hz in next(f for f in payload["indices"] if f["name"] == "Nifty 50")["horizons"]}
+        alone = {hz["h"]: hz for hz in ixf.forecast_index("Nifty 50", calm, data["vix"], [])["horizons"]}
+        fits = {name: ixf.fit_index(closes, data["vix"]) for name, closes in data["levels"].items()}
+        pooled = {hz["h"]: hz for hz in ixf.build_forecast("Nifty 50", fits["Nifty 50"], [], ixf.pooled_shapes(fits.values()))["horizons"]}
+
+        self.assertEqual(in_run[1]["quantiles"], alone[1]["quantiles"])
+        self.assertEqual(in_run[5]["quantiles"], alone[5]["quantiles"])
+        self.assertNotEqual(in_run[21]["quantiles"], alone[21]["quantiles"])
+        self.assertEqual(in_run[21]["quantiles"], pooled[21]["quantiles"])
+        self.assertEqual(payload["model"]["pooled_shape_horizons"], [21])
+
     def test_an_index_without_history_is_left_out_with_a_note(self):
         closes = _series(n=1100)
         evening = datetime.combine(closes[-1][0], datetime.min.time(), tzinfo=IST) + timedelta(hours=19)

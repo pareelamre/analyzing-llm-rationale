@@ -8,8 +8,9 @@ is a calibrated range, not a direction.
 The model is a HAR-style variance regression: realized variance over the horizon is regressed
 on a fast EWMA, a slow EWMA and India VIX, refit every day on the last 750 sessions. Its
 residuals, standardized by the fitted volatility, give the shape of the distribution, so fat
-tails come from the data rather than a normal assumption. A plain EWMA normal forecast is
-recorded alongside as the baseline the live track record is scored against.
+tails come from the data rather than a normal assumption. For the 21-session horizon the ten
+indices' residuals are pooled into one shape (see POOLED_SHAPE_HORIZONS). A plain EWMA normal
+forecast is recorded alongside as the baseline the live track record is scored against.
 
 Forecasts are only issued between the close they are made from and the next session's open,
 so a late run can never record a forecast for a close that has already happened.
@@ -51,16 +52,24 @@ WARMUP_SESSIONS = 250
 TRAINING_SESSIONS = 750
 FETCH_SESSIONS = 1000
 
+#: Horizons whose residual shape pools every index forecast that day. 750 sessions hold only
+#: about 35 separate 21-session outcomes per index, so one index's own tails are noisy. In the
+#: 2016-2026 walk-forward, pooling the ten indices beat each index's own shape at 21 sessions on
+#: quantile loss, Brier on "closes higher" (0.2434 to 0.2409 in 2016-20, 0.2435 to 0.2417 in
+#: 2021-26) and Brier on the round levels, in both halves. At 1 and 5 sessions it did worse.
+POOLED_SHAPE_HORIZONS = (21,)
+
 #: This module walked forward over Yahoo Finance copies of the ten indices (Nifty Midcap 50
-#: standing in for Midcap Select, whose history Yahoo lacks): a forecast every fifth session
-#: from 2016, each fit on the 1,000 sessions before it, scored like the live ledger.
+#: standing in for Midcap Select, whose history Yahoo lacks): a forecast every fifth Nifty 50
+#: session from 2016, each index fit on the 1,000 sessions before it and the 21-session shape
+#: pooled as run() does, scored like the live ledger.
 BACKTEST = {
     "window": "2016-2026",
     "indices": 10,
     "by_horizon": [
-        {"h": 1, "n": 5335, "coverage_50": 0.496, "coverage_80": 0.803, "coverage_90": 0.898, "skill_vs_baseline": 0.013},
-        {"h": 5, "n": 5326, "coverage_50": 0.506, "coverage_80": 0.797, "coverage_90": 0.895, "skill_vs_baseline": 0.012},
-        {"h": 21, "n": 5295, "coverage_50": 0.487, "coverage_80": 0.784, "coverage_90": 0.885, "skill_vs_baseline": 0.011},
+        {"h": 1, "n": 5327, "coverage_50": 0.485, "coverage_80": 0.796, "coverage_90": 0.893, "skill_vs_baseline": 0.006},
+        {"h": 5, "n": 5327, "coverage_50": 0.498, "coverage_80": 0.798, "coverage_90": 0.900, "skill_vs_baseline": 0.010},
+        {"h": 21, "n": 5287, "coverage_50": 0.505, "coverage_80": 0.793, "coverage_90": 0.887, "skill_vs_baseline": 0.010},
     ],
     "direction": "Up/down calls from momentum, trend, volatility and VIX features had no skill (AUC 0.47-0.52).",
 }
@@ -231,18 +240,35 @@ def next_sessions(after: date, count: int, holidays: Iterable[date]) -> list[dat
     return out
 
 
-def forecast_index(name: str, closes, vix, holidays) -> Optional[dict[str, Any]]:
-    """Today's forecast for one index at every horizon, or None without enough history."""
+def fit_index(closes, vix) -> Optional[dict[int, dict[str, Any]]]:
+    """Every horizon's fit for one index, or None without enough history."""
     if len(closes) < WARMUP_SESSIONS + 300:
         return None
     fits = {h: fit_horizon(closes, vix, h) for h in HORIZONS}
-    if any(fit is None for fit in fits.values()):
-        return None
+    return None if any(fit is None for fit in fits.values()) else fits
+
+
+def pooled_shapes(all_fits: Iterable[dict[int, dict[str, Any]]]) -> dict[int, np.ndarray]:
+    """The standardized residuals of every fitted index together, for POOLED_SHAPE_HORIZONS."""
+    all_fits = list(all_fits)
+    if not all_fits:
+        return {}
+    return {h: np.sort(np.concatenate([fits[h]["z"] for fits in all_fits])) for h in POOLED_SHAPE_HORIZONS}
+
+
+def forecast_index(name: str, closes, vix, holidays) -> Optional[dict[str, Any]]:
+    """Today's forecast for one index at every horizon from its own residuals alone."""
+    fits = fit_index(closes, vix)
+    return build_forecast(name, fits, holidays) if fits else None
+
+
+def build_forecast(name: str, fits: dict[int, dict[str, Any]], holidays, shapes: Optional[dict[int, np.ndarray]] = None) -> dict[str, Any]:
+    """The forecast from one index's fits. ``shapes`` replaces its own residuals at those horizons."""
     as_of, close = fits[1]["as_of"], fits[1]["close"]
     sessions = next_sessions(as_of, max(HORIZONS), holidays)
     horizons = []
     for h, fit in fits.items():
-        sigma, z = fit["sigma"], fit["z"]
+        sigma, z = fit["sigma"], (shapes or {}).get(h, fit["z"])
         horizons.append({
             "h": h,
             "target_date": sessions[h - 1].isoformat(),
@@ -344,12 +370,14 @@ def run(data: dict[str, Any], ledger: list[dict], now: datetime) -> tuple[dict, 
     score_ledger(ledger, data["levels"])
     known = {(row["name"], row["as_of"]) for row in ledger}
     forecasts, notes = [], []
+    fitted = {name: fit_index(data["levels"].get(name) or [], data["vix"]) for name, _ in INDICES}
+    shapes = pooled_shapes(fits for fits in fitted.values() if fits)
     for name, _ in INDICES:
-        forecast = forecast_index(name, data["levels"].get(name) or [], data["vix"], holidays)
-        if forecast is None:
+        if fitted[name] is None:
             # Left out rather than carried over: an old forecast would read as today's.
             notes.append(f"{name}: not enough Tapetide history to forecast.")
             continue
+        forecast = build_forecast(name, fitted[name], holidays, shapes)
         if (name, forecast["as_of"]) not in known:
             if issue_window_open(date.fromisoformat(forecast["as_of"]), now, holidays):
                 ledger.extend(ledger_rows(forecast, now))
@@ -370,6 +398,7 @@ def run(data: dict[str, Any], ledger: list[dict], now: datetime) -> tuple[dict, 
             "quantiles": list(QUANTILES),
             "horizons": list(HORIZONS),
             "baseline": "EWMA (0.94) volatility, normal distribution",
+            "pooled_shape_horizons": list(POOLED_SHAPE_HORIZONS),
         },
         "backtest": BACKTEST,
         "indices": forecasts,
