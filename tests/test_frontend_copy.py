@@ -698,13 +698,26 @@ function escHtml(s) {
         for name, index in self._both().items():
             with self.subTest(file=name):
                 self.assertIn('data-eb-view="agentic">Agentic</button>', index)
-                self.assertIn("['mtm', 'agentic'].includes(view)", index)
+                self.assertIn("['mtm', 'agentic', 'indices'].includes(view)", index)
                 self.assertIn('id="eb-agentic-section"', index)
                 # _ebSetView triggers the fetch when switching onto the tab.
                 setview = index.split("function _ebSetView(view) {", 1)[1].split(
                     "function _equitySvg", 1
                 )[0]
                 self.assertIn("loadAgentTradingSection()", setview)
+
+    def test_indices_is_a_real_edge_board_tab_refreshed_like_agentic(self):
+        # Like Agentic, the Indices data is not in the /edge-board payload, so every
+        # place that repopulates Agentic after renderEdgeBoard() must do Indices too.
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertIn('data-eb-view="indices">Indices</button>', index)
+                self.assertIn('id="eb-indices-section"', index)
+                self.assertIn("/markets/index-forecast", index)
+                self.assertEqual(
+                    index.count("if (_ebView === 'agentic') loadAgentTradingSection();"),
+                    index.count("if (_ebView === 'indices') loadIndexForecastSection();"),
+                )
 
     def test_periodic_refresh_repopulates_the_agentic_tab(self):
         # Regression test: renderEdgeBoard() only ever emits a "Loading…"
