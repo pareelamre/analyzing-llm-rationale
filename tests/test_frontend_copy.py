@@ -698,7 +698,7 @@ function escHtml(s) {
         for name, index in self._both().items():
             with self.subTest(file=name):
                 self.assertIn('data-eb-view="agentic">Agentic</button>', index)
-                self.assertIn("['mtm', 'agentic', 'indices'].includes(view)", index)
+                self.assertIn("['mtm', 'agentic', 'indices', 'pairs'].includes(view)", index)
                 self.assertIn('id="eb-agentic-section"', index)
                 # _ebSetView triggers the fetch when switching onto the tab.
                 setview = index.split("function _ebSetView(view) {", 1)[1].split(
@@ -717,6 +717,17 @@ function escHtml(s) {
                 self.assertEqual(
                     index.count("if (_ebView === 'agentic') loadAgentTradingSection();"),
                     index.count("if (_ebView === 'indices') loadIndexForecastSection();"),
+                )
+
+    def test_commodity_pairs_is_a_real_edge_board_tab_refreshed_like_agentic(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertIn('data-eb-view="pairs">Commodity Pairs</button>', index)
+                self.assertIn('id="eb-pairs-section"', index)
+                self.assertIn("/markets/commodity-pairs", index)
+                self.assertEqual(
+                    index.count("if (_ebView === 'agentic') loadAgentTradingSection();"),
+                    index.count("if (_ebView === 'pairs') loadCommodityPairsSection();"),
                 )
 
     def test_periodic_refresh_repopulates_the_agentic_tab(self):

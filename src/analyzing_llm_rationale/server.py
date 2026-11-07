@@ -195,6 +195,15 @@ _INDEX_FORECAST_URL = os.environ.get(
 )
 _INDEX_FORECAST_TTL = int(os.environ.get("INDEX_FORECAST_TTL", "300"))
 _INDEX_FORECAST_STALE_AFTER_S = int(os.environ.get("INDEX_FORECAST_STALE_AFTER_S", str(4 * 86400)))
+# Commodity pair tracker (scripts/commodity_pairs_tick.py, published by
+# .github/workflows/commodity-pairs.yml once a day from complete sessions).
+_COMMODITY_PAIRS_URL = os.environ.get(
+    "COMMODITY_PAIRS_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/commodity_pairs_live.json",
+)
+_COMMODITY_PAIRS_TTL = int(os.environ.get("COMMODITY_PAIRS_TTL", "300"))
+_COMMODITY_PAIRS_STALE_AFTER_S = int(os.environ.get("COMMODITY_PAIRS_STALE_AFTER_S", str(4 * 86400)))
 # Agentic shadow-trading board (scripts/build_agent_trading_board.py, published by
 # .github/workflows/agent-trading-board-publish.yml on its own cadence, separate
 # from the deterministic-Kelly mark-to-market ledgers above). Shadow/paper only.
@@ -2309,6 +2318,23 @@ _INDEX_FORECAST_READER = live_track_record_support.LiveTrackRecordReader(
     ),
     logger=logger,
 )
+_COMMODITY_PAIRS_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_COMMODITY_PAIRS_URL,
+        ttl_seconds=_COMMODITY_PAIRS_TTL,
+        stale_after_seconds=_COMMODITY_PAIRS_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "commodity_pairs_live.json",
+        request_timeout_seconds=_TRACK_RECORD_LIVE_TIMEOUT,
+        cache_namespace="commodity_pairs_live",
+        cache_version="v1",
+        resource_label="commodity pair tracker",
+        user_agent="Foresea/commodity-pairs",
+    ),
+    logger=logger,
+)
 _AGENT_TRADING_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
     cache_key=_cache_key,
     cache_get=_cache_get,
@@ -3438,8 +3464,8 @@ async def edge_page(request: Request) -> Response:
 
 @app.get("/edge/{panel:path}", include_in_schema=False)
 async def edge_panel_page(panel: str, request: Request) -> Response:
-    """Refresh-safe URL for one edge-board sub-panel (markets/mtm/agentic/indices)."""
-    if panel not in ("mtm", "agentic", "indices"):
+    """Refresh-safe URL for one edge-board sub-panel (markets/mtm/agentic/indices/pairs)."""
+    if panel not in ("mtm", "agentic", "indices", "pairs"):
         raise HTTPException(status_code=404)
     return await _spa_page(request, "edge")
 
@@ -10521,6 +10547,25 @@ async def markets_index_forecast() -> JSONResponse:
         raise HTTPException(status_code=404, detail="Index forecasts publish after the next NSE close.")
     body = {**payload, "freshness": _INDEX_FORECAST_READER.freshness(payload)}
     body.pop("holidays", None)
+    return JSONResponse(body, headers={"Cache-Control": "public, max-age=300"})
+
+
+@app.get(
+    "/markets/commodity-pairs",
+    tags=["Markets"],
+    summary="Statistical-arbitrage tracker for ten commodity pairs",
+)
+async def markets_commodity_pairs() -> JSONResponse:
+    """How stretched ten commodity pair spreads are, and the live record of stretched-pair signals.
+
+    Built once a day from Tapetide commodity prices by scripts/commodity_pairs_tick.py. A
+    monitor, not a strategy: the same signal rule lost money on half the pairs in a
+    2011-2026 backtest, which the payload carries per pair.
+    """
+    payload = await asyncio.get_running_loop().run_in_executor(None, _COMMODITY_PAIRS_READER.read)
+    if not payload or not payload.get("pairs"):
+        raise HTTPException(status_code=404, detail="The commodity pair tracker has not published yet.")
+    body = {**payload, "freshness": _COMMODITY_PAIRS_READER.freshness(payload)}
     return JSONResponse(body, headers={"Cache-Control": "public, max-age=300"})
 
 
