@@ -1097,6 +1097,10 @@
     .eb-view-tab { border: 0; border-radius: 5px; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 6px 12px; }
     .eb-view-tab.active { background: var(--ink); color: #fff; }
     .eb-view-tab:not(.active):hover { background: var(--paper); color: var(--text); }
+    .ixf-scroll { overflow-x: auto; }
+    .ixf-levels { display: flex; flex-wrap: wrap; gap: 4px; min-width: 300px; }
+    .ixf-level { background: var(--paper); border-radius: 4px; font-size: 11.5px; padding: 1px 6px; white-space: nowrap; }
+    .ixf-late { color: var(--text-dim); font-size: 10px; font-weight: 600; margin-left: 4px; text-transform: uppercase; }
     .eb-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 0 0 12px; padding: 8px 10px; background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
     .eb-filter-pill { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 500; color: var(--text-dim); cursor: pointer; transition: all 0.15s ease; }
     .eb-filter-pill:hover { color: var(--text); border-color: #999; }
@@ -5777,7 +5781,7 @@ function normaliseAppPath(pathname = window.location.pathname) {
 // Edge board sub-panels (Markets/MTM/Agentic) get their own path segment off
 // /edge so a refresh lands back on whichever panel was open, not always Markets.
 function parseEdgePath(pathname) {
-  const m = /^\/edge(?:\/(mtm|agentic))?$/.exec(pathname);
+  const m = /^\/edge(?:\/(mtm|agentic|indices))?$/.exec(pathname);
   return m ? { panel: m[1] || 'markets' } : null;
 }
 function historyUrlFor(view, convId = null, panel = null) {
@@ -6351,6 +6355,7 @@ async function refreshEdgeForecasts() {
       // Agentic tab (its data isn't part of this /edge-board payload), so
       // the periodic re-render above wipes it -- re-fetch to repopulate.
       if (_ebView === 'agentic') loadAgentTradingSection();
+      if (_ebView === 'indices') loadIndexForecastSection();
     }
   } catch (_) {}
 }
@@ -6636,6 +6641,7 @@ function _startEdgeTimers() {
   _crypto5mTimer   = setInterval(loadCrypto5mEquity, 30 * 1000);
   _agentTradingTimer = setInterval(() => {
     if (_ebView === 'agentic') loadAgentTradingSection();
+    if (_ebView === 'indices') loadIndexForecastSection();
   }, AGENT_TRADING_REFRESH_MS);
 }
 
@@ -6650,6 +6656,7 @@ document.addEventListener('visibilitychange', () => {
   refreshEdgeForecasts();
   loadCrypto5mEquity();
   if (_ebView === 'agentic') loadAgentTradingSection();
+  if (_ebView === 'indices') loadIndexForecastSection();
 });
 
 async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
@@ -6769,6 +6776,7 @@ async function loadEdgeBoard() {
     // Deep link / refresh straight into the Agentic panel: renderEdgeBoard() only
     // emits a placeholder for it since its data isn't part of this payload.
     if (_ebView === 'agentic') loadAgentTradingSection();
+    if (_ebView === 'indices') loadIndexForecastSection();
     _restoreEdgeBoardScroll();
     if (window.Motion && !prefersReduced()) {
       const stats = host.querySelectorAll('.tr-stat');
@@ -7024,6 +7032,99 @@ function _agentTradingSignature(data) {
     data?.leaderboard?.length || 0,
     data?.recent_activity?.[0]?.ts || data?.recent_activity?.[0]?.timestamp || '',
   ]);
+}
+
+// NSE index range forecasts (Edge board -> Indices), published once per trading
+// day by .github/workflows/index-forecast.yml and served at /markets/index-forecast.
+let _ixfData = null;
+let _ixfHorizon = 5;
+let _ixfRequest = null;
+const _IXF_HORIZON_LABEL = { 1: 'Next session', 5: '1 week', 21: '1 month' };
+
+function _ixfNum(x) {
+  const n = Number(x);
+  return Number.isFinite(n) ? n.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—';
+}
+
+function _ixfPct(p) {
+  const n = Number(p);
+  if (!Number.isFinite(n)) return '—';
+  if (n < 0.01) return '<1%';
+  if (n > 0.99) return '>99%';
+  return Math.round(n * 100) + '%';
+}
+
+function _ixfSetHorizon(h) {
+  _ixfHorizon = h;
+  if (_ixfData) renderIndexForecast(_ixfData);
+}
+
+async function loadIndexForecastSection() {
+  if (!document.getElementById('eb-indices-section')) return;
+  if (_ixfData) renderIndexForecast(_ixfData);
+  if (_ixfRequest) return _ixfRequest;
+  _ixfRequest = (async () => {
+    try {
+      const r = await _liveJsonFetch('/markets/index-forecast');
+      const d = await _readJson(r);
+      if (!r.ok) throw new Error(d.detail || 'Could not load the index forecasts.');
+      _ixfData = d;
+      renderIndexForecast(d);
+    } catch (err) {
+      if (!_ixfData) renderIndexForecast({ error: err.message || 'Could not load the index forecasts.' });
+    } finally {
+      _ixfRequest = null;
+    }
+  })();
+  return _ixfRequest;
+}
+
+function renderIndexForecast(d) {
+  const host = document.getElementById('eb-indices-section');
+  if (!host) return;
+  if (d.error) {
+    host.innerHTML = `<p class="text-sm text-gray-500">${escHtml(d.error)}</p>`;
+    return;
+  }
+  const h = _ixfHorizon;
+  const indices = d.indices || [];
+  const target = (indices[0]?.horizons || []).find(x => x.h === h)?.target_date;
+  const tabs = `<div class="eb-view-tabs" role="tablist" aria-label="Forecast horizon">` + [1, 5, 21].map(x =>
+    `<button type="button" class="eb-view-tab ${x === h ? 'active' : ''}" role="tab" aria-selected="${x === h}" onclick="_ixfSetHorizon(${x})">${_IXF_HORIZON_LABEL[x]}</button>`
+  ).join('') + `</div>`;
+  const rows = indices.map(ix => {
+    const f = (ix.horizons || []).find(x => x.h === h);
+    if (!f) return '';
+    const q = f.quantiles || [];
+    const levels = (f.levels || []).map(l => `<span class="ixf-level">${_ixfNum(l.level)} · <b>${_ixfPct(l.p_above)}</b></span>`).join('');
+    const late = ix.recorded === false
+      ? `<span class="ixf-late" title="Built after the next session opened, so it is kept out of the track record">late</span>` : '';
+    return `<tr class="eb-row"><td><b>${escHtml(ix.name)}</b>${late}</td><td>${_ixfNum(ix.close)}</td>`
+      + `<td>${_ixfNum(q[1])} – ${_ixfNum(q[5])}</td><td>${_ixfNum(q[3])}</td><td>${_ixfPct(f.p_up)}</td>`
+      + `<td><div class="ixf-levels">${levels}</div></td></tr>`;
+  }).join('');
+  const live = Object.fromEntries((d.track_record?.by_horizon || []).map(r => [r.h, r]));
+  const back = Object.fromEntries((d.backtest?.by_horizon || []).map(r => [r.h, r]));
+  const skill = s => (s == null ? '—' : `${s >= 0 ? '+' : ''}${(s * 100).toFixed(1)}%`);
+  const cov = c => (c == null ? '—' : (c * 100).toFixed(1) + '%');
+  const record = [1, 5, 21].map(x => {
+    const l = live[x] || {}, b = back[x] || {};
+    const liveCells = l.n
+      ? `<td>${l.n}</td><td>${cov(l.coverage_80)}</td><td>${cov(l.coverage_90)}</td><td>${skill(l.skill_vs_baseline)}</td>`
+      : `<td>0</td><td colspan="3" style="color:var(--text-dim)">scores once the first targets close</td>`;
+    return `<tr class="eb-row"><td><b>${_IXF_HORIZON_LABEL[x]}</b></td>${liveCells}`
+      + `<td>${cov(b.coverage_80)}</td><td>${skill(b.skill_vs_baseline)}</td></tr>`;
+  }).join('');
+  const updated = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
+  const stale = d.freshness?.stale
+    ? `<p class="text-xs" style="color:#b45309;margin:6px 0 0">These forecasts have not been refreshed for over four days.</p>` : '';
+  host.innerHTML = `
+    <p class="text-sm" style="color:var(--text-dim);margin:0 0 12px">Where ten NSE indices are likely to close, from the ${escHtml(_fmtDate(d.as_of))} close${target ? ` to the close on ${escHtml(_fmtDate(target))}` : ''}. These are ranges, not direction calls: in a 2016–2026 test no model called up or down better than each index's long-run up-rate, so "Higher" mostly reflects that drift. ${updated ? 'Updated ' + escHtml(updated) + '.' : ''}</p>${stale}
+    ${tabs}
+    <div class="ixf-scroll"><table class="eb-table" style="margin-top:12px"><thead><tr><th>Index</th><th>Close</th><th>80% range</th><th>Median</th><th>Higher</th><th>Chance of closing above</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <h4 class="eb-h">Track record: does the price land inside the range as often as it should?</h4>
+    <div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Horizon</th><th>Scored</th><th>In 80% range</th><th>In 90% range</th><th>vs EWMA</th><th>Backtest 80%</th><th>Backtest vs EWMA</th></tr></thead><tbody>${record}</tbody></table></div>
+    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Model: volatility from fast and slow EWMAs and India VIX, refit daily on ${escHtml(String(d.model?.training_sessions || 750))} sessions, with fat tails taken from its own past errors. "vs EWMA" compares quantile loss with a plain EWMA normal forecast. Data: ${escHtml(d.source || 'Tapetide')}. Research forecasts, not investment advice.</p>`;
 }
 
 async function loadAgentTradingSection() {
@@ -8185,7 +8286,7 @@ function _ebGoPage(n) {
 }
 
 function _ebSetView(view) {
-  _ebView = ['mtm', 'agentic'].includes(view) ? view : 'markets';
+  _ebView = ['mtm', 'agentic', 'indices'].includes(view) ? view : 'markets';
   const host = document.getElementById('edgeBody');
   if (!host) return;
   if (!_ebLastData) {
@@ -8202,6 +8303,7 @@ function _ebSetView(view) {
   _restoreEdgeBoardScroll();
   refreshEdgePrices();
   if (_ebView === 'agentic') loadAgentTradingSection();
+  if (_ebView === 'indices') loadIndexForecastSection();
 }
 
 function _modelLogoSymbol(modelOrLabel) {
@@ -9439,13 +9541,15 @@ function renderEdgeBoard(d) {
     <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" data-eb-view="markets">Markets</button>
     <button type="button" class="eb-view-tab ${_ebView === 'mtm' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'mtm'}" data-eb-view="mtm">MTM</button>
     <button type="button" class="eb-view-tab ${_ebView === 'agentic' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'agentic'}" data-eb-view="agentic">Agentic</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'indices' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'indices'}" data-eb-view="indices">Indices</button>
   </div>`;
   const marketsPageHtml = `${stats}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live Foresea forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
   const mtmPageHtml = _renderMtmPage(d);
   const agenticPageHtml = `<div id="eb-agentic-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
-  const activePageHtml = _ebView === 'mtm' ? mtmPageHtml : _ebView === 'agentic' ? agenticPageHtml : marketsPageHtml;
+  const indicesPageHtml = `<div id="eb-indices-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
+  const activePageHtml = _ebView === 'mtm' ? mtmPageHtml : _ebView === 'agentic' ? agenticPageHtml : _ebView === 'indices' ? indicesPageHtml : marketsPageHtml;
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced - and our track record of being right about it</h3>

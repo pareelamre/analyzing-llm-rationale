@@ -913,6 +913,8 @@ const pMtm = sandbox.parseEdgePath('/edge/mtm');
 if (!pMtm || pMtm.panel !== 'mtm') throw new Error('parseEdgePath /edge/mtm failed');
 const pAgentic = sandbox.parseEdgePath('/edge/agentic');
 if (!pAgentic || pAgentic.panel !== 'agentic') throw new Error('parseEdgePath /edge/agentic failed');
+const pIndices = sandbox.parseEdgePath('/edge/indices');
+if (!pIndices || pIndices.panel !== 'indices') throw new Error('parseEdgePath /edge/indices failed');
 
 // 3. Legacy hash routes
 const hMtm = sandbox.legacyRouteFromHash('#edge/mtm');

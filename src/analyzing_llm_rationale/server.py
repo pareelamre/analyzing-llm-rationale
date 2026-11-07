@@ -184,6 +184,17 @@ _MARK_TO_MARKET_LIVE_TIMEOUT = int(
 _MARK_TO_MARKET_STALE_AFTER_S = int(
     os.environ.get("MARK_TO_MARKET_STALE_AFTER_S", str(_EDGE_BOARD_STALE_AFTER_S))
 )
+# NSE index range forecasts (scripts/index_forecast_tick.py, published by
+# .github/workflows/index-forecast.yml once per trading day after the close).
+# A weekend leaves the newest payload from Friday evening, so it is stale only
+# after four days without a publish.
+_INDEX_FORECAST_URL = os.environ.get(
+    "INDEX_FORECAST_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/index_forecast_live.json",
+)
+_INDEX_FORECAST_TTL = int(os.environ.get("INDEX_FORECAST_TTL", "300"))
+_INDEX_FORECAST_STALE_AFTER_S = int(os.environ.get("INDEX_FORECAST_STALE_AFTER_S", str(4 * 86400)))
 # Agentic shadow-trading board (scripts/build_agent_trading_board.py, published by
 # .github/workflows/agent-trading-board-publish.yml on its own cadence, separate
 # from the deterministic-Kelly mark-to-market ledgers above). Shadow/paper only.
@@ -2281,6 +2292,23 @@ _MARK_TO_MARKET_READER = live_track_record_support.LiveTrackRecordReader(
     source=_gcs_payload_source("MARK_TO_MARKET", "mark_to_market_live.json"),
 )
 _read_mark_to_market_record = _MARK_TO_MARKET_READER.read
+_INDEX_FORECAST_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_INDEX_FORECAST_URL,
+        ttl_seconds=_INDEX_FORECAST_TTL,
+        stale_after_seconds=_INDEX_FORECAST_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "index_forecast_live.json",
+        request_timeout_seconds=_TRACK_RECORD_LIVE_TIMEOUT,
+        cache_namespace="index_forecast_live",
+        cache_version="v1",
+        resource_label="index range forecasts",
+        user_agent="Foresea/index-forecast",
+    ),
+    logger=logger,
+)
 _AGENT_TRADING_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
     cache_key=_cache_key,
     cache_get=_cache_get,
@@ -3410,8 +3438,8 @@ async def edge_page(request: Request) -> Response:
 
 @app.get("/edge/{panel:path}", include_in_schema=False)
 async def edge_panel_page(panel: str, request: Request) -> Response:
-    """Refresh-safe URL for one edge-board sub-panel (markets/mtm/agentic)."""
-    if panel not in ("mtm", "agentic"):
+    """Refresh-safe URL for one edge-board sub-panel (markets/mtm/agentic/indices)."""
+    if panel not in ("mtm", "agentic", "indices"):
         raise HTTPException(status_code=404)
     return await _spa_page(request, "edge")
 
@@ -10474,6 +10502,26 @@ async def agent_debate(req: DebateRequest) -> Dict[str, Any]:
         ),
     )
     return res
+
+
+@app.get(
+    "/markets/index-forecast",
+    tags=["Markets"],
+    summary="Calibrated range forecasts for ten NSE indices",
+)
+async def markets_index_forecast() -> JSONResponse:
+    """Today's 1-, 5- and 21-session range forecasts for ten NSE indices and their track record.
+
+    Built once per trading day from Tapetide's official index levels and India VIX by
+    scripts/index_forecast_tick.py. The forecasts are ranges and the chance of closing above
+    round levels, not direction calls: a walk-forward test found no up/down skill.
+    """
+    payload = await asyncio.get_running_loop().run_in_executor(None, _INDEX_FORECAST_READER.read)
+    if not payload or not payload.get("indices"):
+        raise HTTPException(status_code=404, detail="Index forecasts publish after the next NSE close.")
+    body = {**payload, "freshness": _INDEX_FORECAST_READER.freshness(payload)}
+    body.pop("holidays", None)
+    return JSONResponse(body, headers={"Cache-Control": "public, max-age=300"})
 
 
 @app.get(

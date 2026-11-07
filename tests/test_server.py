@@ -5201,6 +5201,7 @@ class ServerTests(unittest.TestCase):
             ("/edge", "edge", "no-cache"),
             ("/edge/mtm", "edge", "no-cache"),
             ("/edge/agentic", "edge", "no-cache"),
+            ("/edge/indices", "edge", "no-cache"),
             ("/track", "track", "no-cache"),
             ("/ledger", "ledger", "no-cache"),
             ("/chat/conv_123", "chat", "no-cache"),
@@ -5225,6 +5226,30 @@ class ServerTests(unittest.TestCase):
         r = self.client.get("/edge/bogus")
 
         self.assertEqual(r.status_code, 404)
+
+    def test_index_forecast_serves_the_published_payload_with_its_age(self):
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "as_of": "2026-11-06",
+            "indices": [{"name": "Nifty 50", "close": 25030.35, "horizons": []}],
+            "holidays": ["2026-11-24"],
+        }
+        with mock.patch.object(server_module._INDEX_FORECAST_READER, "read", return_value=payload):
+            r = self.client.get("/markets/index-forecast")
+
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["indices"][0]["name"], "Nifty 50")
+        self.assertFalse(body["freshness"]["stale"])
+        self.assertNotIn("holidays", body)
+        self.assertEqual(r.headers.get("cache-control"), "public, max-age=300")
+
+    def test_index_forecast_is_404_before_the_first_publish(self):
+        with mock.patch.object(server_module._INDEX_FORECAST_READER, "read", return_value=None):
+            r = self.client.get("/markets/index-forecast")
+
+        self.assertEqual(r.status_code, 404)
+        self.assertIn("next NSE close", r.json()["detail"])
 
     def test_chat_page_route_does_not_reflect_hostile_path_input(self):
         r = self.client.get("/chat/conv_%22%3E%3Cimg%20src=x%20onerror=alert(1)%3E")

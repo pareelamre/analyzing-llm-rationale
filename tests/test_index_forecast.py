@@ -1,0 +1,231 @@
+from __future__ import annotations
+
+import importlib.util
+import math
+import sys
+import unittest
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+
+import numpy as np
+
+_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_ROOT / "src"))
+
+from analyzing_llm_rationale import index_forecast as ixf  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location("index_forecast_tick", _ROOT / "scripts" / "index_forecast_tick.py")
+tick = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(tick)
+
+IST = ixf.IST
+
+
+def _sessions(start: date, n: int, holidays=()) -> list[date]:
+    out, day = [], start
+    while len(out) < n:
+        if day.weekday() < 5 and day not in holidays:
+            out.append(day)
+        day += timedelta(days=1)
+    return out
+
+
+def _series(n=1100, vol=0.01, seed=0, start=date(2022, 1, 3)):
+    rng = np.random.default_rng(seed)
+    days = _sessions(start, n)
+    logp = np.log(20000) + np.cumsum(rng.normal(0, vol, n))
+    return list(zip(days, np.exp(logp).tolist()))
+
+
+def _vix(days, level=16.0):
+    return [(d, level) for d in days]
+
+
+class FitTests(unittest.TestCase):
+    def test_a_steady_series_gets_its_own_volatility_back(self):
+        closes = _series(vol=0.01)
+        fit = ixf.fit_horizon(closes, _vix([d for d, _ in closes], 0.01 * math.sqrt(252) * 100), 1)
+
+        self.assertAlmostEqual(fit["sigma"], 0.01, delta=0.0015)
+        self.assertAlmostEqual(fit["baseline_sigma"], 0.01, delta=0.003)
+        self.assertEqual(fit["as_of"], closes[-1][0])
+
+    def test_quantiles_rise_and_level_chances_fall(self):
+        closes = _series()
+        forecast = ixf.forecast_index("Nifty 50", closes, _vix([d for d, _ in closes]), [])
+
+        self.assertEqual([hz["h"] for hz in forecast["horizons"]], [1, 5, 21])
+        for hz in forecast["horizons"]:
+            self.assertEqual(hz["quantiles"], sorted(hz["quantiles"]))
+            chances = [lvl["p_above"] for lvl in hz["levels"]]
+            self.assertEqual(chances, sorted(chances, reverse=True))
+            self.assertTrue(0.3 < hz["p_up"] < 0.7)
+        widths = [hz["quantiles"][5] - hz["quantiles"][1] for hz in forecast["horizons"]]
+        self.assertLess(widths[0], widths[1])
+        self.assertLess(widths[1], widths[2])
+
+    def test_short_history_gives_no_forecast(self):
+        closes = _series(n=400)
+        self.assertIsNone(ixf.forecast_index("Nifty 50", closes, _vix([d for d, _ in closes]), []))
+
+    def test_target_dates_skip_weekends_and_holidays(self):
+        friday = date(2026, 11, 6)
+        self.assertEqual(ixf.next_sessions(friday, 2, [date(2026, 11, 9)]), [date(2026, 11, 10), date(2026, 11, 11)])
+
+    def test_round_levels_bracket_the_close_and_stay_positive(self):
+        levels = ixf.round_levels(25030.35, 0.009)
+        # sigma 0.9% of 25,030 is 226 points; half of that is nearest a 100-point step.
+        self.assertEqual(levels, [24800, 24900, 25000, 25100, 25200, 25300])
+        self.assertTrue(all(level > 0 for level in ixf.round_levels(4000, 0.6)))
+
+
+class IssueWindowTests(unittest.TestCase):
+    def test_open_from_the_close_until_the_next_session_opens(self):
+        friday = date(2026, 11, 6)
+        at = lambda d, h, m: datetime(d.year, d.month, d.day, h, m, tzinfo=IST)  # noqa: E731
+
+        self.assertFalse(ixf.issue_window_open(friday, at(friday, 15, 0), []))
+        self.assertTrue(ixf.issue_window_open(friday, at(friday, 19, 0), []))
+        self.assertTrue(ixf.issue_window_open(friday, at(date(2026, 11, 9), 9, 0), []))
+        self.assertFalse(ixf.issue_window_open(friday, at(date(2026, 11, 9), 9, 15), []))
+        # Monday a holiday: the window runs on to Tuesday's open.
+        self.assertTrue(ixf.issue_window_open(friday, at(date(2026, 11, 9), 12, 0), [date(2026, 11, 9)]))
+
+
+class LedgerTests(unittest.TestCase):
+    def _data(self, closes):
+        return {"levels": {"Nifty 50": closes}, "vix": _vix([d for d, _ in closes]), "holidays": []}
+
+    def test_run_records_once_and_scores_when_the_target_closes(self):
+        closes = _series(n=1100)
+        as_of = closes[-6][0]
+        evening = datetime.combine(as_of, datetime.min.time(), tzinfo=IST) + timedelta(hours=19)
+
+        payload, ledger = ixf.run(self._data(closes[:-5]), [], evening)
+        self.assertEqual(len(ledger), 3)
+        self.assertEqual({row["as_of"] for row in ledger}, {as_of.isoformat()})
+        self.assertEqual(payload["track_record"]["pending"], 3)
+        self.assertNotIn("recorded", payload["indices"][0])
+
+        # A rerun the same evening adds nothing.
+        _, ledger = ixf.run(self._data(closes[:-5]), ledger, evening)
+        self.assertEqual(len(ledger), 3)
+
+        # Five sessions later the 1- and 5-session rows score against those closes.
+        later = datetime.combine(closes[-1][0], datetime.min.time(), tzinfo=IST) + timedelta(hours=19)
+        payload, ledger = ixf.run(self._data(closes), ledger, later)
+        by_h = {row["h"]: row for row in ledger if row["as_of"] == as_of.isoformat()}
+        self.assertEqual(by_h[1]["realized"], round(closes[-5][1], 2))
+        self.assertEqual(by_h[1]["realized_date"], closes[-5][0].isoformat())
+        self.assertEqual(by_h[5]["realized"], round(closes[-1][1], 2))
+        self.assertIsNone(by_h[21].get("realized"))
+        summary = {row["h"]: row for row in payload["track_record"]["by_horizon"]}
+        self.assertEqual(summary[1]["n"], 1)
+        self.assertEqual(summary[21]["n"], 0)
+        self.assertEqual(len(payload["track_record"]["recent"]), 2)
+
+    def test_a_forecast_built_after_the_next_open_is_kept_out_of_the_ledger(self):
+        closes = _series(n=1100)
+        late = datetime.combine(closes[-1][0] + timedelta(days=3), datetime.min.time(), tzinfo=IST) + timedelta(hours=12)
+
+        payload, ledger = ixf.run(self._data(closes), [], late)
+
+        self.assertEqual(ledger, [])
+        self.assertIs(payload["indices"][0]["recorded"], False)
+
+    def test_an_index_without_history_is_left_out_with_a_note(self):
+        closes = _series(n=1100)
+        evening = datetime.combine(closes[-1][0], datetime.min.time(), tzinfo=IST) + timedelta(hours=19)
+
+        payload, _ = ixf.run(self._data(closes), [], evening)
+
+        self.assertEqual([item["name"] for item in payload["indices"]], ["Nifty 50"])
+        self.assertTrue(any("Nifty Bank" in note for note in payload["notes"]))
+
+    def test_coverage_and_skill_come_from_the_scored_rows(self):
+        row = {"name": "Nifty 50", "as_of": "2026-11-02", "h": 1, "close": 100.0, "p_up": 0.5,
+               "quantiles": [95, 96, 98, 100, 102, 104, 105], "baseline_quantiles": [90, 92, 96, 100, 104, 108, 110]}
+        series = [(date(2026, 11, 2), 100.0), (date(2026, 11, 3), 103.0)]
+
+        self.assertEqual(ixf.score_ledger([row], {"Nifty 50": series}), 1)
+        self.assertEqual((row["in_50"], row["in_80"], row["in_90"], row["up"]), (False, True, True, True))
+        summary = ixf.summarize_ledger([row])[0]
+        self.assertEqual(summary["coverage_80"], 1.0)
+        self.assertGreater(summary["skill_vs_baseline"], 0)
+
+
+class _Resp:
+    def __init__(self, status, body):
+        self.status_code, self._body = status, body
+
+    def json(self):
+        return self._body
+
+
+class TapetideClientTests(unittest.TestCase):
+    def test_pages_follow_the_cursor(self):
+        pages = [
+            _Resp(200, {"data": [{"date": "2026-11-05", "close": 1}], "meta": {"next_cursor": "c2"}}),
+            _Resp(200, {"data": [{"date": "2026-11-06", "close": 2}], "meta": {"next_cursor": None}}),
+        ]
+        seen = []
+
+        def get(url, params, timeout, headers):
+            seen.append(dict(params))
+            self.assertEqual(headers["Authorization"], "Bearer tok")
+            return pages.pop(0)
+
+        rows = ixf.tapetide_get("/v1/indices/nifty-50/levels", "tok", {"limit": 2}, http_get=get)
+        self.assertEqual([r["close"] for r in rows], [1, 2])
+        self.assertEqual(seen[1]["cursor"], "c2")
+
+    def test_a_plan_notice_or_http_error_raises(self):
+        notice = _Resp(200, {"data": None, "notice": {"code": "api_access_not_in_plan"}})
+        with self.assertRaisesRegex(ixf.TapetideError, "api_access_not_in_plan"):
+            ixf.tapetide_get("/v1/market/vix/history", "tok", http_get=lambda *a, **k: notice)
+        limited = _Resp(429, {"error": {"code": "quota_exhausted", "message": "x"}})
+        with self.assertRaisesRegex(ixf.TapetideError, "quota_exhausted"):
+            ixf.tapetide_get("/v1/market/vix/history", "tok", http_get=lambda *a, **k: limited)
+
+    def test_a_daily_fetch_costs_thirteen_requests(self):
+        calls = []
+
+        def get(url, params, timeout, headers):
+            calls.append(url)
+            if url.endswith("/reference/indices"):
+                return _Resp(200, {"data": [{"name": "Nifty Midcap Select", "slug": "nifty-midcap-select-x"}], "meta": {}})
+            if url.endswith("/holidays"):
+                return _Resp(200, {"data": [{"date": "2026-11-24", "exchange": "NSE", "type": "FULL"}], "meta": {}})
+            return _Resp(200, {"data": [{"date": "2026-11-06", "close": 100.0}], "meta": {}})
+
+        data = ixf.fetch_market_data("tok", date(2026, 11, 7), http_get=get)
+
+        self.assertEqual(len(calls), 13)
+        self.assertIn("https://api.tapetide.com/v1/indices/nifty-midcap-select-x/levels", calls)
+        self.assertIn("https://api.tapetide.com/v1/indices/nifty-50/levels", calls)
+        self.assertEqual(data["holidays"], [date(2026, 11, 24)])
+        self.assertEqual(data["vix"], [(date(2026, 11, 6), 100.0)])
+
+
+class TickScheduleTests(unittest.TestCase):
+    def test_skips_once_the_latest_close_is_published(self):
+        saturday = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+        previous = {"as_of": "2026-11-06", "generated_at": "2026-11-06T13:10:00+00:00", "holidays": []}
+        self.assertTrue(tick.already_published(previous, saturday))
+
+    def test_fetches_after_a_new_close_and_waits_while_tapetide_catches_up(self):
+        monday_evening = datetime(2026, 11, 9, 13, 10, tzinfo=timezone.utc)  # 18:40 IST
+        previous = {"as_of": "2026-11-06", "generated_at": "2026-11-06T13:10:00+00:00", "holidays": []}
+        self.assertFalse(tick.already_published(previous, monday_evening))
+        retried = {**previous, "generated_at": "2026-11-09T12:00:00+00:00"}
+        self.assertTrue(tick.already_published(retried, monday_evening))
+        self.assertFalse(tick.already_published(retried, monday_evening + timedelta(hours=3)))
+
+    def test_monday_morning_still_counts_friday_as_the_latest_close(self):
+        monday_morning = datetime(2026, 11, 9, 2, 0, tzinfo=timezone.utc)  # 07:30 IST
+        self.assertEqual(tick._latest_close(monday_morning, []), date(2026, 11, 6))
+        self.assertEqual(tick._latest_close(monday_morning + timedelta(hours=9), []), date(2026, 11, 9))
+
+
+if __name__ == "__main__":
+    unittest.main()
