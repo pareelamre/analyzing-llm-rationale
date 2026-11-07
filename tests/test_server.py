@@ -5202,6 +5202,7 @@ class ServerTests(unittest.TestCase):
             ("/edge/mtm", "edge", "no-cache"),
             ("/edge/agentic", "edge", "no-cache"),
             ("/edge/indices", "edge", "no-cache"),
+            ("/edge/pairs", "edge", "no-cache"),
             ("/track", "track", "no-cache"),
             ("/ledger", "ledger", "no-cache"),
             ("/chat/conv_123", "chat", "no-cache"),
@@ -5243,6 +5244,25 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(body["freshness"]["stale"])
         self.assertNotIn("holidays", body)
         self.assertEqual(r.headers.get("cache-control"), "public, max-age=300")
+
+    def test_commodity_pairs_serves_the_published_payload_with_its_age(self):
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data_through": "2026-11-06",
+            "pairs": [{"key": "gold-silver", "label": "Gold / Silver", "z": 1.02}],
+        }
+        with mock.patch.object(server_module._COMMODITY_PAIRS_READER, "read", return_value=payload):
+            r = self.client.get("/markets/commodity-pairs")
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["pairs"][0]["key"], "gold-silver")
+        self.assertFalse(r.json()["freshness"]["stale"])
+
+    def test_commodity_pairs_is_404_before_the_first_publish(self):
+        with mock.patch.object(server_module._COMMODITY_PAIRS_READER, "read", return_value=None):
+            r = self.client.get("/markets/commodity-pairs")
+
+        self.assertEqual(r.status_code, 404)
 
     def test_index_forecast_is_404_before_the_first_publish(self):
         with mock.patch.object(server_module._INDEX_FORECAST_READER, "read", return_value=None):

@@ -1,0 +1,67 @@
+name: Commodity pair tracker
+
+# Daily statistical-arbitrage tracker for ten commodity pairs from Tapetide
+# commodity prices. It uses complete sessions only, so any hour after midnight
+# IST works; GitHub drops most scheduled slots here
+# (docs/SCHEDULED_WORKFLOW_DELIVERY.md), hence hourly. The script spends no
+# Tapetide quota once the newest weekday is published and waits six hours
+# between fetches while Tapetide catches up.
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Fetch even when the newest weekday is already published"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: commodity-pairs
+  cancel-in-progress: false
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install --quiet 'numpy>=1.26' requests
+
+      - name: Track pairs
+        env:
+          TAPETIDE_API_TOKEN: ${{ secrets.TAPETIDE_API_TOKEN }}
+        run: python scripts/commodity_pairs_tick.py ${{ inputs.force && '--force' || '' }}
+
+      - name: Commit tracker
+        env:
+          GIT_REBASE_KEEP_THEIRS: "static/commodity_pairs_live.json,data/commodity_pairs_ledger.jsonl"
+          MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add static/commodity_pairs_live.json data/commodity_pairs_ledger.jsonl 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No tracker changes to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p ~/.ssh
+          printf '%s' "$MTM_PUBLISH_DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/mtm_publish_deploy_key
+          chmod 600 ~/.ssh/mtm_publish_deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
+          git commit -m "commodity pairs: daily tick [skip ci]"
+          bash .github/scripts/push_with_rebase_retry.sh origin main

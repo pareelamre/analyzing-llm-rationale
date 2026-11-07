@@ -1101,6 +1101,10 @@
     .ixf-levels { display: flex; flex-wrap: wrap; gap: 4px; min-width: 300px; }
     .ixf-level { background: var(--paper); border-radius: 4px; font-size: 11.5px; padding: 1px 6px; white-space: nowrap; }
     .ixf-late { color: var(--text-dim); font-size: 10px; font-weight: 600; margin-left: 4px; text-transform: uppercase; }
+    .cpt-z { border-radius: 4px; font-variant-numeric: tabular-nums; font-weight: 650; padding: 1px 6px; white-space: nowrap; }
+    .cpt-z.hot { background: #fef3c7; color: #92400e; }
+    .cpt-chip { background: var(--paper); border-radius: 4px; color: var(--text-dim); font-size: 10px; font-weight: 600; margin-left: 4px; padding: 1px 5px; text-transform: uppercase; white-space: nowrap; }
+    .cpt-why { color: var(--text-dim); font-size: 11.5px; margin-top: 2px; max-width: 260px; }
     .eb-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 0 0 12px; padding: 8px 10px; background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
     .eb-filter-pill { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 500; color: var(--text-dim); cursor: pointer; transition: all 0.15s ease; }
     .eb-filter-pill:hover { color: var(--text); border-color: #999; }
@@ -5781,7 +5785,7 @@ function normaliseAppPath(pathname = window.location.pathname) {
 // Edge board sub-panels (Markets/MTM/Agentic) get their own path segment off
 // /edge so a refresh lands back on whichever panel was open, not always Markets.
 function parseEdgePath(pathname) {
-  const m = /^\/edge(?:\/(mtm|agentic|indices))?$/.exec(pathname);
+  const m = /^\/edge(?:\/(mtm|agentic|indices|pairs))?$/.exec(pathname);
   return m ? { panel: m[1] || 'markets' } : null;
 }
 function historyUrlFor(view, convId = null, panel = null) {
@@ -6356,6 +6360,7 @@ async function refreshEdgeForecasts() {
       // the periodic re-render above wipes it -- re-fetch to repopulate.
       if (_ebView === 'agentic') loadAgentTradingSection();
       if (_ebView === 'indices') loadIndexForecastSection();
+      if (_ebView === 'pairs') loadCommodityPairsSection();
     }
   } catch (_) {}
 }
@@ -6642,6 +6647,7 @@ function _startEdgeTimers() {
   _agentTradingTimer = setInterval(() => {
     if (_ebView === 'agentic') loadAgentTradingSection();
     if (_ebView === 'indices') loadIndexForecastSection();
+    if (_ebView === 'pairs') loadCommodityPairsSection();
   }, AGENT_TRADING_REFRESH_MS);
 }
 
@@ -6657,6 +6663,7 @@ document.addEventListener('visibilitychange', () => {
   loadCrypto5mEquity();
   if (_ebView === 'agentic') loadAgentTradingSection();
   if (_ebView === 'indices') loadIndexForecastSection();
+  if (_ebView === 'pairs') loadCommodityPairsSection();
 });
 
 async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
@@ -6777,6 +6784,7 @@ async function loadEdgeBoard() {
     // emits a placeholder for it since its data isn't part of this payload.
     if (_ebView === 'agentic') loadAgentTradingSection();
     if (_ebView === 'indices') loadIndexForecastSection();
+    if (_ebView === 'pairs') loadCommodityPairsSection();
     _restoreEdgeBoardScroll();
     if (window.Motion && !prefersReduced()) {
       const stats = host.querySelectorAll('.tr-stat');
@@ -7125,6 +7133,90 @@ function renderIndexForecast(d) {
     <h4 class="eb-h">Track record: does the price land inside the range as often as it should?</h4>
     <div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Horizon</th><th>Scored</th><th>In 80% range</th><th>In 90% range</th><th>vs EWMA</th><th>Backtest 80%</th><th>Backtest vs EWMA</th></tr></thead><tbody>${record}</tbody></table></div>
     <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Model: volatility from fast and slow EWMAs and India VIX, refit daily on ${escHtml(String(d.model?.training_sessions || 750))} sessions, with fat tails taken from its own past errors. "vs EWMA" compares quantile loss with a plain EWMA normal forecast. Data: ${escHtml(d.source || 'Tapetide')}. Research forecasts, not investment advice.</p>`;
+}
+
+// Commodity pair tracker (Edge board -> Commodity Pairs), published once a day
+// by .github/workflows/commodity-pairs.yml and served at /markets/commodity-pairs.
+let _cptData = null;
+let _cptRequest = null;
+
+async function loadCommodityPairsSection() {
+  if (!document.getElementById('eb-pairs-section')) return;
+  if (_cptData) renderCommodityPairs(_cptData);
+  if (_cptRequest) return _cptRequest;
+  _cptRequest = (async () => {
+    try {
+      const r = await _liveJsonFetch('/markets/commodity-pairs');
+      const d = await _readJson(r);
+      if (!r.ok) throw new Error(d.detail || 'Could not load the commodity pair tracker.');
+      _cptData = d;
+      renderCommodityPairs(d);
+    } catch (err) {
+      if (!_cptData) renderCommodityPairs({ error: err.message || 'Could not load the commodity pair tracker.' });
+    } finally {
+      _cptRequest = null;
+    }
+  })();
+  return _cptRequest;
+}
+
+function _cptPct(x, digits = 2) {
+  const n = Number(x);
+  return Number.isFinite(n) ? `${n >= 0 ? '+' : ''}${(n * 100).toFixed(digits)}%` : '—';
+}
+
+function renderCommodityPairs(d) {
+  const host = document.getElementById('eb-pairs-section');
+  if (!host) return;
+  if (d.error) {
+    host.innerHTML = `<p class="text-sm text-gray-500">${escHtml(d.error)}</p>`;
+    return;
+  }
+  const rule = d.rule || {};
+  const back = d.backtest?.pairs || {};
+  const live = d.track_record?.by_pair || {};
+  const labels = Object.fromEntries((d.pairs || []).map(p => [p.key, p.label]));
+  const rows = (d.pairs || []).map(p => {
+    const name = `<b>${escHtml(p.label)}</b>${p.short_history ? `<span class="cpt-chip" title="${escHtml(String(p.sessions))} sessions so far; the hedge uses up to ${escHtml(String(rule.hedge_window || 250))}">${escHtml(String(p.sessions))} sessions</span>` : ''}<div class="cpt-why">${escHtml(p.why || '')}</div>`;
+    if (p.z == null) {
+      return `<tr class="eb-row"><td>${name}</td><td colspan="6" style="color:var(--text-dim)">${escHtml(p.note || 'Not enough history yet.')}</td></tr>`;
+    }
+    const z = Number(p.z);
+    const state = p.stretched ? `Stretched: ${escHtml(p.rich)} rich vs ${escHtml(p.cheap)}` : '<span style="color:var(--text-dim)">Normal</span>';
+    const level = p.source === 'parity'
+      ? `${_cptPct(p.ratio - 1, 1)} over landed cost`
+      : `ratio ${Number(p.ratio).toPrecision(4)}`;
+    const hedge = p.hedge === 'regression' ? `${Number(p.beta).toFixed(2)} (fit)` : p.hedge === 'fixed' ? '1 (same metal)'
+      : `<span title="The fitted hedge was not positive, so the legs did not move together; the plain ratio is used">1 (ratio)</span>`;
+    const coint = p.cointegrated ? `yes <span style="color:var(--text-dim)">(t ${Number(p.eg_t).toFixed(1)})</span>` : `no <span style="color:var(--text-dim)">(t ${Number(p.eg_t).toFixed(1)})</span>`;
+    const b = back[p.key];
+    const backCell = b ? `${_cptPct(b.avg_return)} per signal · ${b.years_up}/${b.years} yrs up` : '<span style="color:var(--text-dim)" title="No US futures contract on both legs to test">—</span>';
+    const l = live[p.key] || {};
+    const liveCell = l.signals ? `${l.signals}${l.open ? ` (${l.open} open)` : ''}` : '0';
+    return `<tr class="eb-row"><td>${name}</td>`
+      + `<td><span class="cpt-z ${Math.abs(z) >= (rule.entry_z || 2) ? 'hot' : ''}">${z >= 0 ? '+' : ''}${z.toFixed(2)}</span><div class="cpt-why">${escHtml(level)}</div></td>`
+      + `<td>${state}</td><td>${hedge}</td>`
+      + `<td>${p.half_life != null ? escHtml(String(p.half_life)) + ' sessions' : '—'}</td><td>${coint}</td>`
+      + `<td>${backCell}</td><td>${liveCell}</td></tr>`;
+  }).join('');
+  const recent = (d.track_record?.recent || []).slice().reverse();
+  const status = s => ({ open: 'Open', reverted: 'Gap closed', timed_out: 'Timed out' }[s] || s);
+  const recentHtml = recent.length
+    ? `<div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Pair</th><th>Signal</th><th>z</th><th>Status</th><th>Sessions</th><th>Spread return</th></tr></thead><tbody>`
+      + recent.map(e => `<tr class="eb-row"><td>${escHtml(labels[e.pair] || e.pair)}</td><td>${escHtml(_fmtDate(e.entry_date))}</td>`
+        + `<td>${Number(e.entry_z).toFixed(2)}</td><td>${escHtml(status(e.status))}${e.exit_date ? ' · ' + escHtml(_fmtDate(e.exit_date)) : ''}</td>`
+        + `<td>${e.sessions ?? '—'}</td><td>${e.spread_return != null ? _cptPct(e.spread_return) : '—'}</td></tr>`).join('')
+      + `</tbody></table></div>`
+    : `<p class="text-sm text-gray-500">No live signals yet. One is recorded the first session a pair's z-score reaches ±${escHtml(String(rule.entry_z || 2))}.</p>`;
+  const updated = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
+  const stale = d.freshness?.stale
+    ? `<p class="text-xs" style="color:#b45309;margin:6px 0 0">This tracker has not been refreshed for over four days.</p>` : '';
+  host.innerHTML = `
+    <p class="text-sm" style="color:var(--text-dim);margin:0 0 12px">How stretched ten commodity pairs are, through the ${escHtml(_fmtDate(d.data_through))} session. The z-score compares each pair's hedged spread with its last ${escHtml(String(rule.z_window || 60))} sessions; at ±${escHtml(String(rule.entry_z || 2))} the pair is stretched and the tracker follows it until the gap closes (z within ±${escHtml(String(rule.exit_z || 0.5))}) or ${escHtml(String(rule.max_hold || 20))} sessions pass. This is a monitor, not a strategy: in a 2011–2026 backtest the same rule made money on three pairs and lost on three. ${updated ? 'Updated ' + escHtml(updated) + '.' : ''}</p>${stale}
+    <div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Pair</th><th>z-score</th><th>State</th><th>Hedge</th><th>Half-life</th><th>Cointegrated</th><th>Backtest 2011–26</th><th>Live signals</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <h4 class="eb-h">Live signals: did the stretched gap close?</h4>
+    ${recentHtml}
+    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Hedge: least-squares ratio of log prices over up to ${escHtml(String(rule.hedge_window || 250))} sessions, or the plain ratio when the fit is not positive. Cointegrated: Engle–Granger test at 5% on the same window. Spread return is per unit of gross exposure after ${escHtml(String((rule.cost_per_side || 0.001) * 100))}% cost per side. Backtest on US futures front months (roll gaps add noise); MCX pairs have no US equivalent. Data: ${escHtml(d.source || 'Tapetide')}. Research tracker, not investment advice.</p>`;
 }
 
 async function loadAgentTradingSection() {
@@ -8286,7 +8378,7 @@ function _ebGoPage(n) {
 }
 
 function _ebSetView(view) {
-  _ebView = ['mtm', 'agentic', 'indices'].includes(view) ? view : 'markets';
+  _ebView = ['mtm', 'agentic', 'indices', 'pairs'].includes(view) ? view : 'markets';
   const host = document.getElementById('edgeBody');
   if (!host) return;
   if (!_ebLastData) {
@@ -8304,6 +8396,7 @@ function _ebSetView(view) {
   refreshEdgePrices();
   if (_ebView === 'agentic') loadAgentTradingSection();
   if (_ebView === 'indices') loadIndexForecastSection();
+  if (_ebView === 'pairs') loadCommodityPairsSection();
 }
 
 function _modelLogoSymbol(modelOrLabel) {
@@ -9542,6 +9635,7 @@ function renderEdgeBoard(d) {
     <button type="button" class="eb-view-tab ${_ebView === 'mtm' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'mtm'}" data-eb-view="mtm">MTM</button>
     <button type="button" class="eb-view-tab ${_ebView === 'agentic' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'agentic'}" data-eb-view="agentic">Agentic</button>
     <button type="button" class="eb-view-tab ${_ebView === 'indices' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'indices'}" data-eb-view="indices">Indices</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'pairs' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'pairs'}" data-eb-view="pairs">Commodity Pairs</button>
   </div>`;
   const marketsPageHtml = `${stats}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
@@ -9549,7 +9643,8 @@ function renderEdgeBoard(d) {
   const mtmPageHtml = _renderMtmPage(d);
   const agenticPageHtml = `<div id="eb-agentic-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
   const indicesPageHtml = `<div id="eb-indices-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
-  const activePageHtml = _ebView === 'mtm' ? mtmPageHtml : _ebView === 'agentic' ? agenticPageHtml : _ebView === 'indices' ? indicesPageHtml : marketsPageHtml;
+  const pairsPageHtml = `<div id="eb-pairs-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
+  const activePageHtml = _ebView === 'mtm' ? mtmPageHtml : _ebView === 'agentic' ? agenticPageHtml : _ebView === 'indices' ? indicesPageHtml : _ebView === 'pairs' ? pairsPageHtml : marketsPageHtml;
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced - and our track record of being right about it</h3>
