@@ -1105,6 +1105,8 @@
     .cpt-z.hot { background: #fef3c7; color: #92400e; }
     .cpt-chip { background: var(--paper); border-radius: 4px; color: var(--text-dim); font-size: 10px; font-weight: 600; margin-left: 4px; padding: 1px 5px; text-transform: uppercase; white-space: nowrap; }
     .cpt-why { color: var(--text-dim); font-size: 11.5px; margin-top: 2px; max-width: 260px; }
+    .cpt-tip { background: none; border: 0; border-bottom: 1px dotted currentColor; color: inherit; cursor: help; font: inherit; padding: 0; position: relative; }
+    .cpt-tip-pop { background: var(--ink); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); color: #fff; font-size: 11.5px; line-height: 1.45; padding: 8px 10px; pointer-events: none; position: fixed; z-index: 1000; }
     .eb-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 0 0 12px; padding: 8px 10px; background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
     .eb-filter-pill { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 500; color: var(--text-dim); cursor: pointer; transition: all 0.15s ease; }
     .eb-filter-pill:hover { color: var(--text); border-color: #999; }
@@ -7166,6 +7168,55 @@ function _cptPct(x, digits = 2) {
   return Number.isFinite(n) ? `${n >= 0 ? '+' : ''}${(n * 100).toFixed(digits)}%` : '—';
 }
 
+// A table header whose explanation shows on hover, keyboard focus or a tap (touch screens
+// never show a title attribute). The explanation is also part of the button's name. One
+// floating tooltip is positioned against the viewport, because the tables sit in
+// horizontally scrolling boxes that would clip anything positioned inside them.
+function _cptTip(label, tip) {
+  return `<button type="button" class="cpt-tip" data-tip="${escHtml(tip)}" aria-label="${escHtml(label + ': ' + tip)}"`
+    + ` onmouseenter="_cptShowTip(this)" onmouseleave="_cptHideTip()" onfocus="_cptShowTip(this)" onblur="_cptHideTip()"`
+    + ` onclick="_cptToggleTip(this)">${escHtml(label)}</button>`;
+}
+
+let _cptTipFor = null;
+let _cptTipShownAt = 0;
+
+function _cptShowTip(btn) {
+  let pop = document.getElementById('cptTipPop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'cptTipPop';
+    pop.className = 'cpt-tip-pop';
+    pop.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(pop);
+  }
+  pop.textContent = btn.dataset.tip || '';
+  const width = Math.min(260, window.innerWidth - 16);
+  pop.style.width = width + 'px';
+  pop.hidden = false;
+  const r = btn.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) + 'px';
+  const below = r.bottom + 6;
+  pop.style.top = (below + pop.offsetHeight > window.innerHeight - 8 ? Math.max(8, r.top - 6 - pop.offsetHeight) : below) + 'px';
+  _cptTipFor = btn;
+  _cptTipShownAt = Date.now();
+}
+
+function _cptHideTip() {
+  const pop = document.getElementById('cptTipPop');
+  if (pop) pop.hidden = true;
+  _cptTipFor = null;
+}
+
+function _cptToggleTip(btn) {
+  // A tap fires hover and focus just before the click: keep the tooltip they opened.
+  if (_cptTipFor === btn && Date.now() - _cptTipShownAt > 400) _cptHideTip();
+  else _cptShowTip(btn);
+}
+
+// A fixed tooltip would drift away from its header once the board or a table scrolls.
+document.addEventListener('scroll', () => { if (_cptTipFor) _cptHideTip(); }, true);
+
 function renderCommodityPairs(d) {
   const host = document.getElementById('eb-pairs-section');
   if (!host) return;
@@ -7174,6 +7225,19 @@ function renderCommodityPairs(d) {
     return;
   }
   const rule = d.rule || {};
+  const entryZ = rule.entry_z || 2, exitZ = rule.exit_z || 0.5, maxHold = rule.max_hold || 20;
+  const zWindow = rule.z_window || 60, hedgeWindow = rule.hedge_window || 250;
+  const costPct = (rule.cost_per_side || 0.001) * 100;
+  const pairHead = [
+    _cptTip('Pair', 'The two prices compared, first leg against second. The figure under the z-score is first ÷ second, so a rising ratio means the first leg is gaining on the second.'),
+    _cptTip('z-score', `How far today's spread is from its average over the last ${zWindow} sessions, in standard deviations. Around 0 is typical; ±${entryZ} or beyond happens only about 5% of the time. Positive means the first leg is expensive relative to the second.`),
+    _cptTip('State', `Stretched when the z-score is at or beyond ±${entryZ}: the rich leg is expensive and the cheap leg inexpensive relative to their usual relationship. Normal otherwise.`),
+    _cptTip('Hedge', `Units of the second leg that offset one unit of the first, fitted on log prices over up to ${hedgeWindow} sessions. "1 (ratio)" means the fit was not positive, so the legs did not move together and the plain price ratio is used.`),
+    _cptTip('Half-life', 'How many sessions a gap in the spread typically takes to shrink by half. Shorter means gaps close faster; a dash means the spread showed no pull back to its average.'),
+    _cptTip('Cointegrated', 'Whether the two prices are tied together over time (Engle–Granger test at 5%). Yes: the spread tends to return to its average. No: a stretched spread can keep drifting. t is the test statistic; below about −3.4 passes.'),
+    _cptTip('Backtest 2011–26', 'The same signal rule run on 2011–2026 US futures prices after costs: average spread return per signal and the number of profitable years. A dash means no US futures contract exists for both legs.'),
+    _cptTip('Live signals', `Signals recorded on this site since tracking began. One opens when the pair turns stretched and closes when the z-score is back within ±${exitZ} or after ${maxHold} sessions; results are listed below.`),
+  ].map(h => `<th>${h}</th>`).join('');
   const back = d.backtest?.pairs || {};
   const live = d.track_record?.by_pair || {};
   const labels = Object.fromEntries((d.pairs || []).map(p => [p.key, p.label]));
@@ -7203,7 +7267,12 @@ function renderCommodityPairs(d) {
   const recent = (d.track_record?.recent || []).slice().reverse();
   const status = s => ({ open: 'Open', reverted: 'Gap closed', timed_out: 'Timed out' }[s] || s);
   const recentHtml = recent.length
-    ? `<div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Pair</th><th>Signal</th><th>z</th><th>Status</th><th>Sessions</th><th>Spread return</th></tr></thead><tbody>`
+    ? `<div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Pair</th>`
+      + `<th>${_cptTip('Signal', 'The session the pair turned stretched and the tracker started following it.')}</th>`
+      + `<th>${_cptTip('z', 'The z-score on the session the signal opened.')}</th>`
+      + `<th>${_cptTip('Status', `Open while being followed. Gap closed: the z-score came back within ±${exitZ}. Timed out: ${maxHold} sessions passed first.`)}</th>`
+      + `<th>${_cptTip('Sessions', 'How many sessions the signal stayed open.')}</th>`
+      + `<th>${_cptTip('Spread return', `What a trade betting on the gap closing would have made: the change in the hedged spread per unit of exposure, after ${costPct}% cost per side.`)}</th></tr></thead><tbody>`
       + recent.map(e => `<tr class="eb-row"><td>${escHtml(labels[e.pair] || e.pair)}</td><td>${escHtml(_fmtDate(e.entry_date))}</td>`
         + `<td>${Number(e.entry_z).toFixed(2)}</td><td>${escHtml(status(e.status))}${e.exit_date ? ' · ' + escHtml(_fmtDate(e.exit_date)) : ''}</td>`
         + `<td>${e.sessions ?? '—'}</td><td>${e.spread_return != null ? _cptPct(e.spread_return) : '—'}</td></tr>`).join('')
@@ -7214,7 +7283,7 @@ function renderCommodityPairs(d) {
     ? `<p class="text-xs" style="color:#b45309;margin:6px 0 0">This tracker has not been refreshed for over four days.</p>` : '';
   host.innerHTML = `
     <p class="text-sm" style="color:var(--text-dim);margin:0 0 12px">How stretched ten commodity pairs are, through the ${escHtml(_fmtDate(d.data_through))} session. The z-score compares each pair's hedged spread with its last ${escHtml(String(rule.z_window || 60))} sessions; at ±${escHtml(String(rule.entry_z || 2))} the pair is stretched and the tracker follows it until the gap closes (z within ±${escHtml(String(rule.exit_z || 0.5))}) or ${escHtml(String(rule.max_hold || 20))} sessions pass. This is a monitor, not a strategy: in a 2011–2026 backtest the same rule made money on three pairs and lost on three. ${updated ? 'Updated ' + escHtml(updated) + '.' : ''}</p>${stale}
-    <div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Pair</th><th>z-score</th><th>State</th><th>Hedge</th><th>Half-life</th><th>Cointegrated</th><th>Backtest 2011–26</th><th>Live signals</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="ixf-scroll"><table class="eb-table"><thead><tr>${pairHead}</tr></thead><tbody>${rows}</tbody></table></div>
     <h4 class="eb-h">Live signals: did the stretched gap close?</h4>
     ${recentHtml}
     <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Hedge: least-squares ratio of log prices over up to ${escHtml(String(rule.hedge_window || 250))} sessions, or the plain ratio when the fit is not positive. Cointegrated: Engle–Granger test at 5% on the same window. Spread return is per unit of gross exposure after ${escHtml(String((rule.cost_per_side || 0.001) * 100))}% cost per side. Backtest on US futures front months (roll gaps add noise); MCX pairs have no US equivalent. Data: ${escHtml(d.source || 'Tapetide')}. Research tracker, not investment advice.</p>`;
