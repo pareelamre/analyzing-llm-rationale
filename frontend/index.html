@@ -1101,10 +1101,33 @@
     .ixf-levels { display: flex; flex-wrap: wrap; gap: 4px; min-width: 300px; }
     .ixf-level { background: var(--paper); border-radius: 4px; font-size: 11.5px; padding: 1px 6px; white-space: nowrap; }
     .ixf-late { color: var(--text-dim); font-size: 10px; font-weight: 600; margin-left: 4px; text-transform: uppercase; }
-    .cpt-z { border-radius: 4px; font-variant-numeric: tabular-nums; font-weight: 650; padding: 1px 6px; white-space: nowrap; }
-    .cpt-z.hot { background: #fef3c7; color: #92400e; }
-    .cpt-chip { background: var(--paper); border-radius: 4px; color: var(--text-dim); font-size: 10px; font-weight: 600; margin-left: 4px; padding: 1px 5px; text-transform: uppercase; white-space: nowrap; }
-    .cpt-why { color: var(--text-dim); font-size: 11.5px; margin-top: 2px; max-width: 260px; }
+    .cpt-lede { color: var(--text-dim); font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
+    .cpt-guide { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; font-size: 12.5px; line-height: 1.5; margin: 0 0 14px; padding: 10px 14px; }
+    .cpt-guide ol { list-style: decimal; margin: 6px 0 0; padding-left: 18px; }
+    .cpt-guide li + li { margin-top: 4px; }
+    .cpt-summary { font-size: 13.5px; margin: 0 0 8px; }
+    .cpt-note { background: var(--info-bg); border-radius: 10px; font-size: 12.5px; line-height: 1.5; margin: 0 0 14px; padding: 10px 14px; }
+    .cpt-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+    .cpt-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; min-width: 0; padding: 12px 14px; }
+    .cpt-card.hot { border-color: #f59e0b; }
+    .cpt-head { align-items: flex-start; display: flex; gap: 8px; justify-content: space-between; }
+    .cpt-name { font-size: 14px; font-weight: 650; }
+    .cpt-why { color: var(--text-dim); font-size: 11.5px; margin-top: 2px; }
+    .cpt-badge { background: var(--paper); border-radius: 999px; color: var(--text-dim); font-size: 10.5px; font-weight: 650; padding: 2px 8px; white-space: nowrap; }
+    .cpt-badge.near { background: var(--info-bg); color: var(--info); }
+    .cpt-badge.hot { background: #fef3c7; color: #92400e; }
+    .cpt-say { font-size: 13px; line-height: 1.45; margin: 8px 0 2px; }
+    .cpt-back { background: var(--panel); border-radius: 8px; font-size: 12.5px; line-height: 1.5; margin: 6px 0 2px; padding: 6px 10px; }
+    .cpt-up { color: var(--signal); font-weight: 600; white-space: nowrap; }
+    .cpt-down { color: #b91c1c; font-weight: 600; white-space: nowrap; }
+    .cpt-up .ui-icon, .cpt-down .ui-icon { fill: currentColor; height: .8em; width: .8em; }
+    .cpt-spark { display: block; height: auto; margin: 4px 0 2px; width: 100%; }
+    .cpt-facts { display: grid; font-size: 12px; gap: 8px 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 8px 0 0; }
+    .cpt-facts dt, .cpt-record dt { color: var(--text-dim); font-size: 10.5px; font-weight: 600; letter-spacing: .03em; }
+    .cpt-facts dd, .cpt-record dd { margin: 1px 0 0; }
+    .cpt-record { border-top: 1px solid var(--border); display: grid; font-size: 11.5px; gap: 4px 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 10px 0 0; padding-top: 8px; }
+    .cpt-record b { display: block; font-size: 12.5px; }
+    .cpt-dim { color: var(--text-dim); }
     .cpt-tip { background: none; border: 0; border-bottom: 1px dotted currentColor; color: inherit; cursor: help; font: inherit; padding: 0; position: relative; }
     .cpt-tip-pop { background: var(--ink); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); color: #fff; font-size: 11.5px; line-height: 1.45; padding: 8px 10px; pointer-events: none; position: fixed; z-index: 1000; }
     .eb-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 0 0 12px; padding: 8px 10px; background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
@@ -7216,6 +7239,152 @@ function _cptToggleTip(btn) {
 // A fixed tooltip would drift away from its header once the board or a table scrolls.
 document.addEventListener('scroll', () => { if (_cptTipFor) _cptHideTip(); }, true);
 
+function _cptLegs(p) {
+  if (Array.isArray(p.legs) && p.legs.length === 2) return p.legs;
+  const [a, b] = String(p.label || '').replace(' (MCX)', '').split(' / ');
+  return [a || 'First leg', b || 'Second leg'];
+}
+
+// Session dates are calendar days: read them as local dates so no timezone shifts them.
+function _cptDay(iso) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(iso || '')) ? _fmtDate(`${iso}T00:00:00`) : _fmtDate(iso);
+}
+
+function _cptPlural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+// The pair's score over its last sessions. The shaded band is the usual range (inside
+// ±entryZ); the line leaving it is what opens a signal.
+function _cptSpark(zs, entryZ, legs) {
+  const vals = (zs || []).map(Number).filter(Number.isFinite);
+  if (vals.length < 2) return '';
+  const w = 320, h = 96, left = 2, right = 26, lim = entryZ + 1.5;
+  const y = z => h / 2 - Math.max(-lim, Math.min(lim, z)) / lim * (h / 2 - 6);
+  const x = i => left + i / (vals.length - 1) * (w - left - right);
+  const last = vals[vals.length - 1];
+  const halo = 'paint-order="stroke" stroke="#fff" stroke-width="3" stroke-linejoin="round"';
+  const label = (ty, text, anchor = 'start', tx = left + 2) => `<text x="${tx}" y="${ty.toFixed(1)}" font-size="10" fill="var(--text-dim)" text-anchor="${anchor}" ${halo}>${escHtml(text)}</text>`;
+  return `<svg class="cpt-spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="${escHtml(`Score over the last ${vals.length} sessions, now ${last.toFixed(2)}`)}">`
+    + `<rect x="${left}" y="${y(entryZ).toFixed(1)}" width="${w - left - right}" height="${(y(-entryZ) - y(entryZ)).toFixed(1)}" fill="var(--paper)"/>`
+    + `<line x1="${left}" x2="${w - right}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}" stroke="var(--border)" stroke-dasharray="3 3"/>`
+    + `<polyline points="${vals.map((z, i) => `${x(i).toFixed(1)},${y(z).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="1.5" stroke-linejoin="round"/>`
+    + `<circle cx="${x(vals.length - 1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="3.5" fill="${Math.abs(last) >= entryZ ? '#d97706' : 'var(--ink)'}"/>`
+    + label(10, `${legs[0]} pricier`) + label(h - 3, `${legs[1]} pricier`)
+    + label(y(entryZ) + 3.5, `+${entryZ}`, 'end', w) + label(y(0) + 3.5, '0', 'end', w) + label(y(-entryZ) + 3.5, `−${entryZ}`, 'end', w)
+    + `</svg>`;
+}
+
+// One plain sentence on where the pair stands today.
+function _cptSay(p, legs, entryZ) {
+  const z = Number(p.z), az = Math.abs(z);
+  const [rich, cheap] = z >= 0 ? legs : [legs[1], legs[0]];
+  if (p.source === 'parity') {
+    const gap = Number(p.ratio) - 1;
+    const prem = `MCX gold trades ${Math.abs(gap * 100).toFixed(1)}% ${gap >= 0 ? 'above' : 'below'} the cost of importing it`;
+    const dir = z >= 0 ? 'higher' : 'lower';
+    if (az < 0.5) return `${prem}, about its usual premium.`;
+    if (az < 1.5) return `${prem}, a little ${dir} than usual. Nothing unusual.`;
+    if (az < entryZ) return `${prem}, ${dir} than usual and close to the ±${entryZ} signal line.`;
+    return `${prem}, unusually ${dir}. The tracker records a signal betting the premium returns to normal.`;
+  }
+  if (az < 0.5) return `${legs[0]} and ${legs[1]} are priced about as usual against each other.`;
+  if (az < 1.5) return `${rich} is a little pricier than usual against ${cheap}. Nothing unusual.`;
+  if (az < entryZ) return `${rich} is pricier than usual against ${cheap}, close to the ±${entryZ} signal line.`;
+  return `${rich} is unusually expensive against ${cheap}. The tracker records a signal betting the gap closes: ${rich} falling back against ${cheap}.`;
+}
+
+// The hedge as money on each side, which is what the fitted ratio means in practice.
+function _cptHedge(p, legs, hedgeWindow) {
+  const [a, b] = legs;
+  const cur = p.source === 'international' ? '$' : '₹';
+  const n = Math.min(Number(p.sessions) || hedgeWindow, hedgeWindow);
+  if (p.hedge === 'fixed') {
+    return { text: `${cur}100 each side`, tip: 'Both sides are gold, so the tracker compares the two prices directly, with equal money on each side.' };
+  }
+  if (p.hedge === 'ratio') {
+    return {
+      text: `${cur}100 each side`,
+      tip: `Over the last ${n} sessions ${a} and ${b} did not rise and fall together, so a fitted balance would be negative. The tracker falls back to the plain price ratio: equal money on each side.`,
+    };
+  }
+  const beta = Number(p.beta), per = Math.round(beta * 100);
+  return {
+    text: `${cur}${per} of ${b} per ${cur}100 of ${a}`,
+    tip: `Over the last ${n} sessions ${a} moved about ${beta.toFixed(2)}% for each 1% move in ${b}. So a balanced bet puts ${cur}${per} on ${b} against every ${cur}100 on ${a}: a move that lifts both together cancels out, and only the gap between them is left. Refit every session.`,
+  };
+}
+
+// The move in either leg alone that brings the pair back to its usual level (a score of 0).
+function _cptBack(p, legs, zWindow) {
+  const t = p.to_usual || {}, a = Number(t.a), b = Number(t.b);
+  if (t.a == null || t.b == null || !Number.isFinite(a) || !Number.isFinite(b)) return '';
+  const tip = _cptTip('Back to usual', `How far either commodity would have to move, with the other holding still, to bring the pair back to its average over the last ${zWindow} sessions (a score of 0). It says nothing about which one will move, or when.`);
+  if (Math.abs(a) < 0.0025) return `<p class="cpt-back">${tip}: already at its usual level.</p>`;
+  const leg = (name, move, other) => `<span class="${move >= 0 ? 'cpt-up' : 'cpt-down'}"><svg class="ui-icon" aria-hidden="true"><use href="#ui-triangle-${move >= 0 ? 'up' : 'down'}"></use></svg> ${escHtml(name)} ${_cptPct(move, 1)}</span> with ${escHtml(other)} flat`;
+  return `<p class="cpt-back">${tip}: ${leg(legs[0], a, legs[1])}, or ${leg(legs[1], b, legs[0])}.</p>`;
+}
+
+function _cptCard(p, ctx) {
+  const legs = _cptLegs(p);
+  const head = `<div class="cpt-head"><div><div class="cpt-name">${escHtml(p.label)}</div><div class="cpt-why">${escHtml(p.why || '')}</div></div>`;
+  if (p.z == null) {
+    return `<article class="cpt-card">${head}<span class="cpt-badge">Warming up</span></div><p class="cpt-say cpt-dim">${escHtml(p.note || 'Not enough history yet.')}</p></article>`;
+  }
+  const { entryZ, exitZ, maxHold, zWindow, hedgeWindow, liveSince } = ctx;
+  const z = Number(p.z), az = Math.abs(z);
+  const badge = az >= entryZ ? '<span class="cpt-badge hot">Stretched</span>'
+    : az >= 1.5 ? '<span class="cpt-badge near">Near signal</span>' : '<span class="cpt-badge">Normal</span>';
+  const hedge = _cptHedge(p, legs, hedgeWindow);
+  const fmtRatio = x => p.source === 'parity' ? _cptPct(x - 1, 1) : escHtml(Number(x).toPrecision(4));
+  const level = [
+    p.source === 'parity'
+      ? _cptTip('Premium', `How far the MCX gold price sits above the landed cost of importing gold (international price, rupee rate, duties): today, and at its usual level over the last ${zWindow} sessions.`)
+      : _cptTip('Price ratio', `${legs[0]}'s price divided by ${legs[1]}'s, in their quoted units: today, and at the pair's usual level over the last ${zWindow} sessions${p.hedge === 'regression' ? ` with ${legs[1]} at today's price (the hedge is not 1:1, so the usual ratio shifts as ${legs[1]} moves)` : ''}.`),
+    p.usual_ratio != null ? `${fmtRatio(p.ratio)} <span class="cpt-dim">usual ${fmtRatio(p.usual_ratio)}</span>` : fmtRatio(p.ratio),
+  ];
+  const facts = [
+    [_cptTip('Score', `How unusual today's gap between the two prices is, against the last ${zWindow} sessions (a z-score). 0 is typical, ±1 is common, ±${entryZ} or beyond happens about 1 session in 20. Positive means ${legs[0]} is pricier than usual against ${legs[1]}.`),
+      `<b>${z >= 0 ? '+' : '−'}${az.toFixed(2)}</b> <span class="cpt-dim">signal at ±${entryZ}</span>`],
+    [_cptTip('Hedge', hedge.tip), escHtml(hedge.text)],
+    [_cptTip('Gap halves in', 'When a gap opens, it has typically shrunk by half within this many sessions. Shorter means faster snap-backs. "No pull-back" means gaps have not tended to close.'),
+      p.half_life != null ? `about ${_cptPlural(Math.max(1, Math.round(Number(p.half_life))), 'session')}` : 'no pull-back seen'],
+    [_cptTip('Tied together?', `Whether the two prices are anchored to each other over the last ${Math.min(Number(p.sessions) || hedgeWindow, hedgeWindow)} sessions (Engle–Granger test at 5%). Yes: gaps have reliably closed. Not proven: a stretched gap can keep widening, so a signal is riskier. Test score ${Number(p.eg_t).toFixed(1)}; below ${Number(p.eg_crit_5pct || -3.4).toFixed(1)} passes.`),
+      p.cointegrated ? 'Yes' : 'Not proven'],
+    level,
+    [_cptTip('History', `Prices since ${_cptDay(p.data_from)}. The hedge uses up to ${hedgeWindow} sessions, so it firms up as history grows.`), _cptPlural(Number(p.sessions), 'session')],
+  ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  const l = ctx.live[p.key] || {}, r = p.replay || {}, b = ctx.back[p.key];
+  const liveCount = l.signals || 0;
+  const record = [
+    [_cptTip('Live', `Signals recorded on this site since the ${_cptDay(liveSince)} session. One opens when the score reaches ±${entryZ} and closes when it is back within ±${exitZ} or after ${maxHold} sessions.`),
+      `<b>${_cptPlural(liveCount, 'signal')}</b>${l.open ? `${l.open} open` : liveCount && l.avg_return != null ? `avg ${_cptPct(l.avg_return)}` : ''}`],
+    [_cptTip('Before live', `The same rule replayed over this pair's prices before ${_cptDay(liveSince)}, using only prices available on each day. Not recorded live, and a short window.`),
+      r.signals ? `<b>${_cptPlural(r.signals, 'signal')}</b>${r.avg_return != null ? `avg ${_cptPct(r.avg_return)}` : ''}` : '<b>none</b>'],
+    [_cptTip('US 2011–26', 'The same rule on 2011–2026 US futures prices after costs: average return per signal and the number of profitable years. MCX and parity pairs have no US contract to test.'),
+      b ? `<b>avg ${_cptPct(b.avg_return)}</b>up ${b.years_up} of ${b.years} yrs` : '<b class="cpt-dim">not testable</b>'],
+  ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  return `<article class="cpt-card${az >= entryZ ? ' hot' : ''}">${head}${badge}</div>`
+    + `<p class="cpt-say">${escHtml(_cptSay(p, legs, entryZ))}</p>`
+    + _cptBack(p, legs, zWindow)
+    + _cptSpark(p.z_recent, entryZ, legs)
+    + `<dl class="cpt-facts">${facts}</dl><dl class="cpt-record">${record}</dl></article>`;
+}
+
+function _cptSignalTable(events, labels, ctx) {
+  const status = s => ({ open: 'Open', reverted: 'Gap closed', timed_out: 'Timed out' }[s] || s);
+  return `<div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Pair</th>`
+    + `<th>${_cptTip('Opened', 'The session the pair reached the signal line.')}</th>`
+    + `<th>${_cptTip('Score', 'The score on the session the signal opened.')}</th>`
+    + `<th>${_cptTip('Result', `Gap closed: the score came back within ±${ctx.exitZ}. Timed out: ${ctx.maxHold} sessions passed first. Open: still being followed.`)}</th>`
+    + `<th>${_cptTip('Sessions', 'How many sessions the signal stayed open.')}</th>`
+    + `<th>${_cptTip('Return', `What betting on the gap closing would have made: the move in the hedged spread per unit of money on both sides, after ${ctx.costPct}% cost per side.`)}</th></tr></thead><tbody>`
+    + events.map(e => `<tr class="eb-row"><td>${escHtml(labels[e.pair] || e.pair)}</td><td>${escHtml(_cptDay(e.entry_date))}</td>`
+      + `<td>${Number(e.entry_z) >= 0 ? '+' : '−'}${Math.abs(Number(e.entry_z)).toFixed(2)}</td><td>${escHtml(status(e.status))}${e.exit_date ? ' · ' + escHtml(_cptDay(e.exit_date)) : ''}</td>`
+      + `<td>${e.sessions ?? '—'}</td><td>${e.spread_return != null ? _cptPct(e.spread_return) : '—'}</td></tr>`).join('')
+    + `</tbody></table></div>`;
+}
+
 function renderCommodityPairs(d) {
   const host = document.getElementById('eb-pairs-section');
   if (!host) return;
@@ -7224,68 +7393,55 @@ function renderCommodityPairs(d) {
     return;
   }
   const rule = d.rule || {};
-  const entryZ = rule.entry_z || 2, exitZ = rule.exit_z || 0.5, maxHold = rule.max_hold || 20;
-  const zWindow = rule.z_window || 60, hedgeWindow = rule.hedge_window || 250;
-  const costPct = (rule.cost_per_side || 0.001) * 100;
-  const pairHead = [
-    _cptTip('Pair', 'The two prices compared, first leg against second. The figure under the z-score is first ÷ second, so a rising ratio means the first leg is gaining on the second.'),
-    _cptTip('z-score', `How far today's spread is from its average over the last ${zWindow} sessions, in standard deviations. Around 0 is typical; ±${entryZ} or beyond happens only about 5% of the time. Positive means the first leg is expensive relative to the second.`),
-    _cptTip('State', `Stretched when the z-score is at or beyond ±${entryZ}: the rich leg is expensive and the cheap leg inexpensive relative to their usual relationship. Normal otherwise.`),
-    _cptTip('Hedge', `Units of the second leg that offset one unit of the first, fitted on log prices over up to ${hedgeWindow} sessions. "1 (ratio)" means the fit was not positive, so the legs did not move together and the plain price ratio is used.`),
-    _cptTip('Half-life', 'How many sessions a gap in the spread typically takes to shrink by half. Shorter means gaps close faster; a dash means the spread showed no pull back to its average.'),
-    _cptTip('Cointegrated', 'Whether the two prices are tied together over time (Engle–Granger test at 5%). Yes: the spread tends to return to its average. No: a stretched spread can keep drifting. t is the test statistic; below about −3.4 passes.'),
-    _cptTip('Backtest 2011–26', 'The same signal rule run on 2011–2026 US futures prices after costs: average spread return per signal and the number of profitable years. A dash means no US futures contract exists for both legs.'),
-    _cptTip('Live signals', `Signals recorded on this site since tracking began. One opens when the pair turns stretched and closes when the z-score is back within ±${exitZ} or after ${maxHold} sessions; results are listed below.`),
-  ].map(h => `<th>${h}</th>`).join('');
-  const back = d.backtest?.pairs || {};
-  const live = d.track_record?.by_pair || {};
-  const labels = Object.fromEntries((d.pairs || []).map(p => [p.key, p.label]));
-  const rows = (d.pairs || []).map(p => {
-    const name = `<b>${escHtml(p.label)}</b>${p.short_history ? `<span class="cpt-chip" title="${escHtml(String(p.sessions))} sessions so far; the hedge uses up to ${escHtml(String(rule.hedge_window || 250))}">${escHtml(String(p.sessions))} sessions</span>` : ''}<div class="cpt-why">${escHtml(p.why || '')}</div>`;
-    if (p.z == null) {
-      return `<tr class="eb-row"><td>${name}</td><td colspan="6" style="color:var(--text-dim)">${escHtml(p.note || 'Not enough history yet.')}</td></tr>`;
-    }
-    const z = Number(p.z);
-    const state = p.stretched ? `Stretched: ${escHtml(p.rich)} rich vs ${escHtml(p.cheap)}` : '<span style="color:var(--text-dim)">Normal</span>';
-    const level = p.source === 'parity'
-      ? `${_cptPct(p.ratio - 1, 1)} over landed cost`
-      : `ratio ${Number(p.ratio).toPrecision(4)}`;
-    const hedge = p.hedge === 'regression' ? `${Number(p.beta).toFixed(2)} (fit)` : p.hedge === 'fixed' ? '1 (same metal)'
-      : `<span title="The fitted hedge was not positive, so the legs did not move together; the plain ratio is used">1 (ratio)</span>`;
-    const coint = p.cointegrated ? `yes <span style="color:var(--text-dim)">(t ${Number(p.eg_t).toFixed(1)})</span>` : `no <span style="color:var(--text-dim)">(t ${Number(p.eg_t).toFixed(1)})</span>`;
-    const b = back[p.key];
-    const backCell = b ? `${_cptPct(b.avg_return)} per signal · ${b.years_up}/${b.years} yrs up` : '<span style="color:var(--text-dim)" title="No US futures contract on both legs to test">—</span>';
-    const l = live[p.key] || {};
-    const liveCell = l.signals ? `${l.signals}${l.open ? ` (${l.open} open)` : ''}` : '0';
-    return `<tr class="eb-row"><td>${name}</td>`
-      + `<td><span class="cpt-z ${Math.abs(z) >= (rule.entry_z || 2) ? 'hot' : ''}">${z >= 0 ? '+' : ''}${z.toFixed(2)}</span><div class="cpt-why">${escHtml(level)}</div></td>`
-      + `<td>${state}</td><td>${hedge}</td>`
-      + `<td>${p.half_life != null ? escHtml(String(p.half_life)) + ' sessions' : '—'}</td><td>${coint}</td>`
-      + `<td>${backCell}</td><td>${liveCell}</td></tr>`;
-  }).join('');
-  const recent = (d.track_record?.recent || []).slice().reverse();
-  const status = s => ({ open: 'Open', reverted: 'Gap closed', timed_out: 'Timed out' }[s] || s);
-  const recentHtml = recent.length
-    ? `<div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Pair</th>`
-      + `<th>${_cptTip('Signal', 'The session the pair turned stretched and the tracker started following it.')}</th>`
-      + `<th>${_cptTip('z', 'The z-score on the session the signal opened.')}</th>`
-      + `<th>${_cptTip('Status', `Open while being followed. Gap closed: the z-score came back within ±${exitZ}. Timed out: ${maxHold} sessions passed first.`)}</th>`
-      + `<th>${_cptTip('Sessions', 'How many sessions the signal stayed open.')}</th>`
-      + `<th>${_cptTip('Spread return', `What a trade betting on the gap closing would have made: the change in the hedged spread per unit of exposure, after ${costPct}% cost per side.`)}</th></tr></thead><tbody>`
-      + recent.map(e => `<tr class="eb-row"><td>${escHtml(labels[e.pair] || e.pair)}</td><td>${escHtml(_fmtDate(e.entry_date))}</td>`
-        + `<td>${Number(e.entry_z).toFixed(2)}</td><td>${escHtml(status(e.status))}${e.exit_date ? ' · ' + escHtml(_fmtDate(e.exit_date)) : ''}</td>`
-        + `<td>${e.sessions ?? '—'}</td><td>${e.spread_return != null ? _cptPct(e.spread_return) : '—'}</td></tr>`).join('')
-      + `</tbody></table></div>`
-    : `<p class="text-sm text-gray-500">No live signals yet. One is recorded the first session a pair's z-score reaches ±${escHtml(String(rule.entry_z || 2))}.</p>`;
+  const ctx = {
+    entryZ: rule.entry_z || 2, exitZ: rule.exit_z || 0.5, maxHold: rule.max_hold || 20,
+    zWindow: rule.z_window || 60, hedgeWindow: rule.hedge_window || 250,
+    costPct: (rule.cost_per_side || 0.001) * 100,
+    liveSince: d.track_record?.live_since || d.data_through,
+    back: d.backtest?.pairs || {}, live: d.track_record?.by_pair || {},
+  };
+  const pairs = (d.pairs || []).slice();
+  const scored = pairs.filter(p => p.z != null).sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+  const labels = Object.fromEntries(pairs.map(p => [p.key, p.label]));
+  const stretched = scored.filter(p => Math.abs(p.z) >= ctx.entryZ);
+  const closest = scored.find(p => Math.abs(p.z) < ctx.entryZ);
+  const fmtZ = z => `${z >= 0 ? '+' : '−'}${Math.abs(z).toFixed(2)}`;
+  const liveTotal = Object.values(ctx.live).reduce((n, l) => n + (l.signals || 0), 0);
+  const replay = pairs.flatMap(p => (p.replay_signals || []).map(e => ({ ...e, pair: p.key }))).sort((a, b) => a.entry_date < b.entry_date ? 1 : -1);
+  const replayCount = replay.length || pairs.reduce((n, p) => n + (p.replay?.signals || 0), 0);
+  const replayPairs = pairs.filter(p => p.replay?.signals).length;
+  const summary = stretched.length
+    ? `<b>${stretched.length} of ${scored.length} pairs stretched</b> on the ${escHtml(_cptDay(d.data_through))} session: ${stretched.map(p => `${escHtml(p.label)} (${fmtZ(p.z)})`).join(', ')}.`
+    : `<b>No pair is stretched</b> on the ${escHtml(_cptDay(d.data_through))} session.${closest ? ` Closest to a signal: ${escHtml(closest.label)} at ${fmtZ(closest.z)}, against a line of ±${ctx.entryZ}.` : ''}`;
+  const why = liveTotal ? '' : `<div class="cpt-note"><b>Why live signals are 0.</b> Live tracking started with the ${escHtml(_cptDay(ctx.liveSince))} session, and a live signal is recorded only when a pair reaches ±${ctx.entryZ} on a session from then on. None has yet${closest ? `; ${escHtml(closest.label)} is closest at ${fmtZ(closest.z)}` : ''}.`
+    + (replayCount ? ` Before that, the same rule replayed over these prices finds ${_cptPlural(replayCount, 'signal')} on ${_cptPlural(replayPairs, 'pair')}${replay[0] ? `, the latest on ${escHtml(_cptDay(replay[0].entry_date))}` : ''} (listed at the bottom), so live ones should follow.` : '')
+    + `</div>`;
+  const live = (d.track_record?.recent || []).slice().reverse();
+  const liveHtml = live.length ? _cptSignalTable(live, labels, ctx)
+    : `<p class="text-sm text-gray-500">None yet. One is recorded the first session a pair's score reaches ±${ctx.entryZ}.</p>`;
+  const replayHtml = replay.length
+    ? `<h4 class="eb-h">Before live tracking: the same rule replayed</h4>`
+      + `<p class="text-xs" style="color:var(--text-dim);margin:0 0 6px">Each signal uses only prices available on its day, but none was recorded live. ${_cptPlural(replay.length, 'signal')} over a few months is too few to judge the rule; the 2011–26 US backtest on each card is the larger test.</p>`
+      + _cptSignalTable(replay, labels, ctx)
+    : '';
   const updated = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   const stale = d.freshness?.stale
     ? `<p class="text-xs" style="color:#b45309;margin:6px 0 0">This tracker has not been refreshed for over four days.</p>` : '';
   host.innerHTML = `
-    <p class="text-sm" style="color:var(--text-dim);margin:0 0 12px">How stretched ten commodity pairs are, through the ${escHtml(_fmtDate(d.data_through))} session. The z-score compares each pair's hedged spread with its last ${escHtml(String(rule.z_window || 60))} sessions; at ±${escHtml(String(rule.entry_z || 2))} the pair is stretched and the tracker follows it until the gap closes (z within ±${escHtml(String(rule.exit_z || 0.5))}) or ${escHtml(String(rule.max_hold || 20))} sessions pass. This is a monitor, not a strategy: in a 2011–2026 backtest the same rule made money on three pairs and lost on three. ${updated ? 'Updated ' + escHtml(updated) + '.' : ''}</p>${stale}
-    <div class="ixf-scroll"><table class="eb-table"><thead><tr>${pairHead}</tr></thead><tbody>${rows}</tbody></table></div>
-    <h4 class="eb-h">Live signals: did the stretched gap close?</h4>
-    ${recentHtml}
-    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Hedge: least-squares ratio of log prices over up to ${escHtml(String(rule.hedge_window || 250))} sessions, or the plain ratio when the fit is not positive. Cointegrated: Engle–Granger test at 5% on the same window. Spread return is per unit of gross exposure after ${escHtml(String((rule.cost_per_side || 0.001) * 100))}% cost per side. Backtest on US futures front months (roll gaps add noise); MCX pairs have no US equivalent. Data: ${escHtml(d.source || 'Tapetide')}. Research tracker, not investment advice.</p>`;
+    <p class="cpt-lede">Ten pairs of commodities that usually move together. When one gets unusually expensive against the other, the gap has often closed again. Each card shows how stretched a pair is today, and the tracker records what happens when one stretches.</p>
+    <div class="cpt-guide"><b>How to read a card</b><ol>
+      <li><b>Score:</b> how unusual today's gap is against the last ${ctx.zWindow} sessions. 0 is typical, ±1 is common, ±${ctx.entryZ} or beyond happens about 1 session in 20. The chart shows the last ${ctx.zWindow} sessions; the shaded band is the usual range.</li>
+      <li><b>Signal:</b> at ±${ctx.entryZ} the pair is stretched, and the tracker records a bet that the pricier side falls back against the cheaper one. It follows the bet until the gap closes (score back within ±${ctx.exitZ}) or ${ctx.maxHold} sessions pass.</li>
+      <li><b>Back to usual:</b> how far either commodity would have to move, with the other holding still, to bring the pair back to its usual level. It says nothing about which one will move, or when.</li>
+      <li><b>Hedge:</b> how much money goes on each side, so that a move lifting both prices together cancels out and only the gap is left.</li>
+      <li><b>A monitor, not a strategy:</b> over 2011–26 on US futures, the same rule made money on three pairs and lost on three.</li>
+    </ol></div>
+    <p class="cpt-summary">${summary}</p>${why}${stale}
+    <div class="cpt-grid">${scored.concat(pairs.filter(p => p.z == null)).map(p => _cptCard(p, ctx)).join('')}</div>
+    <h4 class="eb-h">Live signals</h4>
+    ${liveHtml}
+    ${replayHtml}
+    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Prices through the ${escHtml(_cptDay(d.data_through))} session${updated ? ', updated ' + escHtml(updated) : ''}. Hedge: least-squares fit of log prices over up to ${ctx.hedgeWindow} sessions, or equal money when the fit is not positive. Returns are per unit of money on both sides after ${ctx.costPct}% cost per side. US backtest on futures front months (roll gaps add noise). Data: ${escHtml(d.source || 'Tapetide')}. Research tracker, not investment advice.</p>`;
 }
 
 async function loadAgentTradingSection() {
