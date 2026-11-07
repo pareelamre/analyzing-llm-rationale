@@ -719,6 +719,21 @@ function escHtml(s) {
                     index.count("if (_ebView === 'indices') loadIndexForecastSection();"),
                 )
 
+    def test_commodity_pairs_headers_explain_themselves_on_hover_focus_and_tap(self):
+        # Touch screens never show a title attribute, and the tables scroll sideways in a
+        # box that would clip a tooltip drawn inside it, so each header is a button driving
+        # one floating tooltip positioned to the viewport.
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                for label in ("z-score", "State", "Hedge", "Half-life", "Cointegrated", "Backtest 2011–26", "Live signals", "Status", "Spread return"):
+                    self.assertIn(f"_cptTip('{label}'", index)
+                self.assertIn('onmouseenter="_cptShowTip(this)"', index)
+                self.assertIn('onfocus="_cptShowTip(this)"', index)
+                self.assertIn('onclick="_cptToggleTip(this)"', index)
+                self.assertIn("position: fixed", index.split(".cpt-tip-pop {", 1)[1].split("}", 1)[0])
+                tip_fn = index.split("function _cptTip(", 1)[1].split("let _cptTipFor", 1)[0]
+                self.assertIn("aria-label=", tip_fn)
+
     def test_commodity_pairs_is_a_real_edge_board_tab_refreshed_like_agentic(self):
         for name, index in self._both().items():
             with self.subTest(file=name):
