@@ -1122,6 +1122,7 @@
     .cpt-down { color: #b91c1c; font-weight: 600; white-space: nowrap; }
     .cpt-up .ui-icon, .cpt-down .ui-icon { fill: currentColor; height: .8em; width: .8em; }
     .cpt-spark { display: block; height: auto; margin: 4px 0 2px; width: 100%; }
+    .cpt-spark-note { color: var(--text-dim); font-size: 11.5px; line-height: 1.45; margin: 0; }
     .cpt-facts { display: grid; font-size: 12px; gap: 8px 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 8px 0 0; }
     .cpt-facts dt, .cpt-record dt { color: var(--text-dim); font-size: 10.5px; font-weight: 600; letter-spacing: .03em; }
     .cpt-facts dd, .cpt-record dd { margin: 1px 0 0; }
@@ -7255,14 +7256,23 @@ function _cptPlural(n, word) {
 }
 
 // The pair's score over its last sessions. The shaded band is the usual range (inside
-// ±entryZ); the line leaving it is what opens a signal.
-function _cptSpark(zs, entryZ, legs) {
-  const vals = (zs || []).map(Number).filter(Number.isFinite);
+// ±entryZ); the line leaving it is what opens a signal. Only the half the score is in gets
+// a label, and the note names that half first, so the chart never reads as the opposite
+// of the sentence above it.
+function _cptSpark(p, entryZ, legs) {
+  const vals = (p.z_recent || []).map(Number).filter(Number.isFinite);
   if (vals.length < 2) return '';
   const w = 320, h = 96, left = 2, right = 26, lim = entryZ + 1.5;
   const y = z => h / 2 - Math.max(-lim, Math.min(lim, z)) / lim * (h / 2 - 6);
   const x = i => left + i / (vals.length - 1) * (w - left - right);
-  const last = vals[vals.length - 1];
+  const last = vals[vals.length - 1], up = last >= 0;
+  const [here, there] = up ? ['Above', 'below'] : ['Below', 'above'];
+  const [rich, cheap] = up ? legs : [legs[1], legs[0]];
+  const parity = p.source === 'parity';
+  const side = parity ? `Premium ${up ? 'higher' : 'lower'}` : `${rich} pricier`;
+  const halves = parity
+    ? `${here} the dashed line, the premium is ${up ? 'higher' : 'lower'} than usual; ${there} it, ${up ? 'lower' : 'higher'}.`
+    : `${here} the dashed line, ${rich} is pricier than usual; ${there} it, ${cheap} is.`;
   const halo = 'paint-order="stroke" stroke="#fff" stroke-width="3" stroke-linejoin="round"';
   const label = (ty, text, anchor = 'start', tx = left + 2) => `<text x="${tx}" y="${ty.toFixed(1)}" font-size="10" fill="var(--text-dim)" text-anchor="${anchor}" ${halo}>${escHtml(text)}</text>`;
   return `<svg class="cpt-spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="${escHtml(`Score over the last ${vals.length} sessions, now ${last.toFixed(2)}`)}">`
@@ -7270,9 +7280,9 @@ function _cptSpark(zs, entryZ, legs) {
     + `<line x1="${left}" x2="${w - right}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}" stroke="var(--border)" stroke-dasharray="3 3"/>`
     + `<polyline points="${vals.map((z, i) => `${x(i).toFixed(1)},${y(z).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="1.5" stroke-linejoin="round"/>`
     + `<circle cx="${x(vals.length - 1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="3.5" fill="${Math.abs(last) >= entryZ ? '#d97706' : 'var(--ink)'}"/>`
-    + label(10, `${legs[0]} pricier`) + label(h - 3, `${legs[1]} pricier`)
+    + (Math.abs(last) >= 0.5 ? label(up ? 10 : h - 3, side) : '')
     + label(y(entryZ) + 3.5, `+${entryZ}`, 'end', w) + label(y(0) + 3.5, '0', 'end', w) + label(y(-entryZ) + 3.5, `−${entryZ}`, 'end', w)
-    + `</svg>`;
+    + `</svg><p class="cpt-spark-note">Last ${vals.length} sessions. ${escHtml(halves)} A signal opens outside the shaded band.</p>`;
 }
 
 // One plain sentence on where the pair stands today.
@@ -7367,7 +7377,7 @@ function _cptCard(p, ctx) {
   return `<article class="cpt-card${az >= entryZ ? ' hot' : ''}">${head}${badge}</div>`
     + `<p class="cpt-say">${escHtml(_cptSay(p, legs, entryZ))}</p>`
     + _cptBack(p, legs, zWindow)
-    + _cptSpark(p.z_recent, entryZ, legs)
+    + _cptSpark(p, entryZ, legs)
     + `<dl class="cpt-facts">${facts}</dl><dl class="cpt-record">${record}</dl></article>`;
 }
 
