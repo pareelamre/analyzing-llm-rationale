@@ -55,6 +55,8 @@ EXIT_Z = 0.5
 MAX_HOLD = 20
 COST_PER_SIDE = 0.001
 FIRST_DATE = date(2026, 4, 1)
+#: The first session the live tracker evaluated. Signals before it come only from the replay.
+LIVE_SINCE = date(2026, 11, 6)
 
 #: This module's rule walked over 2010-2026 daily US futures closes (Yahoo Finance continuous
 #: front months, so roll gaps add noise) for the pairs with a US contract on both legs, 0.1%
@@ -138,7 +140,8 @@ def history(days: Sequence[date], la: np.ndarray, lb: np.ndarray, *, fixed: bool
         sd = float(np.std(window, ddof=1))
         if not sd > 0:
             continue
-        out.append({"date": days[t], "i": t, "beta": beta, "spread": float(window[-1]), "z": float((window[-1] - window.mean()) / sd)})
+        out.append({"date": days[t], "i": t, "beta": beta, "spread": float(window[-1]), "mean": float(window.mean()),
+                    "z": float((window[-1] - window.mean()) / sd)})
     return out
 
 
@@ -207,10 +210,17 @@ def summarize(trades: list[dict]) -> dict[str, Any]:
     }
 
 
+def _legs(pair: dict[str, str]) -> tuple[str, str]:
+    if pair["source"] == "parity":
+        return "MCX gold", "Import cost"
+    first, second = pair["label"].replace(" (MCX)", "").split(" / ")
+    return first, second
+
+
 def _state(pair: dict[str, str], z: float) -> dict[str, Any]:
     if abs(z) < ENTRY_Z:
         return {"stretched": False, "rich": None, "cheap": None}
-    first, second = pair["label"].replace(" (MCX)", "").split(" / ")
+    first, second = _legs(pair)
     rich, cheap = (first, second) if z > 0 else (second, first)
     return {"stretched": True, "rich": rich, "cheap": cheap}
 
@@ -224,18 +234,27 @@ def track_pair(pair: dict[str, str], series: dict) -> Optional[dict[str, Any]]:
                 "sessions": len(days), "note": f"{len(days)} sessions of history; tracking starts at {MIN_SESSIONS}."}
     hist = history(days, la, lb, fixed=fixed)
     last = hist[-1]
-    replay = simulate(days, la, lb, hist)
+    # The replay covers the sessions before live tracking began; from then on the ledger records signals.
+    replay = [t for t in simulate(days, la, lb, hist) if t["entry_date"] < LIVE_SINCE.isoformat()]
+    # How far the spread sits from its window average, and the move in either leg alone that closes it.
+    gap = last["spread"] - last["mean"]
+    ratio = math.exp(la[-1] - lb[-1])
     return {
-        "key": pair["key"], "label": pair["label"], "why": pair["why"], "source": pair["source"],
+        "key": pair["key"], "label": pair["label"], "legs": list(_legs(pair)), "why": pair["why"], "source": pair["source"],
         "sessions": len(days), "data_from": days[0].isoformat(), "date": last["date"].isoformat(),
         "short_history": len(days) < FULL_HISTORY,
-        "ratio": round(math.exp(la[-1] - lb[-1]), 6),
+        "ratio": round(ratio, 6),
+        "usual_ratio": round(ratio * math.exp(-gap), 6),
+        "to_usual": {"a": round(math.expm1(-gap), 5), "b": round(math.expm1(gap / last["beta"]), 5)},
         "beta": round(last["beta"], 4), "hedge": "fixed" if fixed else ("ratio" if last["beta"] == 1.0 else "regression"),
         "z": round(last["z"], 3),
         "z_recent": [round(row["z"], 3) for row in hist[-Z_WINDOW:]],
         **_state(pair, last["z"]),
         **diagnostics(la, lb, fixed=fixed),
         "replay": summarize(replay),
+        "replay_signals": [
+            {k: t.get(k) for k in ("entry_date", "entry_z", "status", "exit_date", "sessions", "spread_return")} for t in replay
+        ],
         "_days": days, "_la": la, "_lb": lb, "_hist": hist,
     }
 
@@ -301,6 +320,7 @@ def run(rows_in: list[dict], ledger: list[dict], now: datetime) -> tuple[dict, l
         "pairs": public,
         "track_record": {
             "by_pair": live,
+            "live_since": LIVE_SINCE.isoformat(),
             "first_signal": min((e["entry_date"] for e in ledger), default=None),
             "recent": [
                 {k: e.get(k) for k in ("pair", "entry_date", "entry_z", "status", "exit_date", "sessions", "spread_return")}

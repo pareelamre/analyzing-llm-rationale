@@ -93,6 +93,33 @@ class TrackerTests(unittest.TestCase):
         self.assertGreater(row["z"], cp.ENTRY_Z)
         self.assertEqual((row["stretched"], row["rich"], row["cheap"]), (True, "Gold", "Silver"))
 
+    def test_the_move_back_to_usual_closes_the_gap_in_either_leg(self):
+        days = _weekdays(date(2025, 6, 2), 200)
+        gold, silver = _cointegrated(200, shock_at=199)
+        row = cp.track_pair(GOLD_SILVER, cp.price_series(_rows(days, gold, silver)))
+        last, beta = row["_hist"][-1], row["_hist"][-1]["beta"]
+        la, lb = row["_la"][-1], row["_lb"][-1]
+
+        self.assertEqual(row["legs"], ["Gold", "Silver"])
+        # Gold is rich, so gold falls or silver rises to get back to the window average.
+        self.assertLess(row["to_usual"]["a"], 0)
+        self.assertGreater(row["to_usual"]["b"], 0)
+        self.assertAlmostEqual(la + np.log1p(row["to_usual"]["a"]) - beta * lb, last["mean"], places=4)
+        self.assertAlmostEqual(la - beta * (lb + np.log1p(row["to_usual"]["b"])), last["mean"], places=4)
+        self.assertAlmostEqual(row["usual_ratio"], row["ratio"] * (1 + row["to_usual"]["a"]), places=4)
+
+    def test_the_replay_stops_where_live_tracking_starts(self):
+        days = _weekdays(date(2026, 3, 2), 200)
+        self.assertGreater(days[-1], cp.LIVE_SINCE)
+        gold, silver = _cointegrated(200, shock_at=199)
+        payload, ledger = cp.run(_rows(days, gold, silver), [], datetime(2026, 12, 8, tzinfo=timezone.utc))
+        row = next(p for p in payload["pairs"] if p["key"] == "gold-silver")
+
+        self.assertEqual(payload["track_record"]["live_since"], cp.LIVE_SINCE.isoformat())
+        self.assertTrue(all(e["entry_date"] < cp.LIVE_SINCE.isoformat() for e in row["replay_signals"]))
+        self.assertEqual(row["replay"]["signals"], len(row["replay_signals"]))
+        self.assertEqual([e["entry_date"] for e in ledger if e["pair"] == "gold-silver"], [days[-1].isoformat()])
+
     def test_a_negative_fit_falls_back_to_the_ratio(self):
         days = _weekdays(date(2025, 6, 2), 120)
         rng = np.random.default_rng(3)
