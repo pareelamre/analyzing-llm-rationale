@@ -747,6 +747,15 @@ function escHtml(s) {
                 hedge = index.split("function _cptHedge(", 1)[1].split("function _cptBack(", 1)[0]
                 self.assertIn("per ${cur}100 of", hedge)
 
+    def test_commodity_pairs_chart_labels_only_the_side_the_pair_is_on(self):
+        # Labelling both halves put "Copper pricier" right after "Zinc is pricier than usual".
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                spark = index.split("function _cptSpark(", 1)[1].split("function _cptSay(", 1)[0]
+                self.assertNotIn("label(10, `${legs[0]} pricier`) + label(h - 3, `${legs[1]} pricier`)", spark)
+                self.assertIn("label(up ? 10 : h - 3, side)", spark)
+                self.assertIn('class="cpt-spark-note"', spark)
+
     def test_commodity_pairs_is_a_real_edge_board_tab_refreshed_like_agentic(self):
         for name, index in self._both().items():
             with self.subTest(file=name):
