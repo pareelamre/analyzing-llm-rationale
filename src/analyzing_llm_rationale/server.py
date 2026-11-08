@@ -10538,7 +10538,7 @@ async def agent_debate(req: DebateRequest) -> Dict[str, Any]:
 async def markets_index_forecast() -> JSONResponse:
     """Today's 1-, 5- and 21-session range forecasts for ten NSE indices and their track record.
 
-    Built once per trading day from Tapetide's official index levels and India VIX by
+    Built once per trading day from Upstox's NSE index closes and India VIX by
     scripts/index_forecast_tick.py. The forecasts are ranges and the chance of closing above
     round levels, not direction calls: a walk-forward test found no up/down skill.
     """

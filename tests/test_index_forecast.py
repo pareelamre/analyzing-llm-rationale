@@ -50,6 +50,16 @@ class FitTests(unittest.TestCase):
         self.assertAlmostEqual(fit["baseline_sigma"], 0.01, delta=0.003)
         self.assertEqual(fit["as_of"], closes[-1][0])
 
+    def test_the_next_session_trains_on_recent_history_and_longer_horizons_on_all_of_it(self):
+        closes = _series(n=2000)
+        vix = _vix([d for d, _ in closes])
+        # Rows with a VIX reading, past the warm-up, whose target session has closed.
+        usable = {h: len(closes) - 1 - ixf.WARMUP_SESSIONS - h for h in ixf.HORIZONS}
+
+        self.assertEqual(len(ixf.fit_horizon(closes, vix, 1)["z"]), 750)
+        self.assertEqual(len(ixf.fit_horizon(closes, vix, 5)["z"]), usable[5])
+        self.assertEqual(len(ixf.fit_horizon(closes, vix, 21)["z"]), usable[21])
+
     def test_quantiles_rise_and_level_chances_fall(self):
         closes = _series()
         forecast = ixf.forecast_index("Nifty 50", closes, _vix([d for d, _ in closes]), [])
@@ -183,49 +193,72 @@ class _Resp:
         return self._body
 
 
-class TapetideClientTests(unittest.TestCase):
-    def test_pages_follow_the_cursor(self):
-        pages = [
-            _Resp(200, {"data": [{"date": "2026-11-05", "close": 1}], "meta": {"next_cursor": "c2"}}),
-            _Resp(200, {"data": [{"date": "2026-11-06", "close": 2}], "meta": {"next_cursor": None}}),
-        ]
-        seen = []
-
-        def get(url, params, timeout, headers):
-            seen.append(dict(params))
-            self.assertEqual(headers["Authorization"], "Bearer tok")
-            return pages.pop(0)
-
-        rows = ixf.tapetide_get("/v1/indices/nifty-50/levels", "tok", {"limit": 2}, http_get=get)
-        self.assertEqual([r["close"] for r in rows], [1, 2])
-        self.assertEqual(seen[1]["cursor"], "c2")
-
-    def test_a_plan_notice_or_http_error_raises(self):
-        notice = _Resp(200, {"data": None, "notice": {"code": "api_access_not_in_plan"}})
-        with self.assertRaisesRegex(ixf.TapetideError, "api_access_not_in_plan"):
-            ixf.tapetide_get("/v1/market/vix/history", "tok", http_get=lambda *a, **k: notice)
-        limited = _Resp(429, {"error": {"code": "quota_exhausted", "message": "x"}})
-        with self.assertRaisesRegex(ixf.TapetideError, "quota_exhausted"):
-            ixf.tapetide_get("/v1/market/vix/history", "tok", http_get=lambda *a, **k: limited)
-
-    def test_a_daily_fetch_costs_thirteen_requests(self):
+class UpstoxFetchTests(unittest.TestCase):
+    def test_a_run_fetches_full_history_in_decade_chunks_without_a_token(self):
         calls = []
 
-        def get(url, params, timeout, headers):
+        def get(url, timeout, headers):
             calls.append(url)
-            if url.endswith("/reference/indices"):
-                return _Resp(200, {"data": [{"name": "Nifty Midcap Select", "slug": "nifty-midcap-select-x"}], "meta": {}})
-            if url.endswith("/holidays"):
-                return _Resp(200, {"data": [{"date": "2026-11-24", "exchange": "NSE", "type": "FULL"}], "meta": {}})
-            return _Resp(200, {"data": [{"date": "2026-11-06", "close": 100.0}], "meta": {}})
+            self.assertNotIn("Authorization", headers)
+            self.assertIn("Foresea", headers["User-Agent"])
+            if "/market/holidays" in url:
+                rows = [
+                    {"date": "2026-11-24", "holiday_type": "TRADING_HOLIDAY", "closed_exchanges": ["NSE", "BSE"]},
+                    {"date": "2026-11-08", "holiday_type": "SPECIAL_TIMING", "closed_exchanges": []},
+                    {"date": "2026-08-26", "holiday_type": "SETTLEMENT_HOLIDAY", "closed_exchanges": []},
+                    {"date": "2026-11-19", "holiday_type": "TRADING_HOLIDAY", "closed_exchanges": ["MCX"]},
+                ]
+                if url.endswith("/holidays/2027-01-01"):
+                    rows = [{"date": "2027-01-01", "holiday_type": "TRADING_HOLIDAY", "closed_exchanges": ["NSE"]}]
+                elif not url.endswith("/holidays"):
+                    rows = []
+                return _Resp(200, {"status": "success", "data": rows})
+            if "/intraday/" in url:
+                # Monday's candle from the intraday route; the historical route has not caught up.
+                return _Resp(200, {"status": "success", "data": {"candles": [["2026-11-09T00:00:00+05:30", 1, 1, 1, 102.0, 0, 0]]}})
+            if url.endswith("/2026-11-09/2016-12-31"):
+                return _Resp(200, {"status": "success", "data": {"candles": [
+                    ["2026-11-08T00:00:00+05:30", 1, 1, 1, 999.0, 0, 0],  # Sunday Muhurat session
+                    ["2026-11-06T00:00:00+05:30", 1, 1, 1, 101.0, 0, 0],
+                ]}})
+            return _Resp(200, {"status": "success", "data": {"candles": [["2008-01-01T00:00:00+05:30", 1, 1, 1, 50.0, 0, 0]]}})
 
-        data = ixf.fetch_market_data("tok", date(2026, 11, 7), http_get=get)
+        monday_evening = datetime(2026, 11, 9, 13, 10, tzinfo=timezone.utc)  # 18:40 IST
+        data = ixf.fetch_market_data(monday_evening, http_get=get)
 
-        self.assertEqual(len(calls), 13)
-        self.assertIn("https://api.tapetide.com/v1/indices/nifty-midcap-select-x/levels", calls)
-        self.assertIn("https://api.tapetide.com/v1/indices/nifty-50/levels", calls)
-        self.assertEqual(data["holidays"], [date(2026, 11, 24)])
-        self.assertEqual(data["vix"], [(date(2026, 11, 6), 100.0)])
+        # Per series: today's candle plus two decade chunks back to 2008. Then the holiday list
+        # and each weekday of next year inside the 60-day horizon (1-8 January 2027).
+        self.assertEqual(len(calls), 11 * 3 + 1 + 6)
+        self.assertIn("https://api.upstox.com/v3/historical-candle/NSE_INDEX%7CNifty%20Fin%20Service/days/1/2026-11-09/2016-12-31", calls)
+        self.assertIn("https://api.upstox.com/v3/historical-candle/NSE_INDEX%7CIndia%20VIX/days/1/2016-12-30/2008-01-01", calls)
+        expected = [(date(2008, 1, 1), 50.0), (date(2026, 11, 6), 101.0), (date(2026, 11, 9), 102.0)]
+        self.assertEqual(data["levels"]["Nifty 50"], expected)
+        self.assertEqual(data["vix"], expected)
+        self.assertEqual(data["holidays"], [date(2026, 11, 24), date(2027, 1, 1)])
+
+    def test_a_candle_is_not_used_before_its_close_settles(self):
+        def get(url, timeout, headers):
+            if "/market/holidays" in url:
+                return _Resp(200, {"status": "success", "data": []})
+            # A pre-open candle for Tuesday from the intraday route.
+            return _Resp(200, {"status": "success", "data": {"candles": [
+                ["2026-11-10T00:00:00+05:30", 1, 1, 1, 103.0, 0, 0], ["2026-11-09T00:00:00+05:30", 1, 1, 1, 102.0, 0, 0],
+            ]}})
+
+        tuesday_morning = datetime(2026, 11, 10, 3, 37, tzinfo=timezone.utc)  # 09:07 IST
+        data = ixf.fetch_market_data(tuesday_morning, http_get=get)
+        self.assertEqual(data["levels"]["Nifty 50"], [(date(2026, 11, 9), 102.0)])
+
+    def test_a_failed_index_is_left_empty_but_a_failed_vix_raises(self):
+        def get(url, timeout, headers):
+            if "Nifty%20IT" in url or "India%20VIX" in url:
+                return _Resp(429, {"status": "error"})
+            if "/market/holidays" in url:
+                return _Resp(200, {"status": "success", "data": []})
+            return _Resp(200, {"status": "success", "data": {"candles": []}})
+
+        with self.assertRaisesRegex(ixf.UpstoxError, "India%20VIX.*429"):
+            ixf.fetch_market_data(datetime(2026, 11, 9, 13, 10, tzinfo=timezone.utc), http_get=get)
 
 
 class TickScheduleTests(unittest.TestCase):
@@ -234,13 +267,13 @@ class TickScheduleTests(unittest.TestCase):
         previous = {"as_of": "2026-11-06", "generated_at": "2026-11-06T13:10:00+00:00", "holidays": []}
         self.assertTrue(tick.already_published(previous, saturday))
 
-    def test_fetches_after_a_new_close_and_waits_while_tapetide_catches_up(self):
+    def test_fetches_on_every_run_until_the_new_close_is_published(self):
         monday_evening = datetime(2026, 11, 9, 13, 10, tzinfo=timezone.utc)  # 18:40 IST
         previous = {"as_of": "2026-11-06", "generated_at": "2026-11-06T13:10:00+00:00", "holidays": []}
         self.assertFalse(tick.already_published(previous, monday_evening))
-        retried = {**previous, "generated_at": "2026-11-09T12:00:00+00:00"}
-        self.assertTrue(tick.already_published(retried, monday_evening))
-        self.assertFalse(tick.already_published(retried, monday_evening + timedelta(hours=3)))
+        retried = {**previous, "generated_at": "2026-11-09T12:40:00+00:00"}
+        self.assertFalse(tick.already_published(retried, monday_evening))
+        self.assertTrue(tick.already_published({**retried, "as_of": "2026-11-09"}, monday_evening))
 
     def test_monday_morning_still_counts_friday_as_the_latest_close(self):
         monday_morning = datetime(2026, 11, 9, 2, 0, tzinfo=timezone.utc)  # 07:30 IST

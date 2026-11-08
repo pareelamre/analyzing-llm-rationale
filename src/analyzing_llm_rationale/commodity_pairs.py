@@ -19,8 +19,6 @@ from typing import Any, Callable, Iterable, Optional, Sequence
 import numpy as np
 import requests
 
-from .index_forecast import tapetide_get
-
 #: key, label, first leg, second leg, price source, why traders watch it.
 #: international: benchmark USD price. india: domestic exchange (MCX) price in INR.
 #: parity: the domestic exchange price against the import-parity (landed) cost, hedge fixed at 1.
@@ -74,6 +72,41 @@ BACKTEST: dict[str, Any] = {
 }
 
 HttpGet = Callable[..., Any]
+
+
+TAPETIDE_BASE_URL = "https://api.tapetide.com"
+
+
+class TapetideError(RuntimeError):
+    """A Tapetide request failed or returned no data."""
+
+
+def tapetide_get(path: str, token: str, params: Optional[dict] = None, *, http_get: HttpGet = requests.get) -> list[dict]:
+    """GET one Tapetide list route and return its ``data`` rows, following cursors."""
+    rows: list[dict] = []
+    params = dict(params or {})
+    for _ in range(10):
+        resp = http_get(
+            f"{TAPETIDE_BASE_URL}{path}", params=params, timeout=30,
+            headers={"Authorization": f"Bearer {token}", "User-Agent": "Foresea/commodity-pairs"},
+        )
+        status = getattr(resp, "status_code", None)
+        try:
+            body = resp.json()
+        except ValueError:
+            body = None
+        if status != 200 or not isinstance(body, dict):
+            code = ((body or {}).get("error") or {}).get("code") if isinstance(body, dict) else None
+            raise TapetideError(f"Tapetide {path} returned HTTP {status}{f' ({code})' if code else ''}")
+        if body.get("data") is None:
+            notice = body.get("notice") or {}
+            raise TapetideError(f"Tapetide {path} returned no data ({notice.get('code') or 'no notice'})")
+        rows.extend(row for row in body["data"] if isinstance(row, dict))
+        cursor = (body.get("meta") or {}).get("next_cursor")
+        if not cursor:
+            return rows
+        params["cursor"] = cursor
+    raise TapetideError(f"Tapetide {path} paged more than 10 times")
 
 
 def fetch_prices(token: str, today: date, *, http_get: HttpGet = requests.get) -> list[dict]:

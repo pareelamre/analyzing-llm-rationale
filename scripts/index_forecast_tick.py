@@ -2,9 +2,9 @@
 """Publish the daily NSE index range forecasts -- runs in a GitHub Action after the close.
 
 Each run:
-  1. skips without spending Tapetide quota when today's forecasts are already published,
-  2. fetches ten index level series, India VIX and NSE holidays from Tapetide (13 requests;
-     the free tier allows 50 a day),
+  1. skips when today's forecasts are already published,
+  2. fetches every close since 2008 of ten indices and India VIX, and NSE holidays, from
+     Upstox's open data routes (about 35 requests; no account or token),
   3. scores ledger rows whose target session has closed,
   4. appends today's forecasts to the ledger, only while the issue window is open
      (after the close they are made from, before the next session opens),
@@ -14,16 +14,12 @@ Outputs (committed back to the repo by the workflow):
   - ``data/index_forecast_ledger.jsonl``: every recorded forecast and, once its target
     session closes, its score. Rows are only ever appended or scored, never rewritten.
   - ``static/index_forecast_live.json``: today's forecasts and the track record.
-
-Env:
-  TAPETIDE_API_TOKEN  Tapetide personal token (tpt_rt_...)
 """
 from __future__ import annotations
 
 import argparse
 import json
 import logging
-import os
 import sys
 from datetime import date, datetime, time, timezone
 from pathlib import Path
@@ -36,7 +32,6 @@ from analyzing_llm_rationale import index_forecast as ixf  # noqa: E402
 logger = logging.getLogger("index_forecast_tick")
 LEDGER = ROOT / "data" / "index_forecast_ledger.jsonl"
 PAYLOAD = ROOT / "static" / "index_forecast_live.json"
-REFETCH_AFTER_S = 3 * 3600
 
 
 def _read_ledger(path: Path) -> list[dict]:
@@ -66,21 +61,15 @@ def _latest_close(now: datetime, holidays: list[date]) -> date:
 def already_published(previous: dict | None, now: datetime) -> bool:
     if not previous or not previous.get("as_of"):
         return False
-    # An index Tapetide is missing does not force a refetch: three runs a day of 13 requests
-    # each must stay inside the free tier's 50.
+    # An index Upstox is missing does not force a refetch; the next close brings it back.
     holidays = [date.fromisoformat(d) for d in previous.get("holidays", [])]
-    if previous["as_of"] >= _latest_close(now, holidays).isoformat():
-        return True
-    # Tapetide has not published the latest close yet: wait before spending another 13 requests.
-    fetched = datetime.fromisoformat(previous["generated_at"])
-    return (now - fetched).total_seconds() < REFETCH_AFTER_S
+    return previous["as_of"] >= _latest_close(now, holidays).isoformat()
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--ledger", type=Path, default=LEDGER)
     parser.add_argument("--payload", type=Path, default=PAYLOAD)
-    parser.add_argument("--token-file", type=Path, help="Read the Tapetide token from this file instead of the env")
     parser.add_argument("--force", action="store_true", help="Fetch even when today's forecasts are published")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -90,16 +79,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.force and already_published(previous, now):
         logger.info("forecasts as of %s are already published; nothing to fetch", previous["as_of"])
         return 0
-    token = (args.token_file.read_text(encoding="utf-8") if args.token_file else os.environ.get("TAPETIDE_API_TOKEN", "")).strip()
-    if not token:
-        # Quiet until the secret exists: the workflow runs every half hour overnight.
-        print("::warning::TAPETIDE_API_TOKEN is not set; no index forecasts published")
-        return 0
-
-    data = ixf.fetch_market_data(token, now.astimezone(ixf.IST).date())
+    data = ixf.fetch_market_data(now)
     missing = [name for name, series in data["levels"].items() if not series]
     if len(missing) == len(ixf.INDICES):
-        logger.error("Tapetide returned no index levels")
+        logger.error("Upstox returned no index levels")
         return 1
     ledger = _read_ledger(args.ledger)
     before = len(ledger)
