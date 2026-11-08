@@ -734,6 +734,16 @@ function escHtml(s) {
                 tip_fn = index.split("function _cptTip(", 1)[1].split("let _cptTipFor", 1)[0]
                 self.assertIn("aria-label=", tip_fn)
 
+    def test_index_forecast_labels_explain_themselves_like_the_pairs_board(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                render = index.split("function renderIndexForecast(", 1)[1].split("\nfunction ", 1)[0]
+                for label in ("Close", "80% range", "Median", "Higher", "Chance of closing above", "Scored",
+                              "In 80% range", "In 90% range", "vs EWMA", "Backtest 80%", "Backtest vs EWMA", "late"):
+                    self.assertIn(f"_cptTip('{label}'", render)
+                # The "late" badge used a title attribute, which touch screens never show.
+                self.assertNotIn("title=", render)
+
     def test_commodity_pairs_cards_explain_empty_live_signals_and_the_way_back_to_usual(self):
         for name, index in self._both().items():
             with self.subTest(file=name):
