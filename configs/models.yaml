@@ -3,12 +3,14 @@
 # Production deploys without the key, which hides them from the chat picker and
 # makes /predict answer 503, and the scheduled jobs that called them are off.
 #
-# The eight Agentic-board models (chat_interface_enabled, agent_trading_enabled)
-# deliberately keep forecasting_enabled and track_record_enabled. Those flags
-# also pick the canonical roster that build_agent_trading_board.py,
-# build_agent_trading_audit.py and the track_record_tick.py MTM board render, so
-# turning them off would remove those models' paper accounts from the public
-# boards rather than freeze them. The aliases are on no roster and are retired.
+# The eight SCADS models that were the Agentic board (deepseek-v4-flash,
+# gemma-4-26b-a4b-it, glm-5-3, glm-5-3-flash, gpt-oss-120b,
+# llama-3.3-70b-instruct, minimax-m3, qwen3-8-27b) retired from it on
+# 2026-11-08: agent_trading_enabled is false, their stores and notes are
+# archived in R2 under archive/, and their open positions passed to the
+# on-device model (qwen3.5-9b-selfhosted), now the board's only agent. They
+# keep forecasting_enabled and track_record_enabled for the forecast records.
+# The aliases are on no roster and are retired.
 models:
   qwen2.5-7b-instruct:
     result_label: Qwen2.5-7b-instruct
@@ -45,7 +47,7 @@ models:
     request_timeout_cap_s: 90
     access: self-hosted
     chat_interface_enabled: true
-    agent_trading_enabled: false
+    agent_trading_enabled: true
     track_record_enabled: false
   llama-3.3-70b-instruct:
     result_label: Llama-3.3-70B-Instruct
@@ -58,6 +60,7 @@ models:
     output_tpm_limit: 6000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
+    agent_trading_enabled: false
     api_key_file: SCADS_AI_API_KEY.txt
     request_timeout_cap_s: 90
     access: hosted
@@ -217,6 +220,7 @@ models:
     output_tpm_limit: 6000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
+    agent_trading_enabled: false
     api_key_file: SCADS_AI_API_KEY.txt
     request_timeout_cap_s: 90
     access: hosted
@@ -236,6 +240,7 @@ models:
     output_tpm_limit: 30000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
+    agent_trading_enabled: false
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
@@ -280,6 +285,7 @@ models:
     router_model_name: zai-org/GLM-5.3
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
+    agent_trading_enabled: false
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
@@ -304,6 +310,7 @@ models:
     output_tpm_limit: 30000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
+    agent_trading_enabled: false
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
@@ -323,6 +330,7 @@ models:
     output_tpm_limit: 30000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
+    agent_trading_enabled: false
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
@@ -371,6 +379,7 @@ models:
     output_tpm_limit: 6000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
+    agent_trading_enabled: false
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
@@ -387,6 +396,7 @@ models:
     output_tpm_limit: 6000
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
+    agent_trading_enabled: false
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
