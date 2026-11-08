@@ -7305,10 +7305,12 @@ function _cptSay(p, legs, entryZ) {
   return `${rich} is unusually expensive against ${cheap}. The tracker records a signal betting the gap closes: ${rich} falling back against ${cheap}.`;
 }
 
-// The hedge as money on each side, which is what the fitted ratio means in practice.
+// The hedge as money on each side, which is what the fitted ratio means in practice. Every
+// pair shows rupees: the hedge is a ratio of money, so one currency serves the dollar-priced
+// pairs too (converting both legs at one rate leaves the ratio unchanged).
 function _cptHedge(p, legs, hedgeWindow) {
   const [a, b] = legs;
-  const cur = p.source === 'international' ? '$' : '₹';
+  const cur = '₹';
   const n = Math.min(Number(p.sessions) || hedgeWindow, hedgeWindow);
   if (p.hedge === 'fixed') {
     return { text: `${cur}100 each side`, tip: 'Both sides are gold, so the tracker compares the two prices directly, with equal money on each side.' };
