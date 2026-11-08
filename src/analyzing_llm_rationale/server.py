@@ -6792,6 +6792,19 @@ def _format_percentage_points(value: float) -> str:
     return f"{abs(value) * 100:.0f}"
 
 
+def _confidence_in_answer(predicted_answer: Optional[str], confidence: Optional[float]) -> Optional[float]:
+    """Read a binary confidence as confidence in the stated answer.
+
+    Small models often put P(Yes) in `confidence` whatever they answer: the
+    on-device model wrote "No" with 0.02 for markets its rationale called near
+    impossible, which became a 98% Yes forecast. Confidence in an answer cannot
+    be below 0.5, so a lower value belongs to the other side and the answer wins.
+    """
+    if confidence is None or (predicted_answer or "").strip().lower() not in ("yes", "no"):
+        return confidence
+    return confidence if confidence >= 0.5 else 1.0 - confidence
+
+
 def _model_probability_for_market(
     question_type: str,
     predicted_answer: Optional[str],
@@ -6980,7 +6993,7 @@ def _build_typed_response(
         )
     brat = bparsed.get("rationale")
     predicted_answer = bparsed.get("predicted_answer")
-    confidence = bparsed.get("confidence")
+    confidence = _confidence_in_answer(predicted_answer, bparsed.get("confidence"))
     return PredictResponse(
         question_type="binary",
         predicted_answer=predicted_answer,
