@@ -1047,6 +1047,34 @@ class FileStoreTests(unittest.TestCase):
             comparison = {m["model"]: m for m in agg["models_comparison"]}
             self.assertEqual(comparison["crowd-follow"]["n_snapshots_resolved"], 2)
 
+    def test_edge_board_can_show_another_model_than_the_track_record(self):
+        now = datetime.now(timezone.utc)
+        with tempfile.TemporaryDirectory() as td:
+            store = FileStore(Path(td) / "store.json")
+            for ident, model in (("A", "council"), ("B", "on-device")):
+                snap = Entity(store.key(trl.SNAPSHOT_KIND, f"Kalshi:{ident}:{model}:2026-11-08"))
+                snap.update(
+                    platform="Kalshi", ident=ident, model=model, question=f"Will {ident} happen?",
+                    market_url=f"https://kalshi.com/markets/{ident}",
+                    snapshot_ts=now, snapshot_date="2026-11-08",
+                    model_probability=0.7, market_probability=0.4,
+                    close_time=(now + timedelta(days=10)).isoformat(),
+                    lead_time_days=10.0, horizon="7-14d", resolved=False,
+                )
+                store.put(snap)
+                price = Entity(store.key(trl.PRICE_KIND, f"Kalshi:{ident}:price"))
+                price.update(platform="Kalshi", ident=ident, market_probability=0.4, ts=now)
+                store.put(price)
+
+            same = trl.aggregate(store, model="council", variant="v", temperature=0.0)
+            self.assertEqual([e["ident"] for e in same["edge_board"]], ["A"])
+            self.assertEqual(same["edge_model"], "council")
+
+            split = trl.aggregate(store, model="council", variant="v", temperature=0.0, edge_model="on-device")
+            self.assertEqual([e["ident"] for e in split["edge_board"]], ["B"])
+            self.assertEqual(split["primary_model"], "council")
+            self.assertEqual(split["edge_model"], "on-device")
+
     def test_aggregate_excludes_diagnostic_backfill_snapshots(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "store.json"

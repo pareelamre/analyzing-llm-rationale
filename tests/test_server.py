@@ -5286,7 +5286,6 @@ class ServerTests(unittest.TestCase):
             ("/edge/agentic", "edge", "no-cache"),
             ("/edge/indices", "edge", "no-cache"),
             ("/edge/pairs", "edge", "no-cache"),
-            ("/track", "track", "no-cache"),
             ("/ledger", "ledger", "no-cache"),
             ("/chat/conv_123", "chat", "no-cache"),
             ("/watchlist", "watchlist", "no-cache"),
@@ -5305,6 +5304,11 @@ class ServerTests(unittest.TestCase):
                 self.assertEqual(context["canonical"], f"https://foresea.ink{path}")
                 self.assertEqual(context["api"]["radar"], "/radar")
                 self.assertIn("</head>", r.text)
+
+    def test_track_page_redirects_to_the_edge_board(self):
+        r = self.client.get("/track", follow_redirects=False)
+        self.assertEqual(r.status_code, 301)
+        self.assertEqual(r.headers["location"], "/edge")
 
     def test_edge_panel_route_rejects_unknown_panel(self):
         r = self.client.get("/edge/bogus")

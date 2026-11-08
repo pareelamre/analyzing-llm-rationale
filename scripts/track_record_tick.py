@@ -24,6 +24,7 @@ Outputs (committed back to the repo by the workflow):
 Env:
   FORESEA_BASE_URL  forecast endpoint base   (default https://foresea.ink)
   TRACK_MODEL       stable primary model for public metrics (default council)
+  EDGE_MODEL        model whose open forecasts fill the edge board (default TRACK_MODEL)
   TRACK_VARIANT     variant label            (default variant0_neutral_baseline)
   TRACK_TEMPERATURE temperature label        (default 0.0)
   PER_VENUE         new markets per venue     (default 5, clamped 1..25)
@@ -108,13 +109,14 @@ EVALUATION_PATH = Path(
 
 BASE_URL = os.environ.get("FORESEA_BASE_URL", "https://foresea.ink").rstrip("/")
 MODEL = os.environ.get("TRACK_MODEL", "council").strip()
+EDGE_MODEL = os.environ.get("EDGE_MODEL", "").strip() or MODEL
 # MTM keeps the forecast accounts of the eight SCADS models that were the
 # Agentic board until 2026-11-08 (those with track_record_enabled; the aliases
 # are off it, so none double-counts its backing model). The board itself now
 # runs on the on-device model; MTM is no longer shown on the site.
 SCADS_MTM_MODELS = tuple(sorted(scads_track_model_labels(ROOT / "configs" / "models.yaml")))
 # The on-device agent forecasts nightly and is the Edge board's model
-# (TRACK_MODEL in track-record-forecast.yml), so it must be a track model too.
+# (EDGE_MODEL in the track-record workflows), so it must be a track model too.
 AGENT_MODELS = tuple(
     m for m in scads_agent_trading_model_labels(ROOT / "configs" / "models.yaml") if m not in SCADS_MTM_MODELS
 )
@@ -179,6 +181,8 @@ ALL_TRACK_MODELS = _csv_list(os.environ.get(
 ))
 if MODEL not in ALL_TRACK_MODELS:
     raise RuntimeError(f"TRACK_MODEL {MODEL!r} must be included in TRACK_MODELS")
+if EDGE_MODEL not in ALL_TRACK_MODELS:
+    raise RuntimeError(f"EDGE_MODEL {EDGE_MODEL!r} must be included in TRACK_MODELS")
 TRACK_MODEL_SHARD_COUNT = max(
     1, int(os.environ.get("TRACK_MODEL_SHARD_COUNT", "1") or 1)
 )
@@ -1248,6 +1252,7 @@ async def main() -> int:
             # Forecasting can be sharded, but the public board must retain the
             # complete roster across every shard and tick.
             tracked_models=ALL_TRACK_MODELS,
+            edge_model=EDGE_MODEL,
         )
     after_primary = _model_progress(store, primary_model)
 
@@ -1292,6 +1297,7 @@ async def main() -> int:
         "predict_circuit_open_models": sorted(_predict_circuit_open_models),
         "predict_model_mismatches": _predict_stats["model_mismatches"],
         "track_models": TRACK_MODELS,
+        "edge_model": EDGE_MODEL,
         "track_model_shard_count": TRACK_MODEL_SHARD_COUNT,
         "track_model_shard_index": TRACK_MODEL_SHARD_INDEX,
         "track_model_shard_always": TRACK_MODEL_SHARD_ALWAYS,

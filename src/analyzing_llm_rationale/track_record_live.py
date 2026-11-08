@@ -3207,8 +3207,13 @@ def build_arbitrage_board(open_rows: List[Dict[str, Any]], latest_price: Dict[st
 def aggregate(client, *, model: str, variant: str, temperature: float,
               trajectory_samples: int = 8,
               cycle_minutes: Optional[int] = None,
-              tracked_models: Optional[List[str]] = None) -> Dict[str, Any]:
-    """Recompute the public aggregate (overall + by-horizon) and persist it."""
+              tracked_models: Optional[List[str]] = None,
+              edge_model: Optional[str] = None) -> Dict[str, Any]:
+    """Recompute the public aggregate (overall + by-horizon) and persist it.
+
+    ``edge_model`` picks whose open forecasts fill the edge board (default
+    ``model``); every track-record figure stays on ``model``."""
+    edge_model = edge_model or model
 
     con = _sql_con(client)
     if con is not None:
@@ -3298,7 +3303,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     resolved_primary = [r for r in resolved if (r.get("model") or model) == model]
     resolved_llm = [r for r in resolved if (r.get("model") or model) != "crowd-follow"]
     resolved_skill = _crowd_baseline_reference_rows(resolved, default_model=model) or resolved_llm
-    open_primary = [r for r in open_rows if (r.get("model") or model) == model]
+    open_primary = [r for r in open_rows if (r.get("model") or model) == edge_model]
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_primary}
     n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_skill})
     primary_n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_primary})
@@ -3318,7 +3323,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
 
     # Compute edge board early so the stat can reflect its actual length.
     # Use non-sports resolved snapshots for the skill calibration so sports
-    _res_skill_early = [r for r in resolved if (r.get("model") or model) == model]
+    _res_skill_early = [r for r in resolved if (r.get("model") or model) == edge_model]
     by_edge_early = edge_calibration(_res_skill_early)
     edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early, by_horizon)
     mark_to_market_rows_all = resolved + open_rows
@@ -3369,6 +3374,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "n_snapshots_resolved": len(resolved_skill),
         "n_markets_resolved": n_markets_resolved,
         "primary_model": model,
+        "edge_model": edge_model,
         "primary_n_snapshots_resolved": len(resolved_primary),
         "primary_n_markets_resolved": primary_n_markets_resolved,
         "n_markets_open": len(edge_board_result),

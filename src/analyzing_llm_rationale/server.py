@@ -2407,6 +2407,7 @@ _read_agent_trading_audit_archive_manifest = _AGENT_TRADING_AUDIT_ARCHIVE_READER
 _MARK_TO_MARKET_MERGE_KEYS = (
     "models_comparison",
     "edge_board",
+    "edge_model",
     "discrepancy_monitor",
     "arbitrage_signals",
     "mark_to_market_account",
@@ -3474,8 +3475,10 @@ async def edge_panel_page(panel: str, request: Request) -> Response:
 
 
 @app.get("/track", include_in_schema=False)
-async def track_page(request: Request) -> Response:
-    return await _spa_page(request, "track")
+async def track_page() -> Response:
+    # The track record page left the site on 2026-11-08; the data stays at
+    # GET /track-record.
+    return RedirectResponse(url="/edge", status_code=301)
 
 
 @app.get("/ledger", include_in_schema=False)
@@ -4073,6 +4076,7 @@ async def edge_board(request: Request):
         "generated_at": live.get("generated_at"),
         "freshness": freshness,
         "model": live.get("model"),
+        "edge_model": live.get("edge_model") or live.get("model"),
         "edge_board": audited_board,
         "by_edge": live.get("by_edge", []),
         "by_horizon": live.get("by_horizon", []),

@@ -202,7 +202,6 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("_sendAnalytics('/analytics/visit', payload);", self.index_html)
         self.assertIn("_sendAnalytics('/analytics/event', payload);", self.index_html)
         self.assertIn("trackEvent('forecast_started'", self.index_html)
-        self.assertIn("trackEvent('track_record_opened'", self.index_html)
         self.assertIn("trackEvent('edge_board_opened'", self.index_html)
         self.assertIn("trackEvent('watchlist_opened'", self.index_html)
         self.assertIn("trackEvent('personal_ledger_opened'", self.index_html)
@@ -450,7 +449,7 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         )
         self.assertIn('html[data-boot-view="edge-app"] #appShell', self.index_html)
         self.assertIn('html[data-boot-view^="edge-"] #edgeOverlay', self.index_html)
-        self.assertIn('html[data-boot-view^="track-"] #trackOverlay', self.index_html)
+        self.assertNotIn("trackOverlay", self.index_html)
         self.assertIn('html[data-boot-view^="watch-"] #watchOverlay', self.index_html)
         self.assertIn('html[data-boot-view^="ledger-"] #ledgerOverlay', self.index_html)
 
@@ -466,10 +465,6 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         for guarded in (
             "if (!_bootRouting && window.Motion && !prefersReduced()) {\n"
             "    Motion.animate(app, { opacity: [0, 1]",
-            "if (!_bootRouting && window.Motion && !prefersReduced()) {\n"
-            "    Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });\n"
-            "  }\n"
-            "  if (!trackLoaded)",
             "if (!_bootRouting && window.Motion && !prefersReduced()) {\n"
             "    Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });\n"
             "  }\n"
@@ -559,14 +554,6 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         self.assertIn('id="googleFallbackBtn"', self.index_html)
         self.assertIn("githubBtn.disabled = !_ghClientId;", self.index_html)
         self.assertIn("Google sign-in is not configured on this server.", self.index_html)
-
-    def test_track_chat_uses_smart_roi_against_crowd_baseline(self) -> None:
-        self.assertIn("_trackCurve(smart, '#10b981', 'Smart ROI')", self.index_html)
-        self.assertIn("_trackCurve(crowd, '#94a3b8', 'crowd-follow baseline', true)", self.index_html)
-        self.assertIn(">Smart ROI</div>", self.index_html)
-        self.assertIn(">vs crowd-follow</div>", self.index_html)
-        self.assertIn("crowd-follow is the zero-edge baseline", self.index_html)
-        self.assertNotIn("Best paper ROI", self.index_html)
 
     def test_signed_out_users_can_try_the_forecast_desk(self) -> None:
         launch_body = self.index_html.split("function launchApp", 1)[1].split(
