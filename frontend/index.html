@@ -7132,11 +7132,28 @@ function renderIndexForecast(d) {
     const q = f.quantiles || [];
     const levels = (f.levels || []).map(l => `<span class="ixf-level">${_ixfNum(l.level)} · <b>${_ixfPct(l.p_above)}</b></span>`).join('');
     const late = ix.recorded === false
-      ? `<span class="ixf-late" title="Built after the next session opened, so it is kept out of the track record">late</span>` : '';
+      ? `<span class="ixf-late">${_cptTip('late', 'Built after the next session opened, so it is kept out of the track record.')}</span>` : '';
     return `<tr class="eb-row"><td><b>${escHtml(ix.name)}</b>${late}</td><td>${_ixfNum(ix.close)}</td>`
       + `<td>${_ixfNum(q[1])} – ${_ixfNum(q[5])}</td><td>${_ixfNum(q[3])}</td><td>${_ixfPct(f.p_up)}</td>`
       + `<td><div class="ixf-levels">${levels}</div></td></tr>`;
   }).join('');
+  // Each label explains itself on hover, focus or tap (_cptTip), as on the pairs board.
+  const when = target ? _fmtDate(target) : 'the target date';
+  const from = d.as_of ? _fmtDate(d.as_of) : 'the latest';
+  const testYears = String(d.backtest?.window || '2016-2026').replace('-', '–');
+  const head = `<tr><th>Index</th>`
+    + `<th>${_cptTip('Close', `The index's close on ${from}, where the forecast starts.`)}</th>`
+    + `<th>${_cptTip('80% range', `Where the index should close on ${when} 8 times in 10. It should land below the range about 1 time in 10, and above it about 1 time in 10.`)}</th>`
+    + `<th>${_cptTip('Median', `The middle of the forecast: an even chance the index closes above or below it on ${when}.`)}</th>`
+    + `<th>${_cptTip('Higher', `The chance the index closes above its ${from} close on ${when}. It mostly reflects the index's long-run upward drift: in the ${testYears} test no model called up or down better than that.`)}</th>`
+    + `<th>${_cptTip('Chance of closing above', `The chance the index closes above each round level on ${when}. The levels are about half a typical move apart, so most fall inside the range.`)}</th></tr>`;
+  const recordHead = `<tr><th>Horizon</th>`
+    + `<th>${_cptTip('Scored', 'Forecasts whose target close has happened. Each index gets one forecast per horizon each trading day, recorded only between a close and the next open.')}</th>`
+    + `<th>${_cptTip('In 80% range', 'How often the actual close landed inside the 80% range. Near 80% is right: much lower means the ranges are too narrow, much higher too wide.')}</th>`
+    + `<th>${_cptTip('In 90% range', 'The same check for a wider 90% range (not shown above), so near 90% is right.')}</th>`
+    + `<th>${_cptTip('vs EWMA', 'How much better the forecast scored than a plain baseline: a bell curve sized by recent volatility (EWMA). The score is quantile loss, which rewards ranges that are both right and tight. Above 0 beats the baseline.')}</th>`
+    + `<th>${_cptTip('Backtest 80%', `The same 80% check over the ${testYears} test, which forecast every fifth session using only the data available at the time.`)}</th>`
+    + `<th>${_cptTip('Backtest vs EWMA', `The comparison with the plain baseline over the same ${testYears} test.`)}</th></tr>`;
   const live = Object.fromEntries((d.track_record?.by_horizon || []).map(r => [r.h, r]));
   const back = Object.fromEntries((d.backtest?.by_horizon || []).map(r => [r.h, r]));
   const skill = s => (s == null ? '—' : `${s >= 0 ? '+' : ''}${(s * 100).toFixed(1)}%`);
@@ -7155,9 +7172,9 @@ function renderIndexForecast(d) {
   host.innerHTML = `
     <p class="text-sm" style="color:var(--text-dim);margin:0 0 12px">Where ten NSE indices are likely to close, from the ${escHtml(_fmtDate(d.as_of))} close${target ? ` to the close on ${escHtml(_fmtDate(target))}` : ''}. These are ranges, not direction calls: in a 2016–2026 test no model called up or down better than each index's long-run up-rate, so "Higher" mostly reflects that drift. ${updated ? 'Updated ' + escHtml(updated) + '.' : ''}</p>${stale}
     ${tabs}
-    <div class="ixf-scroll"><table class="eb-table" style="margin-top:12px"><thead><tr><th>Index</th><th>Close</th><th>80% range</th><th>Median</th><th>Higher</th><th>Chance of closing above</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="ixf-scroll"><table class="eb-table" style="margin-top:12px"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
     <h4 class="eb-h">Track record: does the price land inside the range as often as it should?</h4>
-    <div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Horizon</th><th>Scored</th><th>In 80% range</th><th>In 90% range</th><th>vs EWMA</th><th>Backtest 80%</th><th>Backtest vs EWMA</th></tr></thead><tbody>${record}</tbody></table></div>
+    <div class="ixf-scroll"><table class="eb-table"><thead>${recordHead}</thead><tbody>${record}</tbody></table></div>
     <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Model: volatility from fast and slow EWMAs and India VIX, refit daily on ${typeof d.model?.training_sessions === 'number' ? escHtml(String(d.model.training_sessions)) + ' sessions' : 'the last 750 sessions for the 1-day range and every session since India VIX began in 2009 for the longer two'}, with fat tails taken from past errors (its own at 1 and 5 days; all ten indices' together for the month-ahead range, which a backtest scored better). "vs EWMA" compares quantile loss with a plain EWMA normal forecast. Data: ${escHtml(d.source || 'Upstox')}. Research forecasts, not investment advice.</p>`;
 }
 
