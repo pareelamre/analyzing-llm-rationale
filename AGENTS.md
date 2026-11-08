@@ -17,9 +17,11 @@ Edge board's Foresea odds to the on-device model, `qwen3.5-9b-selfhosted`
   `archive/2026-11-08-mtm-agents/` (sha256 manifest; never expired).
 - MTM tab removed (#735); the backend still computes MTM for the eight
   retired SCADS accounts.
-- Agent roster is the on-device model only (#736). It trades in the 02:00 and
-  14:00 IST hours (`AGENT_TRADING_RUN_HOURS_IST`, 10 h cooldown), with short
-  turns because the Mac writes about 8 tokens a second.
+- Agent roster is the on-device model only (#736). It trades about 01:30 and
+  13:30 IST: the VPS cron's two-hourly board dispatch (even UTC hours) starts
+  a cycle, and `AGENT_TRADING_RUN_HOURS_IST` (1,2,13,14) plus the 10 h cooldown
+  let only those two through. Short turns, because the Mac writes about 8
+  tokens a second.
 - It took over the retired agents' open positions once (#737,
   `agent-trading-seed.yml`): 8 positions worth $3,225.94 plus $6,774.06 cash,
   $10,000 in all. Do not rerun the seed; it refuses once the store exists.
