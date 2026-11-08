@@ -5,6 +5,34 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-08 — Agents and Foresea odds run on the on-device model (Claude)
+
+The owner retired MTM from the site and moved the Agentic experiment and the
+Edge board's Foresea odds to the on-device model, `qwen3.5-9b-selfhosted`
+(mlx on the owner's 16 GB Mac, reached over Tailscale through the
+`SELF_HOSTED_LLM_URL` variable and `SELF_HOSTED_LLM_API_KEY` secret).
+
+- Archive first: every agent store and notes file, the forecast store and
+  the published MTM/agent payloads are in R2 under
+  `archive/2026-11-08-mtm-agents/` (sha256 manifest; never expired).
+- MTM tab removed (#735); the backend still computes MTM for the eight
+  retired SCADS accounts.
+- Agent roster is the on-device model only (#736). It trades in the 02:00 and
+  14:00 IST hours (`AGENT_TRADING_RUN_HOURS_IST`, 10 h cooldown), with short
+  turns because the Mac writes about 8 tokens a second.
+- It took over the retired agents' open positions once (#737,
+  `agent-trading-seed.yml`): 8 positions worth $3,225.94 plus $6,774.06 cash,
+  $10,000 in all. Do not rerun the seed; it refuses once the store exists.
+- Foresea odds: one nightly forecast pass in the 22:00 IST hour (#739), with
+  `PROVIDER_TIMEOUT_CAP_S=300` for that batch only; the site keeps the 90 s cap.
+- `track-record-forecast.yml` and `agent-trading-board-publish.yml` are
+  re-enabled (`gh workflow enable`), and `AGENT_TRADING_TICK_ENABLED` and
+  `TRACK_RECORD_FORECAST_ENABLED` are `true`. This supersedes the 2026-11-02
+  entry for those two workflows; Metaculus, Headline Arena, agent reset and
+  R2 bootstrap stay disabled.
+- Do not load another model copy on the Mac's mlx server, and do not switch
+  branches in the owner's main checkout (`~/Documents/foresea`); use worktrees.
+
 ### 2026-11-02 — Paid Kite Connect market data source (Codex)
 
 The owner expanded the Kite scope to paid Connect quotes and history.
