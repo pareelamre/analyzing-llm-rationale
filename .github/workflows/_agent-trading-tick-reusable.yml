@@ -135,9 +135,11 @@ jobs:
           # localhost, so the runner reaches it through the public Tailscale URL.
           SELF_HOSTED_LLM_API_KEY: ${{ secrets.SELF_HOSTED_LLM_API_KEY }}
           AGENT_TRADING_API_BASE_URL: ${{ vars.SELF_HOSTED_LLM_URL }}
-          # Two cycles a day, in the 02:00 and 14:00 IST hours; dispatches outside
+          # Two cycles a day. The VPS cron dispatches on even UTC hours, which land
+          # at 01:30 and 13:30 IST; hours 2 and 14 absorb a late start, and the
+          # 10-hour cooldown keeps it to one cycle per window. Dispatches outside
           # them (or within 10 hours of the last cycle) exit without trading.
-          AGENT_TRADING_RUN_HOURS_IST: "2,14"
+          AGENT_TRADING_RUN_HOURS_IST: "1,2,13,14"
           AGENT_TRADING_MIN_HOURS_BETWEEN_CYCLES: "10"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # Optional read-only Hugging Face access improves dependency/model

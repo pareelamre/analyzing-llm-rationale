@@ -80,7 +80,7 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
         self.assertNotIn("AGENT_TRADING_RETRY_BACKOFF_S:", self.workflow)
         self.assertIn("SELF_HOSTED_LLM_API_KEY:", self.workflow)
         self.assertIn("AGENT_TRADING_API_BASE_URL:", self.workflow)
-        self.assertIn('AGENT_TRADING_RUN_HOURS_IST: "2,14"', self.workflow)
+        self.assertIn('AGENT_TRADING_RUN_HOURS_IST: "1,2,13,14"', self.workflow)
         self.assertIn('AGENT_TRADING_MIN_HOURS_BETWEEN_CYCLES: "10"', self.workflow)
         self.assertIn('AGENT_MAX_TOKENS: "640"', self.workflow)
 
@@ -149,8 +149,9 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
         parsed = yaml.safe_load(_BOARD_PUBLISH_PATH.read_text(encoding="utf-8"))
         gate = " ".join(str(parsed["jobs"]["agent-tick"]["if"]).split())
         self.assertIn("workflow_dispatch", gate)
-        self.assertIn("run_agent_tick", gate)
         self.assertNotIn("schedule", gate)
+        # The VPS cron dispatches without inputs, so the gate must not need one.
+        self.assertNotIn("run_agent_tick", gate)
 
     def test_publish_only_refreshes_cannot_evict_a_queued_agent_cycle(self):
         # GitHub keeps only ONE pending member per concurrency group, so a

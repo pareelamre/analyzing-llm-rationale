@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       run_agent_tick:
-        description: "Run a shadow-agent cycle before publishing the board"
+        description: "Unused: every dispatch tries a cycle; the agent's hour window decides"
         required: false
         type: boolean
         default: false
@@ -56,15 +56,13 @@ concurrency:
 
 jobs:
   agent-tick:
-    # Use this workflow's proven heartbeat as the agent dispatcher. The other
-    # two quarterly-hour publishes stay aggregation-only, keeping the board
-    # fresh without starting an extra trading pass.
-    #
-    # Every agent model is SCADS-hosted, and SCADS access ended for good on
-    # 2026-11-03, so the scheduler's run_agent_tick dispatches only publish
-    # until AGENT_TRADING_TICK_ENABLED is set to 'true' for a working roster.
-    # The board still publishes, so the retired models' history stays visible.
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_agent_tick == true && vars.AGENT_TRADING_TICK_ENABLED == 'true' }}
+    # The VPS cron (deploy/vps/crontab) dispatches this workflow every two
+    # hours with no inputs, and every dispatch tries an agent cycle. The agent's
+    # own IST hour window and 10-hour cooldown (_agent-trading-tick-reusable.yml)
+    # turn all but two of those a day into a quick no-op. Before 2026-11-08 the
+    # gate also required run_agent_tick, which the VPS cron never sends, so the
+    # on-device agent never traded; the input stays so older callers still work.
+    if: ${{ github.event_name == 'workflow_dispatch' && vars.AGENT_TRADING_TICK_ENABLED == 'true' }}
     uses: ./.github/workflows/agent-trading-tick.yml
     secrets: inherit
 
@@ -113,7 +111,7 @@ jobs:
 
       - name: Build the public agent-trading board
         env:
-          # The on-device agent trades twice a day (02:00 and 14:00 IST, 12h apart).
+          # The on-device agent trades twice a day (about 01:30 and 13:30 IST, 12h apart).
           # Health labels reflect that 12-hour cadence.
           AGENT_TRADING_MODEL_HEALTH_EXPECTED_CYCLE_SECONDS: "43200"
           AGENT_TRADING_MODEL_HEALTH_DELAYED_AFTER_SECONDS: "50400"
