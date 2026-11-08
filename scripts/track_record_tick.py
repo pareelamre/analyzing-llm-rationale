@@ -321,7 +321,11 @@ def _predict_mode() -> str:
 
 
 def _local_predict_credentials_available() -> bool:
-    return bool(os.environ.get("SCADS_AI_API_KEY") or (ROOT / "SCADS_AI_API_KEY.txt").exists())
+    return bool(
+        os.environ.get("SCADS_AI_API_KEY")
+        or os.environ.get("SELF_HOSTED_LLM_API_KEY")
+        or (ROOT / "SCADS_AI_API_KEY.txt").exists()
+    )
 
 
 def _record_predict_call(model_label: str, outcome: str) -> None:
@@ -413,7 +417,7 @@ def _init_local_predict() -> None:
             provider=None,
             local_model_name=None,
             router_model_name=None,
-            api_base_url=None,
+            api_base_url=(os.environ.get("TRACK_RECORD_API_BASE_URL") or "").strip() or None,
             api_key_env_var=None,
             api_key_file=None,
             device=os.environ.get("MODEL_DEVICE", "cpu"),

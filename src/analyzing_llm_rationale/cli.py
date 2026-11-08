@@ -548,8 +548,13 @@ def build_provider(args: argparse.Namespace):
     args = resolve_model_args(args)
     model = args._resolved_model_config
     effective_request_timeout_s = args.request_timeout_s
-    if model.request_timeout_cap_s is not None:
-        effective_request_timeout_s = min(effective_request_timeout_s, model.request_timeout_cap_s)
+    timeout_cap_s = model.request_timeout_cap_s
+    # A batch job with nobody waiting on a page (the nightly forecasts) may let a
+    # slow self-hosted model finish; the site never sets this.
+    if os.environ.get("PROVIDER_TIMEOUT_CAP_S", "").strip():
+        timeout_cap_s = float(os.environ["PROVIDER_TIMEOUT_CAP_S"])
+    if timeout_cap_s is not None:
+        effective_request_timeout_s = min(effective_request_timeout_s, timeout_cap_s)
     if args.provider == "local-qwen":
         return LocalQwenProvider(
             model_name=args.local_model_name,
