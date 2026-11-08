@@ -1253,6 +1253,13 @@ models:
             self.assertIsInstance(provider, OpenAICompatibleProvider)
             self.assertEqual(provider.request_timeout_s, 45.0)
 
+            # A batch job may lift the cap (the nightly forecasts on the slow
+            # on-device model); the request's own timeout still bounds it.
+            with patch.dict("os.environ", {"PROVIDER_TIMEOUT_CAP_S": "300"}):
+                self.assertEqual(build_provider(args).request_timeout_s, 120.0)
+                args.request_timeout_s = 600.0
+                self.assertEqual(build_provider(args).request_timeout_s, 300.0)
+
 
 if __name__ == "__main__":
     unittest.main()

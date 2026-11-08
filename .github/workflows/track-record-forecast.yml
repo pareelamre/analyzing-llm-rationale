@@ -5,11 +5,12 @@ name: Track record forecast snapshots
 # A single downstream publish job merges the successful model artifacts and
 # pushes once, avoiding parallel write contention on main.
 #
-# Off since SCADS access ended for good on 2026-11-03: every LLM in the roster
-# was SCADS-hosted, and 8 targets x MAX_TOKENS 4096 per model each hour is far
-# more than the single self-hosted Mac can absorb next to live traffic. The
-# hourly scheduler dispatch now skips every job until
-# TRACK_RECORD_FORECAST_ENABLED is set to 'true' for a reachable roster.
+# Since 2026-11-08 the forecasts come from the on-device model
+# (qwen3.5-9b-selfhosted on the owner's Mac, reached over Tailscale), once a
+# night: the hourly scheduler dispatch only forecasts in the 22:00 IST hour,
+# so the Mac also has room for the site's live chat and the agent's 02:00 and
+# 14:00 IST cycles. SCADS access ended on 2026-11-03, taking the council with
+# it. Nothing runs until TRACK_RECORD_FORECAST_ENABLED is 'true'.
 # Already-recorded snapshots keep resolving via track-record-tick/resolved.
 
 on:
@@ -31,6 +32,10 @@ on:
         description: "Maximum markets to forecast in this run"
         required: false
         default: "12"
+      any_hour:
+        description: "Forecast now instead of waiting for the 22:00 IST hour (1=yes, 0=no)"
+        required: false
+        default: "0"
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
@@ -57,21 +62,35 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      run: ${{ steps.window.outputs.run }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Forecast once a night, in the 22:00 IST hour
+        id: window
+        shell: bash
+        run: |
+          hour="$(TZ=Asia/Kolkata date +%H)"
+          if [ "$hour" = "22" ] || [ "${{ github.event.inputs.any_hour || '0' }}" = "1" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Outside the 22:00 IST forecast hour (now ${hour}:xx IST); nothing to do."
+          fi
       - name: Resolve the canonical Agentic model roster
         id: matrix
         shell: bash
         run: |
           python -m pip install --quiet pyyaml
-          matrix="$(PYTHONPATH=src python -c "import json; from pathlib import Path; from analyzing_llm_rationale.config import scads_agent_trading_model_labels; labels = ['crowd-follow', 'council', *scads_agent_trading_model_labels(Path('configs/models.yaml'))]; print(json.dumps({'include': [{'model': label, 'artifact': label} for label in labels]}, separators=(',', ':'))) ")"
+          # The council was SCADS models only; the on-device agent forecasts alone.
+          matrix="$(PYTHONPATH=src python -c "import json; from pathlib import Path; from analyzing_llm_rationale.config import scads_agent_trading_model_labels; labels = ['crowd-follow', *scads_agent_trading_model_labels(Path('configs/models.yaml'))]; print(json.dumps({'include': [{'model': label, 'artifact': label} for label in labels]}, separators=(',', ':'))) ")"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   prepare-targets:
     needs: roster
+    if: ${{ needs.roster.outputs.run == 'true' }}
     name: prepare unified forecast targets
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -108,7 +127,8 @@ jobs:
           FORESEA_BASE_URL: https://foresea.ink
           TRACK_STORE_PATH: tmp/prepare-targets/store.duckdb
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
-          TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '4' }}
+          # One nightly pass covers every target, so there is one shard.
+          TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '1' }}
           TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
           TRACK_TARGET_SHARD_SLOT_MINUTES: "5"
           TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '12' }}
@@ -127,24 +147,15 @@ jobs:
 
   forecast:
     needs: [roster, prepare-targets]
+    if: ${{ needs.roster.outputs.run == 'true' }}
     name: forecast (${{ matrix.model }})
     runs-on: ubuntu-latest
-    # 35 minutes cut off models that were up on SCADS but slow, leaving them
-    # with no resolved record -- the very evidence needed to judge whether
-    # they are worth trading. Sized from the work: 8 targets per model, and
-    # SCADS' observed worst-case latency is ~180s per call, so a realistic
-    # slow run is ~24 minutes. 60 gives that 2.5x headroom.
-    #
-    # 90 covers even the pathological case: the provider read timeout is 600s,
-    # so a model hitting it on all 8 targets needs ~80 minutes. Above that a
-    # model is not answering at all and stopping is correct. Chosen so no
-    # model that is genuinely up on SCADS is ever truncated by this ceiling.
-    timeout-minutes: 90
+    # 12 targets at up to five minutes a forecast on the Mac, with headroom.
+    timeout-minutes: 120
     continue-on-error: true
     strategy:
       fail-fast: false
-      # Parallel matrix of 2 models provides safe global fan-out for SCADS,
-      # bringing total roster snapshot duration down to ~16-20 minutes.
+      # crowd-follow (no model) runs beside the on-device model.
       max-parallel: 2
       matrix: ${{ fromJSON(needs.roster.outputs.matrix) }}
     steps:
@@ -163,10 +174,11 @@ jobs:
 
       - name: Verify forecast secrets
         env:
-          SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
+          SELF_HOSTED_LLM_API_KEY: ${{ secrets.SELF_HOSTED_LLM_API_KEY }}
+          SELF_HOSTED_LLM_URL: ${{ vars.SELF_HOSTED_LLM_URL }}
         run: |
-          if [ -z "$SCADS_AI_API_KEY" ]; then
-            echo "::error::SCADS_AI_API_KEY must be configured as a GitHub Actions secret for GitHub-hosted forecasts."
+          if [ -z "$SELF_HOSTED_LLM_API_KEY" ] || [ -z "$SELF_HOSTED_LLM_URL" ]; then
+            echo "::error::The on-device model needs the SELF_HOSTED_LLM_API_KEY secret and the SELF_HOSTED_LLM_URL variable."
             exit 1
           fi
 
@@ -196,20 +208,25 @@ jobs:
           FORESEA_BASE_URL: https://foresea.ink
           TRACK_STORE_PATH: tmp/model-forecast/${{ matrix.artifact }}.duckdb
           TRACK_TARGETS_FILE: tmp/prepared/targets.json
-          SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
           TRACK_RECORD_PREDICT_MODE: "local"
-          TRACK_RECORD_LOCAL_MODEL: "gpt-oss-120b"
+          # The on-device model, through the Mac's public Tailscale URL; its config
+          # address is the Mac's own localhost. No page waits on this nightly batch,
+          # so a forecast may take up to five minutes instead of the site's 90 s.
+          TRACK_RECORD_LOCAL_MODEL: "qwen3.5-9b-selfhosted"
+          SELF_HOSTED_LLM_API_KEY: ${{ secrets.SELF_HOSTED_LLM_API_KEY }}
+          TRACK_RECORD_API_BASE_URL: ${{ vars.SELF_HOSTED_LLM_URL }}
+          PROVIDER_TIMEOUT_CAP_S: "300"
           TRACK_MODEL: ${{ matrix.model }}
           TRACK_MODELS: ${{ matrix.model }}
           TRACK_MODEL_SHARD_COUNT: "1"
           TRACK_MODEL_SHARD_INDEX: "0"
           TRACK_MODEL_SHARD_ALWAYS: ""
           TRACK_MODEL_SHARD_SLOT_MINUTES: "5"
-          TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '4' }}
+          TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '1' }}
           TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
           TRACK_TARGET_SHARD_SLOT_MINUTES: "5"
-          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '8' }}
+          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '12' }}
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
           # Scheduled runs rotate target shards. Full reforecasting remains an
@@ -223,7 +240,8 @@ jobs:
           SHORT_HORIZON_SLOT_HOURS: "24"
           EXPIRY_REFORECAST_LEAD_DAYS: "3"
           EXPIRY_SLOT_HOURS: "6"
-          MAX_TOKENS: "4096"
+          # About eight tokens a second on the Mac: room for a full forecast in 300 s.
+          MAX_TOKENS: "1536"
           PROVIDER_TIMEOUT_S: "300"
           PROVIDER_MAX_RETRIES: "1"
           PROVIDER_BACKOFF_BASE_S: "4"
@@ -249,7 +267,7 @@ jobs:
 
   publish:
     name: publish forecast snapshots
-    needs: forecast
+    needs: [roster, forecast]
     # `!cancelled()` discarded the whole run whenever a single model's job
     # timed out. Observed: 9 of 10 model forecasts succeeded, minimax-m3 hit
     # the 35-minute job timeout (which GitHub reports as cancelled), and the
@@ -261,7 +279,7 @@ jobs:
     #
     # always() would also run it after the off switch skipped every forecast,
     # and it exits 1 when there are no model stores, so it carries the switch.
-    if: ${{ always() && vars.TRACK_RECORD_FORECAST_ENABLED == 'true' }}
+    if: ${{ always() && vars.TRACK_RECORD_FORECAST_ENABLED == 'true' && needs.roster.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
@@ -304,7 +322,8 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           FORESEA_BASE_URL: https://foresea.ink
-          TRACK_MODEL: "council"
+          # The Edge board's Foresea odds are the on-device model's.
+          TRACK_MODEL: "qwen3.5-9b-selfhosted"
           CYCLE_INTERVAL_MINUTES: "5"
           MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
         run: |
