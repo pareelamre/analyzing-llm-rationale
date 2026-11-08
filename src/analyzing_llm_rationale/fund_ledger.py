@@ -60,6 +60,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             entry_price REAL NOT NULL,
             collateral_usd REAL NOT NULL,
             attribution_json TEXT NOT NULL DEFAULT '{}',
+            pair_key TEXT,
             opened_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             PRIMARY KEY (fund_id, instrument_id, side)
@@ -184,11 +185,12 @@ def buy(conn: sqlite3.Connection, fund_id: str, instrument: Mapping[str, Any], s
     if held is None:
         conn.execute(
             "INSERT INTO fund_positions (fund_id, instrument_id, side, kind, venue, asset_class, underlying, key, label,"
-            " currency, multiplier, quantity, entry_price, collateral_usd, attribution_json, opened_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " currency, multiplier, quantity, entry_price, collateral_usd, attribution_json, pair_key, opened_at,"
+            " updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (fund_id, instrument["id"], side, kind, instrument.get("venue", ""), instrument.get("asset_class", ""),
              instrument.get("underlying", ""), instrument.get("key", instrument["id"]), instrument.get("label"),
-             currency, multiplier, quantity, price, notional, json.dumps(attribution, sort_keys=True), ts, ts))
+             currency, multiplier, quantity, price, notional, json.dumps(attribution, sort_keys=True), pair_key,
+             ts, ts))
     else:
         total = held["quantity"] + quantity
         merged = _merge_attribution(json.loads(held["attribution_json"]), held["quantity"], attribution, quantity)
@@ -283,7 +285,8 @@ def nav(conn: sqlite3.Connection, fund_id: str, quotes: Mapping[str, Mapping[str
         for analyst, weight in json.loads(pos["attribution_json"]).items():
             by_analyst[analyst] = by_analyst.get(analyst, 0.0) + weight * pnl
         rows.append({**{k: pos[k] for k in ("instrument_id", "label", "side", "kind", "venue", "asset_class",
-                                            "underlying", "quantity", "entry_price", "collateral_usd")},
+                                            "underlying", "quantity", "entry_price", "collateral_usd", "pair_key",
+                                            "opened_at")},
                      "mark": mark, "value_usd": round(worth, 4), "pnl_usd": round(pnl, 4), "marked": mark is not None,
                      "attribution": json.loads(pos["attribution_json"])})
     realized_by_analyst = {}
