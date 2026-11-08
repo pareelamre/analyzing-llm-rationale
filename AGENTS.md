@@ -25,6 +25,18 @@ it does not add paid market-data calls or feed private values into binary edge
 calculations. Restore the single panel before replacing its parent DOM, and
 clear its transient contents when leaving the source.
 
+### 2026-10-31 — Edge Board agent research before inference (Codex)
+
+The scheduled Edge Board agent now prepares bounded orderbook/news packets for
+up to two candidates before its first model turn. Query planning, model summaries
+and embeddings are disabled for this path, including follow-up `web_search`;
+nested `forecast` and `search_evidence` tools are omitted. Public API request JSON
+cannot enable the internal prefetch context. The default is four orchestration
+turns plus one terminal finalization, with the existing `MAX_TOOL_STEPS` override.
+Keep guarded paper execution and thesis reconciliation intact. Details and call
+count boundaries: `docs/edge_board_agent_workflow.md`. This does not replace the
+discontinued model provider or change deployed schedules/model credentials.
+
 ### 2026-10-26 — Kite Personal account reads (Codex)
 
 Kite Personal uses separate authenticated `/integrations/kite` routes and the

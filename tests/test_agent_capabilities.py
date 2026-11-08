@@ -210,6 +210,62 @@ class SystemPromptTests(unittest.TestCase):
         self.assertIn("forecast", prompt)
 
 
+class PrefetchedResearchTests(unittest.TestCase):
+    def test_prefetched_observation_allows_one_turn_final_without_fabricated_tool_execution(self):
+        calls = []
+        observation = {"action": "research_brief", "args": {"ticker": "KXTEST"},
+                       "observation": '{"sources":[{"url":"https://example.test/update"}]}',
+                       "initiated_by": "system_prefetch", "research_available": True}
+
+        async def chat(messages):
+            calls.append(messages)
+            return '{"final":"PASS: the researched edge is insufficient."}'
+
+        tool = unittest.mock.AsyncMock()
+        result = asyncio.run(ac.run_tool_loop(
+            "Research market", {"place_trade": tool}, [], chat, max_steps=4,
+            initial_observations=[observation]))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual([message["role"] for message in calls[0]], ["system", "user"])
+        self.assertIn("https://example.test/update", str(calls[0]))
+        self.assertIn("untrusted", str(calls[0]).lower())
+        self.assertEqual(result["transcript"], [observation])
+        tool.assert_not_awaited()
+        self.assertFalse(result["truncated"])
+
+    def test_four_turn_budget_still_finalizes_and_preserves_prefetch(self):
+        calls = []
+
+        async def chat(messages):
+            calls.append(messages)
+            return '{"action":"get_market","args":{}}' if len(calls) <= 4 else '{"final":"PASS"}'
+
+        async def market(args):
+            return "Market data"
+
+        initial = [{"action": "research_brief", "args": {}, "observation": "Research data"}]
+        result = asyncio.run(ac.run_tool_loop(
+            "Research market", {"get_market": market}, [], chat, max_steps=4,
+            initial_observations=initial))
+        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(result["transcript"]), 5)
+        self.assertEqual(initial, [{"action": "research_brief", "args": {}, "observation": "Research data"}])
+        self.assertEqual(result["answer"], "PASS")
+
+    def test_missing_prefetch_data_still_requires_the_research_retry(self):
+        calls = []
+        async def chat(messages):
+            calls.append(str(messages))
+            return '{"final":"PASS"}'
+        seed = {"action": "research_brief", "observation": '{"evidence_status":"unavailable"}',
+                "research_available": False, "initiated_by": "system_prefetch"}
+        result = asyncio.run(ac.run_tool_loop("q", {"web_search": unittest.mock.AsyncMock()}, [], chat,
+                                             max_steps=4, initial_observations=[seed, {}]))
+        self.assertEqual(len(calls), 2)
+        self.assertIn("Do the research first", calls[1])
+        self.assertEqual(result["transcript"], [seed])
+
+
 class ToolLoopTests(unittest.TestCase):
     def test_calls_tool_then_finalizes(self):
         seen = []

@@ -1906,8 +1906,9 @@ class ThesisForecastLearningTests(unittest.TestCase):
 
 
 class RunCycleTests(unittest.TestCase):
-    def _fake_report(self, thesis="Passed this cycle.", transcript=None):
-        return SimpleNamespace(thesis=thesis, tool_transcript=transcript or [])
+    def _fake_report(self, thesis="Passed this cycle.", transcript=None, model_calls=None):
+        return SimpleNamespace(thesis=thesis, tool_transcript=transcript or [],
+                               tool_loop_truncated=None, tool_loop_model_calls=model_calls)
 
     def test_run_cycle_persists_thesis_and_candidates(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1924,7 +1925,9 @@ class RunCycleTests(unittest.TestCase):
                 mock.patch.object(
                     agent_trading_tick, "_call_agent_analyze",
                     return_value=self._fake_report(thesis="Bought KXNEW on a genuine edge.",
-                                                     transcript=[{"action": "place_trade"}]),
+                                                     model_calls=agent_trading_tick.MAX_TOOL_STEPS + 1,
+                                                     transcript=[{"action": "research_brief", "initiated_by": "system_prefetch"},
+                                                                 {"action": "place_trade"}]),
                 ) as call_mock,
             ):
                 agent_trading_tick.run_cycle("model-c")
@@ -1938,11 +1941,15 @@ class RunCycleTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["thesis"], "Bought KXNEW on a genuine edge.")
         self.assertEqual(row["steps"], 1)
+        self.assertEqual(row["truncated"], 1)
+        self.assertEqual(json.loads(row["transcript_json"])["model_calls"], agent_trading_tick.MAX_TOOL_STEPS + 1)
         self.assertIn("KXNEW", row["transcript_json"])
         # The question passed to the tool loop must actually mention the candidate.
         question_arg = call_mock.call_args[0][0]
         self.assertIn("KXNEW", question_arg)
         self.assertIn("Your portfolio", question_arg)
+        self.assertIn("KXNEW", {q["ident"] for q in call_mock.call_args.kwargs["research_candidates"]})
+        self.assertIn("system_prefetch", row["transcript_json"])
 
     def test_run_cycle_executes_a_declared_buy_thesis_when_the_tool_was_not_called(self):
         """A final BUY is a paper-trade commitment, not merely display copy."""
@@ -2129,7 +2136,7 @@ class RunCycleTests(unittest.TestCase):
             }
             seen = {}
 
-            async def _capture_env(question):
+            async def _capture_env(question, **kwargs):
                 seen["FORESEA_MAX_ORDER_NOTIONAL"] = os.environ.get("FORESEA_MAX_ORDER_NOTIONAL")
                 seen["FORESEA_AGENT_ACCOUNT_VALUE"] = os.environ.get("FORESEA_AGENT_ACCOUNT_VALUE")
                 return self._fake_report()
@@ -2267,12 +2274,18 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
 
         async def _capture(req, request=None):
             captured["require_kelly_sizing"] = req.benchmark_tools
+            captured["research"] = req._benchmark_research_candidates
+            captured["max_steps"] = req.max_tool_steps
             return SimpleNamespace(thesis="Passed.", tool_transcript=[])
 
         with mock.patch("analyzing_llm_rationale.server.agent_analyze", side_effect=_capture):
-            asyncio.run(agent_trading_tick._call_agent_analyze("question text"))
+            asyncio.run(agent_trading_tick._call_agent_analyze(
+                "question text", research_candidates=[_quote("KXREADY")],
+            ))
 
         self.assertTrue(captured["require_kelly_sizing"])
+        self.assertEqual(captured["research"][0]["ident"], "KXREADY")
+        self.assertEqual(captured["max_steps"], agent_trading_tick.MAX_TOOL_STEPS)
 
     def test_agent_analyze_request_binds_the_worker_model(self):
         import asyncio
