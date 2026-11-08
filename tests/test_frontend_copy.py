@@ -70,25 +70,9 @@ class FrontendCopyTests(unittest.TestCase):
         # never clipped at the right edge.
         self.assertIn("const padL = 60, padR = HEAD_R + 24, padT = 26", index)
         self.assertIn("legendRowH = 17", index)
-        self.assertIn('id="eb-mtm-svg"', index)
-        self.assertIn('id="eb-mtm-table-body"', index)
         self.assertIn("data-eq-id", index)
         self.assertIn("const _equityChartStates = new Map()", index)
         self.assertIn("_attachEdgeBoardChartHovers(host)", index)
-
-    def test_mtm_curves_carry_head_labels(self):
-
-        """_equitySvg skips the end-of-line bubble unless the curve sets `head`;
-        _renderMtmPage used to omit it, so the MTM chart rendered as bare lines."""
-        index = (
-            Path(__file__).resolve().parents[1] / "static" / "index.html"
-        ).read_text(encoding="utf-8")
-        renderer = index.split("function _renderMtmPage(d) {", 1)[1].split(
-            "function renderEdgeBoard", 1
-        )[0]
-
-        self.assertIn("head: _ebModelHead(m.model)", renderer)
-        self.assertIn("headTitle:", renderer)
 
     def test_equity_chart_scales_and_bounds_head_bubbles(self):
         index = (
@@ -211,35 +195,6 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("state?.edgeScrollTop", history)
         self.assertIn("_edgeBoardScrollTop = edgeScrollTop", history)
 
-    def test_mtm_sizing_controls_use_delegated_button_handlers(self):
-        index = (
-            Path(__file__).resolve().parents[1] / "static" / "index.html"
-        ).read_text(encoding="utf-8")
-        renderer = index.split("function _renderMtmPage(d) {", 1)[1].split(
-            "function renderEdgeBoard", 1
-        )[0]
-        edge_renderer = index.split("function renderEdgeBoard(d) {", 1)[1].split(
-            "function _fmtDate", 1
-        )[0]
-
-        self.assertIn("document.addEventListener('click'", index)
-        self.assertIn('id="eb-mtm-container"', renderer)
-        self.assertIn('id="eb-mtm-header-title"', renderer)
-        self.assertIn("eb-mtm-heading-row", renderer)
-        self.assertIn("eb-sizing-tabs", renderer)
-        self.assertIn("data-mtm-sizing-mode=\"quarter_kelly\"", renderer)
-        self.assertIn("quarter_kelly_by_model", index)
-        self.assertIn("d[`${sizingMode}_by_model`]", index)
-        self.assertIn("event_type === 'settlement'", index)
-        self.assertIn("m.model !== 'crowd-follow'", index)
-        self.assertIn("m.model !== 'market-follow'", index)
-        self.assertIn("data-mtm-sizing-mode=\"growth_1pct\"", renderer)
-        self.assertIn("data-mtm-sizing-mode=\"growth_2pct\"", renderer)
-        self.assertNotIn("data-mtm-strategy=", renderer)
-        self.assertIn("data-eb-view=\"mtm\"", edge_renderer)
-        self.assertNotIn("onclick=\"_setMtmSizingMode", renderer)
-        self.assertNotIn("onclick=\"_ebSetView", edge_renderer)
-
     def test_edge_board_strategy_chart_uses_compound_growth_curve(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
@@ -271,18 +226,6 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertNotIn("chart heartbeat", index)
         self.assertNotIn("SCADS + baseline", index)
 
-    def test_mtm_methodology_uses_quiet_agentic_style_not_a_callout_banner(self):
-        index = (
-            Path(__file__).resolve().parents[1] / "static" / "index.html"
-        ).read_text(encoding="utf-8")
-        renderer = index.split("function _renderMtmPage(d) {", 1)[1].split(
-            "function renderEdgeBoard", 1
-        )[0]
-
-        self.assertIn('class="mtm-methodology"', renderer)
-        self.assertIn("mtm-methodology-label", renderer)
-        self.assertNotIn("background:rgba(6,182,212,0.05)", renderer)
-
     def test_server_compact_pnl_strategy_preserves_growth_curve_ts(self):
         from analyzing_llm_rationale.server import _compact_pnl_strategy
         strategy = {
@@ -309,18 +252,6 @@ class FrontendCopyTests(unittest.TestCase):
 
         self.assertEqual(compact[0]["sharpe"], 1.25)
         self.assertEqual(compact[0]["max_drawdown"], 0.12)
-
-    def test_mtm_renderer_keeps_risk_cells_aligned_after_sizing_switch(self):
-        index = (
-            Path(__file__).resolve().parents[1] / "static" / "index.html"
-        ).read_text(encoding="utf-8")
-        updater = index.split("function _updateMtmViewInPlace() {", 1)[1].split(
-            "function _refreshActiveEdgeBoardHost", 1
-        )[0]
-
-        self.assertIn("const risk = _mtmRiskStats(m);", updater)
-        self.assertIn("<td><b>${sharpeStr}</b></td>", updater)
-        self.assertIn("<td>${account.n_trades ?? m.n_trades ?? 0}</td>", updater)
 
     def test_equity_hover_uses_per_curve_points_length_in_index_mode(self):
         index = (
@@ -698,13 +629,23 @@ function escHtml(s) {
         for name, index in self._both().items():
             with self.subTest(file=name):
                 self.assertIn('data-eb-view="agentic">Agentic</button>', index)
-                self.assertIn("['mtm', 'agentic', 'indices', 'pairs'].includes(view)", index)
+                self.assertIn("['agentic', 'indices', 'pairs'].includes(view)", index)
                 self.assertIn('id="eb-agentic-section"', index)
                 # _ebSetView triggers the fetch when switching onto the tab.
                 setview = index.split("function _ebSetView(view) {", 1)[1].split(
                     "function _equitySvg", 1
                 )[0]
                 self.assertIn("loadAgentTradingSection()", setview)
+
+    def test_mark_to_market_is_gone_from_the_edge_board(self):
+        # The MTM tab was retired on 2026-11-08 (its data is archived in R2 under
+        # archive/); an old /edge/mtm link lands on Prediction Markets.
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertNotIn('data-eb-view="mtm"', index)
+                for gone in ("_renderMtmPage", "_mtmSizingMode", "data-mtm-sizing-mode", "eb-mtm-container"):
+                    self.assertNotIn(gone, index)
+                self.assertIn("document.addEventListener('click', _ebOnViewTabClick);", index)
 
     def test_indices_is_a_real_edge_board_tab_refreshed_like_agentic(self):
         # Like Agentic, the Indices data is not in the /edge-board payload, so every
