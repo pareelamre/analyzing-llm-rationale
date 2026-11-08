@@ -94,7 +94,7 @@ def _pct(x: float) -> str:
 
 
 def _cents(x: float) -> str:
-    return f"{x * 100:.0f}¢"
+    return f"{x * 100:.1f}".rstrip("0").rstrip(".") + "¢"
 
 
 def _age_hours(stamp: Any, now: datetime) -> Optional[float]:

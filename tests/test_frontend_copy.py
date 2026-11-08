@@ -807,6 +807,21 @@ function escHtml(s) {
                 self.assertIn("loadEdgeBoard();", catch_block)
                 self.assertIn(">Retry<", catch_block)
 
+    def test_the_agentic_tab_shows_the_fund_once_it_has_published(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                loader = index.split("async function loadAgentTradingSection() {", 1)[1].split(
+                    "function _extractThesisJsonField", 1)[0]
+                # The fund is tried first; the single-agent board is the fallback.
+                self.assertLess(loader.index("'/fund/board'"), loader.index("'/agent-trading/board'"))
+                self.assertIn("fund.nav_usd != null", loader)
+                renderer = index.split("function renderFundBoard(d) {", 1)[1].split(
+                    "async function removePersonalLedgerEntry", 1)[0]
+                for section in ("Holdings", "Who made the money", "Trades and their reasons", "Passed on this cycle"):
+                    self.assertIn(section, renderer)
+                self.assertIn("escHtml(t.note || '')", renderer)
+                self.assertIn("Paper trading only.", renderer)
+
     def test_track_record_is_off_the_site(self):
         # Retired 2026-11-08: the data stays at GET /track-record, the page,
         # landing stats, /track command and per-row skill labels are gone.

@@ -96,7 +96,13 @@ def seed_from_agent(conn: sqlite3.Connection, agent_store: Path, now: str) -> di
     ledger.open_fund(conn, FUND_ID, float(account["starting_cash"]), cash=float(account["cash"]) + invested, now=now)
     for p in held:
         platform = str(p["platform"] or "kalshi").lower()
-        instrument = orch.event_instrument({"platform": platform, "ident": p["ticker"]})
+        try:
+            quote = (market_data.fetch_polymarket(slug=p["ticker"]) if platform == "polymarket"
+                     else market_data.fetch_kalshi(p["ticker"]))
+        except (market_data.MarketDataError, requests.RequestException):
+            quote = {}
+        instrument = orch.event_instrument({"platform": platform, "ident": p["ticker"],
+                                            "question": quote.get("question")})
         ledger.buy(conn, FUND_ID, instrument, str(p["side"]).upper(), float(p["quantity"]),
                    float(p["cost_basis"]) / float(p["quantity"]), attribution={"agent_transfer": 1.0},
                    action="transfer", cycle_id="fund-seed", now=now,
@@ -258,7 +264,7 @@ def build_payload(conn: sqlite3.Connection, snapshot: dict, universe: dict, *, n
                   traded: bool, executed: list, passed: list, skipped: list, signals: list,
                   seeded: Optional[dict]) -> dict:
     trades = [dict(r) for r in conn.execute(
-        "SELECT ts, cycle_id, instrument_id, side, action, purpose, pair_key, quantity, price, notional_usd,"
+        "SELECT ts, cycle_id, instrument_id, label, side, action, purpose, pair_key, quantity, price, notional_usd,"
         " realized_pnl_usd, attribution_json, note, note_source, evidence_json FROM fund_trades WHERE fund_id = ?"
         " ORDER BY ts DESC LIMIT ?", (FUND_ID, RECENT_TRADES))]
     for t in trades:
