@@ -1,4 +1,4 @@
-"""Calibrated range forecasts for ten NSE indices, from Tapetide daily levels and India VIX.
+"""Calibrated range forecasts for ten NSE indices, from Upstox daily closes and India VIX.
 
 Each index gets a forecast of its close 1, 5 and 21 sessions ahead: quantiles, the chance it
 closes higher, and the chance it closes above round levels. Up/down calls have no skill on
@@ -6,9 +6,11 @@ these indices (a 2018-2026 walk-forward test put every model at a coin flip), so
 is a calibrated range, not a direction.
 
 The model is a HAR-style variance regression: realized variance over the horizon is regressed
-on a fast EWMA, a slow EWMA and India VIX, refit every day on the last 750 sessions. Its
-residuals, standardized by the fitted volatility, give the shape of the distribution, so fat
-tails come from the data rather than a normal assumption. For the 21-session horizon the ten
+on a fast EWMA, a slow EWMA and India VIX, refit every day: on the last 750 sessions for the
+1-session horizon and on every session since India VIX began in 2009 for the longer two (see
+TRAINING_SESSIONS). Its residuals, standardized by the fitted volatility, give the shape of the
+distribution, so fat tails come from the data rather than a normal assumption. For the
+21-session horizon the ten
 indices' residuals are pooled into one shape (see POOLED_SHAPE_HORIZONS). A plain EWMA normal
 forecast is recorded alongside as the baseline the live track record is scored against.
 
@@ -21,36 +23,50 @@ import bisect
 import math
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Callable, Iterable, Optional, Sequence
+from urllib.parse import quote
 
 import numpy as np
 import requests
 
-TAPETIDE_BASE_URL = "https://api.tapetide.com"
+#: Upstox's candle and market-holiday routes are open data endpoints: no account or token.
+UPSTOX_BASE_URL = "https://api.upstox.com"
+USER_AGENT = "Foresea/index-forecast (+https://foresea.ink)"
 IST = timezone(timedelta(hours=5, minutes=30))
 NSE_OPEN = time(9, 15)
+#: A day's candle is only used once the closing session has fixed its close.
+CLOSE_SETTLED = time(15, 45)
 
-#: Display name, as Tapetide's index catalogue lists it, and the slug used when the catalogue
-#: lookup is unavailable.
+#: Display name and Upstox instrument key.
 INDICES: tuple[tuple[str, str], ...] = (
-    ("Nifty 50", "nifty-50"),
-    ("Nifty Bank", "nifty-bank"),
-    ("Nifty Financial Services", "nifty-financial-services"),
-    ("Nifty Midcap Select", "nifty-midcap-select"),
-    ("Nifty Next 50", "nifty-next-50"),
-    ("Nifty IT", "nifty-it"),
-    ("Nifty Auto", "nifty-auto"),
-    ("Nifty Pharma", "nifty-pharma"),
-    ("Nifty FMCG", "nifty-fmcg"),
-    ("Nifty Metal", "nifty-metal"),
+    ("Nifty 50", "NSE_INDEX|Nifty 50"),
+    ("Nifty Bank", "NSE_INDEX|Nifty Bank"),
+    ("Nifty Financial Services", "NSE_INDEX|Nifty Fin Service"),
+    ("Nifty Midcap Select", "NSE_INDEX|NIFTY MID SELECT"),
+    ("Nifty Next 50", "NSE_INDEX|Nifty Next 50"),
+    ("Nifty IT", "NSE_INDEX|Nifty IT"),
+    ("Nifty Auto", "NSE_INDEX|Nifty Auto"),
+    ("Nifty Pharma", "NSE_INDEX|Nifty Pharma"),
+    ("Nifty FMCG", "NSE_INDEX|Nifty FMCG"),
+    ("Nifty Metal", "NSE_INDEX|Nifty Metal"),
 )
+VIX_KEY = "NSE_INDEX|India VIX"
+#: A year of warm-up before India VIX begins (March 2009), which every training row needs.
+HISTORY_START = date(2008, 1, 1)
+#: Upstox serves at most a decade of daily candles per request.
+CHUNK_DAYS = 3600
 HORIZONS = (1, 5, 21)
 QUANTILES = (0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
 _NORMAL_Z = (-1.6448536, -1.2815516, -0.6744898, 0.0, 0.6744898, 1.2815516, 1.6448536)
 FAST_ALPHA = 0.06  # RiskMetrics lambda 0.94
 SLOW_ALPHA = 0.01
 WARMUP_SESSIONS = 250
-TRAINING_SESSIONS = 750
-FETCH_SESSIONS = 1000
+#: Sessions each horizon's fit trains on; None trains on every session with India VIX. In the
+#: 2016-2026 walk-forward on Upstox closes, the whole history beat the last 750 sessions on
+#: quantile loss at 5 and 21 sessions in both halves (21 sessions: 152.3 to 150.0 in 2016-20,
+#: 119.1 to 117.7 in 2021-26; Brier on "closes higher" 0.2410 to 0.2374 and 0.2452 to 0.2430).
+#: At 1 session it tied on quantile loss but its 80% range held only 78.4% of closes against
+#: 79.8%, so that horizon keeps the recent window.
+TRAINING_SESSIONS: dict[int, Optional[int]] = {1: 750, 5: None, 21: None}
 
 #: Horizons whose residual shape pools every index forecast that day. 750 sessions hold only
 #: about 35 separate 21-session outcomes per index, so one index's own tails are noisy. In the
@@ -59,93 +75,102 @@ FETCH_SESSIONS = 1000
 #: 2021-26) and Brier on the round levels, in both halves. At 1 and 5 sessions it did worse.
 POOLED_SHAPE_HORIZONS = (21,)
 
-#: This module walked forward over Yahoo Finance copies of the ten indices (Nifty Midcap 50
-#: standing in for Midcap Select, whose history Yahoo lacks): a forecast every fifth Nifty 50
-#: session from 2016, each index fit on the 1,000 sessions before it and the 21-session shape
-#: pooled as run() does, scored like the live ledger.
+#: This module walked forward over Upstox closes of the ten indices (Midcap Select from 2024,
+#: once two years past its 2022 launch): a forecast every fifth Nifty 50 session from 2016, each
+#: index fit on its history through that day and the 21-session shape pooled as run() does,
+#: scored like the live ledger.
 BACKTEST = {
     "window": "2016-2026",
     "indices": 10,
     "by_horizon": [
-        {"h": 1, "n": 5327, "coverage_50": 0.485, "coverage_80": 0.796, "coverage_90": 0.893, "skill_vs_baseline": 0.006},
-        {"h": 5, "n": 5327, "coverage_50": 0.498, "coverage_80": 0.798, "coverage_90": 0.900, "skill_vs_baseline": 0.010},
-        {"h": 21, "n": 5287, "coverage_50": 0.505, "coverage_80": 0.793, "coverage_90": 0.887, "skill_vs_baseline": 0.010},
+        {"h": 1, "n": 4943, "coverage_50": 0.500, "coverage_80": 0.798, "coverage_90": 0.901, "skill_vs_baseline": 0.004},
+        {"h": 5, "n": 4933, "coverage_50": 0.494, "coverage_80": 0.787, "coverage_90": 0.887, "skill_vs_baseline": 0.012},
+        {"h": 21, "n": 4903, "coverage_50": 0.505, "coverage_80": 0.804, "coverage_90": 0.890, "skill_vs_baseline": 0.025},
     ],
     "direction": "Up/down calls from momentum, trend, volatility and VIX features had no skill (AUC 0.47-0.52).",
 }
 
 
-class TapetideError(RuntimeError):
-    """A Tapetide request failed or returned no data."""
+class UpstoxError(RuntimeError):
+    """An Upstox request failed."""
 
 
 HttpGet = Callable[..., Any]
 
 
-def tapetide_get(path: str, token: str, params: Optional[dict] = None, *, http_get: HttpGet = requests.get) -> list[dict]:
-    """GET one Tapetide list route and return its ``data`` rows, following cursors."""
-    rows: list[dict] = []
-    params = dict(params or {})
-    for _ in range(10):
-        resp = http_get(
-            f"{TAPETIDE_BASE_URL}{path}", params=params, timeout=30,
-            headers={"Authorization": f"Bearer {token}", "User-Agent": "Foresea/index-forecast"},
-        )
-        status = getattr(resp, "status_code", None)
-        try:
-            body = resp.json()
-        except ValueError:
-            body = None
-        if status != 200 or not isinstance(body, dict):
-            code = ((body or {}).get("error") or {}).get("code") if isinstance(body, dict) else None
-            raise TapetideError(f"Tapetide {path} returned HTTP {status}{f' ({code})' if code else ''}")
-        if body.get("data") is None:
-            notice = body.get("notice") or {}
-            raise TapetideError(f"Tapetide {path} returned no data ({notice.get('code') or 'no notice'})")
-        rows.extend(row for row in body["data"] if isinstance(row, dict))
-        cursor = (body.get("meta") or {}).get("next_cursor")
-        if not cursor:
-            return rows
-        params["cursor"] = cursor
-    raise TapetideError(f"Tapetide {path} paged more than 10 times")
+def upstox_get(path: str, *, http_get: HttpGet = requests.get) -> Any:
+    """GET one Upstox route and return its ``data``."""
+    resp = http_get(f"{UPSTOX_BASE_URL}{path}", timeout=30, headers={"Accept": "application/json", "User-Agent": USER_AGENT})
+    status = getattr(resp, "status_code", None)
+    try:
+        body = resp.json()
+    except ValueError:
+        body = None
+    if status != 200 or not isinstance(body, dict) or body.get("status") != "success":
+        raise UpstoxError(f"Upstox {path} returned HTTP {status}")
+    return body.get("data")
 
 
-def resolve_slugs(token: str, *, http_get: HttpGet = requests.get) -> dict[str, str]:
-    """Map each forecast index's name to its Tapetide slug from the index catalogue."""
-    catalogue = {str(row.get("name", "")).strip().lower(): row.get("slug") for row in tapetide_get("/v1/reference/indices", token, {"limit": 200}, http_get=http_get)}
-    return {name: catalogue.get(name.lower()) or fallback for name, fallback in INDICES}
+def _closes(candles: Iterable[Sequence[Any]]) -> list[tuple[date, float]]:
+    """Weekday closes from Upstox candles ``[timestamp, open, high, low, close, ...]``; later rows win.
 
-
-def _closes(rows: Iterable[dict]) -> list[tuple[date, float]]:
+    Weekend special sessions (Muhurat trading, a Sunday budget) are dropped: forecasts count
+    sessions as weekdays less holidays (next_sessions), and the ledger scores by that count.
+    """
     out = {}
-    for row in rows:
+    for candle in candles:
         try:
-            day, close = date.fromisoformat(str(row["date"])), float(row["close"])
-        except (KeyError, TypeError, ValueError):
+            day, close = date.fromisoformat(str(candle[0])[:10]), float(candle[4])
+        except (IndexError, TypeError, ValueError):
             continue
-        if math.isfinite(close) and close > 0:
+        if day.weekday() < 5 and math.isfinite(close) and close > 0:
             out[day] = close
     return sorted(out.items())
 
 
-def fetch_market_data(token: str, today: date, *, http_get: HttpGet = requests.get) -> dict[str, Any]:
-    """Fetch the levels, India VIX and NSE holidays one daily run needs (13 requests)."""
-    start = (today - timedelta(days=int(FETCH_SESSIONS * 1.45))).isoformat()
-    window = {"from": start, "to": today.isoformat(), "limit": FETCH_SESSIONS, "order": "desc"}
-    slugs = resolve_slugs(token, http_get=http_get)
-    levels = {}
-    for name, _ in INDICES:
-        try:
-            levels[name] = _closes(tapetide_get(f"/v1/indices/{slugs[name]}/levels", token, window, http_get=http_get))
-        except TapetideError:
-            levels[name] = []
-    vix = _closes(tapetide_get("/v1/market/vix/history", token, window, http_get=http_get))
-    holidays = {
+def daily_closes(key: str, start: date, through: date, *, http_get: HttpGet = requests.get) -> list[tuple[date, float]]:
+    """Every weekday close of one instrument from ``start`` through ``through``."""
+    path_key = quote(key, safe="")
+    # The historical route can lag the evening close; the intraday route carries today's candle.
+    candles = list((upstox_get(f"/v3/historical-candle/intraday/{path_key}/days/1", http_get=http_get) or {}).get("candles") or [])
+    to = through
+    while to >= start:
+        frm = max(start, to - timedelta(days=CHUNK_DAYS))
+        chunk = upstox_get(f"/v3/historical-candle/{path_key}/days/1/{to.isoformat()}/{frm.isoformat()}", http_get=http_get)
+        candles.extend((chunk or {}).get("candles") or [])
+        to = frm - timedelta(days=1)
+    return [(day, close) for day, close in _closes(candles) if start <= day <= through]
+
+
+def fetch_holidays(today: date, *, http_get: HttpGet = requests.get) -> list[date]:
+    """NSE full-day trading holidays this year and, near the year end, early next year."""
+    rows = list(upstox_get("/v2/market/holidays", http_get=http_get) or [])
+    # The list covers the current year only; next year's dates are looked up one by one.
+    day, last = date(today.year + 1, 1, 1), today + timedelta(days=60)
+    while day <= last:
+        if day.weekday() < 5:
+            rows.extend(upstox_get(f"/v2/market/holidays/{day.isoformat()}", http_get=http_get) or [])
+        day += timedelta(days=1)
+    return sorted({
         date.fromisoformat(row["date"])
-        for row in tapetide_get("/v1/market/holidays", token, {"from": (today - timedelta(days=40)).isoformat(), "to": (today + timedelta(days=60)).isoformat(), "limit": 500}, http_get=http_get)
-        if row.get("exchange", "NSE") == "NSE" and (row.get("type") or "FULL") == "FULL" and row.get("date")
-    }
-    return {"slugs": slugs, "levels": levels, "vix": vix, "holidays": sorted(holidays)}
+        for row in rows
+        if isinstance(row, dict) and row.get("date") and row.get("holiday_type") == "TRADING_HOLIDAY"
+        and "NSE" in (row.get("closed_exchanges") or [])
+    })
+
+
+def fetch_market_data(now: datetime, *, http_get: HttpGet = requests.get) -> dict[str, Any]:
+    """Fetch every index's closes since HISTORY_START, India VIX and NSE holidays for one run."""
+    local = now.astimezone(IST)
+    through = local.date() if local.time() >= CLOSE_SETTLED else local.date() - timedelta(days=1)
+    levels = {}
+    for name, key in INDICES:
+        try:
+            levels[name] = daily_closes(key, HISTORY_START, through, http_get=http_get)
+        except UpstoxError:
+            levels[name] = []
+    vix = daily_closes(VIX_KEY, HISTORY_START, through, http_get=http_get)
+    return {"levels": levels, "vix": vix, "holidays": fetch_holidays(local.date(), http_get=http_get)}
 
 
 def _ewma_var(r: np.ndarray, alpha: float) -> np.ndarray:
@@ -180,7 +205,9 @@ def fit_horizon(closes: Sequence[tuple[date, float]], vix: Sequence[tuple[date, 
     days, logc, X = _features(closes, vix)
     n = len(logc)
     usable = np.arange(WARMUP_SESSIONS, n - h)
-    usable = usable[np.isfinite(X[usable]).all(axis=1)][-TRAINING_SESSIONS:]
+    usable = usable[np.isfinite(X[usable]).all(axis=1)]
+    if TRAINING_SESSIONS.get(h):
+        usable = usable[-TRAINING_SESSIONS[h]:]
     if len(usable) < 250 or not np.isfinite(X[-1]).all():
         return None
     fwd = logc[usable + h] - logc[usable]
@@ -375,7 +402,7 @@ def run(data: dict[str, Any], ledger: list[dict], now: datetime) -> tuple[dict, 
     for name, _ in INDICES:
         if fitted[name] is None:
             # Left out rather than carried over: an old forecast would read as today's.
-            notes.append(f"{name}: not enough Tapetide history to forecast.")
+            notes.append(f"{name}: not enough history to forecast.")
             continue
         forecast = build_forecast(name, fitted[name], holidays, shapes)
         if (name, forecast["as_of"]) not in known:
@@ -390,11 +417,11 @@ def run(data: dict[str, Any], ledger: list[dict], now: datetime) -> tuple[dict, 
     payload = {
         "generated_at": now.astimezone(timezone.utc).isoformat(),
         "as_of": max((f["as_of"] for f in forecasts), default=None),
-        "source": "Tapetide (NSE official index levels and India VIX)",
+        "source": "Upstox (NSE index closes and India VIX)",
         "model": {
             "name": "HAR volatility with empirical residuals",
             "inputs": ["fast EWMA (0.94)", "slow EWMA (0.99)", "India VIX"],
-            "training_sessions": TRAINING_SESSIONS,
+            "training_sessions": {str(h): TRAINING_SESSIONS.get(h) for h in HORIZONS},
             "quantiles": list(QUANTILES),
             "horizons": list(HORIZONS),
             "baseline": "EWMA (0.94) volatility, normal distribution",

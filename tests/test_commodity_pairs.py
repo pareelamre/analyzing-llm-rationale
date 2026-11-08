@@ -193,6 +193,40 @@ class LedgerTests(unittest.TestCase):
         self.assertAlmostEqual(trades[0]["spread_return"], expected, places=6)
 
 
+class _Resp:
+    def __init__(self, status, body):
+        self.status_code, self._body = status, body
+
+    def json(self):
+        return self._body
+
+
+class TapetideClientTests(unittest.TestCase):
+    def test_pages_follow_the_cursor(self):
+        pages = [
+            _Resp(200, {"data": [{"date": "2026-11-05", "close": 1}], "meta": {"next_cursor": "c2"}}),
+            _Resp(200, {"data": [{"date": "2026-11-06", "close": 2}], "meta": {"next_cursor": None}}),
+        ]
+        seen = []
+
+        def get(url, params, timeout, headers):
+            seen.append(dict(params))
+            self.assertEqual(headers["Authorization"], "Bearer tok")
+            return pages.pop(0)
+
+        rows = cp.tapetide_get("/v1/indices/nifty-50/levels", "tok", {"limit": 2}, http_get=get)
+        self.assertEqual([r["close"] for r in rows], [1, 2])
+        self.assertEqual(seen[1]["cursor"], "c2")
+
+    def test_a_plan_notice_or_http_error_raises(self):
+        notice = _Resp(200, {"data": None, "notice": {"code": "api_access_not_in_plan"}})
+        with self.assertRaisesRegex(cp.TapetideError, "api_access_not_in_plan"):
+            cp.tapetide_get("/v1/market/vix/history", "tok", http_get=lambda *a, **k: notice)
+        limited = _Resp(429, {"error": {"code": "quota_exhausted", "message": "x"}})
+        with self.assertRaisesRegex(cp.TapetideError, "quota_exhausted"):
+            cp.tapetide_get("/v1/market/vix/history", "tok", http_get=lambda *a, **k: limited)
+
+
 class TickScheduleTests(unittest.TestCase):
     def test_skips_once_the_newest_weekday_is_published(self):
         monday = datetime(2026, 11, 9, 3, 0, tzinfo=timezone.utc)

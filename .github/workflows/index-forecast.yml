@@ -1,11 +1,11 @@
 name: Index range forecasts
 
-# Daily NSE index range forecasts from Tapetide levels and India VIX. Forecasts
-# can only be recorded between the close they use (15:30 IST) and the next
-# session's open (09:15 IST), so the slots cover 18:30-09:07 IST. GitHub drops
-# most scheduled slots here (docs/SCHEDULED_WORKFLOW_DELIVERY.md), hence one
-# every half hour; the script spends no Tapetide quota once the latest close is
-# published, and waits three hours between fetches while Tapetide catches up.
+# Daily NSE index range forecasts from Upstox closes and India VIX (open data
+# routes, no secret). Forecasts can only be recorded between the close they use
+# (15:30 IST) and the next session's open (09:15 IST), so the slots cover
+# 18:30-09:07 IST. GitHub drops most scheduled slots here
+# (docs/SCHEDULED_WORKFLOW_DELIVERY.md), hence one every half hour; the script
+# fetches nothing once the latest close is published.
 
 on:
   schedule:
@@ -40,8 +40,6 @@ jobs:
         run: pip install --quiet 'numpy>=1.26' requests
 
       - name: Forecast and score
-        env:
-          TAPETIDE_API_TOKEN: ${{ secrets.TAPETIDE_API_TOKEN }}
         run: python scripts/index_forecast_tick.py ${{ inputs.force && '--force' || '' }}
 
       - name: Commit forecasts
