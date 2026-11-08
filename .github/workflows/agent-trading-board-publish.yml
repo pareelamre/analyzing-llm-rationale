@@ -115,6 +115,9 @@ jobs:
       # agent's account downloaded above.
       - name: Run the fund cycle
         if: vars.FUND_CYCLE_ENABLED == 'true'
+        # A fund failure must not stop the board below from publishing; it
+        # shows on this run and the fund page keeps its last good payload.
+        continue-on-error: true
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
