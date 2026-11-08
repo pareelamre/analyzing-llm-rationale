@@ -62,6 +62,34 @@ analysts ──► signals ──► orchestrator ──► paper ledger ──�
 | USD/INR, gold, platinum | fawazahmed0 currency API | |
 | Brent, WTI, Henry Hub | FRED | a few days behind |
 
+## Universe (measured 2026-11-08, `fund_universe.build_universe`)
+
+Ranked by average daily notional over two weeks; re-ranked each month.
+
+- **Indices (10):** Nifty 50 (~$1.3B/day), Nifty Bank, US Tech 100 (Kalshi perp),
+  Nifty Midcap Select, US 500 (Kalshi perp), Sensex, Nifty Financial Services,
+  Nifty Next 50, Bankex, BSE Focused IT. Sector indices have no futures, so
+  they stay on the Indices page only.
+- **Commodity pairs (10):** Gold/Silver, Crude/Natural gas, Copper/Gold,
+  Copper/Zinc, Copper/Aluminium (all MCX); Crude MCX/Kalshi WTI, Gold MCX/Kalshi
+  perp, Zinc/Lead (MCX), Silver MCX/Kalshi perp, Gold/Silver (Kalshi perps).
+- MCX legs use the smallest liquid lot (Gold Petal, Silver Micro, Crude Mini,
+  Natural Gas Mini, Zinc Mini, Aluminium Mini) so a $10,000 fund holds real lots.
+
+## Models
+
+Open-weight models come first; the owner's own fine-tunes follow.
+
+- **Text:** FinBERT, CrudeBERT (FinBERT fine-tuned on crude-oil headlines with
+  supply/demand events, arXiv 2305.06140), and the Mac's Qwen3.5-9B.
+- **Time series:** pretrained forecasters such as Chronos, TimesFM and Moirai,
+  next to the index model and pairs model already on the site.
+- **Weather:** NWS and open-weight global models (GraphCast, Aurora, GenCast)
+  for weather markets.
+- **Fine-tuning:** BERT variants for the fund's own underlyings (no gold or
+  Indian-index version of CrudeBERT exists), trained on Kaggle or Colab once the
+  Wunderfund competition is over. Ask the owner before using Kaggle hours.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
