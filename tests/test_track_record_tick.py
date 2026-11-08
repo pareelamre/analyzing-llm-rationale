@@ -134,6 +134,8 @@ class TrackRecordTickTests(unittest.TestCase):
             "llama-3.3-70b-instruct",
             "minimax-m3",
             "qwen3-8-27b",
+            # The on-device agent publishes the Edge board's odds (TRACK_MODEL).
+            "qwen3.5-9b-selfhosted",
             "crowd-follow",
         ):
             self.assertIn(model, track_record_tick.DEFAULT_TRACK_MODELS)

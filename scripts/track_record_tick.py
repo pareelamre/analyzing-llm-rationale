@@ -59,7 +59,10 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import market_data  # noqa: E402
 from analyzing_llm_rationale import track_record_live as trl  # noqa: E402
-from analyzing_llm_rationale.config import scads_track_model_labels  # noqa: E402
+from analyzing_llm_rationale.config import (  # noqa: E402
+    scads_agent_trading_model_labels,
+    scads_track_model_labels,
+)
 from analyzing_llm_rationale.forecast_evaluation import ResolvedForecast  # noqa: E402
 from analyzing_llm_rationale.forecast_evaluation_report import (  # noqa: E402
     EvaluationPolicy,
@@ -110,7 +113,12 @@ MODEL = os.environ.get("TRACK_MODEL", "council").strip()
 # are off it, so none double-counts its backing model). The board itself now
 # runs on the on-device model; MTM is no longer shown on the site.
 SCADS_MTM_MODELS = tuple(sorted(scads_track_model_labels(ROOT / "configs" / "models.yaml")))
-DEFAULT_TRACK_MODELS = ("council", *SCADS_MTM_MODELS, "crowd-follow")
+# The on-device agent forecasts nightly and is the Edge board's model
+# (TRACK_MODEL in track-record-forecast.yml), so it must be a track model too.
+AGENT_MODELS = tuple(
+    m for m in scads_agent_trading_model_labels(ROOT / "configs" / "models.yaml") if m not in SCADS_MTM_MODELS
+)
+DEFAULT_TRACK_MODELS = ("council", *SCADS_MTM_MODELS, *AGENT_MODELS, "crowd-follow")
 
 
 def _csv_list(value: str | None) -> list[str]:
