@@ -30,7 +30,8 @@ concurrency:
 jobs:
   price-tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Recording prices alone takes about 8.5 minutes, so 10 cancelled most runs.
+    timeout-minutes: 20
     concurrency:
       group: track-record-store-gcs-write
       cancel-in-progress: false
