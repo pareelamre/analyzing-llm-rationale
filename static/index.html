@@ -7340,7 +7340,7 @@ function _cptCard(p, ctx) {
   const legs = _cptLegs(p);
   const head = `<div class="cpt-head"><div><div class="cpt-name">${escHtml(p.label)}</div><div class="cpt-why">${escHtml(p.why || '')}</div></div>`;
   if (p.z == null) {
-    return `<article class="cpt-card">${head}<span class="cpt-badge">Warming up</span></div><p class="cpt-say cpt-dim">${escHtml(p.note || 'Not enough history yet.')}</p></article>`;
+    return `<article class="cpt-card">${head}<span class="cpt-badge">${p.paused ? 'Paused' : 'Warming up'}</span></div><p class="cpt-say cpt-dim">${escHtml(p.note || 'Not enough history yet.')}</p></article>`;
   }
   const { entryZ, exitZ, maxHold, zWindow, hedgeWindow, liveSince } = ctx;
   const z = Number(p.z), az = Math.abs(z);
@@ -7348,6 +7348,7 @@ function _cptCard(p, ctx) {
     : az >= 1.5 ? '<span class="cpt-badge near">Near signal</span>' : '<span class="cpt-badge">Normal</span>';
   const hedge = _cptHedge(p, legs, hedgeWindow);
   const fmtRatio = x => p.source === 'parity' ? _cptPct(x - 1, 1) : escHtml(Number(x).toPrecision(4));
+  const lags = Boolean(p.date && ctx.dataThrough && p.date < ctx.dataThrough);
   const level = [
     p.source === 'parity'
       ? _cptTip('Premium', `How far the MCX gold price sits above the landed cost of importing gold (international price, rupee rate, duties): today, and at its usual level over the last ${zWindow} sessions.`)
@@ -7363,7 +7364,7 @@ function _cptCard(p, ctx) {
     [_cptTip('Tied together?', `Whether the two prices are anchored to each other over the last ${Math.min(Number(p.sessions) || hedgeWindow, hedgeWindow)} sessions (Engle–Granger test at 5%). Yes: gaps have reliably closed. Not proven: a stretched gap can keep widening, so a signal is riskier. Test score ${Number(p.eg_t).toFixed(1)}; below ${Number(p.eg_crit_5pct || -3.4).toFixed(1)} passes.`),
       p.cointegrated ? 'Yes' : 'Not proven'],
     level,
-    [_cptTip('History', `Prices since ${_cptDay(p.data_from)}. The hedge uses up to ${hedgeWindow} sessions, so it firms up as history grows.`), _cptPlural(Number(p.sessions), 'session')],
+    [_cptTip('History', `Prices since ${_cptDay(p.data_from)}${lags ? `, through ${_cptDay(p.date)}: this pair's prices are published a few days late` : ''}. The hedge uses up to ${hedgeWindow} sessions, so it firms up as history grows.`), _cptPlural(Number(p.sessions), 'session') + (lags ? `, to ${escHtml(_cptDay(p.date))}` : '')],
   ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   const l = ctx.live[p.key] || {}, r = p.replay || {}, b = ctx.back[p.key];
   const liveCount = l.signals || 0;
@@ -7408,7 +7409,7 @@ function renderCommodityPairs(d) {
     entryZ: rule.entry_z || 2, exitZ: rule.exit_z || 0.5, maxHold: rule.max_hold || 20,
     zWindow: rule.z_window || 60, hedgeWindow: rule.hedge_window || 250,
     costPct: (rule.cost_per_side || 0.001) * 100,
-    liveSince: d.track_record?.live_since || d.data_through,
+    liveSince: d.track_record?.live_since || d.data_through, dataThrough: d.data_through,
     back: d.backtest?.pairs || {}, live: d.track_record?.by_pair || {},
   };
   const pairs = (d.pairs || []).slice();
@@ -7452,7 +7453,7 @@ function renderCommodityPairs(d) {
     <h4 class="eb-h">Live signals</h4>
     ${liveHtml}
     ${replayHtml}
-    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Prices through the ${escHtml(_cptDay(d.data_through))} session${updated ? ', updated ' + escHtml(updated) : ''}. Hedge: least-squares fit of log prices over up to ${ctx.hedgeWindow} sessions, or equal money when the fit is not positive. Returns are per unit of money on both sides after ${ctx.costPct}% cost per side. US backtest on futures front months (roll gaps add noise). Data: ${escHtml(d.source || 'Tapetide')}. Research tracker, not investment advice.</p>`;
+    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Prices through the ${escHtml(_cptDay(d.data_through))} session${updated ? ', updated ' + escHtml(updated) : ''}. Hedge: least-squares fit of log prices over up to ${ctx.hedgeWindow} sessions, or equal money when the fit is not positive. Returns are per unit of money on both sides after ${ctx.costPct}% cost per side. US backtest on futures front months (roll gaps add noise). Data: ${escHtml(d.source || 'Upstox and FRED')}. Research tracker, not investment advice.</p>`;
 }
 
 async function loadAgentTradingSection() {
