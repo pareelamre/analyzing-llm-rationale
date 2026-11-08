@@ -5,6 +5,14 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-08 — Foresea Fund brief (Claude)
+
+The owner wants one paper portfolio run by a team of owned models with a
+deterministic orchestrator, across every instrument (prediction markets,
+Kalshi perps and futures, NSE/BSE indices, MCX), hedged across venues, with
+solid attribution and grounded trade reasons. The brief and design are in
+`docs/fund.md`; build to it and change it only with the owner.
+
 ### 2026-11-08 — Agents and Foresea odds run on the on-device model (Claude)
 
 The owner retired MTM from the site and moved the Agentic experiment and the
