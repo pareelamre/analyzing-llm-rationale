@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-11-08T08:45:52.127866+00:00",
+ "generated_at": "2026-11-08T09:03:02.280744+00:00",
  "data_through": "2026-11-06",
- "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold and platinum)",
+ "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee)",
  "rule": {
   "hedge_window": 250,
   "z_window": 60,
@@ -730,11 +730,52 @@
   {
    "key": "gold-parity",
    "label": "MCX Gold / import parity",
+   "legs": [
+    "MCX gold",
+    "Import cost"
+   ],
    "why": "India's gold price against the landed cost of imported gold: the domestic premium.",
    "source": "parity",
-   "sessions": 0,
-   "paused": true,
-   "note": "Paused: this needs the world gold price at MCX's close, and the free daily gold price is taken about 12 hours earlier."
+   "sessions": 92,
+   "data_from": "2026-06-10",
+   "date": "2026-11-06",
+   "short_history": true,
+   "ratio": 1.005445,
+   "usual_ratio": 1.007211,
+   "to_usual": {
+    "a": 0.00176,
+    "b": -0.00175
+   },
+   "beta": 1.0,
+   "hedge": "fixed",
+   "z": -0.27,
+   "z_recent": [
+    1.117,
+    0.673,
+    0.775,
+    1.14,
+    0.133,
+    0.593,
+    0.341,
+    0.588,
+    1.078,
+    0.588,
+    -0.356,
+    0.238,
+    -0.27
+   ],
+   "stretched": false,
+   "rich": null,
+   "cheap": null,
+   "eg_t": -2.859,
+   "eg_crit_5pct": -3.404,
+   "cointegrated": false,
+   "half_life": 6.6,
+   "replay": {
+    "signals": 0,
+    "closed": 0
+   },
+   "replay_signals": []
   }
  ],
  "track_record": {
