@@ -9,21 +9,21 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0,
+      "max_drawdown": 0.05171,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.0,
+      "return_pct": -5.171,
       "settled_count": 0,
-      "sharpe": 0.3333
+      "sharpe": -0.3333
     }
   },
   "equity_curves": {
     "qwen3.5-9b-selfhosted": {
       "agent_id": "qwen3.5-9b-selfhosted",
-      "current_drawdown": 0.0,
-      "max_drawdown": 0.0,
-      "sharpe": 0.3333,
+      "current_drawdown": 0.05171,
+      "max_drawdown": 0.05171,
+      "sharpe": -0.3333,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -71,9 +71,9 @@
           "ts": "2026-11-08T12:34:07.374527+00:00"
         },
         {
-          "account_value": 10000.000091,
+          "account_value": 9482.898051,
           "event_type": "mark_to_market",
-          "ts": "2026-11-08T14:03:36.274035+00:00"
+          "ts": "2026-11-08T16:03:47.733626+00:00"
         }
       ]
     }
@@ -91,23 +91,38 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-11-08T14:03:36.275896+00:00",
+  "generated_at": "2026-11-08T16:03:47.735674+00:00",
   "latest_theses": {
     "qwen3.5-9b-selfhosted": null
   },
   "leaderboard": [
     {
-      "account_value": 10000.000091,
+      "account_value": 9482.898051,
       "agent_id": "qwen3.5-9b-selfhosted",
       "cash": 6774.0569,
       "fees_paid": 0.0,
-      "illiquid_positions": [],
+      "illiquid_positions": [
+        {
+          "ident": "KXUKCHAGOS-28JAN01-26DEC01",
+          "platform": "kalshi",
+          "quantity": 20.0,
+          "reason": "zero_or_missing_bid",
+          "side": "NO"
+        },
+        {
+          "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+          "platform": "polymarket",
+          "quantity": 8598.311043,
+          "reason": "zero_or_missing_bid",
+          "side": "NO"
+        }
+      ],
       "mark_coverage": {
         "open_positions": 8,
-        "priced_cost_basis": 3225.9431,
-        "priced_positions": 8,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
+        "priced_cost_basis": 2708.8411,
+        "priced_positions": 6,
+        "unpriced_cost_basis": 517.102,
+        "unpriced_positions": 2
       },
       "open_positions": [
         {
@@ -161,14 +176,14 @@
         {
           "avg_entry_price": 0.92,
           "cost_basis": 18.4,
-          "current_price": 0.92,
+          "current_price": null,
           "ident": "KXUKCHAGOS-28JAN01-26DEC01",
           "indicative_price": null,
           "platform": "kalshi",
           "quantity": 20.0,
           "side": "NO",
-          "unrealized_pnl": 0.0,
-          "valuation_status": "bid_liquidation"
+          "unrealized_pnl": null,
+          "valuation_status": "unpriced_no_executable_bid"
         },
         {
           "avg_entry_price": 0.91,
@@ -197,25 +212,25 @@
         {
           "avg_entry_price": 0.058,
           "cost_basis": 498.702,
-          "current_price": 0.058,
+          "current_price": null,
           "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
           "indicative_price": null,
           "platform": "polymarket",
           "quantity": 8598.311043,
           "side": "NO",
-          "unrealized_pnl": 4e-05,
-          "valuation_status": "bid_liquidation"
+          "unrealized_pnl": null,
+          "valuation_status": "unpriced_no_executable_bid"
         }
       ],
       "realized_count": 0,
       "realized_pnl": 0.0,
-      "return_pct": 0.0,
+      "return_pct": -5.171,
       "rule_exit_count": 0,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "total_pnl": 9.1e-05,
+      "total_pnl": -517.101949,
       "trade_count": 8,
-      "unrealized_pnl": 9.1e-05,
+      "unrealized_pnl": -517.101949,
       "updated_at": "2026-11-08T12:34:07.373918+00:00",
       "win_rate": null,
       "won_count": 0
