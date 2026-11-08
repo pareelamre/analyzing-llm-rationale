@@ -9160,7 +9160,7 @@ function renderEdgeBoard(d) {
   _ebPage = 0;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   const stats = `
-    <div class="tr-stats">
+    <div class="tr-stats" style="grid-template-columns:repeat(2, 1fr)">
       <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div></div>
       <div class="tr-stat"><div class="v">${(d.n_markets_tracked || 0)}</div><div class="k label">Markets tracked</div></div>
     </div>`;
