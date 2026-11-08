@@ -887,8 +887,35 @@ function escHtml(s) {
                 self.assertNotIn("(Validated)", index)
                 self.assertIn("_ebHorizonFilter === '14_30d'", index)
 
+    def test_landing_page_option_a_copy_and_watchlist_nav_removed(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                landing = index.split('<section id="landingPage"', 1)[1].split(
+                    '<div id="appShell"', 1
+                )[0]
+                self.assertIn("Evidence-backed market intelligence", landing)
+                self.assertIn("See where market odds and the evidence disagree.", landing)
+                self.assertIn(
+                    "Foresea reads live news and order books to estimate the real probability of an event, then puts its number next to the market price.",
+                    landing,
+                )
+                self.assertIn("1. Read the evidence", landing)
+                self.assertIn("2. Compare the price", landing)
+                self.assertIn("3. Test across prediction markets, indices, and commodity pairs", landing)
+                self.assertIn("openEdgeBoard({ panel: 'indices' })", landing)
+                self.assertIn("openEdgeBoard({ panel: 'pairs' })", landing)
+                for gone in (
+                    "AI forecasts, scored in public",
+                    "The intelligence layer for prediction markets.",
+                    "Engineered for Prediction Calibration",
+                    '<section class="landing-demo">',
+                ):
+                    self.assertNotIn(gone, landing)
+                self.assertNotIn('onclick="openWatchlist()"', index)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
