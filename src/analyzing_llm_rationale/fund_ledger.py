@@ -70,6 +70,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             fund_id TEXT NOT NULL,
             cycle_id TEXT,
             instrument_id TEXT NOT NULL,
+            label TEXT,
             side TEXT NOT NULL,
             action TEXT NOT NULL,
             purpose TEXT NOT NULL DEFAULT 'view',
@@ -144,10 +145,11 @@ def _record(conn: sqlite3.Connection, fund_id: str, instrument: Mapping[str, Any
             evidence: Sequence[Mapping[str, Any]], now: str) -> str:
     trade_id = uuid.uuid4().hex
     conn.execute(
-        "INSERT INTO fund_trades (id, ts, fund_id, cycle_id, instrument_id, side, action, purpose, pair_key, quantity,"
-        " price, fx, notional_usd, fee_usd, cash_delta_usd, realized_pnl_usd, attribution_json, note, note_source,"
-        " evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (trade_id, now, fund_id, cycle_id, instrument["id"], side, action, purpose, pair_key, quantity, price, fx,
+        "INSERT INTO fund_trades (id, ts, fund_id, cycle_id, instrument_id, label, side, action, purpose, pair_key,"
+        " quantity, price, fx, notional_usd, fee_usd, cash_delta_usd, realized_pnl_usd, attribution_json, note,"
+        " note_source, evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (trade_id, now, fund_id, cycle_id, instrument["id"], instrument.get("label"), side, action, purpose, pair_key,
+         quantity, price, fx,
          notional_usd, fee_usd, cash_delta, realized, json.dumps(dict(attribution), sort_keys=True), note,
          note_source, json.dumps(list(evidence), sort_keys=True)))
     conn.execute("UPDATE fund_account SET cash = cash + ?, realized_pnl = realized_pnl + ?, fees_paid = fees_paid + ?,"
@@ -238,7 +240,7 @@ def sell(conn: sqlite3.Connection, fund_id: str, instrument_id: str, side: str, 
         conn.execute("UPDATE fund_positions SET quantity = ?, collateral_usd = collateral_usd - ?, updated_at = ?"
                      " WHERE fund_id = ? AND instrument_id = ? AND side = ?",
                      (remaining, collateral, ts, fund_id, instrument_id, side))
-    instrument = {"id": instrument_id}
+    instrument = {"id": instrument_id, "label": held["label"]}
     return _record(conn, fund_id, instrument, side, action or ("close" if remaining <= MIN_QUANTITY else "reduce"),
                    quantity=qty, price=price, fx=fx, notional_usd=collateral + pnl, fee_usd=fee_usd,
                    cash_delta=collateral + pnl - fee_usd, realized=pnl - fee_usd,

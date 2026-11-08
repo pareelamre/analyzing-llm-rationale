@@ -2578,6 +2578,18 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["weather_operations"]["window_hours"], 168)
         self.assertEqual(payload["weather_operations"]["candidates_offered"], 10_000)
 
+    def test_fund_board_serves_the_published_fund_and_is_empty_before_it(self):
+        live = {"generated_at": "2026-11-09T20:05:00+00:00", "nav_usd": 10_041.2, "positions": [],
+                "trades": [{"note": "Fact sheet.", "note_source": "facts"}]}
+        with mock.patch.object(server_module, "_read_fund_board", return_value=live):
+            payload = self.client.get("/fund/board").json()
+        self.assertEqual(payload["nav_usd"], 10_041.2)
+        self.assertEqual(payload["trades"][0]["note_source"], "facts")
+        self.assertIn("freshness", payload)
+        with mock.patch.object(server_module, "_read_fund_board", return_value=None):
+            payload = self.client.get("/fund/board").json()
+        self.assertNotIn("nav_usd", payload)
+
     def test_agent_trading_board_endpoint_defaults_to_empty_when_no_live_file(self):
         with (
             mock.patch.object(server_module, "_read_agent_trading_board", return_value=None),

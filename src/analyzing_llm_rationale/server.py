@@ -212,6 +212,12 @@ _AGENT_TRADING_BOARD_URL = os.environ.get(
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
     "main/static/agent_trading_live.json",
 )
+#: The Foresea Fund (docs/fund.md), published with the agent board on every dispatch.
+_FUND_BOARD_URL = os.environ.get(
+    "FUND_BOARD_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/fund_live.json",
+)
 _AGENT_TRADING_BOARD_TTL = int(
     os.environ.get("AGENT_TRADING_BOARD_TTL", str(_TRACK_RECORD_LIVE_TTL))
 )
@@ -2359,6 +2365,25 @@ _AGENT_TRADING_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
 )
 _read_agent_trading_board = _AGENT_TRADING_BOARD_READER.read
 _agent_trading_board_freshness = _AGENT_TRADING_BOARD_READER.freshness
+_FUND_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_FUND_BOARD_URL,
+        ttl_seconds=_AGENT_TRADING_BOARD_TTL,
+        stale_after_seconds=_AGENT_TRADING_BOARD_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "fund_live.json",
+        request_timeout_seconds=_AGENT_TRADING_BOARD_TIMEOUT,
+        cache_namespace="fund_live",
+        cache_version="v1",
+        resource_label="fund board",
+        user_agent="Foresea/fund-board",
+    ),
+    logger=logger,
+)
+_read_fund_board = _FUND_BOARD_READER.read
+_fund_board_freshness = _FUND_BOARD_READER.freshness
 _AGENT_TRADING_AUDIT_READER = live_track_record_support.LiveTrackRecordReader(
     cache_key=_cache_key,
     cache_get=_cache_get,
@@ -4101,6 +4126,17 @@ async def edge_board(request: Request):
         "arbitrage_signals": live.get("arbitrage_signals", []),
     }
     return etag_helper.json_or_304(request, payload)
+
+
+@app.get("/fund/board", tags=["System"], summary="Foresea Fund: one paper portfolio run by models")
+async def fund_board(request: Request):
+    """The Foresea Fund (paper only; docs/fund.md): account value, positions across event
+    contracts, futures and perps, every trade with its grounded note and evidence, P&L split by
+    the analyst that caused it, and the signals it passed on with the reason. Empty until the
+    fund's first cycle has published."""
+    live = await asyncio.get_running_loop().run_in_executor(None, _read_fund_board)
+    live = live or {}
+    return etag_helper.json_or_304(request, {**live, "freshness": _fund_board_freshness(live)})
 
 
 @app.get(

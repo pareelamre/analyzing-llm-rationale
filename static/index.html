@@ -7275,13 +7275,28 @@ async function loadAgentTradingSection() {
   // A return to the Agentic tab should be instant. Reuse the last successful
   // payload while a background request checks whether the publisher has
   // produced a newer board.
-  if (_agentTradingCachedBoard && host.dataset.agenticSignature !== _agentTradingBoardSignature) {
+  if (_fundCachedBoard) {
+    renderFundBoard(_fundCachedBoard);
+  } else if (_agentTradingCachedBoard && host.dataset.agenticSignature !== _agentTradingBoardSignature) {
     renderAgentTradingBoard(_agentTradingCachedBoard);
   }
   if (_agentTradingRequest) return _agentTradingRequest;
 
   _agentTradingRequest = (async () => {
   try {
+    // The Foresea Fund replaces the single-agent board once it has published
+    // (docs/fund.md); until then the agent's own account is shown.
+    const fr = await _liveJsonFetch('/fund/board').catch(() => null);
+    const fund = fr && fr.ok ? await _readJson(fr).catch(() => null) : null;
+    if (fund && fund.nav_usd != null) {
+      const fundSignature = `fund:${fund.generated_at || ''}`;
+      _fundCachedBoard = fund;
+      if (host.dataset.agenticSignature !== fundSignature) {
+        renderFundBoard(fund);
+        host.dataset.agenticSignature = fundSignature;
+      }
+      return;
+    }
     const r = await _liveJsonFetch('/agent-trading/board');
     const d = await _readJson(r);
     if (!r.ok) throw new Error(d.detail || 'Could not load the agentic trading board.');
@@ -8011,6 +8026,130 @@ function renderAgentTradingBoard(d) {
       : '<p class="text-sm text-gray-500">No activity matching this filter.</p>')}</div>`;
   const svgEl = document.getElementById('agentTradingSvg');
   if (svgEl) _attachEquityHover(svgEl);
+}
+
+let _fundCachedBoard = null;
+const FUND_ANALYST_LABELS = {
+  event_model: 'On-device model forecasts',
+  pairs_model: 'Pairs model',
+  risk_overlay: 'Risk overlay (hedges)',
+  agent_transfer: 'Carried over from the agent',
+};
+const FUND_CLASS_LABELS = { event: 'Prediction markets', index: 'Indices', commodity: 'Commodities' };
+function _fundAnalystLabel(key) { return FUND_ANALYST_LABELS[key] || String(key || '').replace(/_/g, ' '); }
+function _fundMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  return `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function _fundPnl(value) {
+  const n = Number(value) || 0;
+  return `<span style="color:${n >= 0 ? '#0a7' : '#c33'}">${n >= 0 ? '+' : ''}${_fundMoney(n)}</span>`;
+}
+function _fundName(item) {
+  return item.label || String(item.instrument_id || '').split(':').slice(1).join(':').replace(/-/g, ' ');
+}
+
+function renderFundBoard(d) {
+  const host = document.getElementById('eb-agentic-section');
+  if (!host) return;
+  const updated = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
+  const ret = Number(d.return_pct || 0);
+  const navPoints = (d.curve || []).filter(p => p && p.ts && Number.isFinite(Number(p.nav_usd)));
+  const start = Number(d.starting_value) || 10000;
+  let points = navPoints.map(p => Number(p.nav_usd));
+  let times = navPoints.map(p => new Date(p.ts).getTime());
+  if (points.length < 2) {
+    points = [start, Number(d.nav_usd) || start];
+    times = [];
+  }
+  const chart = _equitySvg([{ points, times, color: '#4f46e5', label: 'Foresea Fund' }], 760, 260, { asPct: false, yPrefix: '$' });
+
+  const positions = (d.positions || []).slice().sort((a, b) => String(a.asset_class).localeCompare(String(b.asset_class)));
+  const positionRows = positions.map(p => {
+    const why = Object.entries(p.attribution || {})
+      .map(([k, w]) => `${escHtml(_fundAnalystLabel(k))} ${Math.round(Number(w) * 100)}%`).join(', ');
+    return `<tr>
+      <td>${escHtml(FUND_CLASS_LABELS[p.asset_class] || p.asset_class || '')}</td>
+      <td style="max-width:300px">${escHtml(_fundName(p))}</td>
+      <td>${escHtml(p.side || '')}</td>
+      <td>${Number(p.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+      <td>${_fundMoney(p.value_usd)}</td>
+      <td>${_fundPnl(p.pnl_usd)}</td>
+      <td class="text-xs" style="color:var(--text-dim)">${why}</td>
+    </tr>`;
+  }).join('');
+
+  const analysts = new Set([...Object.keys(d.attribution?.unrealized || {}), ...Object.keys(d.attribution?.realized || {})]);
+  const attributionRows = [...analysts].map(k => {
+    const open = Number(d.attribution?.unrealized?.[k] || 0);
+    const closed = Number(d.attribution?.realized?.[k] || 0);
+    return `<tr><td>${escHtml(_fundAnalystLabel(k))}</td><td>${_fundPnl(closed)}</td><td>${_fundPnl(open)}</td><td>${_fundPnl(open + closed)}</td></tr>`;
+  }).join('');
+
+  const tradeItems = (d.trades || []).map(t => {
+    const when = t.ts ? new Date(t.ts).toLocaleString() : '';
+    const evidence = (t.evidence || [])
+      .map(e => `<li>${escHtml(e.figure || '')} <span style="color:var(--text-mute)">(${escHtml(e.source || '')})</span></li>`).join('');
+    const source = t.note_source === 'model'
+      ? 'Worded by the on-device model and checked against these facts'
+      : 'Plain fact sheet';
+    return `<article class="agentic-activity">
+      <div class="agentic-activity-meta">
+        <span><b>${escHtml(t.action || '')}</b> · ${escHtml(t.purpose || '')} · ${escHtml(t.side || '')} ${escHtml(_fundName(t))}</span>
+        <span>${escHtml(when)}</span>
+      </div>
+      <div class="agentic-activity-body">
+        <p style="margin:0 0 6px">${escHtml(t.note || '')}</p>
+        ${evidence ? `<details><summary class="text-xs" style="cursor:pointer">Evidence (${escHtml(source)})</summary><ul class="text-xs" style="margin:6px 0 0 16px">${evidence}</ul></details>` : ''}
+      </div>
+    </article>`;
+  }).join('');
+
+  const passedItems = [...(d.cycle?.skipped || []), ...(d.cycle?.passed || [])]
+    .map(s => `<li><b>${escHtml(s.label || s.pair || _fundName({ instrument_id: s.instrument || '' }))}</b>: ${escHtml(s.reason || '')}</li>`).join('');
+  const limits = d.limits || {};
+  const universe = d.universe || {};
+
+  host.innerHTML = `
+    <section class="agentic-panel">
+      <div class="agentic-panel-head"><div>
+        <h4 class="agentic-panel-title">Foresea Fund</h4>
+        <p class="agentic-panel-copy">One paper portfolio run by a team of models. The models advise; the orchestrator decides, sizes and hedges. Every trade states its reason and the numbers behind it. Updated ${escHtml(updated)}.</p>
+      </div></div>
+      <div class="tr-stats">
+        <div class="tr-stat"><div class="v">${_fundMoney(d.nav_usd)}</div><div class="k label">Account value</div></div>
+        <div class="tr-stat"><div class="v" style="color:${ret >= 0 ? '#0a7' : '#c33'}">${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%</div><div class="k label">Since ${_fundMoney(start)}</div></div>
+        <div class="tr-stat"><div class="v">${_fundMoney(d.cash_usd)}</div><div class="k label">Cash</div></div>
+        <div class="tr-stat"><div class="v">${positions.length}</div><div class="k label">Positions</div></div>
+      </div>
+      <div id="fundChart" class="agentic-chart" style="margin-top:14px">${chart}</div>
+    </section>
+    <section class="agentic-panel">
+      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Holdings</h4>
+        <p class="agentic-panel-copy">Valued at what each position would sell for now. "Why" is the share each analyst had in opening it.</p></div></div>
+      <div class="agentic-table-wrap"><table class="eb-table agentic-table"><thead><tr><th>Asset</th><th>Instrument</th><th>Side</th><th>Quantity</th><th>Value</th><th>P&amp;L</th><th>Why</th></tr></thead>
+      <tbody>${positionRows || '<tr><td colspan="7" class="text-sm text-gray-500">No open positions.</td></tr>'}</tbody></table></div>
+    </section>
+    <section class="agentic-panel">
+      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Who made the money</h4>
+        <p class="agentic-panel-copy">Profit and loss split back to the analyst behind each position, in proportion to its share.</p></div></div>
+      <div class="agentic-table-wrap"><table class="eb-table agentic-table"><thead><tr><th>Analyst</th><th>Closed</th><th>Open</th><th>Total</th></tr></thead>
+      <tbody>${attributionRows || '<tr><td colspan="4" class="text-sm text-gray-500">Nothing to attribute yet.</td></tr>'}</tbody></table></div>
+    </section>
+    <section class="agentic-panel">
+      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Trades and their reasons</h4>
+        <p class="agentic-panel-copy">A note may only state numbers from its evidence; one that adds anything else is replaced by the plain fact sheet.</p></div></div>
+      <div class="agentic-activity-list">${tradeItems || '<p class="text-sm text-gray-500">No trades yet.</p>'}</div>
+    </section>
+    <section class="agentic-panel">
+      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Passed on this cycle</h4>
+        <p class="agentic-panel-copy">Signals the orchestrator did not trade, and why.</p></div></div>
+      ${passedItems ? `<ul class="text-sm" style="margin:0 0 0 18px;display:grid;gap:6px">${passedItems}</ul>` : '<p class="text-sm text-gray-500">Nothing passed on this cycle.</p>'}
+      <p class="text-xs" style="color:var(--text-dim);margin-top:12px">Limits: ${Math.round((limits.position || 0) * 100)}% of the fund per position, ${Math.round((limits.asset_class || 0) * 100)}% per asset class, ${Math.round((limits.underlying || 0) * 100)}% net per underlying, ${Math.round((limits.cash_floor || 0) * 100)}% kept in cash. Universe (${escHtml(universe.as_of || '')}): ${escHtml((universe.indices || []).join(', '))}; pairs: ${escHtml((universe.pairs || []).join(', '))}. Paper trading only.</p>
+    </section>`;
+  const chartEl = document.getElementById('fundChart');
+  if (chartEl) _attachEquityHover(chartEl);
 }
 
 async function removePersonalLedgerEntry(entryId, btn) {
