@@ -1,0 +1,99 @@
+name: Agent trading transfer to the on-device model
+
+# One-time: hands the retired SCADS agents' open positions to the on-device
+# agent (scripts/seed_on_device_agent.py). Winners move at today's bid; a
+# losing position moves only if the on-device model still backs that side.
+# A dry run (the default) decides and reports without booking anything. The
+# real run refuses if the on-device agent already has a store, and shares the
+# agent slot so it can never race a trading cycle.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Decide and report only (true) or book the transfer (false)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  FORESEA_STORAGE_BACKEND: ${{ vars.FORESEA_STORAGE_BACKEND || 'gcs' }}
+  R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+  R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+  PYTHONPATH: src
+  AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
+  TARGET: qwen3.5-9b-selfhosted
+
+concurrency:
+  group: agent-trading-provider-slot
+  cancel-in-progress: false
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: >-
+          pip install --quiet -e ".[serve,pipeline]"
+          requests duckdb pyyaml
+          opentelemetry-sdk
+          opentelemetry-instrumentation-requests
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download the retired stores and check the target is new
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -eu
+          for model in deepseek-v4-flash gemma-4-26b-a4b-it glm-5-3 glm-5-3-flash gpt-oss-120b llama-3.3-70b-instruct minimax-m3 qwen3-8-27b; do
+            mkdir -p "tmp/retired/$model"
+            python -m analyzing_llm_rationale.r2_store cp --allow-missing "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${model}.sqlite" \
+              "tmp/retired/$model/store.sqlite"
+          done
+          mkdir -p tmp/target
+          python -m analyzing_llm_rationale.r2_store cp --allow-missing "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${TARGET}.sqlite" \
+            tmp/target/existing.sqlite
+          if [ -s tmp/target/existing.sqlite ]; then
+            echo "::error::$TARGET already has a store; the transfer runs only once."
+            exit 1
+          fi
+
+      - name: Decide (and book, unless a dry run)
+        env:
+          SELF_HOSTED_LLM_URL: ${{ vars.SELF_HOSTED_LLM_URL }}
+          SELF_HOSTED_LLM_API_KEY: ${{ secrets.SELF_HOSTED_LLM_API_KEY }}
+        run: |
+          python scripts/seed_on_device_agent.py --retired-dir tmp/retired --out tmp/target/store.sqlite \
+            --report tmp/target/transfer_report.json ${{ inputs.dry_run && '--dry-run' || '' }} | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the new store and the report
+        if: ${{ !inputs.dry_run }}
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          python -m analyzing_llm_rationale.r2_store cp tmp/target/store.sqlite \
+            "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${TARGET}.sqlite"
+          python -m analyzing_llm_rationale.r2_store cp tmp/target/transfer_report.json \
+            "$AGENT_TRADING_STORE_BUCKET/agent_trading_transfer_report__${TARGET}.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: transfer-report
+          path: tmp/target/transfer_report.json
+          retention-days: 90
