@@ -35,14 +35,20 @@ class FundCycleTests(unittest.TestCase):
             agent.commit()
             fund = sqlite3.connect(":memory:")
             fund_ledger.ensure_schema(fund)
-            seeded = cycle.seed_from_agent(fund, agent_path, "2026-11-09T00:00:00+00:00")
+            with (
+                mock.patch.object(cycle.market_data, "fetch_kalshi", return_value={"question": "Fed cuts in December?"}),
+                mock.patch.object(cycle.market_data, "fetch_polymarket",
+                                  side_effect=cycle.market_data.MarketDataError("gone")),
+            ):
+                seeded = cycle.seed_from_agent(fund, agent_path, "2026-11-09T00:00:00+00:00")
             self.assertEqual(seeded["positions"], 2)
             snap = fund_ledger.nav(fund, cycle.FUND_ID, {}, {})
             self.assertAlmostEqual(snap["cash_usd"], 6_774.06)
             self.assertAlmostEqual(snap["nav_usd"], 6_774.06 + 356.40 + 498.70)
             self.assertEqual(snap["starting_value"], 10_000.0)
-            ids = {p["instrument_id"] for p in snap["positions"]}
-            self.assertEqual(ids, {"kalshi:KXFED", "polymarket:iran-slug"})
+            labels = {p["instrument_id"]: p["label"] for p in snap["positions"]}
+            # A market whose question can't be fetched keeps its ticker as the label.
+            self.assertEqual(labels, {"kalshi:KXFED": "Fed cuts in December?", "polymarket:iran-slug": "iran-slug"})
             actions = {r[0] for r in fund.execute("SELECT action FROM fund_trades")}
             self.assertEqual(actions, {"transfer"})
 
