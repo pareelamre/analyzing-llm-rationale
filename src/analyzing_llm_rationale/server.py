@@ -10558,7 +10558,7 @@ async def markets_index_forecast() -> JSONResponse:
 async def markets_commodity_pairs() -> JSONResponse:
     """How stretched ten commodity pair spreads are, and the live record of stretched-pair signals.
 
-    Built once a day from MCX futures (Upstox) and FRED spot prices by
+    Built once a day from MCX futures (Upstox), FRED spot prices and gold and platinum snapshots by
     scripts/commodity_pairs_tick.py. A
     monitor, not a strategy: the same signal rule lost money on half the pairs in a
     2011-2026 backtest, which the payload carries per pair.

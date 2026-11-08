@@ -9,8 +9,9 @@ z-score against its last 60 sessions says how stretched the pair is. A pair is "
 Prices: MCX front-month futures from Upstox's open candle route, stitched across rolls and
 ratio-adjusted so a roll is not read as a move, then stored daily (data/commodity_prices.jsonl)
 because expired contracts leave the route. Brent, WTI and Henry Hub gas are daily spot prices
-from FRED. The pairs that need international metals prices (Gold / Platinum and the gold
-import-parity pair) are paused until a feed for those is connected.
+from FRED. Gold and platinum in USD are a daily snapshot from the open fawazahmed0 currency API,
+also stored. The gold import-parity pair is paused: it needs the world gold price at MCX's close,
+and that snapshot is taken about 12 hours earlier.
 
 This is a tracker, not a strategy with an edge: the same rule on 2010-2026 US futures history
 mostly lost money or broke even after costs (see BACKTEST). Live signals are recorded only on
@@ -100,8 +101,20 @@ FRED_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 FRED_SERIES = {"brentcrude": "DCOILBRENTEU", "crudeoil": "DCOILWTICO", "naturalgas": "DHHNGSP"}
 #: Enough FRED history for a full hedge window plus the z-score window.
 FRED_DAYS = 600
+#: Gold and platinum per troy ounce in USD from the fawazahmed0 currency API (CC0, no key or rate
+#: limit), one snapshot a day at about 05:30 UTC. Its gold-platinum score tracked one from US
+#: futures closes at 0.94 correlation over 2025-26. Cloudflare Pages is its fallback host.
+METALS_URLS = (
+    "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{day}/v1/currencies/usd.json",
+    "https://{day}.currency-api.pages.dev/v1/currencies/usd.json",
+)
+METALS_CODES = {"gold": "xau", "platinum": "xpt"}
+#: How far back the first run looks: a full hedge window plus the z-score window.
+METALS_BACKFILL_DAYS = 450
 #: The (commodity, source) series some feed supplies. A pair needing any other is paused.
-FEEDS = frozenset({(c, "international") for c in FRED_SERIES} | {(c, "india") for c in MCX_SYMBOLS})
+FEEDS = frozenset(
+    {(c, "international") for c in (*FRED_SERIES, *METALS_CODES)} | {(c, "india") for c in MCX_SYMBOLS}
+)
 
 
 class FeedError(RuntimeError):
@@ -187,7 +200,7 @@ def front_rows(commodity: str, listed: Sequence[dict], candles: dict[str, dict],
         if active:
             front = next((c for c in active if (c["expiry"] - day).days > ROLL_DAYS), active[-1])
             later = [c for c in traded if c["expiry"] > front["expiry"]]
-            row = {"date": day.isoformat(), "commodity": commodity, "contract": front["contract"],
+            row = {"date": day.isoformat(), "commodity": commodity, "source": "india", "contract": front["contract"],
                    "expiry": front["expiry"].isoformat(), "close": candles[front["contract"]][day][0]}
             if later:
                 row.update({"next_contract": later[0]["contract"], "next_close": candles[later[0]["contract"]][day][0]})
@@ -205,6 +218,8 @@ def fetch_mcx(stored: Sequence[dict], today: date, *, http_get: HttpGet = reques
     contracts = mcx_contracts(http_get=http_get)
     last: dict[str, dict] = {}
     for row in stored:
+        if row.get("source", "india") != "india":
+            continue
         if row["commodity"] not in last or row["date"] > last[row["commodity"]]["date"]:
             last[row["commodity"]] = row
     through, new = today - timedelta(days=1), []
@@ -222,11 +237,45 @@ def fetch_mcx(stored: Sequence[dict], today: date, *, http_get: HttpGet = reques
     return new
 
 
+def _metals_snapshot(day: date, *, http_get: HttpGet) -> Optional[dict]:
+    for template in METALS_URLS:
+        try:
+            body = _get(template.format(day=day.isoformat()), http_get=http_get).json()
+        except (FeedError, ValueError, requests.RequestException):
+            continue
+        if isinstance(body, dict) and isinstance(body.get("usd"), dict):
+            return body["usd"]
+    return None
+
+
+def fetch_metals(stored: Sequence[dict], today: date, *, http_get: HttpGet = requests.get) -> list[dict]:
+    """New gold and platinum rows for the weekdays after the last stored snapshot, before today.
+
+    A day's snapshot is used from the next IST day on, like an MCX session, so the newest metals
+    date never runs ahead of the newest MCX one. An old day missing from both hosts is skipped;
+    a missing one from the last three days stops the run there, and the next run retries it.
+    """
+    last = max((r["date"] for r in stored if r.get("source") == "international"), default=None)
+    day = date.fromisoformat(last) + timedelta(days=1) if last else today - timedelta(days=METALS_BACKFILL_DAYS)
+    rows = []
+    while day < today:
+        if day.weekday() < 5:
+            rates = _metals_snapshot(day, http_get=http_get)
+            if rates is None and (today - day).days <= 3:
+                break
+            for commodity, code in METALS_CODES.items():
+                rate = (rates or {}).get(code)
+                if isinstance(rate, (int, float)) and math.isfinite(rate) and rate > 0:
+                    rows.append({"date": day.isoformat(), "commodity": commodity, "source": "international", "close": round(1 / rate, 4)})
+        day += timedelta(days=1)
+    return rows
+
+
 def _roll_ratio(earlier: Sequence[dict], new_contract: str) -> float:
     """The new contract's price over the old one's on the last session both traded."""
-    old = earlier[-1]["contract"]
+    old = earlier[-1].get("contract")
     for row in reversed(earlier):
-        if row["contract"] != old:
+        if row.get("contract") != old:
             break
         if row.get("next_contract") == new_contract and row.get("next_close"):
             return row["next_close"] / row["close"]
@@ -243,7 +292,7 @@ def continuous(rows: Sequence[dict]) -> list[tuple[date, float]]:
     out, factor = [], 1.0
     for i in range(len(rows) - 1, -1, -1):
         out.append((date.fromisoformat(rows[i]["date"]), rows[i]["close"] * factor))
-        if i and rows[i - 1]["contract"] != rows[i]["contract"]:
+        if i and rows[i - 1].get("contract") != rows[i].get("contract"):
             factor *= _roll_ratio(rows[:i], rows[i]["contract"])
     return out[::-1]
 
@@ -251,12 +300,12 @@ def continuous(rows: Sequence[dict]) -> list[tuple[date, float]]:
 def build_series(stored: Sequence[dict], fred: dict) -> dict[tuple[str, str], list[tuple[date, float]]]:
     """Every (commodity, source) price series the pairs read."""
     series = dict(fred)
-    by_commodity: dict[str, list[dict]] = {}
+    grouped: dict[tuple[str, str], list[dict]] = {}
     for row in stored:
-        by_commodity.setdefault(row["commodity"], []).append(row)
-    for commodity, rows in by_commodity.items():
-        scale = MCX_PER_KG.get(commodity, 1.0)
-        series[(commodity, "india")] = [(day, price * scale) for day, price in continuous(rows)]
+        grouped.setdefault((row["commodity"], row.get("source", "india")), []).append(row)
+    for (commodity, source), rows in grouped.items():
+        scale = MCX_PER_KG.get(commodity, 1.0) if source == "india" else 1.0
+        series[(commodity, source)] = [(day, price * scale) for day, price in continuous(rows)]
     return series
 
 
@@ -388,7 +437,7 @@ def track_pair(pair: dict[str, str], series: dict) -> Optional[dict[str, Any]]:
     fixed = pair["source"] == "parity"
     if any(need not in FEEDS for need in _needs(pair)):
         return {"key": pair["key"], "label": pair["label"], "why": pair["why"], "source": pair["source"], "sessions": 0,
-                "paused": True, "note": "Paused until an international metals price feed is connected."}
+                "paused": True, "note": "Paused: this needs the world gold price at MCX's close, and the free daily gold price is taken about 12 hours earlier."}
     days, la, lb = aligned(pair, series)
     if len(days) < MIN_SESSIONS:
         return {"key": pair["key"], "label": pair["label"], "why": pair["why"], "source": pair["source"],
@@ -474,7 +523,7 @@ def run(series: dict, ledger: list[dict], now: datetime) -> tuple[dict, list[dic
     payload = {
         "generated_at": now.astimezone(timezone.utc).isoformat(),
         "data_through": max(dated) if dated else None,
-        "source": "Upstox (MCX front-month futures) and FRED (Brent, WTI and Henry Hub spot)",
+        "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold and platinum)",
         "rule": {
             "hedge_window": HEDGE_WINDOW, "z_window": Z_WINDOW, "entry_z": ENTRY_Z, "exit_z": EXIT_Z,
             "max_hold": MAX_HOLD, "cost_per_side": COST_PER_SIDE, "min_sessions": MIN_SESSIONS,

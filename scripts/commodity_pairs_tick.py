@@ -3,14 +3,16 @@
 
 Each run:
   1. skips when the newest complete weekday is published,
-  2. fetches Brent, WTI and Henry Hub spot prices from FRED, and the MCX front-month closes
-     after the last stored session from Upstox (no account or token for either),
+  2. fetches Brent, WTI and Henry Hub spot prices from FRED, and appends the MCX front-month
+     closes (Upstox) and gold and platinum snapshots (fawazahmed0 currency API) after the last
+     stored day (no account or token for any of them),
   3. advances open signals through new sessions and opens signals on the newest session,
   4. writes the public payload served at ``GET /markets/commodity-pairs``.
 
 Outputs (committed back to the repo by the workflow):
-  - ``data/commodity_prices.jsonl``: MCX front-month closes, one row per commodity and session,
-    appended only. Expired contracts leave Upstox's route, so this is the history.
+  - ``data/commodity_prices.jsonl``: MCX front-month closes and gold and platinum snapshots,
+    one row per commodity, source and session, appended only. Expired contracts leave Upstox's
+    route, so this is the history.
   - ``data/commodity_pairs_ledger.jsonl``: every live signal, appended and then closed.
   - ``static/commodity_pairs_live.json``: today's pair states and the track record.
 """
@@ -74,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     today = now.astimezone(cp.IST).date()
     fred = cp.fetch_fred(today)
     stored = _read_jsonl(args.prices)
-    new_prices = cp.fetch_mcx(stored, today)
+    new_prices = cp.fetch_mcx(stored, today) + cp.fetch_metals(stored, today)
     stored += new_prices
     ledger = _read_jsonl(args.ledger)
     before = sum(e["status"] == "open" for e in ledger), len(ledger)
@@ -84,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     args.payload.parent.mkdir(parents=True, exist_ok=True)
     args.payload.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
     logger.info(
-        "data_through=%s new_mcx_rows=%d stretched=%s signals: open %d->%d, total %d->%d",
+        "data_through=%s new_price_rows=%d stretched=%s signals: open %d->%d, total %d->%d",
         payload["data_through"], len(new_prices), [p["key"] for p in payload["pairs"] if p.get("stretched")],
         before[0], sum(e["status"] == "open" for e in ledger), before[1], len(ledger),
     )

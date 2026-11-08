@@ -133,6 +133,10 @@ class FeedTests(unittest.TestCase):
                          [("copper", "2026-11-05", 105.0, "2026-11-30"), ("copper", "2026-11-06", 106.0, "2026-11-30")])
         self.assertNotIn("MCX_FO%7C2", "".join(calls))
 
+        # A stored world-price copper row is not the MCX series' last session.
+        world = [{"date": "2026-11-06", "commodity": "copper", "source": "international", "close": 1.0}]
+        self.assertEqual(len(cp.fetch_mcx(world, date(2026, 11, 7), http_get=get)), 2)
+
         calls.clear()
         later = cp.fetch_mcx(first[:1], date(2026, 11, 9), http_get=get)
         self.assertTrue(any(c.endswith("MCX_FO%7C1/days/1/2026-11-08/2026-11-06") for c in calls))
@@ -146,11 +150,45 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(series[("gold", "india")], [(date(2026, 11, 6), 14216700.0)])
         self.assertEqual(series[("crudeoil", "international")], fred[("crudeoil", "international")])
 
-    def test_pairs_without_a_feed_are_paused(self):
-        for key in ("gold-platinum", "gold-parity"):
-            row = cp.track_pair(next(p for p in cp.PAIRS if p["key"] == key), {})
-            self.assertTrue(row["paused"])
-            self.assertNotIn("z", row)
+    def test_only_the_parity_pair_is_paused(self):
+        paused = [p["key"] for p in cp.PAIRS if cp.track_pair(p, {}).get("paused")]
+        self.assertEqual(paused, ["gold-parity"])
+        self.assertNotIn("z", cp.track_pair(cp.PAIRS[-1], {}))
+
+    def test_metals_use_the_fallback_host_and_stop_at_a_recent_gap(self):
+        rates = {"xau": 1 / 4000, "xpt": 1 / 1500, "inr": 94.0}
+        calls = []
+
+        def get(url, params, timeout, headers):
+            calls.append(url)
+            if "2026-11-04" in url and "jsdelivr" in url:
+                return _Resp(503)
+            if "2026-11-05" in url or "2026-10-21" in url:
+                return _Resp(404)
+            return _Resp(200, {"date": "x", "usd": rates})
+
+        stored = [{"date": "2026-11-02", "commodity": "gold", "source": "international", "close": 3990.0},
+                  {"date": "2026-11-06", "commodity": "gold", "source": "india", "contract": "GOLD", "close": 142000.0}]
+        rows = cp.fetch_metals(stored, date(2026, 11, 7), http_get=get)
+
+        # 3rd from the main host, 4th from the fallback; the 5th is missing on both and recent, so
+        # the run stops there and the 6th waits for the next run.
+        self.assertEqual([(r["date"], r["commodity"], r["close"]) for r in rows],
+                         [("2026-11-03", "gold", 4000.0), ("2026-11-03", "platinum", 1500.0),
+                          ("2026-11-04", "gold", 4000.0), ("2026-11-04", "platinum", 1500.0)])
+        self.assertFalse(any("2026-11-06" in c for c in calls))
+
+        # An old missing day is skipped rather than retried.
+        older = cp.fetch_metals([{**stored[0], "date": "2026-10-20"}], date(2026, 10, 27), http_get=get)
+        self.assertEqual(sorted({r["date"] for r in older}), ["2026-10-22", "2026-10-23", "2026-10-26"])
+
+    def test_world_and_mcx_gold_are_kept_apart(self):
+        stored = [{"date": "2026-11-06", "commodity": "gold", "source": "india", "contract": "GOLD", "close": 142167.0},
+                  {"date": "2026-11-06", "commodity": "gold", "source": "international", "close": 4042.89}]
+        series = cp.build_series(stored, {})
+
+        self.assertEqual(series[("gold", "india")], [(date(2026, 11, 6), 14216700.0)])
+        self.assertEqual(series[("gold", "international")], [(date(2026, 11, 6), 4042.89)])
 
     def test_parity_pairs_the_exchange_price_with_the_landed_cost(self):
         days = _weekdays(date(2026, 4, 6), 3)
