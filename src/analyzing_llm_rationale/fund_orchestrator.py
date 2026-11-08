@@ -46,6 +46,12 @@ MAX_FORECAST_AGE_H = 48.0
 EVENT_COST = 0.02
 #: Orders smaller than this are not worth the fees and noise.
 MIN_ORDER_USD = 5.0
+#: A forecast further than this from the market price is far more often a model error than an
+#: edge (the on-device model's inverted 98% forecasts of 2026-11-08 were 92 and 95 points out),
+#: so it is not traded until the analyst has a graded record that says otherwise.
+MAX_DISAGREEMENT = 0.30
+#: Markets closing sooner than this leave no time for a forecast to be checked or corrected.
+MIN_LEAD_DAYS = 1.0
 
 
 @dataclass
@@ -110,15 +116,29 @@ def event_instrument(row: Mapping[str, Any]) -> dict:
 
 
 def event_signals(board: Iterable[Mapping[str, Any]], now: datetime, *, analyst: str = "event_model",
-                  model_label: str = "the on-device model", trust: float = DEFAULT_TRUST) -> list[Signal]:
-    """A signal per Edge board row where the forecast beats the price after costs."""
-    out = []
+                  model_label: str = "the on-device model", trust: float = DEFAULT_TRUST,
+                  max_disagreement: float = MAX_DISAGREEMENT) -> tuple[list[Signal], list[dict]]:
+    """Signals for Edge board rows whose forecast beats the price after costs; and the rows
+    skipped as implausible or too close to closing, with why."""
+    out, skipped = [], []
     for row in board:
         p, bid, ask = row.get("model_probability"), row.get("market_bid"), row.get("market_ask")
         age = _age_hours(row.get("forecasted_at"), now)
         if p is None or bid is None or ask is None or age is None or age > MAX_FORECAST_AGE_H:
             continue
         p, bid, ask = float(p), float(bid), float(ask)
+        label = str(row.get("question") or row.get("ident"))
+        gap = abs(p - (bid + ask) / 2)
+        if gap > max_disagreement:
+            skipped.append({"instrument": event_instrument(row)["id"], "label": label,
+                            "reason": f"forecast {_pct(p)} is {gap * 100:.0f} points from the market; "
+                                      "treated as a likely model error until the model has a record"})
+            continue
+        lead = row.get("lead_days")
+        if lead is not None and float(lead) < MIN_LEAD_DAYS:
+            skipped.append({"instrument": event_instrument(row)["id"], "label": label,
+                            "reason": "closes within a day"})
+            continue
         for side, prob, price in (("YES", p, ask), ("NO", 1.0 - p, 1.0 - bid)):
             if not PRICE_BAND[0] <= price <= PRICE_BAND[1]:
                 continue
@@ -134,7 +154,7 @@ def event_signals(board: Iterable[Mapping[str, Any]], now: datetime, *, analyst:
                        _fact(f"price to buy {side}", _cents(price), f"{row.get('platform')} order book"),
                        _fact("expected profit per dollar after costs", _pct(edge), "orchestrator")],
             ))
-    return out
+    return out, skipped
 
 
 def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[str, Any]], *,

@@ -41,7 +41,7 @@ UNIVERSE_PAIRS = [{"key": "copper-aluminium", "label": "Copper / Aluminium (MCX)
 
 class EventSignalTests(unittest.TestCase):
     def test_a_forecast_beating_the_ask_after_costs_is_a_signal(self):
-        signals = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)
+        signals, _ = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)
         self.assertEqual([s.side for s in signals], ["NO"])
         no = signals[0]
         self.assertAlmostEqual(no.price, 0.80)
@@ -49,8 +49,19 @@ class EventSignalTests(unittest.TestCase):
         self.assertIn("98.0%", {f["value"] for f in no.facts})
 
     def test_stale_or_thin_forecasts_are_ignored(self):
-        self.assertEqual(orch.event_signals([_row("x", 0.6, 0.55, 0.57, at="2026-11-01T00:00:00+00:00")], NOW), [])
-        self.assertEqual(orch.event_signals([_row("x", 0.58, 0.55, 0.57)], NOW), [])
+        self.assertEqual(orch.event_signals([_row("x", 0.6, 0.55, 0.57, at="2026-11-01T00:00:00+00:00")], NOW)[0], [])
+        self.assertEqual(orch.event_signals([_row("x", 0.58, 0.55, 0.57)], NOW)[0], [])
+
+    def test_a_forecast_far_from_the_market_is_skipped_as_a_likely_model_error(self):
+        # The inverted forecast of 2026-11-08: 98% against a 6c market.
+        signals, skipped = orch.event_signals([_row("hamas", 0.98, 0.05, 0.06)], NOW)
+        self.assertEqual(signals, [])
+        self.assertIn("92 points from the market", skipped[0]["reason"])
+
+    def test_a_market_closing_within_a_day_is_skipped(self):
+        row = {**_row("match", 0.45, 0.30, 0.32), "lead_days": 0.2}
+        signals, skipped = orch.event_signals([row], NOW)
+        self.assertEqual((signals, skipped[0]["reason"]), ([], "closes within a day"))
 
 
 class PairSignalTests(unittest.TestCase):
@@ -64,7 +75,7 @@ class PairSignalTests(unittest.TestCase):
 
 class PlanTests(unittest.TestCase):
     def test_entries_respect_the_position_cap_and_carry_attribution(self):
-        signals = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)
+        signals, _ = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)
         out = orch.plan(_snapshot(), signals, {}, {})
         order = out["orders"][0]
         self.assertEqual((order.action, order.side, order.purpose), ("buy", "NO", "view"))
@@ -72,7 +83,7 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(order.attribution, {"event_model": 1.0})
 
     def test_the_cash_floor_stops_new_buys(self):
-        signals = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)
+        signals, _ = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)
         out = orch.plan(_snapshot(cash=2_000.0), signals, {}, {})
         self.assertEqual(out["orders"], [])
         self.assertEqual(out["passed"][0]["reason"], "no room under the fund's limits")
@@ -111,7 +122,7 @@ class PlanTests(unittest.TestCase):
 
 class NoteTests(unittest.TestCase):
     def _order(self):
-        signals = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)
+        signals, _ = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)
         order = orch.plan(_snapshot(), signals, {}, {})["orders"][0]
         return dataclasses.asdict(order)
 
