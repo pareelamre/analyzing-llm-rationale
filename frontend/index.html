@@ -1137,25 +1137,6 @@
     .eb-filter-pill.active { background: var(--ink); color: #fff; border-color: var(--ink); }
     .eb-search-input { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; color: var(--text); width: 170px; }
     .eb-search-input:focus { outline: none; border-color: var(--accent); }
-    .eb-mtm-heading-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 20px; margin-bottom: 12px; }
-    .eb-mtm-title { margin: 0; min-height: 2.9em; display: flex; align-items: flex-end; }
-    .eb-view-tabs.eb-sizing-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: 500px; margin: 0; }
-    .eb-sizing-tabs .eb-view-tab { width: 100%; min-width: 0; padding-left: 8px; padding-right: 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* MTM methodology uses the Agentic feed's quiet metadata treatment, not a callout card. */
-    .mtm-methodology { align-items: center; color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 11px; gap: 8px 16px; margin: 8px 0 18px; }
-    .mtm-methodology-item { align-items: baseline; display: inline-flex; gap: 5px; }
-    .mtm-methodology-item + .mtm-methodology-item { border-left: 1px solid var(--border); padding-left: 16px; }
-    .mtm-methodology-label { color: #64748b; font-size: 9px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
-    .mtm-methodology-value { color: #334155; font-weight: 600; }
-    .mtm-methodology-value--positive { color: #0f766e; }
-    @media (min-width: 760px) {
-      .eb-mtm-heading-row { grid-template-columns: minmax(0, 1fr) minmax(420px, 500px); align-items: center; }
-      .eb-mtm-title { min-height: 1.45em; align-items: center; }
-    }
-    @media (max-width: 640px) {
-      .mtm-methodology { align-items: flex-start; display: grid; gap: 7px; }
-      .mtm-methodology-item + .mtm-methodology-item { border-left: 0; padding-left: 0; }
-    }
     .eb-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: center; }
     .eb-page-btn { padding: 5px 16px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 12.5px; cursor: pointer; color: var(--text-dim); transition: background .15s; }
     .eb-page-btn:hover:not(:disabled) { background: var(--paper); color: var(--text); }
@@ -8633,7 +8614,7 @@ function _ebGoPage(n) {
 }
 
 function _ebSetView(view) {
-  _ebView = ['mtm', 'agentic', 'indices', 'pairs'].includes(view) ? view : 'markets';
+  _ebView = ['agentic', 'indices', 'pairs'].includes(view) ? view : 'markets';
   const host = document.getElementById('edgeBody');
   if (!host) return;
   if (!_ebLastData) {
@@ -9481,358 +9462,24 @@ function _renderBoardPage(board, page) {
   return toolbarHtml + tableHtml + pagination;
 }
 
-let _activeMtmStrat = 'quarter_kelly';
-let _mtmSizingMode = 'quarter_kelly';
-
-function _mtmModelsForSizing(d, sizingMode) {
-  const source = sizingMode === 'quarter_kelly'
-    ? d.quarter_kelly_by_model
-    : d[`${sizingMode}_by_model`];
-  return (source || []).filter(m => (
-    m
-    && m.model !== 'crowd-follow'
-    && m.model !== 'market-follow'
-    && (m.account || m.account_value != null)
-  ));
-}
-
-function _mtmCurvePoints(account) {
-  const points = account?.value_curve || [];
-  const firstEvent = points.findIndex(point => point.event_type === 'trade' || point.event_type === 'settlement');
-  return firstEvent >= 0 ? points.slice(firstEvent) : [];
-}
-
-function _mtmRiskStats(model) {
-  const metric = value => {
-    if (value == null || value === '') return null;
-    const number = Number(value);
-    return Number.isFinite(number) ? number : null;
-  };
-  const sourceSharpe = metric(model?.sharpe);
-  const sourceDrawdown = metric(model?.max_drawdown);
-  if (sourceSharpe != null && sourceDrawdown != null) {
-    return { sharpe: sourceSharpe, maxDrawdown: sourceDrawdown };
-  }
-
-  // Older compact payloads did not include the server-computed risk fields.
-  // Match the server calculation from the plotted account-value curve until
-  // a fresh payload arrives, rather than shifting Trades/Open into these cells.
-  const values = (model?.account?.value_curve || [])
-    .map(point => metric(point?.account_value))
-    .filter(value => value != null);
-  if (values.length < 2) return { sharpe: sourceSharpe, maxDrawdown: sourceDrawdown };
-  const returns = [];
-  for (let index = 1; index < values.length; index += 1) {
-    if (values[index - 1] > 0) returns.push((values[index] - values[index - 1]) / values[index - 1]);
-  }
-  let sharpe = null;
-  if (returns.length >= 2) {
-    const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
-    const variance = returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (returns.length - 1);
-    if (variance > 0) sharpe = mean / Math.sqrt(variance);
-  }
-  let peak = values[0];
-  let maxDrawdown = 0;
-  values.forEach(value => {
-    peak = Math.max(peak, value);
-    if (peak > 0) maxDrawdown = Math.max(maxDrawdown, (peak - value) / peak);
-  });
-  return {
-    sharpe: sourceSharpe ?? sharpe,
-    maxDrawdown: sourceDrawdown ?? maxDrawdown,
-  };
-}
-
-function _updateMtmViewInPlace() {
-  if (!_ebLastData) return false;
-  const d = _ebLastData;
-  const sizingMode = _mtmSizingMode || 'quarter_kelly';
-  const mtmModels = _mtmModelsForSizing(d, sizingMode);
-  if (!mtmModels.length) return false;
-
-  const mtmContainer = document.getElementById('eb-mtm-container');
-  if (!mtmContainer) return false;
-
-  const sizingLabels = {
-    'quarter_kelly': 'Quarter-Kelly 8% Cap',
-    'growth_1pct': 'Edge Kelly 5% Cap',
-    'growth_2pct': 'Edge Kelly 8% Cap',
-  };
-  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.quarter_kelly;
-
-  const titleEl = document.getElementById('eb-mtm-header-title');
-  if (titleEl) titleEl.textContent = `Per-Model Shadow Mark-to-Market Accounts (${activeSizingLabel})`;
-
-  const tabs = mtmContainer.querySelectorAll('.eb-view-tab');
-  tabs.forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.mtmSizingMode === sizingMode);
-  });
-
-  const _usd = v => Number.isFinite(Number(v))
-    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-    : 'building';
-
-  const _getScaledMtmValue = (rawVal, m) => {
-    const val = Number(rawVal);
-    if (!Number.isFinite(val)) return EB_STARTING_BANKROLL;
-    return val;
-  };
-
-  const modelCurves = mtmModels.map((m, i) => {
-    const account = m.account || {};
-    const curvePoints = _mtmCurvePoints(account);
-    const values = curvePoints.map(p => {
-      const rawVal = Number(p.account_value);
-      if (!Number.isFinite(rawVal)) return null;
-      return _getScaledMtmValue(rawVal, sizingMode);
-    }).filter(Number.isFinite);
-    const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
-    if (!values.length) return null;
-    const label = _ebModelLabel(m.model);
-    const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    const startP = EB_STARTING_BANKROLL;
-    const scaledVal = _getScaledMtmValue(rawVal, sizingMode);
-    const ret = (scaledVal - startP) / startP;
-    const curve = {
-      model: m.model,
-      points: values,
-      color: _mtmModelColor(m.model, i),
-      label,
-      head: _ebModelHead(m.model),
-      headTitle: `${label} · ${_usd(scaledVal)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
-    };
-    if (times.length === values.length) curve.times = times;
-    return curve;
-  }).filter(Boolean);
-
-  const svgEl = document.getElementById('eb-mtm-svg');
-  if (svgEl) {
-    svgEl.innerHTML = modelCurves.length
-      ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'})
-      : '<p class="text-sm text-gray-500">No positions yet for this sizing mode.</p>';
-  }
-
-  const tableBodyEl = document.getElementById('eb-mtm-table-body');
-  if (tableBodyEl) {
-    tableBodyEl.innerHTML = mtmModels.map((m, i) => {
-      const account = m.account || {};
-      const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-      const startPrincipal = EB_STARTING_BANKROLL;
-      const currentBankroll = _getScaledMtmValue(rawVal, sizingMode);
-      const pnlUsd = currentBankroll - startPrincipal;
-      const pnlPct = pnlUsd / startPrincipal;
-      const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
-      const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
-      const risk = _mtmRiskStats(m);
-      const sharpeStr = risk.sharpe != null ? risk.sharpe.toFixed(2) : '—';
-      const ddVal = risk.maxDrawdown;
-      const ddStr = Number.isFinite(ddVal) ? (ddVal * 100).toFixed(1) + '%' : '—';
-
-      return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
-        <td><b>${i + 1}</b></td>
-        <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span>${m.status === 'collecting_history' ? '<span style="display:block;color:var(--text-dim);font-size:11px">Collecting resolved history</span>' : ''}</td>
-        <td>${_usd(startPrincipal)}</td>
-        <td><b>${_usd(currentBankroll)}</b></td>
-        <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
-        <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
-        <td><b>${sharpeStr}</b></td>
-        <td style="color:${ddVal > 0.15 ? '#c33' : 'inherit'}">${ddStr}</td>
-        <td>${account.n_trades ?? m.n_trades ?? 0}</td>
-        <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
-      </tr>`;
-    }).join('');
-  }
-
-  _attachEdgeBoardChartHovers(mtmContainer);
-  return true;
-}
-
-function _refreshActiveEdgeBoardHost() {
-  if (!_ebLastData) return;
-  if (_updateMtmViewInPlace()) return;
-  const edgeHost = document.getElementById('edgeBody');
-  if (edgeHost) {
-    _captureEdgeBoardScroll();
-    edgeHost.innerHTML = renderEdgeBoard(_ebLastData);
-    _attachEdgeBoardChartHovers(edgeHost);
-    _restoreEdgeBoardScroll();
-  }
-  const trackHost = document.getElementById('trackBody');
-  if (trackHost) {
-    trackHost.innerHTML = renderTrackRecord(_ebLastData);
-    _attachEdgeBoardChartHovers(trackHost);
-  }
-}
-
-function _selectMtmStrategy(key) {
-  _activeMtmStrat = key;
-  if (key === 'quarter_kelly' || key === 'growth_2pct' || key === 'growth_1pct') {
-    _mtmSizingMode = key;
-  } else {
-    _mtmSizingMode = 'quarter_kelly';
-  }
-  if (!_updateMtmViewInPlace()) {
-    _refreshActiveEdgeBoardHost();
-  }
-}
-
-function _setMtmSizingMode(mode) {
-  _mtmSizingMode = mode;
-  _activeMtmStrat = mode;
-  if (!_updateMtmViewInPlace()) {
-    _refreshActiveEdgeBoardHost();
-  }
-}
-
-document.addEventListener('click', (event) => {
+// Edge board tab buttons switch the view through one delegated listener.
+function _ebOnViewTabClick(event) {
   const viewBtn = event.target.closest('[data-eb-view]');
   if (viewBtn) {
     event.preventDefault();
     _ebSetView(viewBtn.dataset.ebView);
     setHistoryState(currentView === 'app' ? 'edge-app' : 'edge-landing', 'replace', { panel: _ebView });
-    return;
   }
-  const sizingBtn = event.target.closest('[data-mtm-sizing-mode]');
-  if (sizingBtn) {
-    event.preventDefault();
-    _setMtmSizingMode(sizingBtn.dataset.mtmSizingMode);
-    return;
-  }
-  const strategyRow = event.target.closest('[data-mtm-strategy]');
-  if (strategyRow) {
-    event.preventDefault();
-    _selectMtmStrategy(strategyRow.dataset.mtmStrategy);
-  }
-});
-
-function _renderMtmPage(d) {
-  const sizingMode = _mtmSizingMode || 'quarter_kelly';
-  const mtmModels = _mtmModelsForSizing(d, sizingMode);
-  if (!mtmModels.length) {
-    return '<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4><p class="text-sm text-gray-500">Shadow mark-to-market account values will appear after strategy snapshots are available.</p>';
-  }
-  const _usd = v => Number.isFinite(Number(v))
-    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-    : 'building';
-  const pnl = d.paper_pnl || {};
-  const roi = s => (s && s.n_bets >= 5) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : `<span style="color:var(--text-dim);font-weight:500">building · n=${s ? s.n_bets : 0}</span>`;
-  const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-  const activeStrat = _activeMtmStrat || 'quarter_kelly';
-
-  const cardConfig = [
-    { key: 'growth_2pct', label: 'Edge Kelly 8% Cap', sub: '50% Kelly / 10pp EWMA', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.4)' },
-    { key: 'growth_1pct', label: 'Edge Kelly 5% Cap', sub: '50% Kelly / 10pp EWMA', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.4)' },
-    { key: 'quarter_kelly', label: 'Quarter-Kelly Mode', sub: '25% Kelly / 8% cap / 30% DD', color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.4)' },
-  ];
-
-  const _normCurve = s => _ebPnlCurve(s);
-  const _times = s => _ebCurveTimes(s);
-
-  const _getScaledMtmValue = (rawVal, mode) => {
-    const val = Number(rawVal);
-    if (!Number.isFinite(val)) return EB_STARTING_BANKROLL;
-    return val;
-  };
-
-  const modelCurves = mtmModels.map((m, i) => {
-    const account = m.account || {};
-    const curvePoints = _mtmCurvePoints(account);
-    const values = curvePoints.map(p => {
-      const rawVal = Number(p.account_value);
-      if (!Number.isFinite(rawVal)) return null;
-      return _getScaledMtmValue(rawVal, sizingMode);
-    }).filter(Number.isFinite);
-    const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
-    if (!values.length) return null;
-    const label = _ebModelLabel(m.model);
-    const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    const startP = EB_STARTING_BANKROLL;
-    const scaledVal = _getScaledMtmValue(rawVal, sizingMode);
-    const ret = (scaledVal - startP) / startP;
-    const curve = {
-      model: m.model,
-      points: values,
-      color: _mtmModelColor(m.model, i),
-      label,
-      head: _ebModelHead(m.model),
-      headTitle: `${label} · ${_usd(scaledVal)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
-    };
-    if (times.length === values.length) curve.times = times;
-    return curve;
-  }).filter(Boolean);
-
-  const rows = mtmModels.map((m, i) => {
-    const account = m.account || {};
-    const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-
-    const startPrincipal = EB_STARTING_BANKROLL;
-    const currentBankroll = _getScaledMtmValue(rawVal, sizingMode);
-    const pnlUsd = currentBankroll - startPrincipal;
-    const pnlPct = pnlUsd / startPrincipal;
-
-    const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
-    const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
-
-    const risk = _mtmRiskStats(m);
-    const sharpeStr = risk.sharpe != null ? risk.sharpe.toFixed(2) : '—';
-    const ddVal = risk.maxDrawdown;
-    const ddStr = Number.isFinite(ddVal) ? (ddVal * 100).toFixed(1) + '%' : '—';
-
-    const pnlTitle = `Net P&L: ${_usd(pnlUsd)} (Realized: ${_usd(account.realized_pnl || 0)}, Unrealized: ${_usd(account.unrealized_pnl || 0)}) · Net of venue trading fees (Kalshi 7% taker formula & Polymarket category-based taker fees)`;
-
-    return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
-      <td><b>${i + 1}</b></td>
-      <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span>${m.status === 'collecting_history' ? '<span style="display:block;color:var(--text-dim);font-size:11px">Collecting resolved history</span>' : ''}</td>
-      <td>${_usd(startPrincipal)}</td>
-      <td><b>${_usd(currentBankroll)}</b></td>
-      <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnlStr}<span style="display:block;font-size:10px;color:var(--text-dim);font-weight:400">net of fees</span></td>
-      <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
-      <td><b>${sharpeStr}</b></td>
-      <td style="color:${ddVal > 0.15 ? '#c33' : 'inherit'}">${ddStr}</td>
-      <td>${account.n_trades ?? m.n_trades ?? 0}</td>
-      <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
-    </tr>`;
-  }).join('');
-
-  const sizingLabels = {
-    'quarter_kelly': 'Quarter-Kelly 8% Cap',
-    'growth_1pct': 'Edge Kelly 5% Cap',
-    'growth_2pct': 'Edge Kelly 8% Cap',
-  };
-  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.quarter_kelly;
-
-  const validSharpes = mtmModels.map(m => _mtmRiskStats(m).sharpe).filter(Number.isFinite);
-  const avgSharpe = validSharpes.length ? (validSharpes.reduce((a, b) => a + b, 0) / validSharpes.length).toFixed(2) : '—';
-
-  const sizingButtonsHtml = `
-    <div class="eb-mtm-heading-row">
-      <h4 id="eb-mtm-header-title" class="eb-h eb-mtm-title">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
-      <div class="eb-view-tabs eb-sizing-tabs" role="tablist" aria-label="Position sizing modes">
-        <button type="button" class="eb-view-tab ${sizingMode === 'quarter_kelly' ? 'active' : ''}" data-mtm-sizing-mode="quarter_kelly">Quarter-Kelly (8% cap)</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Edge Kelly 5%</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Edge Kelly 8%</button>
-      </div>
-    </div>
-    <div class="mtm-methodology" aria-label="MTM methodology">
-      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Avg Sharpe</span><span class="mtm-methodology-value mtm-methodology-value--positive">${avgSharpe}</span></span>
-      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Risk guard</span><span class="mtm-methodology-value">30% drawdown halt</span></span>
-      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Fee model</span><span class="mtm-methodology-value">Net of taker fees</span></span>
-      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Liquidation</span><span class="mtm-methodology-value">Bid-marked book</span></span>
-    </div>`;
-
-  return `<div id="eb-mtm-container"><h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
-    ${sizingButtonsHtml}
-    <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Sharpe</th><th>Max DD</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table></div>`;
 }
+document.addEventListener('click', _ebOnViewTabClick);
 
 function renderEdgeBoard(d) {
   _restoreKiteSourcePanel();
-  const board = d.edge_board || [], comp = d.models_comparison || [];
+  const board = d.edge_board || [];
   _ebLastData = d;
   _ebBoardData = board;
   _ebPage = 0;
-  const pnl = d.paper_pnl, ll = d.lead_lag;
+  const ll = d.lead_lag;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   // Never surface a degenerate metric (a 0% / −100% read off a handful of points).
   // Below EB_MIN_N samples a metric reads "building n=…" instead of a misleading zero.
@@ -9854,24 +9501,6 @@ function renderEdgeBoard(d) {
       <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Foresea follows market</div></div>
     </div>
     <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">${coverageNote}</p>`;
-  let compHtml;
-  if (comp.length) {
-    const crowdRoi = ((pnl || {}).crowd_baseline || {}).roi;
-    const compCurves = _ebModelCurves(comp, EB_MIN_N, 9);
-    const compChart = compCurves.length
-      ? `<div id="eb-model-comparison-svg">${_equitySvg(compCurves, 760, 180, {asPct: false, yPrefix: '$'})}</div>`
-      : '';
-    compHtml = `${compChart}<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Smart ROI</th><th>vs crowd</th></tr></thead><tbody>` +
-      comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
-        const modelSmartRoi = m.paper_roi_smart != null ? m.paper_roi_smart : (m.model === 'crowd-follow' ? m.paper_roi : null);
-        const roiDelta = modelSmartRoi != null && crowdRoi != null ? modelSmartRoi - crowdRoi : null;
-        return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
-        `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
-        `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
-        `<td>${enough ? _roiPct(modelSmartRoi) : '·'}</td><td>${enough ? _roiDeltaPct(roiDelta) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
-  } else {
-    compHtml = `<p class="text-sm text-gray-500">Model comparison across SCADS-hosted models fills in as forecasts resolve.</p>`;
-  }
   const byHorizon = d.by_horizon || [];
   const _hOrder = { '30d+': 0, '14-30d': 1, '7-14d': 2, '3-7d': 3, '1-3d': 4, '<1d': 5 };
   let calibHtml;
@@ -9887,7 +9516,6 @@ function renderEdgeBoard(d) {
   const boardHtml = `<div id="eb-board-section">${_renderBoardPage(board, 0)}</div>`;
   const viewTabs = `<div class="eb-view-tabs" role="tablist" aria-label="Edge board views">
     <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" data-eb-view="markets">Prediction Markets</button>
-    <button type="button" class="eb-view-tab ${_ebView === 'mtm' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'mtm'}" data-eb-view="mtm">MTM</button>
     <button type="button" class="eb-view-tab ${_ebView === 'agentic' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'agentic'}" data-eb-view="agentic">Agentic</button>
     <button type="button" class="eb-view-tab ${_ebView === 'indices' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'indices'}" data-eb-view="indices">Indices</button>
     <button type="button" class="eb-view-tab ${_ebView === 'pairs' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'pairs'}" data-eb-view="pairs">Commodity Pairs</button>
@@ -9895,11 +9523,10 @@ function renderEdgeBoard(d) {
   const marketsPageHtml = `${stats}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live Foresea forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
-  const mtmPageHtml = _renderMtmPage(d);
   const agenticPageHtml = `<div id="eb-agentic-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
   const indicesPageHtml = `<div id="eb-indices-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
   const pairsPageHtml = `<div id="eb-pairs-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
-  const activePageHtml = _ebView === 'mtm' ? mtmPageHtml : _ebView === 'agentic' ? agenticPageHtml : _ebView === 'indices' ? indicesPageHtml : _ebView === 'pairs' ? pairsPageHtml : marketsPageHtml;
+  const activePageHtml = _ebView === 'agentic' ? agenticPageHtml : _ebView === 'indices' ? indicesPageHtml : _ebView === 'pairs' ? pairsPageHtml : marketsPageHtml;
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced - and our track record of being right about it</h3>

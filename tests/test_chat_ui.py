@@ -568,16 +568,6 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         self.assertIn("crowd-follow is the zero-edge baseline", self.index_html)
         self.assertNotIn("Best paper ROI", self.index_html)
 
-    def test_edge_board_renders_mtm_chart_without_summary_cards(self) -> None:
-        self.assertIn('data-eb-view="mtm"', self.index_html)
-        self.assertIn("Shadow mark-to-market account", self.index_html)
-        self.assertIn('id="eb-mtm-svg"', self.index_html)
-        self.assertIn('id="eb-mtm-table-body"', self.index_html)
-        self.assertNotIn("Council account value", self.index_html)
-        self.assertNotIn("cash + bid liquidation", self.index_html)
-        self.assertNotIn("chart heartbeat", self.index_html)
-        self.assertNotIn("SCADS + baseline", self.index_html)
-
     def test_signed_out_users_can_try_the_forecast_desk(self) -> None:
         launch_body = self.index_html.split("function launchApp", 1)[1].split(
             "function fillExample", 1
@@ -927,8 +917,9 @@ const hAppMtm = sandbox.legacyRouteFromHash('#edge-app/mtm');
 if (!hAppMtm || hAppMtm.panel !== 'mtm' || hAppMtm.view !== 'edge-app') throw new Error('legacyRouteFromHash #edge-app/mtm failed');
 
 // 4. View switching
+// MTM was retired: an old mtm link lands on Prediction Markets.
 sandbox._ebSetView('mtm');
-if (vm.runInContext('_ebView', context) !== 'mtm') throw new Error('_ebSetView mtm failed');
+if (vm.runInContext('_ebView', context) !== 'markets') throw new Error('_ebSetView mtm should fall back to markets');
 sandbox._ebSetView('agentic');
 if (vm.runInContext('_ebView', context) !== 'agentic') throw new Error('_ebSetView agentic failed');
 sandbox._ebSetView('markets');
