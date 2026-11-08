@@ -1426,7 +1426,7 @@
     "raw_skill_vs_market": -0.0023
   },
   "edge_model": "council",
-  "generated_at": "2026-11-08T19:46:30.739564+00:00",
+  "generated_at": "2026-11-08T23:48:00.805838+00:00",
   "knowledge_graph": {
     "domain_distribution": {
       "crypto": 10,
@@ -1545,6 +1545,196 @@
   "methodology": "Forecast trajectories on live Polymarket/Kalshi markets: a fresh point-in-time forecast each day (latest price + latest news, no look-ahead) until the market resolves, then every snapshot is scored. Skill vs market = market Brier \u2212 model Brier, reported by forecast horizon; long-horizon skill is the meaningful signal.",
   "model": "council",
   "models_comparison": [
+    {
+      "accuracy": 0.5,
+      "by_horizon": [
+        {
+          "accuracy": 0.5,
+          "horizon": "<1d",
+          "market_brier": 0.0756,
+          "model_brier": 0.2984,
+          "n": 2,
+          "n_markets": 1,
+          "skill_ci_comparisons": 6,
+          "skill_ci_high": null,
+          "skill_ci_low": null,
+          "skill_ci_mean": -0.2228,
+          "skill_ci_method": "market_means_normal_bonferroni_v1",
+          "skill_significant": false,
+          "skill_vs_market": -0.2228
+        }
+      ],
+      "model": "qwen3.5-9b-selfhosted",
+      "model_brier": 0.2984,
+      "n_markets_resolved": 1,
+      "n_snapshots_resolved": 2,
+      "paper_pnl": {
+        "bets": [
+          {
+            "calibrated_model_probability": 0.72,
+            "category": "Other",
+            "domain": "other",
+            "edge": 0.445,
+            "fee_edge": 0.0091,
+            "fee_flat": 0.0362,
+            "ident": "lal-mad-bar-2026-11-08-mad",
+            "in_validated": false,
+            "market_probability": 0.275,
+            "market_url": "https://polymarket.com/market/lal-mad-bar-2026-11-08-mad",
+            "model": "qwen3.5-9b-selfhosted",
+            "model_probability": 0.72,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": -0.2591,
+            "profit_flat": -1.0362,
+            "question": "Will Club Atl\u00e9tico de Madrid win on 2026-11-08?",
+            "resolved_ts": "2026-11-08T23:44:14.351432+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-11-08T17:26:44.354295+00:00",
+            "stake_edge": 0.25,
+            "stake_flat": 1.0,
+            "win": false
+          }
+        ],
+        "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi & Polymarket category-based taker fees; 0% maker/geopolitics). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
+        "flat": {
+          "compound_bankroll": 0.0,
+          "compound_return": -1.0,
+          "equity_curve": [
+            -1.0362
+          ],
+          "equity_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "fees": 0.0362,
+          "growth_curve": [
+            0.0
+          ],
+          "growth_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "n_bets": 1,
+          "pnl": -1.0362,
+          "roi": -1.0362,
+          "total_staked": 1.0,
+          "win_rate": 0.0
+        },
+        "growth_1pct": {
+          "compound_bankroll": 9896.375,
+          "compound_return": -0.0104,
+          "equity_curve": [
+            -103.625
+          ],
+          "equity_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "fees": 3.625,
+          "growth_curve": [
+            9896.375
+          ],
+          "growth_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "n_bets": 1,
+          "pnl": -103.625,
+          "roi": -1.0362,
+          "total_staked": 100.0,
+          "win_rate": 0.0
+        },
+        "growth_2pct": {
+          "compound_bankroll": 9792.75,
+          "compound_return": -0.0207,
+          "equity_curve": [
+            -207.25
+          ],
+          "equity_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "fees": 7.25,
+          "growth_curve": [
+            9792.75
+          ],
+          "growth_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "n_bets": 1,
+          "pnl": -207.25,
+          "roi": -1.0362,
+          "total_staked": 200.0,
+          "win_rate": 0.0
+        },
+        "half_kelly": {
+          "compound_bankroll": 0.0,
+          "compound_return": -1.0,
+          "equity_curve": [
+            -103.625
+          ],
+          "equity_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "fees": 3.625,
+          "growth_curve": [
+            0.0
+          ],
+          "growth_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "n_bets": 1,
+          "pnl": -103.625,
+          "roi": -1.0362,
+          "total_staked": 100.0,
+          "win_rate": 0.0
+        },
+        "min_edge": 0.0,
+        "quarter_kelly": {
+          "compound_bankroll": 9204.946121,
+          "compound_return": -0.0795,
+          "equity_curve": [
+            -795.0539
+          ],
+          "equity_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "fees": 27.8125,
+          "growth_curve": [
+            9204.946121
+          ],
+          "growth_curve_ts": [
+            "2026-11-08T23:44:14.351432+00:00"
+          ],
+          "n_bets": 1,
+          "pnl": -795.0539,
+          "roi": -1.0362,
+          "total_staked": 767.2414,
+          "win_rate": 0.0
+        },
+        "smart": {
+          "compound_bankroll": 10036.556034,
+          "compound_return": 0.0037,
+          "equity_curve": [
+            36.556
+          ],
+          "equity_curve_ts": [
+            "2026-11-08T23:44:14.361990+00:00"
+          ],
+          "fees": 1.375,
+          "growth_curve": [
+            10036.556034
+          ],
+          "growth_curve_ts": [
+            "2026-11-08T23:44:14.361990+00:00"
+          ],
+          "n_bets": 1,
+          "pnl": 36.556,
+          "roi": 0.3656,
+          "total_staked": 100.0,
+          "win_rate": 1.0
+        }
+      },
+      "paper_roi": -1.0362,
+      "paper_roi_smart": 0.3656,
+      "skill_vs_market": -0.2228
+    },
     {
       "accuracy": 0.8487,
       "by_horizon": [
