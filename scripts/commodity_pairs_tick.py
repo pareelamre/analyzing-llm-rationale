@@ -4,13 +4,13 @@
 Each run:
   1. skips when the newest complete weekday is published,
   2. fetches Brent, WTI and Henry Hub spot prices from FRED, and appends the MCX front-month
-     closes (Upstox) and gold and platinum snapshots (fawazahmed0 currency API) after the last
-     stored day (no account or token for any of them),
+     closes and 11:00 IST gold (Upstox) and gold, platinum and rupee snapshots (fawazahmed0
+     currency API) after the last stored day (no account or token for any of them),
   3. advances open signals through new sessions and opens signals on the newest session,
   4. writes the public payload served at ``GET /markets/commodity-pairs``.
 
 Outputs (committed back to the repo by the workflow):
-  - ``data/commodity_prices.jsonl``: MCX front-month closes and gold and platinum snapshots,
+  - ``data/commodity_prices.jsonl``: MCX front-month prices and the snapshot rows,
     one row per commodity, source and session, appended only. Expired contracts leave Upstox's
     route, so this is the history.
   - ``data/commodity_pairs_ledger.jsonl``: every live signal, appended and then closed.
