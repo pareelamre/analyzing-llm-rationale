@@ -109,6 +109,28 @@ jobs:
 
           done
 
+      # The Foresea Fund (docs/fund.md): one paper portfolio the orchestrator runs on every
+      # analyst's signals. Each dispatch revalues it and republishes static/fund_live.json;
+      # it trades only in FUND_RUN_HOURS_IST. Its first run opens it from the on-device
+      # agent's account downloaded above.
+      - name: Run the fund cycle
+        if: vars.FUND_CYCLE_ENABLED == 'true'
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          FUND_STORE_PATH: tmp/fund/store.sqlite
+          FUND_SEED_AGENT_STORE: tmp/agent-trading-board/qwen3.5-9b-selfhosted/store.sqlite
+          FUND_RUN_HOURS_IST: "1,2,13,14"
+          FUND_MIN_HOURS_BETWEEN_CYCLES: "10"
+          FUND_LLM_URL: ${{ vars.SELF_HOSTED_LLM_URL }}
+          SELF_HOSTED_LLM_API_KEY: ${{ secrets.SELF_HOSTED_LLM_API_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/fund
+          python -m analyzing_llm_rationale.r2_store cp --allow-missing "$AGENT_TRADING_STORE_BUCKET/fund_store__foresea-fund.sqlite" tmp/fund/store.sqlite
+          PYTHONPATH=src python scripts/fund_cycle.py
+          python -m analyzing_llm_rationale.r2_store cp tmp/fund/store.sqlite "$AGENT_TRADING_STORE_BUCKET/fund_store__foresea-fund.sqlite"
+
       - name: Build the public agent-trading board
         env:
           # The on-device agent trades twice a day (about 01:30 and 13:30 IST, 12h apart).
@@ -141,7 +163,7 @@ jobs:
         env:
           # Comma-delimited exact paths; the audit directory suffix also
           # allows individual monthly archive files to resolve safely.
-          GIT_REBASE_KEEP_THEIRS: "static/agent_trading_live.json,static/agent_trading_audit_live.json,static/agent_trading_audit_archive_manifest.json,static/agent_trading_audits/"
+          GIT_REBASE_KEEP_THEIRS: "static/agent_trading_live.json,static/agent_trading_audit_live.json,static/agent_trading_audit_archive_manifest.json,static/agent_trading_audits/,static/fund_live.json,static/fund_universe.json"
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
           MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
@@ -155,6 +177,9 @@ jobs:
           git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
           git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
           git add static/agent_trading_live.json static/agent_trading_audit_live.json static/agent_trading_audit_archive_manifest.json static/agent_trading_audits
+          for f in static/fund_live.json static/fund_universe.json; do
+            if [ -f "$f" ]; then git add "$f"; fi
+          done
           if git diff --cached --quiet; then
             echo "No agent-trading board changes to commit."
             exit 0
