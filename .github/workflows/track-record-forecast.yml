@@ -282,9 +282,6 @@ jobs:
     if: ${{ always() && vars.TRACK_RECORD_FORECAST_ENABLED == 'true' && needs.roster.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    concurrency:
-      group: track-record-store-gcs-write
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -317,58 +314,25 @@ jobs:
           path: tmp/model-forecast-artifacts
           merge-multiple: false
 
-      - name: Publish forecast snapshots and refresh MTM
+      # Each model's forecasts go to a staging area; the 15-minute MTM tick, which
+      # already holds the store lock, merges them in and clears them
+      # (track-record-tick.yml). Waiting here for that lock lost to the ticks:
+      # GitHub cancels a queued job when a newer one asks for the same lock, and
+      # a tick almost always does, so forecast batches were dropped unpublished.
+      - name: Stage forecast snapshots for the next MTM tick
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          FORESEA_BASE_URL: https://foresea.ink
-          # The Edge board's Foresea odds are the on-device model's; the
-          # track record stays on the council.
-          TRACK_MODEL: "council"
-          EDGE_MODEL: "qwen3.5-9b-selfhosted"
-          CYCLE_INTERVAL_MINUTES: "5"
-          MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
         run: |
           set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -n "$MTM_PUBLISH_DEPLOY_KEY_B64" ]; then
-            mkdir -p ~/.ssh
-            printf '%s' "$MTM_PUBLISH_DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/mtm_publish_deploy_key
-            chmod 600 ~/.ssh/mtm_publish_deploy_key
-            ssh-keyscan github.com >> ~/.ssh/known_hosts
-            git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
-            git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
-          fi
-
           mapfile -t forecast_stores < <(find tmp/model-forecast-artifacts -type f -name '*.duckdb' | sort)
           if [ "${#forecast_stores[@]}" -eq 0 ]; then
             echo "No model forecast artifacts were available to publish."
             exit 1
           fi
-          printf 'Publishing %s model forecast stores:\n' "${#forecast_stores[@]}"
-          printf ' - %s\n' "${forecast_stores[@]}"
-
-          for attempt in 1 2 3 4 5 6 7 8; do
-            git fetch origin main
-            git checkout -B "forecast-publish-batch" origin/main
-            python -m analyzing_llm_rationale.r2_store cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
-            python scripts/merge_track_record_store.py \
-              --target data/track_record_store.duckdb \
-              "${forecast_stores[@]}"
-            python scripts/track_record_tick.py --mtm-only
-            python -m analyzing_llm_rationale.r2_store cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"
-            git add static/mark_to_market_live.json
-            if git diff --cached --quiet; then
-              echo "No forecast snapshot changes to commit."
-              exit 0
-            fi
-            git commit -m "track record: forecast batch [skip ci]"
-            if git push origin HEAD:main; then
-              exit 0
-            fi
-            echo "Publish attempt ${attempt}/8 failed; retrying."
-            sleep $((attempt * 10))
+          for store in "${forecast_stores[@]}"; do
+            name="$(basename "$store")"
+            python -m analyzing_llm_rationale.r2_store cp "$store" \
+              "$TRACK_STORE_BUCKET/track_record_staging/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${name}"
+            echo "Staged ${name}; the next MTM tick merges it."
           done
-          echo "Failed to publish forecast snapshots." >&2
-          exit 1

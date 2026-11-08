@@ -60,6 +60,27 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: python -m analyzing_llm_rationale.r2_store cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
 
+      # Forecast runs stage their model stores instead of queueing for this
+      # lock (track-record-forecast.yml); merge any that are waiting first.
+      - name: Merge staged forecast batches
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/staged
+          python -m analyzing_llm_rationale.r2_store ls "$TRACK_STORE_BUCKET/track_record_staging/" > tmp/staged/urls.txt
+          if [ ! -s tmp/staged/urls.txt ]; then
+            echo "No staged forecast batches."
+            exit 0
+          fi
+          i=0
+          while read -r url; do
+            i=$((i + 1))
+            python -m analyzing_llm_rationale.r2_store cp "$url" "tmp/staged/batch-$i.duckdb"
+          done < tmp/staged/urls.txt
+          python scripts/merge_track_record_store.py --target data/track_record_store.duckdb tmp/staged/batch-*.duckdb
+
       - name: Record price points and publish MTM
         env:
           FORESEA_BASE_URL: https://foresea.ink
@@ -75,6 +96,19 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: python -m analyzing_llm_rationale.r2_store cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"
+
+      # Only once the merged store is safely uploaded; a batch merged twice is
+      # harmless (the merge upserts), a batch lost is not.
+      - name: Clear merged forecast batches
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          [ -s tmp/staged/urls.txt ] || exit 0
+          while read -r url; do
+            python -m analyzing_llm_rationale.r2_store rm "$url"
+          done < tmp/staged/urls.txt
 
       # Additive for now: the payload is published to GCS *and* still
       # committed. Once the server is reading the GCS copy (set
