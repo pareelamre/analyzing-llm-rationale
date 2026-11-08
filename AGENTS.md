@@ -5,6 +5,26 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-02 — Paid Kite Connect market data source (Codex)
+
+The owner expanded the Kite scope to paid Connect quotes and history.
+The Zerodha source now offers exchange:symbol quote lookup, an IST candle range,
+a closing-price chart and an OHLCV/OI table. Private authenticated routes
+`/integrations/kite/quotes` and `/integrations/kite/history` reuse the owner's
+encrypted connection; `FORESEA_ENABLE_KITE_PERSONAL` remains the default-off
+switch for all Kite reads. History resolves the current token from a fresh quote,
+with bounded interval windows. No streaming, public redistribution, binary-odds
+conversion or broker execution. This supersedes the earlier account-only source
+scope; free Personal still covers the account views. See `docs/kite-personal.md`.
+
+### 2026-11-01 — Kite is selectable as a private account source (Codex)
+
+Edge Board → Markets → Source now lists Zerodha Kite alongside Kalshi and
+Polymarket. It mounts the same Kite Personal account panel used by Settings;
+it does not add paid market-data calls or feed private values into binary edge
+calculations. Restore the single panel before replacing its parent DOM, and
+clear its transient contents when leaving the source.
+
 ### 2026-10-31 — Edge Board agent research before inference (Codex)
 
 The scheduled Edge Board agent now prepares bounded orderbook/news packets for
@@ -16,6 +36,18 @@ turns plus one terminal finalization, with the existing `MAX_TOOL_STEPS` overrid
 Keep guarded paper execution and thesis reconciliation intact. Details and call
 count boundaries: `docs/edge_board_agent_workflow.md`. This does not replace the
 discontinued model provider or change deployed schedules/model credentials.
+
+### 2026-10-26 — Kite Personal account reads (Codex)
+
+Kite Personal uses separate authenticated `/integrations/kite` routes and the
+Settings Exchange panel for holdings, net/day positions, funds and today's
+orders. It is not a prediction-market execution venue or public MCP tool.
+Credentials reuse owner-bound KMS envelopes; `KiteConnectionIntent` generations
+prevent a pending connect from restoring a disconnected credential across replicas.
+Access defaults off via `FORESEA_ENABLE_KITE_PERSONAL`; broker/platform prerequisites
+and audit-log retention must be checked before enabling. Kite tokens can trade,
+although Foresea only reads; disconnect removes local credentials without broker
+revocation. See `docs/kite-personal.md` for setup and renewal.
 
 ### 2026-10-18 — Completed ARR research archive (Codex)
 
@@ -36,6 +68,43 @@ cohort, submission, generation or experiment results exist after reported loss
 of Capella access. Do not relabel the planned protocol as completed results or
 automatically restart old enrichment jobs. The user authorized committing and
 pushing this completed research archive to main; other worktrees stay preserved.
+
+### 2026-11-02 — Model-dependent workflows disabled while no model is hosted (Claude)
+
+The SCADS AI key now gets 403, so every hosted-model call fails. These
+workflows ran anyway (about 2,300 Actions minutes a day) and produced nothing,
+so they are disabled in GitHub (`gh workflow disable`), not deleted:
+
+- `track-record-forecast.yml` (Track record forecast snapshots)
+- `agent-trading-board-publish.yml` (Agent trading board publish)
+- `metaculus-futureeval.yml` (Metaculus FutureEval bots: examined=0 forecasted=0)
+- `headline-arena-runner.yml` (Headline Arena Forecast Runner)
+
+Still running: the MTM tick and resolved-quality jobs (they value and settle
+open paper positions without a model), reconciliation, backups, digest.
+The VPS cron (`deploy/vps/cron/foresea-cron.sh`) still dispatches the
+forecast and agent-trading jobs; GitHub rejects those dispatches while the
+workflows are disabled. Re-enable with `gh workflow enable <file>` once a
+working model provider is configured, not before.
+
+### 2026-11-02 — Account list is operator-only and fails closed (Claude)
+
+`GET /analytics/users` served every registered account (email, name, Google
+id, last login) to anonymous requests in production: its only guard was
+`_check_api_key`, which admits everyone while `API_KEY` is unset. `API_KEY`
+cannot be the fix, because setting it makes `/predict` require sign-in.
+
+- New `OPERATOR_API_KEY` env var, sent as `X-Operator-Key`.
+  `server_security.require_operator_key` returns 403 while it is unset and
+  401 for a missing/wrong key (constant-time bytes compare).
+- `/analytics/users` calls `_require_operator_key`; `/analytics/export`
+  keeps its public aggregate rows and writes account rows only for the key.
+- To read the list: put a long random value in Secret Manager, add
+  `OPERATOR_API_KEY` to the deploy's `--update-secrets`, and send the header.
+
+Do not move a personal-data endpoint back behind `_check_api_key`.
+`test_no_personal_data_endpoint_relies_on_the_fail_open_guard` and
+`test_the_operator_list_matches_the_call_sites` enforce it.
 
 ### 2026-10-13 — Validated horizons are significance-driven, not hardcoded (Copilot)
 

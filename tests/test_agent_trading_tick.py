@@ -2738,6 +2738,75 @@ class ThesisReconciliationTests(unittest.TestCase):
         self.assertEqual(records[0]["model_probability"], 0.42)
         self.assertEqual(records[0]["market_probability"], 0.50)
 
+    def test_init_local_agent_uses_agent_trading_api_base_url_env(self):
+        with (
+            mock.patch.object(agent_trading_tick, "_agent_ready", False),
+            mock.patch.dict(
+                "os.environ",
+                {"AGENT_TRADING_API_BASE_URL": "https://mac.tailnet.ts.net/v1/chat/completions"},
+                clear=False,
+            ),
+            mock.patch("analyzing_llm_rationale.cli.init_server_state") as init_state,
+        ):
+            agent_trading_tick._init_local_agent("qwen3.5-9b-selfhosted")
+            init_state.assert_called_once()
+            self.assertEqual(
+                init_state.call_args.args[0].api_base_url,
+                "https://mac.tailnet.ts.net/v1/chat/completions",
+            )
+
+    def test_in_run_hour_ist_filters_twice_daily_window(self):
+        # 2026-11-08 08:35 UTC == 14:05 IST (hour 14 -> allowed for "2,14")
+        allowed_utc = agent_trading_tick.datetime(2026, 11, 8, 8, 35, tzinfo=agent_trading_tick.timezone.utc)
+        # 2026-11-08 10:05 UTC == 15:35 IST (hour 15 -> outside "2,14")
+        outside_utc = agent_trading_tick.datetime(2026, 11, 8, 10, 5, tzinfo=agent_trading_tick.timezone.utc)
+        with mock.patch.dict("os.environ", {"AGENT_TRADING_RUN_HOURS_IST": "2,14"}, clear=False):
+            ok, detail = agent_trading_tick._in_run_hour_ist(now=allowed_utc)
+            self.assertTrue(ok)
+            self.assertIsNone(detail)
+            ok_out, detail_out = agent_trading_tick._in_run_hour_ist(now=outside_utc)
+            self.assertFalse(ok_out)
+            self.assertIn("outside AGENT_TRADING_RUN_HOURS_IST (15:35 IST; allowed 02:00,14:00)", detail_out)
+
+    def test_cycle_cooldown_active_respects_min_hours_between_cycles(self):
+        now_utc = agent_trading_tick.datetime(2026, 11, 8, 12, 0, tzinfo=agent_trading_tick.timezone.utc)
+        recent_iso = "2026-11-08T06:00:00+00:00"  # 6h ago (< 10h cooldown)
+        old_iso = "2026-11-07T20:00:00+00:00"  # 16h ago (>= 10h cooldown)
+        with tempfile.TemporaryDirectory() as tmp:
+            store_path = str(Path(tmp) / "store.sqlite")
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "FORESEA_AGENT_TRADING_STORE_PATH": store_path,
+                    "AGENT_TRADING_MIN_HOURS_BETWEEN_CYCLES": "10",
+                },
+                clear=False,
+            ):
+                with benchmark_tools._account_transaction() as conn:
+                    conn.execute(
+                        "INSERT INTO agent_cycles (agent_id, cycle_id, ts, thesis, transcript_json, steps, truncated) "
+                        "VALUES (?, ?, ?, '', '{}', 0, 0)",
+                        ("qwen3.5-9b-selfhosted", "c1", recent_iso),
+                    )
+                active, detail = agent_trading_tick._cycle_cooldown_active(
+                    "qwen3.5-9b-selfhosted", now=now_utc
+                )
+                self.assertTrue(active)
+                self.assertIn("6.0h ago < 10h minimum", detail)
+
+                with benchmark_tools._account_transaction() as conn:
+                    conn.execute("DELETE FROM agent_cycles")
+                    conn.execute(
+                        "INSERT INTO agent_cycles (agent_id, cycle_id, ts, thesis, transcript_json, steps, truncated) "
+                        "VALUES (?, ?, ?, '', '{}', 0, 0)",
+                        ("qwen3.5-9b-selfhosted", "c0", old_iso),
+                    )
+                active_old, detail_old = agent_trading_tick._cycle_cooldown_active(
+                    "qwen3.5-9b-selfhosted", now=now_utc
+                )
+                self.assertFalse(active_old)
+                self.assertIsNone(detail_old)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,4 @@
-name: Agent trading tick (qwen3-8-27b)
+name: Agent trading tick (qwen3.5-9b-selfhosted)
 
 on:
   workflow_dispatch: {}
@@ -7,6 +7,6 @@ jobs:
   trade:
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
-      models: qwen3-8-27b
-      lane: "0"
+      models: qwen3.5-9b-selfhosted
+      lane: "1"
     secrets: inherit

@@ -59,7 +59,12 @@ jobs:
     # Use this workflow's proven heartbeat as the agent dispatcher. The other
     # two quarterly-hour publishes stay aggregation-only, keeping the board
     # fresh without starting an extra trading pass.
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_agent_tick == true }}
+    #
+    # Every agent model is SCADS-hosted, and SCADS access ended for good on
+    # 2026-11-03, so the scheduler's run_agent_tick dispatches only publish
+    # until AGENT_TRADING_TICK_ENABLED is set to 'true' for a working roster.
+    # The board still publishes, so the retired models' history stays visible.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_agent_tick == true && vars.AGENT_TRADING_TICK_ENABLED == 'true' }}
     uses: ./.github/workflows/agent-trading-tick.yml
     secrets: inherit
 
@@ -95,7 +100,7 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           set -u
-          models="deepseek-v4-flash gemma-4-26b-a4b-it glm-5-3 glm-5-3-flash gpt-oss-120b llama-3.3-70b-instruct minimax-m3 qwen3-8-27b"
+          models="qwen3.5-9b-selfhosted"
           for model in $models; do
             mkdir -p "tmp/agent-trading-board/$model"
             python -m analyzing_llm_rationale.r2_store cp --allow-missing "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${model}.sqlite" \
@@ -108,12 +113,11 @@ jobs:
 
       - name: Build the public agent-trading board
         env:
-          # The scheduler runs one complete eight-model cycle every 30 minutes.
-          # Health labels must reflect that committed cadence, not the old
-          # 15-minute shared-lane schedule.
-          AGENT_TRADING_MODEL_HEALTH_EXPECTED_CYCLE_SECONDS: "1800"
-          AGENT_TRADING_MODEL_HEALTH_DELAYED_AFTER_SECONDS: "5400"
-          AGENT_TRADING_MODEL_HEALTH_STALE_AFTER_SECONDS: "28800"
+          # The on-device agent trades twice a day (02:00 and 14:00 IST, 12h apart).
+          # Health labels reflect that 12-hour cadence.
+          AGENT_TRADING_MODEL_HEALTH_EXPECTED_CYCLE_SECONDS: "43200"
+          AGENT_TRADING_MODEL_HEALTH_DELAYED_AFTER_SECONDS: "50400"
+          AGENT_TRADING_MODEL_HEALTH_STALE_AFTER_SECONDS: "93600"
         run: PYTHONPATH=src python scripts/build_agent_trading_board.py
 
       - name: Build the on-demand paper-trade audit index

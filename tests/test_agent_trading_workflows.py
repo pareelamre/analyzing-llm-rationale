@@ -78,12 +78,17 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
         self.assertIn("python scripts/agent_trading_tick.py", self.workflow)
         self.assertIn('AGENT_TRADING_RETRIES: "1"', self.workflow)
         self.assertNotIn("AGENT_TRADING_RETRY_BACKOFF_S:", self.workflow)
+        self.assertIn("SELF_HOSTED_LLM_API_KEY:", self.workflow)
+        self.assertIn("AGENT_TRADING_API_BASE_URL:", self.workflow)
+        self.assertIn('AGENT_TRADING_RUN_HOURS_IST: "2,14"', self.workflow)
+        self.assertIn('AGENT_TRADING_MIN_HOURS_BETWEEN_CYCLES: "10"', self.workflow)
+        self.assertIn('AGENT_MAX_TOKENS: "640"', self.workflow)
 
 
 class AgentTradingPerModelWorkflowTests(unittest.TestCase):
     def test_every_agent_trading_model_has_its_own_workflow_file(self):
         models = _chat_capable_models()
-        self.assertEqual(len(models), 8)
+        self.assertEqual(models, ["qwen3.5-9b-selfhosted"])
         for model in models:
             path = _WORKFLOWS_DIR / f"agent-trading-tick-{model}.yml"
             self.assertTrue(path.exists(), f"missing workflow file for {model}: {path}")

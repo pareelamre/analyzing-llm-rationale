@@ -1,0 +1,848 @@
+{
+ "generated_at": "2026-11-08T09:03:02.280744+00:00",
+ "data_through": "2026-11-06",
+ "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee)",
+ "rule": {
+  "hedge_window": 250,
+  "z_window": 60,
+  "entry_z": 2.0,
+  "exit_z": 0.5,
+  "max_hold": 20,
+  "cost_per_side": 0.001,
+  "min_sessions": 80
+ },
+ "backtest": {
+  "window": "2011-2026",
+  "pairs": {
+   "gold-silver": {
+    "signals": 77,
+    "reverted": 0.494,
+    "avg_return": -0.00727,
+    "total_return": -0.5595,
+    "win_rate": 0.506,
+    "years_up": 5,
+    "years": 16
+   },
+   "brent-wti": {
+    "signals": 99,
+    "reverted": 0.697,
+    "avg_return": 0.00352,
+    "total_return": 0.3481,
+    "win_rate": 0.697,
+    "years_up": 9,
+    "years": 16
+   },
+   "wti-natgas": {
+    "signals": 92,
+    "reverted": 0.489,
+    "avg_return": 0.00752,
+    "total_return": 0.692,
+    "win_rate": 0.543,
+    "years_up": 10,
+    "years": 16
+   },
+   "copper-gold": {
+    "signals": 82,
+    "reverted": 0.5,
+    "avg_return": -0.00595,
+    "total_return": -0.4875,
+    "win_rate": 0.561,
+    "years_up": 7,
+    "years": 16
+   },
+   "gold-platinum": {
+    "signals": 89,
+    "reverted": 0.494,
+    "avg_return": -0.00273,
+    "total_return": -0.2429,
+    "win_rate": 0.551,
+    "years_up": 5,
+    "years": 16
+   },
+   "copper-aluminium": {
+    "signals": 62,
+    "reverted": 0.532,
+    "avg_return": 0.00302,
+    "total_return": 0.1874,
+    "win_rate": 0.629,
+    "years_up": 7,
+    "years": 12
+   }
+  }
+ },
+ "pairs": [
+  {
+   "key": "gold-silver",
+   "label": "Gold / Silver (MCX)",
+   "legs": [
+    "Gold",
+    "Silver"
+   ],
+   "why": "The gold-silver ratio, the most watched precious-metals spread.",
+   "source": "india",
+   "sessions": 116,
+   "data_from": "2026-05-14",
+   "date": "2026-11-06",
+   "short_history": true,
+   "ratio": 76.935607,
+   "usual_ratio": 75.445148,
+   "to_usual": {
+    "a": -0.01937,
+    "b": 0.04658
+   },
+   "beta": 0.4297,
+   "hedge": "regression",
+   "z": 1.445,
+   "z_recent": [
+    0.732,
+    0.343,
+    0.468,
+    0.407,
+    0.247,
+    0.336,
+    0.446,
+    0.404,
+    -0.182,
+    0.076,
+    0.397,
+    0.563,
+    0.125,
+    0.234,
+    0.357,
+    0.85,
+    0.87,
+    0.504,
+    0.598,
+    1.228,
+    1.43,
+    1.423,
+    1.286,
+    0.627,
+    0.76,
+    1.051,
+    1.018,
+    1.4,
+    1.651,
+    1.782,
+    1.93,
+    1.489,
+    1.321,
+    1.513,
+    1.863,
+    2.187,
+    1.445
+   ],
+   "stretched": false,
+   "rich": null,
+   "cheap": null,
+   "eg_t": -2.046,
+   "eg_crit_5pct": -3.39,
+   "cointegrated": false,
+   "half_life": 9.4,
+   "replay": {
+    "signals": 1,
+    "closed": 0
+   },
+   "replay_signals": [
+    {
+     "entry_date": "2026-11-05",
+     "entry_z": 2.187,
+     "status": "open",
+     "exit_date": null,
+     "sessions": null,
+     "spread_return": null
+    }
+   ]
+  },
+  {
+   "key": "brent-wti",
+   "label": "Brent / WTI",
+   "legs": [
+    "Brent",
+    "WTI"
+   ],
+   "why": "The benchmark crude spread between the North Sea and US grades.",
+   "source": "international",
+   "sessions": 402,
+   "data_from": "2025-03-18",
+   "date": "2026-11-03",
+   "short_history": false,
+   "ratio": 1.074167,
+   "usual_ratio": 1.165597,
+   "to_usual": {
+    "a": 0.08512,
+    "b": -0.07174
+   },
+   "beta": 1.0974,
+   "hedge": "regression",
+   "z": -1.055,
+   "z_recent": [
+    1.69,
+    1.458,
+    1.152,
+    1.647,
+    1.218,
+    0.695,
+    1.277,
+    0.284,
+    0.0,
+    1.428,
+    0.598,
+    0.121,
+    0.112,
+    0.341,
+    0.279,
+    -0.085,
+    0.118,
+    0.71,
+    1.051,
+    1.486,
+    1.39,
+    2.09,
+    1.973,
+    2.184,
+    2.649,
+    2.69,
+    1.629,
+    1.673,
+    1.947,
+    1.771,
+    2.689,
+    2.54,
+    3.595,
+    1.387,
+    1.084,
+    1.142,
+    0.477,
+    3.297,
+    2.259,
+    2.114,
+    2.251,
+    2.081,
+    1.901,
+    2.337,
+    1.768,
+    1.641,
+    0.388,
+    -0.851,
+    -1.12,
+    -1.219,
+    -0.45,
+    0.345,
+    -0.105,
+    0.46,
+    0.184,
+    -0.648,
+    -0.969,
+    -0.689,
+    -1.09,
+    -1.055
+   ],
+   "stretched": false,
+   "rich": null,
+   "cheap": null,
+   "eg_t": -3.843,
+   "eg_crit_5pct": -3.362,
+   "cointegrated": true,
+   "half_life": 5.8,
+   "replay": {
+    "signals": 12,
+    "closed": 12,
+    "reverted": 0.667,
+    "avg_return": 0.00974,
+    "total_return": 0.1169,
+    "win_rate": 0.75
+   },
+   "replay_signals": [
+    {
+     "entry_date": "2025-08-22",
+     "entry_z": 2.41,
+     "status": "reverted",
+     "exit_date": "2025-09-04",
+     "sessions": 7,
+     "spread_return": 0.010069
+    },
+    {
+     "entry_date": "2025-09-09",
+     "entry_z": 3.234,
+     "status": "timed_out",
+     "exit_date": "2025-10-07",
+     "sessions": 20,
+     "spread_return": 0.001009
+    },
+    {
+     "entry_date": "2025-11-10",
+     "entry_z": -2.216,
+     "status": "reverted",
+     "exit_date": "2025-11-18",
+     "sessions": 5,
+     "spread_return": 0.008323
+    },
+    {
+     "entry_date": "2025-11-24",
+     "entry_z": 2.439,
+     "status": "reverted",
+     "exit_date": "2025-12-04",
+     "sessions": 7,
+     "spread_return": 0.009223
+    },
+    {
+     "entry_date": "2026-01-09",
+     "entry_z": 2.181,
+     "status": "timed_out",
+     "exit_date": "2026-02-09",
+     "sessions": 20,
+     "spread_return": -0.007633
+    },
+    {
+     "entry_date": "2026-03-03",
+     "entry_z": 2.24,
+     "status": "reverted",
+     "exit_date": "2026-03-06",
+     "sessions": 3,
+     "spread_return": 0.016041
+    },
+    {
+     "entry_date": "2026-03-09",
+     "entry_z": -2.59,
+     "status": "reverted",
+     "exit_date": "2026-03-10",
+     "sessions": 1,
+     "spread_return": 0.030315
+    },
+    {
+     "entry_date": "2026-03-17",
+     "entry_z": 2.552,
+     "status": "timed_out",
+     "exit_date": "2026-04-16",
+     "sessions": 20,
+     "spread_return": -0.037304
+    },
+    {
+     "entry_date": "2026-05-06",
+     "entry_z": -2.0,
+     "status": "timed_out",
+     "exit_date": "2026-06-04",
+     "sessions": 20,
+     "spread_return": -0.013253
+    },
+    {
+     "entry_date": "2026-07-23",
+     "entry_z": 2.497,
+     "status": "reverted",
+     "exit_date": "2026-08-19",
+     "sessions": 19,
+     "spread_return": 0.029029
+    },
+    {
+     "entry_date": "2026-09-10",
+     "entry_z": 2.09,
+     "status": "reverted",
+     "exit_date": "2026-10-01",
+     "sessions": 15,
+     "spread_return": 0.004454
+    },
+    {
+     "entry_date": "2026-10-02",
+     "entry_z": 3.297,
+     "status": "reverted",
+     "exit_date": "2026-10-15",
+     "sessions": 9,
+     "spread_return": 0.066621
+    }
+   ]
+  },
+  {
+   "key": "wti-natgas",
+   "label": "WTI / Natural gas",
+   "legs": [
+    "WTI",
+    "Natural gas"
+   ],
+   "why": "The oil-gas ratio: energy priced as liquid fuel against gas.",
+   "source": "international",
+   "sessions": 406,
+   "data_from": "2025-03-18",
+   "date": "2026-11-03",
+   "short_history": false,
+   "ratio": 37.885932,
+   "usual_ratio": 32.880512,
+   "to_usual": {
+    "a": -0.13212,
+    "b": 0.15223
+   },
+   "beta": 1.0,
+   "hedge": "ratio",
+   "z": 1.416,
+   "z_recent": [
+    0.443,
+    0.425,
+    0.278,
+    0.48,
+    0.709,
+    0.624,
+    0.416,
+    0.625,
+    0.712,
+    0.613,
+    0.728,
+    0.407,
+    0.337,
+    0.517,
+    0.53,
+    0.9,
+    0.996,
+    0.835,
+    0.903,
+    1.049,
+    1.463,
+    1.939,
+    1.82,
+    1.497,
+    1.456,
+    1.139,
+    1.292,
+    0.994,
+    0.758,
+    0.768,
+    0.127,
+    0.444,
+    -1.122,
+    0.358,
+    -0.165,
+    0.457,
+    0.825,
+    1.044,
+    0.492,
+    0.148,
+    -0.663,
+    -0.557,
+    0.145,
+    -0.446,
+    -0.58,
+    -0.802,
+    0.076,
+    0.932,
+    0.884,
+    1.396,
+    1.238,
+    1.539,
+    2.855,
+    3.233,
+    1.826,
+    1.668,
+    2.221,
+    3.223,
+    1.867,
+    1.416
+   ],
+   "stretched": false,
+   "rich": null,
+   "cheap": null,
+   "eg_t": -2.265,
+   "eg_crit_5pct": -3.362,
+   "cointegrated": false,
+   "half_life": 16.5,
+   "replay": {
+    "signals": 5,
+    "closed": 4,
+    "reverted": 0.75,
+    "avg_return": 0.09692,
+    "total_return": 0.3877,
+    "win_rate": 0.75
+   },
+   "replay_signals": [
+    {
+     "entry_date": "2025-10-02",
+     "entry_z": -2.276,
+     "status": "timed_out",
+     "exit_date": "2025-10-31",
+     "sessions": 20,
+     "spread_return": -0.001655
+    },
+    {
+     "entry_date": "2025-11-25",
+     "entry_z": -2.269,
+     "status": "reverted",
+     "exit_date": "2025-12-16",
+     "sessions": 13,
+     "spread_return": 0.043524
+    },
+    {
+     "entry_date": "2026-01-22",
+     "entry_z": -4.014,
+     "status": "reverted",
+     "exit_date": "2026-02-02",
+     "sessions": 7,
+     "spread_return": 0.342035
+    },
+    {
+     "entry_date": "2026-06-15",
+     "entry_z": -2.026,
+     "status": "reverted",
+     "exit_date": "2026-07-13",
+     "sessions": 18,
+     "spread_return": 0.003795
+    },
+    {
+     "entry_date": "2026-10-23",
+     "entry_z": 2.855,
+     "status": "open",
+     "exit_date": null,
+     "sessions": null,
+     "spread_return": null
+    }
+   ]
+  },
+  {
+   "key": "copper-gold",
+   "label": "Copper / Gold (MCX)",
+   "legs": [
+    "Copper",
+    "Gold"
+   ],
+   "why": "The copper-gold ratio, read as growth against safety.",
+   "source": "india",
+   "sessions": 92,
+   "data_from": "2026-07-01",
+   "date": "2026-11-06",
+   "short_history": true,
+   "ratio": 9.4e-05,
+   "usual_ratio": 9.8e-05,
+   "to_usual": {
+    "a": 0.036,
+    "b": -0.19925
+   },
+   "beta": 0.1592,
+   "hedge": "regression",
+   "z": -2.579,
+   "z_recent": [
+    0.299,
+    -1.011,
+    -0.17,
+    0.255,
+    0.809,
+    0.861,
+    0.201,
+    -0.693,
+    0.201,
+    -1.291,
+    -1.385,
+    -2.303,
+    -2.579
+   ],
+   "stretched": true,
+   "rich": "Gold",
+   "cheap": "Copper",
+   "eg_t": -2.891,
+   "eg_crit_5pct": -3.404,
+   "cointegrated": false,
+   "half_life": 5.0,
+   "replay": {
+    "signals": 1,
+    "closed": 0
+   },
+   "replay_signals": [
+    {
+     "entry_date": "2026-11-05",
+     "entry_z": -2.303,
+     "status": "open",
+     "exit_date": null,
+     "sessions": null,
+     "spread_return": null
+    }
+   ]
+  },
+  {
+   "key": "gold-platinum",
+   "label": "Gold / Platinum",
+   "legs": [
+    "Gold",
+    "Platinum"
+   ],
+   "why": "Monetary against industrial precious metal.",
+   "source": "international",
+   "sessions": 292,
+   "data_from": "2025-08-15",
+   "date": "2026-11-06",
+   "short_history": true,
+   "ratio": 2.681828,
+   "usual_ratio": 2.663052,
+   "to_usual": {
+    "a": -0.007,
+    "b": 0.01495
+   },
+   "beta": 0.4735,
+   "hedge": "regression",
+   "z": 0.368,
+   "z_recent": [
+    2.103,
+    2.144,
+    1.94,
+    2.023,
+    2.288,
+    1.421,
+    2.406,
+    2.528,
+    2.487,
+    2.376,
+    1.358,
+    0.572,
+    0.736,
+    0.455,
+    1.119,
+    1.102,
+    0.277,
+    0.174,
+    -0.552,
+    -0.974,
+    -0.353,
+    -0.476,
+    -0.361,
+    -0.413,
+    -0.598,
+    -0.063,
+    -0.178,
+    -0.495,
+    -0.27,
+    -0.358,
+    -0.95,
+    -1.119,
+    -0.669,
+    -0.912,
+    -1.058,
+    -1.181,
+    -1.276,
+    -0.883,
+    -0.589,
+    -0.121,
+    -0.434,
+    -0.454,
+    -0.362,
+    0.321,
+    0.171,
+    -0.032,
+    -0.644,
+    -0.524,
+    -0.237,
+    -0.807,
+    -0.561,
+    -0.038,
+    0.004,
+    0.122,
+    0.651,
+    -0.25,
+    0.032,
+    0.768,
+    1.108,
+    0.368
+   ],
+   "stretched": false,
+   "rich": null,
+   "cheap": null,
+   "eg_t": -2.497,
+   "eg_crit_5pct": -3.362,
+   "cointegrated": false,
+   "half_life": 13.8,
+   "replay": {
+    "signals": 5,
+    "closed": 5,
+    "reverted": 0.6,
+    "avg_return": -0.00971,
+    "total_return": -0.0486,
+    "win_rate": 0.6
+   },
+   "replay_signals": [
+    {
+     "entry_date": "2025-12-17",
+     "entry_z": -2.681,
+     "status": "timed_out",
+     "exit_date": "2026-01-14",
+     "sessions": 20,
+     "spread_return": -0.079321
+    },
+    {
+     "entry_date": "2026-02-06",
+     "entry_z": 2.182,
+     "status": "timed_out",
+     "exit_date": "2026-03-09",
+     "sessions": 20,
+     "spread_return": -0.009707
+    },
+    {
+     "entry_date": "2026-07-16",
+     "entry_z": -2.229,
+     "status": "reverted",
+     "exit_date": "2026-07-22",
+     "sessions": 4,
+     "spread_return": 0.013749
+    },
+    {
+     "entry_date": "2026-08-05",
+     "entry_z": -3.026,
+     "status": "reverted",
+     "exit_date": "2026-08-06",
+     "sessions": 1,
+     "spread_return": 0.01961
+    },
+    {
+     "entry_date": "2026-08-11",
+     "entry_z": 2.97,
+     "status": "reverted",
+     "exit_date": "2026-09-02",
+     "sessions": 16,
+     "spread_return": 0.007104
+    }
+   ]
+  },
+  {
+   "key": "copper-aluminium",
+   "label": "Copper / Aluminium (MCX)",
+   "why": "The two largest base metals, substitutes in wiring and cable.",
+   "source": "india",
+   "sessions": 47,
+   "note": "47 sessions of history; tracking starts at 80."
+  },
+  {
+   "key": "zinc-lead",
+   "label": "Zinc / Lead (MCX)",
+   "why": "Mined together and traded as a classic base-metal pair.",
+   "source": "india",
+   "sessions": 29,
+   "note": "29 sessions of history; tracking starts at 80."
+  },
+  {
+   "key": "copper-zinc",
+   "label": "Copper / Zinc (MCX)",
+   "why": "Construction and manufacturing demand on both legs.",
+   "source": "india",
+   "sessions": 42,
+   "note": "42 sessions of history; tracking starts at 80."
+  },
+  {
+   "key": "nickel-copper",
+   "label": "Nickel / Copper (MCX)",
+   "why": "Battery and steel demand against the broad industrial metal.",
+   "source": "india",
+   "sessions": 45,
+   "note": "45 sessions of history; tracking starts at 80."
+  },
+  {
+   "key": "gold-parity",
+   "label": "MCX Gold / import parity",
+   "legs": [
+    "MCX gold",
+    "Import cost"
+   ],
+   "why": "India's gold price against the landed cost of imported gold: the domestic premium.",
+   "source": "parity",
+   "sessions": 92,
+   "data_from": "2026-06-10",
+   "date": "2026-11-06",
+   "short_history": true,
+   "ratio": 1.005445,
+   "usual_ratio": 1.007211,
+   "to_usual": {
+    "a": 0.00176,
+    "b": -0.00175
+   },
+   "beta": 1.0,
+   "hedge": "fixed",
+   "z": -0.27,
+   "z_recent": [
+    1.117,
+    0.673,
+    0.775,
+    1.14,
+    0.133,
+    0.593,
+    0.341,
+    0.588,
+    1.078,
+    0.588,
+    -0.356,
+    0.238,
+    -0.27
+   ],
+   "stretched": false,
+   "rich": null,
+   "cheap": null,
+   "eg_t": -2.859,
+   "eg_crit_5pct": -3.404,
+   "cointegrated": false,
+   "half_life": 6.6,
+   "replay": {
+    "signals": 0,
+    "closed": 0
+   },
+   "replay_signals": []
+  }
+ ],
+ "track_record": {
+  "by_pair": {
+   "gold-silver": {
+    "signals": 0,
+    "closed": 0,
+    "open": 0
+   },
+   "brent-wti": {
+    "signals": 0,
+    "closed": 0,
+    "open": 0
+   },
+   "wti-natgas": {
+    "signals": 0,
+    "closed": 0,
+    "open": 0
+   },
+   "copper-gold": {
+    "signals": 1,
+    "closed": 0,
+    "open": 1
+   },
+   "gold-platinum": {
+    "signals": 0,
+    "closed": 0,
+    "open": 0
+   },
+   "copper-aluminium": {
+    "signals": 0,
+    "closed": 0,
+    "open": 0
+   },
+   "zinc-lead": {
+    "signals": 0,
+    "closed": 0,
+    "open": 0
+   },
+   "copper-zinc": {
+    "signals": 0,
+    "closed": 0,
+    "open": 0
+   },
+   "nickel-copper": {
+    "signals": 0,
+    "closed": 0,
+    "open": 0
+   },
+   "gold-parity": {
+    "signals": 0,
+    "closed": 0,
+    "open": 0
+   }
+  },
+  "live_since": "2026-11-06",
+  "first_signal": "2026-11-06",
+  "recent": [
+   {
+    "pair": "copper-gold",
+    "entry_date": "2026-11-06",
+    "entry_z": -2.579,
+    "status": "open",
+    "exit_date": null,
+    "sessions": null,
+    "spread_return": null
+   }
+  ]
+ }
+}

@@ -80,7 +80,9 @@ class ChatUiTests(unittest.TestCase):
         )
         self.assertIn("const isChatForecast = chatForecastProbability != null;", chat_reply)
         self.assertNotIn("ledgerProbability(data)", chat_reply)
-        self.assertIn("isChatForecast ? `<div class=\"market-lens", chat_reply)
+        # An event's per-option forecasts come as a table in the reply instead.
+        self.assertIn("isChatForecast && !(data.options || []).length ? `<div class=\"market-lens", chat_reply)
+        self.assertIn("options: d.options || [],", self.index_html)
         self.assertIn("isChatForecast && options.includeActions !== false", chat_reply)
         self.assertIn("function normalizedProbability", self.index_html)
         self.assertIn("function statedForecastProbability", self.index_html)
@@ -131,6 +133,37 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertNotIn("_saveVenueCredsStore", self.index_html)
         self.assertNotIn("_allVenueCreds", self.index_html)
         self.assertIn("localStorage.removeItem('foresea_venue_creds')", self.index_html)
+
+    def test_visitors_can_add_a_model_running_on_their_own_device(self) -> None:
+        # The picker offers it, Settings has the form, and the forecast goes
+        # through the browser (prepare, local model, finish), never a server call
+        # to the visitor's machine.
+        self.assertIn('<option value="device:add">Add a model on this device…</option>', self.index_html)
+        self.assertIn('id="settingsSectionDeviceModels"', self.index_html)
+        self.assertIn("data-settings-section=\"device-models\"", self.index_html)
+        self.assertIn("fetch('/predict/device/prepare'", self.index_html)
+        self.assertIn("fetch(`${baseUrl}/v1/chat/completions`", self.index_html)
+        self.assertIn("fetch('/predict/device/finish'", self.index_html)
+        self.assertIn("? _deviceForecastResponse(body, deviceModel, signal)", self.index_html)
+
+    def test_signed_out_visitors_get_the_forecast_answer(self) -> None:
+        # The agent pipeline needs a session. Signed-out visitors used to try it,
+        # get 401, recover the answer from /predict, and then have that answer
+        # replaced by an empty agent report: only "Curious if there's an edge?"
+        # was shown.
+        self.assertIn(
+            "const useAgent = !deviceModel && (options.forceAgent || "
+            "(_agentEnabled() && !!_loadStoredSession().token));",
+            self.index_html,
+        )
+        self.assertIn("    if (useAgent) {\n      const copiedAgent = _activeCopiedAgent();", self.index_html)
+        self.assertIn(
+            "      } else {\n        typingEl.remove();\n"
+            "        // Only an agent report goes through the report formatter; the\n"
+            "        // /predict retry above already holds the answer.\n"
+            "        data = _agentReportData(report);",
+            self.index_html,
+        )
 
     def test_settings_modal_hosts_connections_and_copied_agents_with_no_duplicate_ids(self) -> None:
         self.assertIn("function openSettingsModal", self.index_html)
@@ -535,16 +568,6 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         self.assertIn("crowd-follow is the zero-edge baseline", self.index_html)
         self.assertNotIn("Best paper ROI", self.index_html)
 
-    def test_edge_board_renders_mtm_chart_without_summary_cards(self) -> None:
-        self.assertIn('data-eb-view="mtm"', self.index_html)
-        self.assertIn("Shadow mark-to-market account", self.index_html)
-        self.assertIn('id="eb-mtm-svg"', self.index_html)
-        self.assertIn('id="eb-mtm-table-body"', self.index_html)
-        self.assertNotIn("Council account value", self.index_html)
-        self.assertNotIn("cash + bid liquidation", self.index_html)
-        self.assertNotIn("chart heartbeat", self.index_html)
-        self.assertNotIn("SCADS + baseline", self.index_html)
-
     def test_signed_out_users_can_try_the_forecast_desk(self) -> None:
         launch_body = self.index_html.split("function launchApp", 1)[1].split(
             "function fillExample", 1
@@ -880,6 +903,10 @@ const pMtm = sandbox.parseEdgePath('/edge/mtm');
 if (!pMtm || pMtm.panel !== 'mtm') throw new Error('parseEdgePath /edge/mtm failed');
 const pAgentic = sandbox.parseEdgePath('/edge/agentic');
 if (!pAgentic || pAgentic.panel !== 'agentic') throw new Error('parseEdgePath /edge/agentic failed');
+const pIndices = sandbox.parseEdgePath('/edge/indices');
+if (!pIndices || pIndices.panel !== 'indices') throw new Error('parseEdgePath /edge/indices failed');
+const pPairs = sandbox.parseEdgePath('/edge/pairs');
+if (!pPairs || pPairs.panel !== 'pairs') throw new Error('parseEdgePath /edge/pairs failed');
 
 // 3. Legacy hash routes
 const hMtm = sandbox.legacyRouteFromHash('#edge/mtm');
@@ -890,8 +917,9 @@ const hAppMtm = sandbox.legacyRouteFromHash('#edge-app/mtm');
 if (!hAppMtm || hAppMtm.panel !== 'mtm' || hAppMtm.view !== 'edge-app') throw new Error('legacyRouteFromHash #edge-app/mtm failed');
 
 // 4. View switching
+// MTM was retired: an old mtm link lands on Prediction Markets.
 sandbox._ebSetView('mtm');
-if (vm.runInContext('_ebView', context) !== 'mtm') throw new Error('_ebSetView mtm failed');
+if (vm.runInContext('_ebView', context) !== 'markets') throw new Error('_ebSetView mtm should fall back to markets');
 sandbox._ebSetView('agentic');
 if (vm.runInContext('_ebView', context) !== 'agentic') throw new Error('_ebSetView agentic failed');
 sandbox._ebSetView('markets');

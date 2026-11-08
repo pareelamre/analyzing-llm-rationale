@@ -553,17 +553,32 @@ class PipelineTests(unittest.TestCase):
         identities = scads_agent_trading_identities(config)
         fallbacks = scads_hosted_model_fallbacks(config)
 
-        self.assertIn("zai-org/GLM-5.3", identities)
-        self.assertIn("zai-org/GLM-5.3-Flash", identities)
+        # On the current roster the self-hosted model is active on the
+        # agent trading board; SCADS models have agent_trading_enabled: false.
+        self.assertIn("mlx-community/Qwen3.5-9B-4bit", identities)
+        self.assertNotIn("zai-org/GLM-5.3", identities)
+        self.assertNotIn("zai-org/GLM-5.3-Flash", identities)
 
-        # The condition the agent path must enforce: every entry in a
-        # competitor's chain that is itself a competitor has to be refused.
         glm_chain = fallbacks.get("glm-5-3", ())
         self.assertTrue(glm_chain, "glm-5-3 should still declare a chain")
-        self.assertTrue(
-            all(entry in identities for entry in glm_chain),
-            "this test is meaningless if glm-5-3's chain stops being competitors",
-        )
+
+        # Verify that when SCADS rivals are enabled on the same board, their
+        # identities are returned so rival-chain filtering refuses them.
+        with tempfile.TemporaryDirectory() as tmp:
+            reenabled = Path(tmp) / "models.yaml"
+            reenabled.write_text(
+                config.read_text(encoding="utf-8").replace(
+                    "agent_trading_enabled: false", "agent_trading_enabled: true"
+                ),
+                encoding="utf-8",
+            )
+            multi_board_identities = scads_agent_trading_identities(reenabled)
+            self.assertIn("zai-org/GLM-5.3", multi_board_identities)
+            self.assertIn("zai-org/GLM-5.3-Flash", multi_board_identities)
+            self.assertTrue(
+                all(entry in multi_board_identities for entry in glm_chain),
+                "this test is meaningless if glm-5-3's chain stops being competitors",
+            )
 
     def test_agent_trading_identities_are_drawn_from_enabled_models_only(self):
         repo_root = Path(__file__).resolve().parents[1]
@@ -619,8 +634,10 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(models["gpt-5"].api_key_env_var, "OPENAI_API_KEY")
         self.assertEqual(models["gpt-5"].api_key_file, "OPEN_AI_API_KEY.txt")
         scads_models = scads_hosted_model_allowlist(repo_root / "configs" / "models.yaml")
-        self.assertIn("scads-alias-code", scads_models)
-        self.assertIn("scads-alias-reasoning", scads_models)
+        # The aliases sit on no board roster, so retiring them after SCADS
+        # access ended hides no historical account.
+        self.assertNotIn("scads-alias-code", scads_models)
+        self.assertNotIn("scads-alias-reasoning", scads_models)
         track_model_labels = scads_track_model_labels(repo_root / "configs" / "models.yaml")
         self.assertIn("qwen3-8-27b", track_model_labels)
         self.assertIn("gemma-4-26b-a4b-it", track_model_labels)
@@ -654,20 +671,9 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("scads-alias-ha", chat_models)
         self.assertNotIn("scads-alias-reasoning", chat_models)
         agent_models = scads_agent_trading_model_labels(repo_root / "configs" / "models.yaml")
-        self.assertEqual(
-            agent_models,
-            (
-                "deepseek-v4-flash",
-                "gemma-4-26b-a4b-it",
-                "glm-5-3",
-                "glm-5-3-flash",
-                "gpt-oss-120b",
-                "llama-3.3-70b-instruct",
-                "minimax-m3",
-                "qwen3-8-27b",
-            ),
-        )
-        self.assertEqual(chat_models, set(agent_models))
+        self.assertEqual(agent_models, ("qwen3.5-9b-selfhosted",))
+        self.assertTrue(models["qwen3.5-9b-selfhosted"].agent_trading_enabled)
+        self.assertFalse(models["deepseek-v4-flash"].agent_trading_enabled)
         self.assertNotIn("scads-alias-code", agent_models)
         self.assertFalse(models["scads-alias-code"].agent_trading_enabled)
         output_tpm_limits = scads_model_output_tpm_limits(repo_root / "configs" / "models.yaml")

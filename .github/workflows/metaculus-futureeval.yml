@@ -1,9 +1,10 @@
 name: Metaculus FutureEval bots
 
+# All four bot profiles forecast with SCADS-hosted models, and SCADS access
+# ended for good on 2026-11-03, so the 10-minute cron is gone. Manual previews
+# still work. The external metaculus-dispatch trigger sends submit=true, so set
+# METACULUS_BOTS_ENABLED to anything but 'true' to stop it too.
 on:
-  schedule:
-    # Off the hour to reduce GitHub's peak-time cron delays. Times are UTC.
-    - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch:
     inputs:
       submit:

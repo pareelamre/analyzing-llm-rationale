@@ -4,6 +4,13 @@ name: Track record forecast snapshots
 # Each model runs as an isolated matrix job and uploads its own DuckDB store.
 # A single downstream publish job merges the successful model artifacts and
 # pushes once, avoiding parallel write contention on main.
+#
+# Off since SCADS access ended for good on 2026-11-03: every LLM in the roster
+# was SCADS-hosted, and 8 targets x MAX_TOKENS 4096 per model each hour is far
+# more than the single self-hosted Mac can absorb next to live traffic. The
+# hourly scheduler dispatch now skips every job until
+# TRACK_RECORD_FORECAST_ENABLED is set to 'true' for a reachable roster.
+# Already-recorded snapshots keep resolving via track-record-tick/resolved.
 
 on:
   workflow_dispatch:
@@ -45,6 +52,8 @@ concurrency:
 jobs:
   roster:
     name: build active MTM model roster
+    # Every later job needs this one, so skipping it skips the forecasts.
+    if: ${{ vars.TRACK_RECORD_FORECAST_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
@@ -249,7 +258,10 @@ jobs:
     # accumulate no resolved record and cannot be judged worth trading. The
     # agent board publish already learned this: "Publishing must still occur
     # after a skipped, cancelled, or failed cycle."
-    if: ${{ always() }}
+    #
+    # always() would also run it after the off switch skipped every forecast,
+    # and it exits 1 when there are no model stores, so it carries the switch.
+    if: ${{ always() && vars.TRACK_RECORD_FORECAST_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:

@@ -49,7 +49,7 @@ import re
 import sys
 import time
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Mapping, Optional, Tuple
@@ -395,7 +395,11 @@ def _init_local_agent(model: str) -> None:
         provider=None,
         local_model_name=None,
         router_model_name=None,
-        api_base_url=None,
+        api_base_url=(
+            os.environ.get("AGENT_TRADING_API_BASE_URL")
+            or os.environ.get("FORESEA_MODEL_API_BASE_URL")
+            or ""
+        ).strip() or None,
         api_key_env_var=None,
         api_key_file=None,
         device=os.environ.get("MODEL_DEVICE", "cpu"),
@@ -4655,6 +4659,65 @@ def _broadcast_cycle_trades(model: str, report: Any) -> None:
 
 
 
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _parse_run_hours_ist(raw: Optional[str] = None) -> set[int]:
+    text = raw if raw is not None else os.environ.get("AGENT_TRADING_RUN_HOURS_IST", "")
+    hours: set[int] = set()
+    for token in re.split(r"[\s,]+", str(text or "").strip()):
+        if not token:
+            continue
+        hour = int(token)
+        if not 0 <= hour <= 23:
+            raise ValueError(f"AGENT_TRADING_RUN_HOURS_IST hour must be 0..23, got {hour}")
+        hours.add(hour)
+    return hours
+
+
+def _in_run_hour_ist(now: Optional[datetime] = None) -> Tuple[bool, Optional[str]]:
+    """True when no IST hour window is set or `now` falls inside one of them."""
+    hours = _parse_run_hours_ist()
+    if not hours:
+        return True, None
+    current = (now or datetime.now(timezone.utc)).astimezone(_IST)
+    if current.hour in hours:
+        return True, None
+    allowed = ",".join(f"{h:02d}:00" for h in sorted(hours))
+    return False, f"outside AGENT_TRADING_RUN_HOURS_IST ({current.strftime('%H:%M')} IST; allowed {allowed})"
+
+
+def _cycle_cooldown_active(agent_id: str, *, now: Optional[datetime] = None) -> Tuple[bool, Optional[str]]:
+    """True when `agent_id` already completed a cycle within AGENT_TRADING_MIN_HOURS_BETWEEN_CYCLES."""
+    raw = os.environ.get("AGENT_TRADING_MIN_HOURS_BETWEEN_CYCLES", "").strip()
+    if not raw:
+        return False, None
+    min_hours = float(raw)
+    if min_hours <= 0:
+        return False, None
+    with benchmark_tools._account_transaction() as conn:
+        row = conn.execute(
+            "SELECT ts FROM agent_cycles WHERE agent_id = ? ORDER BY ts DESC LIMIT 1",
+            (agent_id,),
+        ).fetchone()
+    if not row or not row["ts"]:
+        return False, None
+    try:
+        last_ts = datetime.fromisoformat(str(row["ts"]).replace("Z", "+00:00"))
+    except ValueError:
+        return False, None
+    if last_ts.tzinfo is None:
+        last_ts = last_ts.replace(tzinfo=timezone.utc)
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    elapsed_hours = (current - last_ts.astimezone(timezone.utc)).total_seconds() / 3600.0
+    if 0 <= elapsed_hours < min_hours:
+        return (
+            True,
+            f"last cycle at {row['ts']} ({elapsed_hours:.1f}h ago < {min_hours:g}h minimum)",
+        )
+    return False, None
+
+
 def main() -> int:
     if "--discover-candidates-only" in sys.argv:
         out_arg = (
@@ -4664,6 +4727,12 @@ def main() -> int:
             or "tmp/agent_candidates.json"
         )
         out_path = Path(out_arg)
+        allowed, reason = _in_run_hour_ist()
+        if not allowed:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text("[]\n", encoding="utf-8")
+            print(f"agent-trading-tick skipping candidate discovery: {reason}")
+            return 0
         print("discovering candidates for agent trading tick...")
         candidates = _discover_candidates(set())
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4674,6 +4743,14 @@ def main() -> int:
     if not MODEL:
         print("AGENT_TRADING_MODEL must be set", file=sys.stderr)
         return 1
+    allowed, reason = _in_run_hour_ist()
+    if not allowed:
+        print(f"agent-trading-tick skipped model={MODEL}: {reason}")
+        return 0
+    cooldown, reason = _cycle_cooldown_active(MODEL)
+    if cooldown:
+        print(f"agent-trading-tick skipped model={MODEL}: {reason}")
+        return 0
     cycle_id = benchmark_tools._current_cycle_id()
     run_id = uuid4().hex
     started_at = datetime.now(timezone.utc).isoformat()

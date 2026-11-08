@@ -1,0 +1,102 @@
+name: R2 state permanent archive
+
+# One-off, never-expiring copy of the MTM and agent-trading state, taken before
+# a part of it is retired. It copies the same objects as the daily backup
+# (r2-state-backup.yml) plus the published board payloads into
+# archive/<label>/ with a sha256 manifest. The daily backup only ever expires
+# keys under daily/, so nothing here is removed; the job refuses to write into
+# a label that already exists.
+
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "Archive folder name, e.g. 2026-11-08-mtm-agents"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: track-record-store-gcs-write
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: vars.FORESEA_STORAGE_BACKEND == 'r2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - run: pip install boto3==1.43.108 opentelemetry-api==1.44.0
+      - name: Copy state and board payloads into archive/<label>/
+        env:
+          PYTHONPATH: src
+          LABEL: ${{ github.event.inputs.label }}
+          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+          R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from analyzing_llm_rationale.r2_store import get_client
+
+          label = os.environ['LABEL'].strip()
+          if not re.fullmatch(r'[0-9A-Za-z][0-9A-Za-z._-]{2,80}', label):
+              raise SystemExit('Label must be 3-81 letters, digits, dots, dashes or underscores')
+          client = get_client()
+          bucket = os.environ['R2_STATE_BUCKET']
+          prefix = f'archive/{label}/'
+          if client.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=1).get('Contents'):
+              raise SystemExit(f'{prefix} already exists; archives are never overwritten')
+
+          def sha256(key, etag):
+              body = client.get_object(Bucket=bucket, Key=key, IfMatch=etag)['Body']
+              digest = hashlib.sha256()
+              with body as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          state = r'track_record_store\.duckdb|agent_trading_store__[A-Za-z0-9_.-]+\.sqlite|agent_trading_notes__[A-Za-z0-9_.-]+\.json'
+          objects = []
+          for page in client.get_paginator('list_objects_v2').paginate(Bucket=bucket):
+              objects.extend(o for o in page.get('Contents', []) if re.fullmatch(state, o['Key']))
+          if not any(o['Key'] == 'track_record_store.duckdb' for o in objects):
+              raise SystemExit('Forecast store absent; nothing archived')
+
+          manifest = []
+          for obj in objects:
+              key = obj['Key']
+              expected = sha256(key, obj['ETag'])
+              client.copy_object(Bucket=bucket, Key=prefix + key,
+                                 CopySource={'Bucket': bucket, 'Key': key}, CopySourceIfMatch=obj['ETag'])
+              copied = client.head_object(Bucket=bucket, Key=prefix + key)
+              if copied['ContentLength'] != obj['Size'] or sha256(prefix + key, copied['ETag']) != expected:
+                  raise SystemExit(f'Checksum mismatch on {key}')
+              manifest.append({'key': key, 'bytes': obj['Size'], 'sha256': expected})
+
+          # The published payloads, as the site served them at archive time.
+          payloads = ['agent_trading_live.json', 'agent_trading_audit_live.json', 'agent_trading_audit_archive_manifest.json',
+                      'mark_to_market_live.json', 'track_record_live.json', 'forecast_evaluation.json']
+          for name in payloads:
+              data = Path('static', name).read_bytes()
+              client.put_object(Bucket=bucket, Key=f'{prefix}static/{name}', Body=data,
+                                ContentType='application/json', IfNoneMatch='*')
+              manifest.append({'key': f'static/{name}', 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
+
+          client.put_object(Bucket=bucket, Key=prefix + 'manifest.json', Body=json.dumps(manifest, indent=1).encode(),
+                            ContentType='application/json', IfNoneMatch='*')
+          total = sum(entry['bytes'] for entry in manifest)
+          print(f'Archived {len(manifest)} objects ({total / 1e6:.1f} MB) to {prefix}')
+          for entry in manifest:
+              print(f"  {entry['key']}  {entry['bytes']:,} bytes  {entry['sha256'][:12]}")
+          PY

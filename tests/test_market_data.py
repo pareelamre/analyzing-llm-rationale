@@ -165,6 +165,56 @@ class MarketDataTests(unittest.TestCase):
         with self.assertRaises(MarketDataError):
             fetch_polymarket(slug="missing")
 
+    @staticmethod
+    def _polymarket_venue(event):
+        """Fake Gamma API: no market has the slug, and /events returns `event`."""
+        def fake_get(url, params=None, headers=None, timeout=None):
+            return FakeResponse([event] if url.endswith("/events") else [])
+
+        return SimpleNamespace(get=fake_get)
+
+    def test_polymarket_event_link_resolves_to_the_leading_open_market(self):
+        # polymarket.com/event/{slug} names an event; its markets have their own slugs.
+        def market(slug, name, yes, active=True):
+            return {"slug": slug, "question": f"Will {name} win?", "groupItemTitle": name, "active": active,
+                    "closed": False, "outcomes": '["Yes", "No"]', "outcomePrices": f'["{yes}", "{1 - yes:.3f}"]'}
+
+        sys.modules["requests"] = self._polymarket_venue({
+            "slug": "nominee", "title": "Nominee", "negRisk": True, "description": "Who will be the nominee?",
+            "markets": [market("n-alice", "Alice", 0.2), market("n-bob", "Bob", 0.6),
+                        market("n-placeholder", "Person X", 0.49, active=False)],
+        })
+
+        quote = fetch_polymarket(slug="nominee")
+
+        self.assertEqual(quote["question"], "Will Bob win?")
+        self.assertEqual(quote["market_url"], "https://polymarket.com/market/n-bob")
+        self.assertAlmostEqual(quote["probability"], 0.6)
+        self.assertEqual(quote["description"], (
+            "Who will be the nominee? Outcomes in this event (market price): Bob 60%; Alice 20%."
+        ))
+        # Each open option, for a forecast per option.
+        self.assertEqual(quote["event_title"], "Nominee")
+        self.assertIs(quote["event_exclusive"], True)
+        self.assertEqual(quote["event_options"], [
+            {"label": "Bob", "question": "Will Bob win?", "probability": 0.6, "quoted": True},
+            {"label": "Alice", "question": "Will Alice win?", "probability": 0.2, "quoted": False},
+        ])
+
+    def test_polymarket_closed_event_link_says_how_it_resolved(self):
+        sys.modules["requests"] = self._polymarket_venue({"slug": "game", "title": "A vs. B", "markets": [
+            {"slug": "game-a", "question": "Will A win?", "groupItemTitle": "A", "active": True, "closed": True,
+             "outcomes": '["Yes", "No"]', "outcomePrices": '["1", "0"]'},
+            {"slug": "game-b", "question": "Will B win?", "groupItemTitle": "B", "active": True, "closed": True,
+             "outcomes": '["Yes", "No"]', "outcomePrices": '["0", "1"]'},
+        ]})
+
+        quote = fetch_polymarket(slug="game")
+
+        self.assertEqual(quote["question"], "Will A win?")
+        self.assertEqual(quote["description"], 'The linked event "A vs. B" has closed. Resolved Yes: A.')
+        self.assertNotIn("event_options", quote)
+
     def test_kalshi_reads_dollar_price(self):
         market_payload = {"market": {
             "ticker": "KXTEST",
@@ -322,6 +372,116 @@ class MarketDataTests(unittest.TestCase):
     def test_kalshi_requires_ticker(self):
         with self.assertRaises(MarketDataError):
             fetch_kalshi("")
+
+    @staticmethod
+    def _kalshi_venue(routes):
+        """Fake Kalshi API: (path suffix, series_ticker param) -> payload; anything else 404s."""
+        def fake_get(url, params=None, headers=None, timeout=None):
+            key = (url.split("/trade-api/v2")[-1], (params or {}).get("series_ticker"))
+            return FakeResponse(routes[key]) if key in routes else FakeResponse({}, 404)
+
+        return SimpleNamespace(get=fake_get)
+
+    def test_kalshi_series_link_resolves_to_the_leading_open_market(self):
+        # A pasted kalshi.com/markets/{series} link names no single contract.
+        markets = [
+            {"ticker": "KXNATO-99-A", "status": "active", "yes_sub_title": "Alice",
+             "yes_bid_dollars": "0.18", "yes_ask_dollars": "0.22"},
+            {"ticker": "KXNATO-99-B", "status": "active", "yes_sub_title": "Bob",
+             "yes_bid_dollars": "0.58", "yes_ask_dollars": "0.62"},
+            {"ticker": "KXNATO-99-C", "status": "closed", "yes_sub_title": "Carol",
+             "yes_bid_dollars": "0.90", "yes_ask_dollars": "0.95"},
+        ]
+        event = {"event_ticker": "KXNATO-99", "sub_title": "Before 2099", "markets": markets}
+        sys.modules["requests"] = self._kalshi_venue({
+            ("/events", "KXNATO"): {"events": [event]},
+            ("/markets/KXNATO-99-B", None): {"market": {
+                "ticker": "KXNATO-99-B", "event_ticker": "KXNATO-99",
+                "title": "Will Bob be the next NATO chief?", "last_price_dollars": "0.60",
+            }},
+            ("/events/KXNATO-99", None): {"event": event},
+        })
+
+        quote = fetch_kalshi("kxnato")
+
+        self.assertEqual(quote["ident"], "KXNATO-99-B")
+        self.assertEqual(quote["question"], "Will Bob be the next NATO chief?")
+        self.assertEqual(
+            quote["description"],
+            "Before 2099. Outcomes in this event (market price): Bob 60%; Alice 20%.",
+        )
+        self.assertIsNone(quote["event_exclusive"])
+        self.assertEqual([(o["label"], o["probability"], o["quoted"]) for o in quote["event_options"]],
+                         [("Bob", 0.6, True), ("Alice", 0.2, False)])
+
+    def test_kalshi_event_link_with_one_market_quotes_it_unchanged(self):
+        market = {"ticker": "KXMARS-99", "event_ticker": "KXMARS-99", "status": "active",
+                  "title": "Will Elon Musk visit Mars?", "last_price_dollars": "0.09"}
+        event = {"event_ticker": "KXMARS", "sub_title": "Before 2099", "markets": [market]}
+        sys.modules["requests"] = self._kalshi_venue({
+            ("/events/KXMARS", None): {"event": event, "markets": []},
+            ("/markets/KXMARS-99", None): {"market": market},
+        })
+
+        quote = fetch_kalshi("KXMARS")
+
+        self.assertEqual(quote["ident"], "KXMARS-99")
+        self.assertAlmostEqual(quote["probability"], 0.09)
+        self.assertIsNone(quote["description"])
+        self.assertNotIn("event_options", quote)
+
+    def test_kalshi_closed_event_link_reports_results_and_quotes_the_current_event(self):
+        # Yesterday's "where will it rain" link: say how it settled, then
+        # forecast today's event. Its contracts are independent, so the most
+        # contested city is quoted, not one already priced near certain.
+        closed = {"event_ticker": "KXRAIN-01", "series_ticker": "KXRAIN", "title": "Rain on Nov 1?", "markets": [
+            {"ticker": "KXRAIN-01-MIA", "status": "finalized", "result": "yes", "yes_sub_title": "Miami"},
+            {"ticker": "KXRAIN-01-NYC", "status": "finalized", "result": "no", "yes_sub_title": "New York"},
+        ]}
+        today = {"event_ticker": "KXRAIN-02", "title": "Rain on Nov 2?", "mutually_exclusive": False, "markets": [
+            {"ticker": "KXRAIN-02-MIA", "status": "active", "yes_sub_title": "Miami", "last_price_dollars": "0.99",
+             "close_time": "2099-01-02"},
+            {"ticker": "KXRAIN-02-NYC", "status": "active", "yes_sub_title": "New York",
+             "last_price_dollars": "0.40", "close_time": "2099-01-02"},
+        ]}
+        sys.modules["requests"] = self._kalshi_venue({
+            ("/events/KXRAIN-01", None): {"event": closed},
+            ("/events", "KXRAIN"): {"events": [today]},
+            ("/markets/KXRAIN-02-NYC", None): {"market": {
+                "ticker": "KXRAIN-02-NYC", "title": "Will it rain in New York on Nov 2?", "last_price_dollars": "0.40",
+            }},
+        })
+
+        quote = fetch_kalshi("kxrain-01")
+
+        self.assertEqual(quote["ident"], "KXRAIN-02-NYC")
+        self.assertEqual(quote["replaced_closed_event"], "Rain on Nov 1?")
+        self.assertEqual(quote["description"], (
+            'The linked event "Rain on Nov 1?" has closed. Settled Yes: Miami. Settled No: New York. '
+            'The market below is from the series\' current event, "Rain on Nov 2?". '
+            "Outcomes in this event (market price): Miami 99%; New York 40%."
+        ))
+        # The options are the current event's.
+        self.assertEqual(quote["event_title"], "Rain on Nov 2?")
+        self.assertIs(quote["event_exclusive"], False)
+        self.assertEqual([(o["label"], o["quoted"]) for o in quote["event_options"]],
+                         [("Miami", False), ("New York", True)])
+
+    def test_kalshi_settled_market_says_it_settled(self):
+        sys.modules["requests"] = _fake_requests({"market": {
+            "ticker": "KXRAIN-01-MIA", "title": "Will it rain in Miami on Nov 1?", "status": "finalized",
+            "result": "yes", "last_price_dollars": "0.99",
+        }})
+
+        quote = fetch_kalshi("KXRAIN-01-MIA")
+
+        self.assertEqual(quote["description"], "This market has closed and settled Yes.")
+
+    def test_kalshi_unknown_ticker_is_still_not_found(self):
+        sys.modules["requests"] = self._kalshi_venue({("/events", "KXNOPE"): {"events": []}})
+
+        with self.assertRaisesRegex(MarketDataError, "not found"):
+            fetch_kalshi("KXNOPE")
 
     def test_list_polymarket_keeps_priced_binary_only(self):
         payload = [

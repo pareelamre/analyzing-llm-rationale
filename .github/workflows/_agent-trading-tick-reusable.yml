@@ -1,5 +1,12 @@
 name: Agent trading tick (reusable)
 
+# Since 2026-11-08 the roster is the owner's on-device model
+# (qwen3.5-9b-selfhosted, served from a Mac over Tailscale): SCADS access ended
+# on 2026-11-03 and those agents retired. The scheduled path runs when
+# AGENT_TRADING_TICK_ENABLED (agent-trading-board-publish.yml) is 'true';
+# AGENT_TRADING_RUN_HOURS_IST below limits trading to two cycles a day, so the
+# Mac also has room for the site's live chat.
+#
 # Called by the scheduled reserved-capacity dispatcher and by the manual per-model
 # workflows. Each caller drives one or more isolated shadow-trading cycles via
 # scripts/agent_trading_tick.py, which gives the model real tool access
@@ -78,10 +85,11 @@ jobs:
 
       - name: Verify secrets
         env:
-          SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
+          SELF_HOSTED_LLM_API_KEY: ${{ secrets.SELF_HOSTED_LLM_API_KEY }}
+          SELF_HOSTED_LLM_URL: ${{ vars.SELF_HOSTED_LLM_URL }}
         run: |
-          if [ -z "$SCADS_AI_API_KEY" ]; then
-            echo "::error::SCADS_AI_API_KEY must be configured as a GitHub Actions secret."
+          if [ -z "$SELF_HOSTED_LLM_API_KEY" ] || [ -z "$SELF_HOSTED_LLM_URL" ]; then
+            echo "::error::The on-device model needs the SELF_HOSTED_LLM_API_KEY secret and the SELF_HOSTED_LLM_URL variable."
             exit 1
           fi
 
@@ -121,9 +129,16 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           MODELS: ${{ inputs.models }}
           FORESEA_AGENT_PLACE_TRADE_MODE: shadow
-          FORESEA_AGENT_CYCLE_MINUTES: "30"
+          FORESEA_AGENT_CYCLE_MINUTES: "720"
           FORESEA_AGENT_ACCOUNT_VALUE: "10000"
-          SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
+          # The on-device model: its configs/models.yaml address is the Mac's own
+          # localhost, so the runner reaches it through the public Tailscale URL.
+          SELF_HOSTED_LLM_API_KEY: ${{ secrets.SELF_HOSTED_LLM_API_KEY }}
+          AGENT_TRADING_API_BASE_URL: ${{ vars.SELF_HOSTED_LLM_URL }}
+          # Two cycles a day, in the 02:00 and 14:00 IST hours; dispatches outside
+          # them (or within 10 hours of the last cycle) exit without trading.
+          AGENT_TRADING_RUN_HOURS_IST: "2,14"
+          AGENT_TRADING_MIN_HOURS_BETWEEN_CYCLES: "10"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # Optional read-only Hugging Face access improves dependency/model
           # downloads without exposing the token in commands or logs.
@@ -139,12 +154,12 @@ jobs:
           AGENT_TOOL_PROVIDER_MAX_RETRIES: "5"
           AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES: "3"
           AGENT_TOOL_PROVIDER_BACKOFF_BASE_S: "1.5"
-          # Consult SCADS' public five-minute status probe first. Explicitly
-          # down models are deferred (not marked failed) and resume on the
-          # next healthy probe; a status-probe outage fails open.
-          AGENT_TRADING_SCADS_STATUS_PRECHECK: "true"
-          MAX_TOKENS: "2048"
-          AGENT_MAX_TOKENS: "2048"
+          # No SCADS model is on the roster, so its status probe has nothing to say.
+          AGENT_TRADING_SCADS_STATUS_PRECHECK: "false"
+          # The Mac model writes about 8 tokens a second and the site caps each
+          # call at 90 seconds (request_timeout_cap_s), so turns stay short.
+          MAX_TOKENS: "640"
+          AGENT_MAX_TOKENS: "640"
         run: |
           hard_failures=0
           provider_degradations=0

@@ -1093,35 +1093,50 @@
     .eb-fee-pill { font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 4px; letter-spacing: .02em; white-space: nowrap; }
     .eb-fee-pill.poly { color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; }
     .eb-fee-pill.kalshi { color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe; }
-    .eb-view-tabs { display: inline-flex; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 3px; margin-top: 18px; background: #fff; }
+    .eb-view-tabs { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 3px; margin-top: 18px; background: #fff; }
     .eb-view-tab { border: 0; border-radius: 5px; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 6px 12px; }
     .eb-view-tab.active { background: var(--ink); color: #fff; }
     .eb-view-tab:not(.active):hover { background: var(--paper); color: var(--text); }
+    .ixf-scroll { overflow-x: auto; }
+    .ixf-levels { display: flex; flex-wrap: wrap; gap: 4px; min-width: 300px; }
+    .ixf-level { background: var(--paper); border-radius: 4px; font-size: 11.5px; padding: 1px 6px; white-space: nowrap; }
+    .ixf-late { color: var(--text-dim); font-size: 10px; font-weight: 600; margin-left: 4px; text-transform: uppercase; }
+    .cpt-lede { color: var(--text-dim); font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
+    .cpt-guide { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; font-size: 12.5px; line-height: 1.5; margin: 0 0 14px; padding: 10px 14px; }
+    .cpt-guide ol { list-style: decimal; margin: 6px 0 0; padding-left: 18px; }
+    .cpt-guide li + li { margin-top: 4px; }
+    .cpt-summary { font-size: 13.5px; margin: 0 0 8px; }
+    .cpt-note { background: var(--info-bg); border-radius: 10px; font-size: 12.5px; line-height: 1.5; margin: 0 0 14px; padding: 10px 14px; }
+    .cpt-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+    .cpt-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; min-width: 0; padding: 12px 14px; }
+    .cpt-card.hot { border-color: #f59e0b; }
+    .cpt-head { align-items: flex-start; display: flex; gap: 8px; justify-content: space-between; }
+    .cpt-name { font-size: 14px; font-weight: 650; }
+    .cpt-why { color: var(--text-dim); font-size: 11.5px; margin-top: 2px; }
+    .cpt-badge { background: var(--paper); border-radius: 999px; color: var(--text-dim); font-size: 10.5px; font-weight: 650; padding: 2px 8px; white-space: nowrap; }
+    .cpt-badge.near { background: var(--info-bg); color: var(--info); }
+    .cpt-badge.hot { background: #fef3c7; color: #92400e; }
+    .cpt-say { font-size: 13px; line-height: 1.45; margin: 8px 0 2px; }
+    .cpt-back { background: var(--panel); border-radius: 8px; font-size: 12.5px; line-height: 1.5; margin: 6px 0 2px; padding: 6px 10px; }
+    .cpt-up { color: var(--signal); font-weight: 600; white-space: nowrap; }
+    .cpt-down { color: #b91c1c; font-weight: 600; white-space: nowrap; }
+    .cpt-up .ui-icon, .cpt-down .ui-icon { fill: currentColor; height: .8em; width: .8em; }
+    .cpt-spark { display: block; height: auto; margin: 4px 0 2px; width: 100%; }
+    .cpt-spark-note { color: var(--text-dim); font-size: 11.5px; line-height: 1.45; margin: 0; }
+    .cpt-facts { display: grid; font-size: 12px; gap: 8px 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 8px 0 0; }
+    .cpt-facts dt, .cpt-record dt { color: var(--text-dim); font-size: 10.5px; font-weight: 600; letter-spacing: .03em; }
+    .cpt-facts dd, .cpt-record dd { margin: 1px 0 0; }
+    .cpt-record { border-top: 1px solid var(--border); display: grid; font-size: 11.5px; gap: 4px 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 10px 0 0; padding-top: 8px; }
+    .cpt-record b { display: block; font-size: 12.5px; }
+    .cpt-dim { color: var(--text-dim); }
+    .cpt-tip { background: none; border: 0; border-bottom: 1px dotted currentColor; color: inherit; cursor: help; font: inherit; padding: 0; position: relative; }
+    .cpt-tip-pop { background: var(--ink); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); color: #fff; font-size: 11.5px; line-height: 1.45; padding: 8px 10px; pointer-events: none; position: fixed; z-index: 1000; }
     .eb-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 0 0 12px; padding: 8px 10px; background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
     .eb-filter-pill { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 500; color: var(--text-dim); cursor: pointer; transition: all 0.15s ease; }
     .eb-filter-pill:hover { color: var(--text); border-color: #999; }
     .eb-filter-pill.active { background: var(--ink); color: #fff; border-color: var(--ink); }
     .eb-search-input { background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; color: var(--text); width: 170px; }
     .eb-search-input:focus { outline: none; border-color: var(--accent); }
-    .eb-mtm-heading-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 20px; margin-bottom: 12px; }
-    .eb-mtm-title { margin: 0; min-height: 2.9em; display: flex; align-items: flex-end; }
-    .eb-view-tabs.eb-sizing-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: 500px; margin: 0; }
-    .eb-sizing-tabs .eb-view-tab { width: 100%; min-width: 0; padding-left: 8px; padding-right: 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* MTM methodology uses the Agentic feed's quiet metadata treatment, not a callout card. */
-    .mtm-methodology { align-items: center; color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 11px; gap: 8px 16px; margin: 8px 0 18px; }
-    .mtm-methodology-item { align-items: baseline; display: inline-flex; gap: 5px; }
-    .mtm-methodology-item + .mtm-methodology-item { border-left: 1px solid var(--border); padding-left: 16px; }
-    .mtm-methodology-label { color: #64748b; font-size: 9px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
-    .mtm-methodology-value { color: #334155; font-weight: 600; }
-    .mtm-methodology-value--positive { color: #0f766e; }
-    @media (min-width: 760px) {
-      .eb-mtm-heading-row { grid-template-columns: minmax(0, 1fr) minmax(420px, 500px); align-items: center; }
-      .eb-mtm-title { min-height: 1.45em; align-items: center; }
-    }
-    @media (max-width: 640px) {
-      .mtm-methodology { align-items: flex-start; display: grid; gap: 7px; }
-      .mtm-methodology-item + .mtm-methodology-item { border-left: 0; padding-left: 0; }
-    }
     .eb-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: center; }
     .eb-page-btn { padding: 5px 16px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 12.5px; cursor: pointer; color: var(--text-dim); transition: background .15s; }
     .eb-page-btn:hover:not(:disabled) { background: var(--paper); color: var(--text); }
@@ -1793,6 +1808,9 @@
     .model-form-actions { display: flex; gap: 8px; }
     .model-save { flex: 1; background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 8px; font-size: 12px; font-weight: 500; cursor: pointer; }
     .model-save:hover { background: #000; }
+    .device-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-dim); }
+    .device-hint { font-size: 11px; color: var(--text-mute); line-height: 1.5; margin: 0; }
+    .device-hint code { font-size: 10.5px; background: #f1f1f3; border-radius: 4px; padding: 1px 4px; word-break: break-all; }
     .fav-star { align-items: center; background: transparent; border: 0; cursor: pointer; display: inline-flex; font-size: 15px; justify-content: center; line-height: 1; color: #cbd5e1; padding: 0; transition: color var(--dur-med), transform var(--dur-med); }
     .fav-star:hover { transform: scale(1.18); color: #f59e0b; }
     .fav-star.on { color: #f59e0b; }
@@ -2138,6 +2156,9 @@
       .settings-card { flex-direction: column; max-height: 90vh; }
       .settings-nav { width: 100%; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 10px; }
       .settings-nav-title { display: none; }
+      .settings-nav { padding-right: 52px; }
+      .settings-card > .auth-close { z-index: 1; background: #fff; }
+      .settings-nav-item { flex-shrink: 0; white-space: nowrap; }
       .settings-body { padding: 20px; }
     }
     .feedback-star {
@@ -2314,6 +2335,7 @@
     })();
   </script>
 
+
   <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
@@ -2856,7 +2878,7 @@
             <span style="font-size:11px;font-weight:600;color:var(--ink)">Claude Code CLI:</span>
             <button type="button" class="btn-copy-mcp" onclick="copyMcpCode('mcpCodeClaudeCli', this)">Copy</button>
           </div>
-          <pre id="mcpCodeClaudeCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>claude mcp add --transport sse foresea https://foresea.ink/mcp/</code></pre>
+          <pre id="mcpCodeClaudeCli" class="mcp-code-block" style="padding:8px 10px;font-size:11px"><code>claude mcp add --transport http foresea https://foresea.ink/mcp/</code></pre>
         </div>
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -3126,6 +3148,9 @@ print(f"Probability: {forecast.get('probability', 0):.1%}")</code></pre>
       <button type="button" class="settings-nav-item" data-settings-section="model-providers" onclick="_showSettingsSection('model-providers')">
         <span>Model providers</span><span id="settingsModelProvidersBadge" class="settings-nav-badge"></span>
       </button>
+      <button type="button" class="settings-nav-item" data-settings-section="device-models" onclick="_showSettingsSection('device-models')">
+        <span>On this device</span><span id="settingsDeviceModelsBadge" class="settings-nav-badge"></span>
+      </button>
     </nav>
     <div class="settings-body" data-lenis-prevent>
       <section id="settingsSectionConnections" class="settings-section active">
@@ -3166,6 +3191,37 @@ print(f"Probability: {forecast.get('probability', 0):.1%}")</code></pre>
             </div>
           </div>
         </details>
+        <div id="kiteSettingsHome">
+        <details class="model-form" style="margin-top:6px" id="kiteAccountPanel" ontoggle="this.open ? kiteAccountAction('status') : clearKiteAccount()">
+          <summary style="cursor:pointer;font-size:12px;font-weight:600">
+            Zerodha Kite <span id="kiteChip" style="font-size:10px">Read-only · Not connected</span>
+          </summary>
+          <p style="font-size:11px;line-height:1.5;margin-top:8px">
+            Connect Kite for market quotes and history (paid Kite Connect), plus holdings, positions, funds and today's orders.
+            Tokens are encrypted with your Foresea account. Renew after expiry at 6 AM IST the next day.
+            Kite tokens can authorize trades; Foresea uses them only for read access.
+            <a href="https://kite.trade/docs/connect/v3/user/" target="_blank" rel="noopener noreferrer">Get a daily access token</a>.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label for="kiteApiKey" class="text-xs">Kite API key</label>
+            <input id="kiteApiKey" class="variant-select text-xs" autocomplete="off" spellcheck="false" style="box-sizing:border-box;max-width:100%;min-width:0" />
+            <label for="kiteAccessToken" class="text-xs">Daily access token</label>
+            <input id="kiteAccessToken" type="password" class="variant-select text-xs" autocomplete="off" spellcheck="false" style="box-sizing:border-box;max-width:100%;min-width:0" />
+            <div class="model-form-actions">
+              <button type="button" class="model-save" onclick="kiteAccountAction('connect')">Connect securely</button>
+              <button type="button" class="model-cancel" onclick="kiteAccountAction('disconnect')">Disconnect</button>
+            </div>
+            <label for="kiteResource" class="text-xs">Account view</label>
+            <select id="kiteResource" class="variant-select text-xs">
+              <option value="holdings">Holdings</option><option value="positions">Positions</option>
+              <option value="funds">Funds (INR)</option><option value="orders">Today's orders</option>
+            </select>
+            <button type="button" class="model-save" onclick="kiteAccountAction('read')">Refresh account view</button>
+            <div id="kiteAccountMessage" class="text-xs" role="status" aria-live="polite"></div>
+            <div id="kiteAccountData" style="overflow:auto;max-height:300px;font-size:11px" aria-label="Private Kite account data"></div>
+          </div>
+        </details>
+        </div>
         <div id="venueErr" class="model-form-error" hidden></div>
         <button type="button" class="model-add-btn ui-icon-label" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></button>
       </section>
@@ -3196,6 +3252,45 @@ print(f"Probability: {forecast.get('probability', 0):.1%}")</code></pre>
           <!-- Dynamically populated by renderModelProviderCards() -->
         </div>
         <div id="modelProviderGlobalErr" class="model-form-error" hidden style="margin-top:12px"></div>
+      </section>
+
+      <section id="settingsSectionDeviceModels" class="settings-section">
+        <p class="settings-section-title">Use a model on this device</p>
+        <p class="text-gray-400" style="font-size:11px;margin:0 0 12px;line-height:1.5">
+          Forecast with a model running on your own computer: Ollama, LM Studio, llama.cpp, MLX or any
+          OpenAI-compatible server. Foresea still researches the question and writes the prompt; your browser
+          sends it to your model directly. The model's address and key stay in this browser and are never sent to Foresea.
+        </p>
+        <div id="deviceModelList" class="model-list"></div>
+        <div class="model-form" style="margin-top:14px">
+          <div class="mp-category-pills" id="deviceModelPresets" style="margin-bottom:0">
+            <button type="button" class="mp-pill" data-preset="ollama" onclick="_deviceUsePreset('ollama')">Ollama</button>
+            <button type="button" class="mp-pill" data-preset="lmstudio" onclick="_deviceUsePreset('lmstudio')">LM Studio</button>
+            <button type="button" class="mp-pill" data-preset="llamacpp" onclick="_deviceUsePreset('llamacpp')">llama.cpp</button>
+            <button type="button" class="mp-pill" data-preset="mlx" onclick="_deviceUsePreset('mlx')">MLX</button>
+          </div>
+          <p id="dmSetupHint" class="device-hint"></p>
+          <label class="device-field">Server address
+            <input id="dmBaseUrl" class="variant-select text-xs" placeholder="http://localhost:11434" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="device-field">API key (only if your server asks for one)
+            <input id="dmKey" type="password" class="variant-select text-xs" placeholder="Optional" autocomplete="off" />
+          </label>
+          <button type="button" id="dmFind" class="model-add-btn" style="margin:0" onclick="_deviceFindModels()">Find models on this server</button>
+          <label class="device-field">Model
+            <input id="dmModel" class="variant-select text-xs" list="dmModelOptions" placeholder="e.g. llama3.2" autocomplete="off" spellcheck="false" />
+            <datalist id="dmModelOptions"></datalist>
+          </label>
+          <div id="dmError" class="model-form-error" hidden></div>
+          <p id="dmStatus" class="device-hint" hidden></p>
+          <div class="model-form-actions">
+            <button type="button" class="model-save" onclick="_deviceSaveModel()">Save and use for forecasts</button>
+          </div>
+          <p class="device-hint">
+            Your browser may ask to let this site connect to devices on your network: allow it.
+            Use <code>localhost</code> or <code>127.0.0.1</code>; other plain-http addresses are blocked by browsers on https pages.
+          </p>
+        </div>
       </section>
     </div>
   </div>
@@ -4270,7 +4365,7 @@ function makeAIBubble(data, variant, options = {}) {
     }
     div.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
-        ${isChatForecast ? `<div class="market-lens mb-3"><div class="market-lens-grid"><div class="market-lens-cell"><div class="k">Forecast probability</div><div class="v">${fmtPct01(chatForecastProbability)}</div><div class="sub">Foresea estimate</div></div></div></div>` : ''}
+        ${isChatForecast && !(data.options || []).length ? `<div class="market-lens mb-3"><div class="market-lens-grid"><div class="market-lens-cell"><div class="k">Forecast probability</div><div class="v">${fmtPct01(chatForecastProbability)}</div><div class="sub">Foresea estimate</div></div></div></div>` : ''}
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
         ${isChatForecast && options.includeActions !== false ? forecastActionsHtml(data, { ledgerOnly: true }) : ''}
@@ -4409,7 +4504,7 @@ function _trackForecastStreamTiming(surface, phase, startedAt, extra = {}) {
   });
 }
 
-async function streamPredict(body, variant, convId, typingEl, signal) {
+async function streamPredict(body, variant, convId, typingEl, signal, deviceModel = null) {
   const streamStartedAt = performance.now();
   let firstDeltaTracked = false;
   _trackForecastStreamTiming('predict', 'submit', streamStartedAt, {
@@ -4419,12 +4514,14 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   });
   let resp;
   try {
-    resp = await fetch('/predict/stream', {
-      method: 'POST',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(body),
-      signal,
-    });
+    resp = deviceModel
+      ? _deviceForecastResponse(body, deviceModel, signal)
+      : await fetch('/predict/stream', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body),
+        signal,
+      });
   } catch (err) {
     if (err?.name === 'AbortError') throw err;
     typingEl._setForecastProgress?.('fallback');
@@ -4905,7 +5002,10 @@ async function sendQuestion(options = {}) {
     return;
   }
 
-  const typingEl = _agentEnabled()
+  const deviceModel = getActiveDeviceModel();
+  // The agent pipeline needs a session; signed-out visitors get the streamed forecast.
+  const useAgent = !deviceModel && (options.forceAgent || (_agentEnabled() && !!_loadStoredSession().token));
+  const typingEl = useAgent
     ? addAgentProgress([
         'Resolving the market',
         'Gathering evidence',
@@ -4982,7 +5082,20 @@ async function sendQuestion(options = {}) {
     _attachments = [];
     _renderChips();
     let data;
-    if (_agentEnabled() || options.forceAgent) {
+    if (deviceModel) {
+      // The browser runs this forecast on the user's own model; the agent
+      // pipeline would need the server to reach it.
+      delete body.model;
+      body.openrouter_model = deviceModel.model;
+      const streamed = await streamPredict(body, variant, request.convId, typingEl, request.controller.signal, deviceModel);
+      if (!streamed.ok) {
+        typingEl._finishForecastWait?.('error');
+        typingEl.remove();
+        addError(streamed.detail || `No reply from ${deviceModel.model} on this device.`, request.convId);
+      }
+      return;
+    }
+    if (useAgent) {
       const copiedAgent = _activeCopiedAgent();
       const agentBody = {
         question,
@@ -5065,10 +5178,12 @@ async function sendQuestion(options = {}) {
         return;
       } else {
         typingEl.remove();
+        // Only an agent report goes through the report formatter; the
+        // /predict retry above already holds the answer.
+        data = _agentReportData(report);
+        if (data.live_trade_intent) data.source_conversation_id = request.convId;
+        if (data.agent_run) syncAgentRunsFromServer();
       }
-      data = _agentReportData(report);
-      if (data.live_trade_intent) data.source_conversation_id = request.convId;
-      if (data.agent_run) syncAgentRunsFromServer();
     } else {
       const streamed = await streamPredict(body, variant, request.convId, typingEl, request.controller.signal);
       if (streamed.ok) return;
@@ -5678,7 +5793,7 @@ function normaliseAppPath(pathname = window.location.pathname) {
 // Edge board sub-panels (Markets/MTM/Agentic) get their own path segment off
 // /edge so a refresh lands back on whichever panel was open, not always Markets.
 function parseEdgePath(pathname) {
-  const m = /^\/edge(?:\/(mtm|agentic))?$/.exec(pathname);
+  const m = /^\/edge(?:\/(mtm|agentic|indices|pairs))?$/.exec(pathname);
   return m ? { panel: m[1] || 'markets' } : null;
 }
 function historyUrlFor(view, convId = null, panel = null) {
@@ -6228,6 +6343,7 @@ function _mtmModelColor(model, i = 0) {
 }
 
 async function refreshEdgeForecasts() {
+  if (_ebView === 'markets' && _ebVenueFilter === 'kite') return;
   try {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) return;
@@ -6240,10 +6356,10 @@ async function refreshEdgeForecasts() {
       if (previousPage > 0 && _ebBoardData.length) {
         const pages = Math.ceil(_ebBoardData.length / _EB_PAGE_SIZE);
         _ebPage = Math.max(0, Math.min(previousPage, pages - 1));
-        const boardSection = document.getElementById('eb-board-section');
-        if (boardSection) boardSection.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+        _renderBoardContainer();
       }
       _attachEdgeBoardChartHovers(host);
+      _mountKiteSourcePanel();
       _edgeBoardScrollTop = scrollTop;
       _restoreEdgeBoardScroll();
       refreshEdgePrices();
@@ -6251,6 +6367,8 @@ async function refreshEdgeForecasts() {
       // Agentic tab (its data isn't part of this /edge-board payload), so
       // the periodic re-render above wipes it -- re-fetch to repopulate.
       if (_ebView === 'agentic') loadAgentTradingSection();
+      if (_ebView === 'indices') loadIndexForecastSection();
+      if (_ebView === 'pairs') loadCommodityPairsSection();
     }
   } catch (_) {}
 }
@@ -6536,6 +6654,8 @@ function _startEdgeTimers() {
   _crypto5mTimer   = setInterval(loadCrypto5mEquity, 30 * 1000);
   _agentTradingTimer = setInterval(() => {
     if (_ebView === 'agentic') loadAgentTradingSection();
+    if (_ebView === 'indices') loadIndexForecastSection();
+    if (_ebView === 'pairs') loadCommodityPairsSection();
   }, AGENT_TRADING_REFRESH_MS);
 }
 
@@ -6550,6 +6670,8 @@ document.addEventListener('visibilitychange', () => {
   refreshEdgeForecasts();
   loadCrypto5mEquity();
   if (_ebView === 'agentic') loadAgentTradingSection();
+  if (_ebView === 'indices') loadIndexForecastSection();
+  if (_ebView === 'pairs') loadCommodityPairsSection();
 });
 
 async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
@@ -6594,6 +6716,7 @@ async function openForecastDrift() {
 // while fading" and so deliberately leaves the overlay open -- stranding the
 // board on screen over the view we just navigated to.
 function closeEdgeBoard({ updateHistory = true, immediate = false } = {}) {
+  _restoreKiteSourcePanel();
   _captureEdgeBoardScroll();
   _saveEdgeBoardScrollToHistory();
   _stopEdgeTimers();
@@ -6645,6 +6768,7 @@ function _ebAskQuestion(ident) {
 }
 
 async function loadEdgeBoard() {
+  _restoreKiteSourcePanel();
   const host = document.getElementById('edgeBody');
   host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading edge board…</p></div>';
   try {
@@ -6662,10 +6786,13 @@ async function loadEdgeBoard() {
     }
     if (!r || !r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
+    _mountKiteSourcePanel();
     _attachEdgeBoardChartHovers(host);
     // Deep link / refresh straight into the Agentic panel: renderEdgeBoard() only
     // emits a placeholder for it since its data isn't part of this payload.
     if (_ebView === 'agentic') loadAgentTradingSection();
+    if (_ebView === 'indices') loadIndexForecastSection();
+    if (_ebView === 'pairs') loadCommodityPairsSection();
     _restoreEdgeBoardScroll();
     if (window.Motion && !prefersReduced()) {
       const stats = host.querySelectorAll('.tr-stat');
@@ -6921,6 +7048,412 @@ function _agentTradingSignature(data) {
     data?.leaderboard?.length || 0,
     data?.recent_activity?.[0]?.ts || data?.recent_activity?.[0]?.timestamp || '',
   ]);
+}
+
+// NSE index range forecasts (Edge board -> Indices), published once per trading
+// day by .github/workflows/index-forecast.yml and served at /markets/index-forecast.
+let _ixfData = null;
+let _ixfHorizon = 5;
+let _ixfRequest = null;
+const _IXF_HORIZON_LABEL = { 1: 'Next session', 5: '1 week', 21: '1 month' };
+
+function _ixfNum(x) {
+  const n = Number(x);
+  return Number.isFinite(n) ? n.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—';
+}
+
+function _ixfPct(p) {
+  const n = Number(p);
+  if (!Number.isFinite(n)) return '—';
+  if (n < 0.01) return '<1%';
+  if (n > 0.99) return '>99%';
+  return Math.round(n * 100) + '%';
+}
+
+function _ixfSetHorizon(h) {
+  _ixfHorizon = h;
+  if (_ixfData) renderIndexForecast(_ixfData);
+}
+
+async function loadIndexForecastSection() {
+  if (!document.getElementById('eb-indices-section')) return;
+  if (_ixfData) renderIndexForecast(_ixfData);
+  if (_ixfRequest) return _ixfRequest;
+  _ixfRequest = (async () => {
+    try {
+      const r = await _liveJsonFetch('/markets/index-forecast');
+      const d = await _readJson(r);
+      if (!r.ok) throw new Error(d.detail || 'Could not load the index forecasts.');
+      _ixfData = d;
+      renderIndexForecast(d);
+    } catch (err) {
+      if (!_ixfData) renderIndexForecast({ error: err.message || 'Could not load the index forecasts.' });
+    } finally {
+      _ixfRequest = null;
+    }
+  })();
+  return _ixfRequest;
+}
+
+function renderIndexForecast(d) {
+  const host = document.getElementById('eb-indices-section');
+  if (!host) return;
+  if (d.error) {
+    host.innerHTML = `<p class="text-sm text-gray-500">${escHtml(d.error)}</p>`;
+    return;
+  }
+  const h = _ixfHorizon;
+  const indices = d.indices || [];
+  const target = (indices[0]?.horizons || []).find(x => x.h === h)?.target_date;
+  const tabs = `<div class="eb-view-tabs" role="tablist" aria-label="Forecast horizon">` + [1, 5, 21].map(x =>
+    `<button type="button" class="eb-view-tab ${x === h ? 'active' : ''}" role="tab" aria-selected="${x === h}" onclick="_ixfSetHorizon(${x})">${_IXF_HORIZON_LABEL[x]}</button>`
+  ).join('') + `</div>`;
+  const rows = indices.map(ix => {
+    const f = (ix.horizons || []).find(x => x.h === h);
+    if (!f) return '';
+    const q = f.quantiles || [];
+    const levels = (f.levels || []).map(l => `<span class="ixf-level">${_ixfNum(l.level)} · <b>${_ixfPct(l.p_above)}</b></span>`).join('');
+    const late = ix.recorded === false
+      ? `<span class="ixf-late">${_cptTip('late', 'Built after the next session opened, so it is kept out of the track record.')}</span>` : '';
+    return `<tr class="eb-row"><td><b>${escHtml(ix.name)}</b>${late}</td><td>${_ixfNum(ix.close)}</td>`
+      + `<td>${_ixfNum(q[1])} – ${_ixfNum(q[5])}</td><td>${_ixfNum(q[3])}</td><td>${_ixfPct(f.p_up)}</td>`
+      + `<td><div class="ixf-levels">${levels}</div></td></tr>`;
+  }).join('');
+  // Each label explains itself on hover, focus or tap (_cptTip), as on the pairs board.
+  const when = target ? _fmtDate(target) : 'the target date';
+  const from = d.as_of ? _fmtDate(d.as_of) : 'the latest';
+  const testYears = String(d.backtest?.window || '2016-2026').replace('-', '–');
+  const head = `<tr><th>Index</th>`
+    + `<th>${_cptTip('Close', `The index's close on ${from}, where the forecast starts.`)}</th>`
+    + `<th>${_cptTip('80% range', `Where the index should close on ${when} 8 times in 10. It should land below the range about 1 time in 10, and above it about 1 time in 10.`)}</th>`
+    + `<th>${_cptTip('Median', `The middle of the forecast: an even chance the index closes above or below it on ${when}.`)}</th>`
+    + `<th>${_cptTip('Higher', `The chance the index closes above its ${from} close on ${when}. It mostly reflects the index's long-run upward drift: in the ${testYears} test no model called up or down better than that.`)}</th>`
+    + `<th>${_cptTip('Chance of closing above', `The chance the index closes above each round level on ${when}. The levels are about half a typical move apart, so most fall inside the range.`)}</th></tr>`;
+  const recordHead = `<tr><th>Horizon</th>`
+    + `<th>${_cptTip('Scored', 'Forecasts whose target close has happened. Each index gets one forecast per horizon each trading day, recorded only between a close and the next open.')}</th>`
+    + `<th>${_cptTip('In 80% range', 'How often the actual close landed inside the 80% range. Near 80% is right: much lower means the ranges are too narrow, much higher too wide.')}</th>`
+    + `<th>${_cptTip('In 90% range', 'The same check for a wider 90% range (not shown above), so near 90% is right.')}</th>`
+    + `<th>${_cptTip('vs EWMA', 'How much better the forecast scored than a plain baseline: a bell curve sized by recent volatility (EWMA). The score is quantile loss, which rewards ranges that are both right and tight. Above 0 beats the baseline.')}</th>`
+    + `<th>${_cptTip('Backtest 80%', `The same 80% check over the ${testYears} test, which forecast every fifth session using only the data available at the time.`)}</th>`
+    + `<th>${_cptTip('Backtest vs EWMA', `The comparison with the plain baseline over the same ${testYears} test.`)}</th></tr>`;
+  const live = Object.fromEntries((d.track_record?.by_horizon || []).map(r => [r.h, r]));
+  const back = Object.fromEntries((d.backtest?.by_horizon || []).map(r => [r.h, r]));
+  const skill = s => (s == null ? '—' : `${s >= 0 ? '+' : ''}${(s * 100).toFixed(1)}%`);
+  const cov = c => (c == null ? '—' : (c * 100).toFixed(1) + '%');
+  const record = [1, 5, 21].map(x => {
+    const l = live[x] || {}, b = back[x] || {};
+    const liveCells = l.n
+      ? `<td>${l.n}</td><td>${cov(l.coverage_80)}</td><td>${cov(l.coverage_90)}</td><td>${skill(l.skill_vs_baseline)}</td>`
+      : `<td>0</td><td colspan="3" style="color:var(--text-dim)">scores once the first targets close</td>`;
+    return `<tr class="eb-row"><td><b>${_IXF_HORIZON_LABEL[x]}</b></td>${liveCells}`
+      + `<td>${cov(b.coverage_80)}</td><td>${skill(b.skill_vs_baseline)}</td></tr>`;
+  }).join('');
+  const updated = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
+  const stale = d.freshness?.stale
+    ? `<p class="text-xs" style="color:#b45309;margin:6px 0 0">These forecasts have not been refreshed for over four days.</p>` : '';
+  host.innerHTML = `
+    <p class="text-sm" style="color:var(--text-dim);margin:0 0 12px">Where ten NSE indices are likely to close, from the ${escHtml(_fmtDate(d.as_of))} close${target ? ` to the close on ${escHtml(_fmtDate(target))}` : ''}. These are ranges, not direction calls: in a 2016–2026 test no model called up or down better than each index's long-run up-rate, so "Higher" mostly reflects that drift. ${updated ? 'Updated ' + escHtml(updated) + '.' : ''}</p>${stale}
+    ${tabs}
+    <div class="ixf-scroll"><table class="eb-table" style="margin-top:12px"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
+    <h4 class="eb-h">Track record: does the price land inside the range as often as it should?</h4>
+    <div class="ixf-scroll"><table class="eb-table"><thead>${recordHead}</thead><tbody>${record}</tbody></table></div>
+    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Model: volatility from fast and slow EWMAs and India VIX, refit daily on ${typeof d.model?.training_sessions === 'number' ? escHtml(String(d.model.training_sessions)) + ' sessions' : 'the last 750 sessions for the 1-day range and every session since India VIX began in 2009 for the longer two'}, with fat tails taken from past errors (its own at 1 and 5 days; all ten indices' together for the month-ahead range, which a backtest scored better). "vs EWMA" compares quantile loss with a plain EWMA normal forecast. Data: ${escHtml(d.source || 'Upstox')}. Research forecasts, not investment advice.</p>`;
+}
+
+// Commodity pair tracker (Edge board -> Commodity Pairs), published once a day
+// by .github/workflows/commodity-pairs.yml and served at /markets/commodity-pairs.
+let _cptData = null;
+let _cptRequest = null;
+
+async function loadCommodityPairsSection() {
+  if (!document.getElementById('eb-pairs-section')) return;
+  if (_cptData) renderCommodityPairs(_cptData);
+  if (_cptRequest) return _cptRequest;
+  _cptRequest = (async () => {
+    try {
+      const r = await _liveJsonFetch('/markets/commodity-pairs');
+      const d = await _readJson(r);
+      if (!r.ok) throw new Error(d.detail || 'Could not load the commodity pair tracker.');
+      _cptData = d;
+      renderCommodityPairs(d);
+    } catch (err) {
+      if (!_cptData) renderCommodityPairs({ error: err.message || 'Could not load the commodity pair tracker.' });
+    } finally {
+      _cptRequest = null;
+    }
+  })();
+  return _cptRequest;
+}
+
+function _cptPct(x, digits = 2) {
+  const n = Number(x);
+  return Number.isFinite(n) ? `${n >= 0 ? '+' : ''}${(n * 100).toFixed(digits)}%` : '—';
+}
+
+// A table header whose explanation shows on hover, keyboard focus or a tap (touch screens
+// never show a title attribute). The explanation is also part of the button's name. One
+// floating tooltip is positioned against the viewport, because the tables sit in
+// horizontally scrolling boxes that would clip anything positioned inside them.
+function _cptTip(label, tip) {
+  return `<button type="button" class="cpt-tip" data-tip="${escHtml(tip)}" aria-label="${escHtml(label + ': ' + tip)}"`
+    + ` onmouseenter="_cptShowTip(this)" onmouseleave="_cptHideTip()" onfocus="_cptShowTip(this)" onblur="_cptHideTip()"`
+    + ` onclick="_cptToggleTip(this)">${escHtml(label)}</button>`;
+}
+
+let _cptTipFor = null;
+let _cptTipShownAt = 0;
+
+function _cptShowTip(btn) {
+  let pop = document.getElementById('cptTipPop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'cptTipPop';
+    pop.className = 'cpt-tip-pop';
+    pop.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(pop);
+  }
+  pop.textContent = btn.dataset.tip || '';
+  const width = Math.min(260, window.innerWidth - 16);
+  pop.style.width = width + 'px';
+  pop.hidden = false;
+  const r = btn.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) + 'px';
+  const below = r.bottom + 6;
+  pop.style.top = (below + pop.offsetHeight > window.innerHeight - 8 ? Math.max(8, r.top - 6 - pop.offsetHeight) : below) + 'px';
+  _cptTipFor = btn;
+  _cptTipShownAt = Date.now();
+}
+
+function _cptHideTip() {
+  const pop = document.getElementById('cptTipPop');
+  if (pop) pop.hidden = true;
+  _cptTipFor = null;
+}
+
+function _cptToggleTip(btn) {
+  // A tap fires hover and focus just before the click: keep the tooltip they opened.
+  if (_cptTipFor === btn && Date.now() - _cptTipShownAt > 400) _cptHideTip();
+  else _cptShowTip(btn);
+}
+
+// A fixed tooltip would drift away from its header once the board or a table scrolls.
+document.addEventListener('scroll', () => { if (_cptTipFor) _cptHideTip(); }, true);
+
+function _cptLegs(p) {
+  if (Array.isArray(p.legs) && p.legs.length === 2) return p.legs;
+  const [a, b] = String(p.label || '').replace(' (MCX)', '').split(' / ');
+  return [a || 'First leg', b || 'Second leg'];
+}
+
+// Session dates are calendar days: read them as local dates so no timezone shifts them.
+function _cptDay(iso) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(iso || '')) ? _fmtDate(`${iso}T00:00:00`) : _fmtDate(iso);
+}
+
+function _cptPlural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+// The pair's score over its last sessions. The shaded band is the usual range (inside
+// ±entryZ); the line leaving it is what opens a signal. Only the half the score is in gets
+// a label, and the note names that half first, so the chart never reads as the opposite
+// of the sentence above it.
+function _cptSpark(p, entryZ, legs) {
+  const vals = (p.z_recent || []).map(Number).filter(Number.isFinite);
+  if (vals.length < 2) return '';
+  const w = 320, h = 96, left = 2, right = 26, lim = entryZ + 1.5;
+  const y = z => h / 2 - Math.max(-lim, Math.min(lim, z)) / lim * (h / 2 - 6);
+  const x = i => left + i / (vals.length - 1) * (w - left - right);
+  const last = vals[vals.length - 1], up = last >= 0;
+  const [here, there] = up ? ['Above', 'below'] : ['Below', 'above'];
+  const [rich, cheap] = up ? legs : [legs[1], legs[0]];
+  const parity = p.source === 'parity';
+  const side = parity ? `Premium ${up ? 'higher' : 'lower'}` : `${rich} pricier`;
+  const halves = parity
+    ? `${here} the dashed line, the premium is ${up ? 'higher' : 'lower'} than usual; ${there} it, ${up ? 'lower' : 'higher'}.`
+    : `${here} the dashed line, ${rich} is pricier than usual; ${there} it, ${cheap} is.`;
+  const halo = 'paint-order="stroke" stroke="#fff" stroke-width="3" stroke-linejoin="round"';
+  const label = (ty, text, anchor = 'start', tx = left + 2) => `<text x="${tx}" y="${ty.toFixed(1)}" font-size="10" fill="var(--text-dim)" text-anchor="${anchor}" ${halo}>${escHtml(text)}</text>`;
+  return `<svg class="cpt-spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="${escHtml(`Score over the last ${vals.length} sessions, now ${last.toFixed(2)}`)}">`
+    + `<rect x="${left}" y="${y(entryZ).toFixed(1)}" width="${w - left - right}" height="${(y(-entryZ) - y(entryZ)).toFixed(1)}" fill="var(--paper)"/>`
+    + `<line x1="${left}" x2="${w - right}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}" stroke="var(--border)" stroke-dasharray="3 3"/>`
+    + `<polyline points="${vals.map((z, i) => `${x(i).toFixed(1)},${y(z).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="1.5" stroke-linejoin="round"/>`
+    + `<circle cx="${x(vals.length - 1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="3.5" fill="${Math.abs(last) >= entryZ ? '#d97706' : 'var(--ink)'}"/>`
+    + (Math.abs(last) >= 0.5 ? label(up ? 10 : h - 3, side) : '')
+    + label(y(entryZ) + 3.5, `+${entryZ}`, 'end', w) + label(y(0) + 3.5, '0', 'end', w) + label(y(-entryZ) + 3.5, `−${entryZ}`, 'end', w)
+    + `</svg><p class="cpt-spark-note">Last ${vals.length} sessions. ${escHtml(halves)} A signal opens outside the shaded band.</p>`;
+}
+
+// One plain sentence on where the pair stands today.
+function _cptSay(p, legs, entryZ) {
+  const z = Number(p.z), az = Math.abs(z);
+  const [rich, cheap] = z >= 0 ? legs : [legs[1], legs[0]];
+  if (p.source === 'parity') {
+    const gap = Number(p.ratio) - 1;
+    const prem = `MCX gold trades ${Math.abs(gap * 100).toFixed(1)}% ${gap >= 0 ? 'above' : 'below'} the cost of importing it`;
+    const dir = z >= 0 ? 'higher' : 'lower';
+    if (az < 0.5) return `${prem}, about its usual premium.`;
+    if (az < 1.5) return `${prem}, a little ${dir} than usual. Nothing unusual.`;
+    if (az < entryZ) return `${prem}, ${dir} than usual and close to the ±${entryZ} signal line.`;
+    return `${prem}, unusually ${dir}. The tracker records a signal betting the premium returns to normal.`;
+  }
+  if (az < 0.5) return `${legs[0]} and ${legs[1]} are priced about as usual against each other.`;
+  if (az < 1.5) return `${rich} is a little pricier than usual against ${cheap}. Nothing unusual.`;
+  if (az < entryZ) return `${rich} is pricier than usual against ${cheap}, close to the ±${entryZ} signal line.`;
+  return `${rich} is unusually expensive against ${cheap}. The tracker records a signal betting the gap closes: ${rich} falling back against ${cheap}.`;
+}
+
+// The hedge as money on each side, which is what the fitted ratio means in practice. Every
+// pair shows rupees: the hedge is a ratio of money, so one currency serves the dollar-priced
+// pairs too (converting both legs at one rate leaves the ratio unchanged).
+function _cptHedge(p, legs, hedgeWindow) {
+  const [a, b] = legs;
+  const cur = '₹';
+  const n = Math.min(Number(p.sessions) || hedgeWindow, hedgeWindow);
+  if (p.hedge === 'fixed') {
+    return { text: `${cur}100 each side`, tip: 'Both sides are gold, so the tracker compares the two prices directly, with equal money on each side.' };
+  }
+  if (p.hedge === 'ratio') {
+    return {
+      text: `${cur}100 each side`,
+      tip: `Over the last ${n} sessions ${a} and ${b} did not rise and fall together, so a fitted balance would be negative. The tracker falls back to the plain price ratio: equal money on each side.`,
+    };
+  }
+  const beta = Number(p.beta), per = Math.round(beta * 100);
+  return {
+    text: `${cur}${per} of ${b} per ${cur}100 of ${a}`,
+    tip: `Over the last ${n} sessions ${a} moved about ${beta.toFixed(2)}% for each 1% move in ${b}. So a balanced bet puts ${cur}${per} on ${b} against every ${cur}100 on ${a}: a move that lifts both together cancels out, and only the gap between them is left. Refit every session.`,
+  };
+}
+
+// The move in either leg alone that brings the pair back to its usual level (a score of 0).
+function _cptBack(p, legs, zWindow) {
+  const t = p.to_usual || {}, a = Number(t.a), b = Number(t.b);
+  if (t.a == null || t.b == null || !Number.isFinite(a) || !Number.isFinite(b)) return '';
+  const tip = _cptTip('Back to usual', `How far either commodity would have to move, with the other holding still, to bring the pair back to its average over the last ${zWindow} sessions (a score of 0). It says nothing about which one will move, or when.`);
+  if (Math.abs(a) < 0.0025) return `<p class="cpt-back">${tip}: already at its usual level.</p>`;
+  const leg = (name, move, other) => `<span class="${move >= 0 ? 'cpt-up' : 'cpt-down'}"><svg class="ui-icon" aria-hidden="true"><use href="#ui-triangle-${move >= 0 ? 'up' : 'down'}"></use></svg> ${escHtml(name)} ${_cptPct(move, 1)}</span> with ${escHtml(other)} flat`;
+  return `<p class="cpt-back">${tip}: ${leg(legs[0], a, legs[1])}, or ${leg(legs[1], b, legs[0])}.</p>`;
+}
+
+function _cptCard(p, ctx) {
+  const legs = _cptLegs(p);
+  const head = `<div class="cpt-head"><div><div class="cpt-name">${escHtml(p.label)}</div><div class="cpt-why">${escHtml(p.why || '')}</div></div>`;
+  if (p.z == null) {
+    return `<article class="cpt-card">${head}<span class="cpt-badge">${p.paused ? 'Paused' : 'Warming up'}</span></div><p class="cpt-say cpt-dim">${escHtml(p.note || 'Not enough history yet.')}</p></article>`;
+  }
+  const { entryZ, exitZ, maxHold, zWindow, hedgeWindow, liveSince } = ctx;
+  const z = Number(p.z), az = Math.abs(z);
+  const badge = az >= entryZ ? '<span class="cpt-badge hot">Stretched</span>'
+    : az >= 1.5 ? '<span class="cpt-badge near">Near signal</span>' : '<span class="cpt-badge">Normal</span>';
+  const hedge = _cptHedge(p, legs, hedgeWindow);
+  const fmtRatio = x => p.source === 'parity' ? _cptPct(x - 1, 1) : escHtml(Number(x).toPrecision(4));
+  const lags = Boolean(p.date && ctx.dataThrough && p.date < ctx.dataThrough);
+  const level = [
+    p.source === 'parity'
+      ? _cptTip('Premium', `How far the MCX gold price sits above the landed cost of importing gold (international price, rupee rate, duties): today, and at its usual level over the last ${zWindow} sessions.`)
+      : _cptTip('Price ratio', `${legs[0]}'s price divided by ${legs[1]}'s, in their quoted units: today, and at the pair's usual level over the last ${zWindow} sessions${p.hedge === 'regression' ? ` with ${legs[1]} at today's price (the hedge is not 1:1, so the usual ratio shifts as ${legs[1]} moves)` : ''}.`),
+    p.usual_ratio != null ? `${fmtRatio(p.ratio)} <span class="cpt-dim">usual ${fmtRatio(p.usual_ratio)}</span>` : fmtRatio(p.ratio),
+  ];
+  const facts = [
+    [_cptTip('Score', `How unusual today's gap between the two prices is, against the last ${zWindow} sessions (a z-score). 0 is typical, ±1 is common, ±${entryZ} or beyond happens about 1 session in 20. Positive means ${legs[0]} is pricier than usual against ${legs[1]}.`),
+      `<b>${z >= 0 ? '+' : '−'}${az.toFixed(2)}</b> <span class="cpt-dim">signal at ±${entryZ}</span>`],
+    [_cptTip('Hedge', hedge.tip), escHtml(hedge.text)],
+    [_cptTip('Gap halves in', 'When a gap opens, it has typically shrunk by half within this many sessions. Shorter means faster snap-backs. "No pull-back" means gaps have not tended to close.'),
+      p.half_life != null ? `about ${_cptPlural(Math.max(1, Math.round(Number(p.half_life))), 'session')}` : 'no pull-back seen'],
+    [_cptTip('Tied together?', `Whether the two prices are anchored to each other over the last ${Math.min(Number(p.sessions) || hedgeWindow, hedgeWindow)} sessions (Engle–Granger test at 5%). Yes: gaps have reliably closed. Not proven: a stretched gap can keep widening, so a signal is riskier. Test score ${Number(p.eg_t).toFixed(1)}; below ${Number(p.eg_crit_5pct || -3.4).toFixed(1)} passes.`),
+      p.cointegrated ? 'Yes' : 'Not proven'],
+    level,
+    [_cptTip('History', `Prices since ${_cptDay(p.data_from)}${lags ? `, through ${_cptDay(p.date)}: this pair's prices are published a few days late` : ''}. The hedge uses up to ${hedgeWindow} sessions, so it firms up as history grows.`), _cptPlural(Number(p.sessions), 'session') + (lags ? `, to ${escHtml(_cptDay(p.date))}` : '')],
+  ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  const l = ctx.live[p.key] || {}, r = p.replay || {}, b = ctx.back[p.key];
+  const liveCount = l.signals || 0;
+  const record = [
+    [_cptTip('Live', `Signals recorded on this site since the ${_cptDay(liveSince)} session. One opens when the score reaches ±${entryZ} and closes when it is back within ±${exitZ} or after ${maxHold} sessions.`),
+      `<b>${_cptPlural(liveCount, 'signal')}</b>${l.open ? `${l.open} open` : liveCount && l.avg_return != null ? `avg ${_cptPct(l.avg_return)}` : ''}`],
+    [_cptTip('Before live', `The same rule replayed over this pair's prices before ${_cptDay(liveSince)}, using only prices available on each day. Not recorded live, and a short window.`),
+      r.signals ? `<b>${_cptPlural(r.signals, 'signal')}</b>${r.avg_return != null ? `avg ${_cptPct(r.avg_return)}` : ''}` : '<b>none</b>'],
+    [_cptTip('US 2011–26', 'The same rule on 2011–2026 US futures prices after costs: average return per signal and the number of profitable years. MCX and parity pairs have no US contract to test.'),
+      b ? `<b>avg ${_cptPct(b.avg_return)}</b>up ${b.years_up} of ${b.years} yrs` : '<b class="cpt-dim">not testable</b>'],
+  ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  return `<article class="cpt-card${az >= entryZ ? ' hot' : ''}">${head}${badge}</div>`
+    + `<p class="cpt-say">${escHtml(_cptSay(p, legs, entryZ))}</p>`
+    + _cptBack(p, legs, zWindow)
+    + _cptSpark(p, entryZ, legs)
+    + `<dl class="cpt-facts">${facts}</dl><dl class="cpt-record">${record}</dl></article>`;
+}
+
+function _cptSignalTable(events, labels, ctx) {
+  const status = s => ({ open: 'Open', reverted: 'Gap closed', timed_out: 'Timed out' }[s] || s);
+  return `<div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Pair</th>`
+    + `<th>${_cptTip('Opened', 'The session the pair reached the signal line.')}</th>`
+    + `<th>${_cptTip('Score', 'The score on the session the signal opened.')}</th>`
+    + `<th>${_cptTip('Result', `Gap closed: the score came back within ±${ctx.exitZ}. Timed out: ${ctx.maxHold} sessions passed first. Open: still being followed.`)}</th>`
+    + `<th>${_cptTip('Sessions', 'How many sessions the signal stayed open.')}</th>`
+    + `<th>${_cptTip('Return', `What betting on the gap closing would have made: the move in the hedged spread per unit of money on both sides, after ${ctx.costPct}% cost per side.`)}</th></tr></thead><tbody>`
+    + events.map(e => `<tr class="eb-row"><td>${escHtml(labels[e.pair] || e.pair)}</td><td>${escHtml(_cptDay(e.entry_date))}</td>`
+      + `<td>${Number(e.entry_z) >= 0 ? '+' : '−'}${Math.abs(Number(e.entry_z)).toFixed(2)}</td><td>${escHtml(status(e.status))}${e.exit_date ? ' · ' + escHtml(_cptDay(e.exit_date)) : ''}</td>`
+      + `<td>${e.sessions ?? '—'}</td><td>${e.spread_return != null ? _cptPct(e.spread_return) : '—'}</td></tr>`).join('')
+    + `</tbody></table></div>`;
+}
+
+function renderCommodityPairs(d) {
+  const host = document.getElementById('eb-pairs-section');
+  if (!host) return;
+  if (d.error) {
+    host.innerHTML = `<p class="text-sm text-gray-500">${escHtml(d.error)}</p>`;
+    return;
+  }
+  const rule = d.rule || {};
+  const ctx = {
+    entryZ: rule.entry_z || 2, exitZ: rule.exit_z || 0.5, maxHold: rule.max_hold || 20,
+    zWindow: rule.z_window || 60, hedgeWindow: rule.hedge_window || 250,
+    costPct: (rule.cost_per_side || 0.001) * 100,
+    liveSince: d.track_record?.live_since || d.data_through, dataThrough: d.data_through,
+    back: d.backtest?.pairs || {}, live: d.track_record?.by_pair || {},
+  };
+  const pairs = (d.pairs || []).slice();
+  const scored = pairs.filter(p => p.z != null).sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+  const labels = Object.fromEntries(pairs.map(p => [p.key, p.label]));
+  const stretched = scored.filter(p => Math.abs(p.z) >= ctx.entryZ);
+  const closest = scored.find(p => Math.abs(p.z) < ctx.entryZ);
+  const fmtZ = z => `${z >= 0 ? '+' : '−'}${Math.abs(z).toFixed(2)}`;
+  const liveTotal = Object.values(ctx.live).reduce((n, l) => n + (l.signals || 0), 0);
+  const replay = pairs.flatMap(p => (p.replay_signals || []).map(e => ({ ...e, pair: p.key }))).sort((a, b) => a.entry_date < b.entry_date ? 1 : -1);
+  const replayCount = replay.length || pairs.reduce((n, p) => n + (p.replay?.signals || 0), 0);
+  const replayPairs = pairs.filter(p => p.replay?.signals).length;
+  const summary = stretched.length
+    ? `<b>${stretched.length} of ${scored.length} pairs stretched</b> on the ${escHtml(_cptDay(d.data_through))} session: ${stretched.map(p => `${escHtml(p.label)} (${fmtZ(p.z)})`).join(', ')}.`
+    : `<b>No pair is stretched</b> on the ${escHtml(_cptDay(d.data_through))} session.${closest ? ` Closest to a signal: ${escHtml(closest.label)} at ${fmtZ(closest.z)}, against a line of ±${ctx.entryZ}.` : ''}`;
+  const why = liveTotal ? '' : `<div class="cpt-note"><b>Why live signals are 0.</b> Live tracking started with the ${escHtml(_cptDay(ctx.liveSince))} session, and a live signal is recorded only when a pair reaches ±${ctx.entryZ} on a session from then on. None has yet${closest ? `; ${escHtml(closest.label)} is closest at ${fmtZ(closest.z)}` : ''}.`
+    + (replayCount ? ` Before that, the same rule replayed over these prices finds ${_cptPlural(replayCount, 'signal')} on ${_cptPlural(replayPairs, 'pair')}${replay[0] ? `, the latest on ${escHtml(_cptDay(replay[0].entry_date))}` : ''} (listed at the bottom), so live ones should follow.` : '')
+    + `</div>`;
+  const live = (d.track_record?.recent || []).slice().reverse();
+  const liveHtml = live.length ? _cptSignalTable(live, labels, ctx)
+    : `<p class="text-sm text-gray-500">None yet. One is recorded the first session a pair's score reaches ±${ctx.entryZ}.</p>`;
+  const replayHtml = replay.length
+    ? `<h4 class="eb-h">Before live tracking: the same rule replayed</h4>`
+      + `<p class="text-xs" style="color:var(--text-dim);margin:0 0 6px">Each signal uses only prices available on its day, but none was recorded live. ${_cptPlural(replay.length, 'signal')} over a few months is too few to judge the rule; the 2011–26 US backtest on each card is the larger test.</p>`
+      + _cptSignalTable(replay, labels, ctx)
+    : '';
+  const updated = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
+  const stale = d.freshness?.stale
+    ? `<p class="text-xs" style="color:#b45309;margin:6px 0 0">This tracker has not been refreshed for over four days.</p>` : '';
+  host.innerHTML = `
+    <p class="cpt-lede">Ten pairs of commodities that usually move together. When one gets unusually expensive against the other, the gap has often closed again. Each card shows how stretched a pair is today, and the tracker records what happens when one stretches.</p>
+    <div class="cpt-guide"><b>How to read a card</b><ol>
+      <li><b>Score:</b> how unusual today's gap is against the last ${ctx.zWindow} sessions. 0 is typical, ±1 is common, ±${ctx.entryZ} or beyond happens about 1 session in 20. The chart shows the last ${ctx.zWindow} sessions; the shaded band is the usual range.</li>
+      <li><b>Signal:</b> at ±${ctx.entryZ} the pair is stretched, and the tracker records a bet that the pricier side falls back against the cheaper one. It follows the bet until the gap closes (score back within ±${ctx.exitZ}) or ${ctx.maxHold} sessions pass.</li>
+      <li><b>Back to usual:</b> how far either commodity would have to move, with the other holding still, to bring the pair back to its usual level. It says nothing about which one will move, or when.</li>
+      <li><b>Hedge:</b> how much money goes on each side, so that a move lifting both prices together cancels out and only the gap is left.</li>
+      <li><b>A monitor, not a strategy:</b> over 2011–26 on US futures, the same rule made money on three pairs and lost on three.</li>
+    </ol></div>
+    <p class="cpt-summary">${summary}</p>${why}${stale}
+    <div class="cpt-grid">${scored.concat(pairs.filter(p => p.z == null)).map(p => _cptCard(p, ctx)).join('')}</div>
+    <h4 class="eb-h">Live signals</h4>
+    ${liveHtml}
+    ${replayHtml}
+    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Prices through the ${escHtml(_cptDay(d.data_through))} session${updated ? ', updated ' + escHtml(updated) : ''}. Hedge: least-squares fit of log prices over up to ${ctx.hedgeWindow} sessions, or equal money when the fit is not positive. Returns are per unit of money on both sides after ${ctx.costPct}% cost per side. US backtest on futures front months (roll gaps add noise). Data: ${escHtml(d.source || 'Upstox and FRED')}. Research tracker, not investment advice.</p>`;
 }
 
 async function loadAgentTradingSection() {
@@ -8078,12 +8611,11 @@ let _ebLastData = null;
 
 function _ebGoPage(n) {
   _ebPage = n;
-  const sec = document.getElementById('eb-board-section');
-  if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+  _renderBoardContainer();
 }
 
 function _ebSetView(view) {
-  _ebView = ['mtm', 'agentic'].includes(view) ? view : 'markets';
+  _ebView = ['agentic', 'indices', 'pairs'].includes(view) ? view : 'markets';
   const host = document.getElementById('edgeBody');
   if (!host) return;
   if (!_ebLastData) {
@@ -8095,10 +8627,13 @@ function _ebSetView(view) {
   }
   _captureEdgeBoardScroll();
   host.innerHTML = renderEdgeBoard(_ebLastData);
+  _mountKiteSourcePanel();
   _attachEdgeBoardChartHovers(host);
   _restoreEdgeBoardScroll();
   refreshEdgePrices();
   if (_ebView === 'agentic') loadAgentTradingSection();
+  if (_ebView === 'indices') loadIndexForecastSection();
+  if (_ebView === 'pairs') loadCommodityPairsSection();
 }
 
 function _modelLogoSymbol(modelOrLabel) {
@@ -8787,15 +9322,64 @@ function _onEbSort(sortKey) {
   _renderBoardContainer();
 }
 
+function _kiteSourceControls() {
+  return `<span style="font-size:11px;color:var(--text-dim);margin-left:4px">Source:</span>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'all' ? 'active' : ''}" onclick="_onEbVenueFilter('all')">All prediction markets</button>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'polymarket' ? 'active' : ''}" onclick="_onEbVenueFilter('polymarket')">Polymarket</button>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kalshi' ? 'active' : ''}" onclick="_onEbVenueFilter('kalshi')">Kalshi</button>
+    <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kite' ? 'active' : ''}" onclick="_onEbVenueFilter('kite')">Zerodha Kite</button>`;
+}
+
+function _restoreKiteSourcePanel() {
+  clearKiteMarketData();
+  const panel = document.getElementById('kiteAccountPanel');
+  const home = document.getElementById('kiteSettingsHome');
+  if (home && panel?.parentElement?.id === 'eb-kite-source') {
+    clearKiteAccount();
+    panel.open = false;
+    home.appendChild(panel);
+  }
+}
+
+function _mountKiteSourcePanel() {
+  const target = document.getElementById('eb-kite-source');
+  const panel = document.getElementById('kiteAccountPanel');
+  if (target && panel && _ebView === 'markets' && _ebVenueFilter === 'kite' && document.getElementById('edgeOverlay')?.classList.contains('open')) {
+    if (panel.parentElement !== target) {
+      clearKiteAccount();
+      target.appendChild(panel);
+      panel.open = true;
+    }
+  }
+}
+
 function _renderBoardContainer() {
   const container = document.getElementById('eb-board-section');
   if (container && _ebBoardData) {
+    _restoreKiteSourcePanel();
     container.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+    _mountKiteSourcePanel();
   }
 }
 
 function _renderBoardPage(board, page) {
-  if (!board || !board.length) return '<p class="text-sm text-gray-500">No open markets tracked yet.</p>';
+  const sources = _kiteSourceControls();
+  if (_ebVenueFilter === 'kite') {
+    return `<div class="eb-toolbar"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${sources}</div></div>
+      <p class="tr-method">Market quotes and history · Paid Kite Connect. Connect below, then look up an exchange:symbol. Prices use exchange units; dates use IST. Data is private to your signed-in account.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:12px">
+        <label class="text-xs">Exchange:symbol<br><input id="kiteMarketSymbol" class="variant-select" value="NSE:INFY" maxlength="120" spellcheck="false" style="max-width:100%;width:180px"></label>
+        <button type="button" class="model-save" onclick="kiteMarketAction('quotes')">Get quote</button>
+        <label class="text-xs">Interval<br><select id="kiteMarketInterval" class="variant-select"><option value="day">Daily</option><option value="minute">1 minute</option><option value="3minute">3 minutes</option><option value="5minute">5 minutes</option><option value="10minute">10 minutes</option><option value="15minute">15 minutes</option><option value="30minute">30 minutes</option><option value="60minute">Hourly</option></select></label>
+        <label class="text-xs">From (IST)<br><input id="kiteMarketFrom" type="date" class="variant-select" value="${new Date(Date.now() + 19800000 - 29 * 86400000).toISOString().slice(0, 10)}"></label>
+        <label class="text-xs">To (IST)<br><input id="kiteMarketTo" type="date" class="variant-select" value="${new Date(Date.now() + 19800000).toISOString().slice(0, 10)}"></label>
+        <button type="button" class="model-save" onclick="kiteMarketAction('history')">Load history</button>
+      </div>
+      <div id="kiteMarketMessage" class="text-xs" role="status" aria-live="polite"></div>
+      <div id="kiteMarketData" style="overflow:auto;max-height:500px;margin:12px 0;font-size:12px" aria-label="Private Kite market data"></div>
+      <div id="eb-kite-source"></div>`;
+  }
+  if (!board || !board.length) return `<div class="eb-toolbar">${sources}</div><p class="text-sm text-gray-500">No open markets tracked yet.</p>`;
   const displayList = _filterAndSortBoard(board);
   const totalMatches = displayList.length;
   const pages = Math.max(1, Math.ceil(totalMatches / _EB_PAGE_SIZE));
@@ -8805,10 +9389,7 @@ function _renderBoardPage(board, page) {
   const toolbarHtml = `<div class="eb-toolbar">
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
       <input type="text" class="eb-search-input" placeholder="Search markets…" value="${escAttr(_ebSearchQuery)}" oninput="_onEbSearch(this.value)" />
-      <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Venue:</span>
-      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'all' ? 'active' : ''}" onclick="_onEbVenueFilter('all')">All</button>
-      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'polymarket' ? 'active' : ''}" onclick="_onEbVenueFilter('polymarket')">Polymarket</button>
-      <button type="button" class="eb-filter-pill ${_ebVenueFilter === 'kalshi' ? 'active' : ''}" onclick="_onEbVenueFilter('kalshi')">Kalshi</button>
+      ${sources}
       <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Quality:</span>
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'all' ? 'active' : ''}" onclick="_onEbQualityFilter('all')">All</button>
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'credible' ? 'active' : ''}" onclick="_onEbQualityFilter('credible')" title="Grade A or B credibility only">Grade A/B</button>
@@ -8882,357 +9463,24 @@ function _renderBoardPage(board, page) {
   return toolbarHtml + tableHtml + pagination;
 }
 
-let _activeMtmStrat = 'quarter_kelly';
-let _mtmSizingMode = 'quarter_kelly';
-
-function _mtmModelsForSizing(d, sizingMode) {
-  const source = sizingMode === 'quarter_kelly'
-    ? d.quarter_kelly_by_model
-    : d[`${sizingMode}_by_model`];
-  return (source || []).filter(m => (
-    m
-    && m.model !== 'crowd-follow'
-    && m.model !== 'market-follow'
-    && (m.account || m.account_value != null)
-  ));
-}
-
-function _mtmCurvePoints(account) {
-  const points = account?.value_curve || [];
-  const firstEvent = points.findIndex(point => point.event_type === 'trade' || point.event_type === 'settlement');
-  return firstEvent >= 0 ? points.slice(firstEvent) : [];
-}
-
-function _mtmRiskStats(model) {
-  const metric = value => {
-    if (value == null || value === '') return null;
-    const number = Number(value);
-    return Number.isFinite(number) ? number : null;
-  };
-  const sourceSharpe = metric(model?.sharpe);
-  const sourceDrawdown = metric(model?.max_drawdown);
-  if (sourceSharpe != null && sourceDrawdown != null) {
-    return { sharpe: sourceSharpe, maxDrawdown: sourceDrawdown };
-  }
-
-  // Older compact payloads did not include the server-computed risk fields.
-  // Match the server calculation from the plotted account-value curve until
-  // a fresh payload arrives, rather than shifting Trades/Open into these cells.
-  const values = (model?.account?.value_curve || [])
-    .map(point => metric(point?.account_value))
-    .filter(value => value != null);
-  if (values.length < 2) return { sharpe: sourceSharpe, maxDrawdown: sourceDrawdown };
-  const returns = [];
-  for (let index = 1; index < values.length; index += 1) {
-    if (values[index - 1] > 0) returns.push((values[index] - values[index - 1]) / values[index - 1]);
-  }
-  let sharpe = null;
-  if (returns.length >= 2) {
-    const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
-    const variance = returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (returns.length - 1);
-    if (variance > 0) sharpe = mean / Math.sqrt(variance);
-  }
-  let peak = values[0];
-  let maxDrawdown = 0;
-  values.forEach(value => {
-    peak = Math.max(peak, value);
-    if (peak > 0) maxDrawdown = Math.max(maxDrawdown, (peak - value) / peak);
-  });
-  return {
-    sharpe: sourceSharpe ?? sharpe,
-    maxDrawdown: sourceDrawdown ?? maxDrawdown,
-  };
-}
-
-function _updateMtmViewInPlace() {
-  if (!_ebLastData) return false;
-  const d = _ebLastData;
-  const sizingMode = _mtmSizingMode || 'quarter_kelly';
-  const mtmModels = _mtmModelsForSizing(d, sizingMode);
-  if (!mtmModels.length) return false;
-
-  const mtmContainer = document.getElementById('eb-mtm-container');
-  if (!mtmContainer) return false;
-
-  const sizingLabels = {
-    'quarter_kelly': 'Quarter-Kelly 8% Cap',
-    'growth_1pct': 'Edge Kelly 5% Cap',
-    'growth_2pct': 'Edge Kelly 8% Cap',
-  };
-  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.quarter_kelly;
-
-  const titleEl = document.getElementById('eb-mtm-header-title');
-  if (titleEl) titleEl.textContent = `Per-Model Shadow Mark-to-Market Accounts (${activeSizingLabel})`;
-
-  const tabs = mtmContainer.querySelectorAll('.eb-view-tab');
-  tabs.forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.mtmSizingMode === sizingMode);
-  });
-
-  const _usd = v => Number.isFinite(Number(v))
-    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-    : 'building';
-
-  const _getScaledMtmValue = (rawVal, m) => {
-    const val = Number(rawVal);
-    if (!Number.isFinite(val)) return EB_STARTING_BANKROLL;
-    return val;
-  };
-
-  const modelCurves = mtmModels.map((m, i) => {
-    const account = m.account || {};
-    const curvePoints = _mtmCurvePoints(account);
-    const values = curvePoints.map(p => {
-      const rawVal = Number(p.account_value);
-      if (!Number.isFinite(rawVal)) return null;
-      return _getScaledMtmValue(rawVal, sizingMode);
-    }).filter(Number.isFinite);
-    const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
-    if (!values.length) return null;
-    const label = _ebModelLabel(m.model);
-    const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    const startP = EB_STARTING_BANKROLL;
-    const scaledVal = _getScaledMtmValue(rawVal, sizingMode);
-    const ret = (scaledVal - startP) / startP;
-    const curve = {
-      model: m.model,
-      points: values,
-      color: _mtmModelColor(m.model, i),
-      label,
-      head: _ebModelHead(m.model),
-      headTitle: `${label} · ${_usd(scaledVal)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
-    };
-    if (times.length === values.length) curve.times = times;
-    return curve;
-  }).filter(Boolean);
-
-  const svgEl = document.getElementById('eb-mtm-svg');
-  if (svgEl) {
-    svgEl.innerHTML = modelCurves.length
-      ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'})
-      : '<p class="text-sm text-gray-500">No positions yet for this sizing mode.</p>';
-  }
-
-  const tableBodyEl = document.getElementById('eb-mtm-table-body');
-  if (tableBodyEl) {
-    tableBodyEl.innerHTML = mtmModels.map((m, i) => {
-      const account = m.account || {};
-      const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-      const startPrincipal = EB_STARTING_BANKROLL;
-      const currentBankroll = _getScaledMtmValue(rawVal, sizingMode);
-      const pnlUsd = currentBankroll - startPrincipal;
-      const pnlPct = pnlUsd / startPrincipal;
-      const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
-      const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
-      const risk = _mtmRiskStats(m);
-      const sharpeStr = risk.sharpe != null ? risk.sharpe.toFixed(2) : '—';
-      const ddVal = risk.maxDrawdown;
-      const ddStr = Number.isFinite(ddVal) ? (ddVal * 100).toFixed(1) + '%' : '—';
-
-      return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
-        <td><b>${i + 1}</b></td>
-        <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span>${m.status === 'collecting_history' ? '<span style="display:block;color:var(--text-dim);font-size:11px">Collecting resolved history</span>' : ''}</td>
-        <td>${_usd(startPrincipal)}</td>
-        <td><b>${_usd(currentBankroll)}</b></td>
-        <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
-        <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
-        <td><b>${sharpeStr}</b></td>
-        <td style="color:${ddVal > 0.15 ? '#c33' : 'inherit'}">${ddStr}</td>
-        <td>${account.n_trades ?? m.n_trades ?? 0}</td>
-        <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
-      </tr>`;
-    }).join('');
-  }
-
-  _attachEdgeBoardChartHovers(mtmContainer);
-  return true;
-}
-
-function _refreshActiveEdgeBoardHost() {
-  if (!_ebLastData) return;
-  if (_updateMtmViewInPlace()) return;
-  const edgeHost = document.getElementById('edgeBody');
-  if (edgeHost) {
-    _captureEdgeBoardScroll();
-    edgeHost.innerHTML = renderEdgeBoard(_ebLastData);
-    _attachEdgeBoardChartHovers(edgeHost);
-    _restoreEdgeBoardScroll();
-  }
-  const trackHost = document.getElementById('trackBody');
-  if (trackHost) {
-    trackHost.innerHTML = renderTrackRecord(_ebLastData);
-    _attachEdgeBoardChartHovers(trackHost);
-  }
-}
-
-function _selectMtmStrategy(key) {
-  _activeMtmStrat = key;
-  if (key === 'quarter_kelly' || key === 'growth_2pct' || key === 'growth_1pct') {
-    _mtmSizingMode = key;
-  } else {
-    _mtmSizingMode = 'quarter_kelly';
-  }
-  if (!_updateMtmViewInPlace()) {
-    _refreshActiveEdgeBoardHost();
-  }
-}
-
-function _setMtmSizingMode(mode) {
-  _mtmSizingMode = mode;
-  _activeMtmStrat = mode;
-  if (!_updateMtmViewInPlace()) {
-    _refreshActiveEdgeBoardHost();
-  }
-}
-
-document.addEventListener('click', (event) => {
+// Edge board tab buttons switch the view through one delegated listener.
+function _ebOnViewTabClick(event) {
   const viewBtn = event.target.closest('[data-eb-view]');
   if (viewBtn) {
     event.preventDefault();
     _ebSetView(viewBtn.dataset.ebView);
     setHistoryState(currentView === 'app' ? 'edge-app' : 'edge-landing', 'replace', { panel: _ebView });
-    return;
   }
-  const sizingBtn = event.target.closest('[data-mtm-sizing-mode]');
-  if (sizingBtn) {
-    event.preventDefault();
-    _setMtmSizingMode(sizingBtn.dataset.mtmSizingMode);
-    return;
-  }
-  const strategyRow = event.target.closest('[data-mtm-strategy]');
-  if (strategyRow) {
-    event.preventDefault();
-    _selectMtmStrategy(strategyRow.dataset.mtmStrategy);
-  }
-});
-
-function _renderMtmPage(d) {
-  const sizingMode = _mtmSizingMode || 'quarter_kelly';
-  const mtmModels = _mtmModelsForSizing(d, sizingMode);
-  if (!mtmModels.length) {
-    return '<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4><p class="text-sm text-gray-500">Shadow mark-to-market account values will appear after strategy snapshots are available.</p>';
-  }
-  const _usd = v => Number.isFinite(Number(v))
-    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-    : 'building';
-  const pnl = d.paper_pnl || {};
-  const roi = s => (s && s.n_bets >= 5) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : `<span style="color:var(--text-dim);font-weight:500">building · n=${s ? s.n_bets : 0}</span>`;
-  const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-  const activeStrat = _activeMtmStrat || 'quarter_kelly';
-
-  const cardConfig = [
-    { key: 'growth_2pct', label: 'Edge Kelly 8% Cap', sub: '50% Kelly / 10pp EWMA', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.4)' },
-    { key: 'growth_1pct', label: 'Edge Kelly 5% Cap', sub: '50% Kelly / 10pp EWMA', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.4)' },
-    { key: 'quarter_kelly', label: 'Quarter-Kelly Mode', sub: '25% Kelly / 8% cap / 30% DD', color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.4)' },
-  ];
-
-  const _normCurve = s => _ebPnlCurve(s);
-  const _times = s => _ebCurveTimes(s);
-
-  const _getScaledMtmValue = (rawVal, mode) => {
-    const val = Number(rawVal);
-    if (!Number.isFinite(val)) return EB_STARTING_BANKROLL;
-    return val;
-  };
-
-  const modelCurves = mtmModels.map((m, i) => {
-    const account = m.account || {};
-    const curvePoints = _mtmCurvePoints(account);
-    const values = curvePoints.map(p => {
-      const rawVal = Number(p.account_value);
-      if (!Number.isFinite(rawVal)) return null;
-      return _getScaledMtmValue(rawVal, sizingMode);
-    }).filter(Number.isFinite);
-    const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
-    if (!values.length) return null;
-    const label = _ebModelLabel(m.model);
-    const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    const startP = EB_STARTING_BANKROLL;
-    const scaledVal = _getScaledMtmValue(rawVal, sizingMode);
-    const ret = (scaledVal - startP) / startP;
-    const curve = {
-      model: m.model,
-      points: values,
-      color: _mtmModelColor(m.model, i),
-      label,
-      head: _ebModelHead(m.model),
-      headTitle: `${label} · ${_usd(scaledVal)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
-    };
-    if (times.length === values.length) curve.times = times;
-    return curve;
-  }).filter(Boolean);
-
-  const rows = mtmModels.map((m, i) => {
-    const account = m.account || {};
-    const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-
-    const startPrincipal = EB_STARTING_BANKROLL;
-    const currentBankroll = _getScaledMtmValue(rawVal, sizingMode);
-    const pnlUsd = currentBankroll - startPrincipal;
-    const pnlPct = pnlUsd / startPrincipal;
-
-    const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
-    const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
-
-    const risk = _mtmRiskStats(m);
-    const sharpeStr = risk.sharpe != null ? risk.sharpe.toFixed(2) : '—';
-    const ddVal = risk.maxDrawdown;
-    const ddStr = Number.isFinite(ddVal) ? (ddVal * 100).toFixed(1) + '%' : '—';
-
-    const pnlTitle = `Net P&L: ${_usd(pnlUsd)} (Realized: ${_usd(account.realized_pnl || 0)}, Unrealized: ${_usd(account.unrealized_pnl || 0)}) · Net of venue trading fees (Kalshi 7% taker formula & Polymarket category-based taker fees)`;
-
-    return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
-      <td><b>${i + 1}</b></td>
-      <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span>${m.status === 'collecting_history' ? '<span style="display:block;color:var(--text-dim);font-size:11px">Collecting resolved history</span>' : ''}</td>
-      <td>${_usd(startPrincipal)}</td>
-      <td><b>${_usd(currentBankroll)}</b></td>
-      <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnlStr}<span style="display:block;font-size:10px;color:var(--text-dim);font-weight:400">net of fees</span></td>
-      <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
-      <td><b>${sharpeStr}</b></td>
-      <td style="color:${ddVal > 0.15 ? '#c33' : 'inherit'}">${ddStr}</td>
-      <td>${account.n_trades ?? m.n_trades ?? 0}</td>
-      <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
-    </tr>`;
-  }).join('');
-
-  const sizingLabels = {
-    'quarter_kelly': 'Quarter-Kelly 8% Cap',
-    'growth_1pct': 'Edge Kelly 5% Cap',
-    'growth_2pct': 'Edge Kelly 8% Cap',
-  };
-  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.quarter_kelly;
-
-  const validSharpes = mtmModels.map(m => _mtmRiskStats(m).sharpe).filter(Number.isFinite);
-  const avgSharpe = validSharpes.length ? (validSharpes.reduce((a, b) => a + b, 0) / validSharpes.length).toFixed(2) : '—';
-
-  const sizingButtonsHtml = `
-    <div class="eb-mtm-heading-row">
-      <h4 id="eb-mtm-header-title" class="eb-h eb-mtm-title">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
-      <div class="eb-view-tabs eb-sizing-tabs" role="tablist" aria-label="Position sizing modes">
-        <button type="button" class="eb-view-tab ${sizingMode === 'quarter_kelly' ? 'active' : ''}" data-mtm-sizing-mode="quarter_kelly">Quarter-Kelly (8% cap)</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Edge Kelly 5%</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Edge Kelly 8%</button>
-      </div>
-    </div>
-    <div class="mtm-methodology" aria-label="MTM methodology">
-      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Avg Sharpe</span><span class="mtm-methodology-value mtm-methodology-value--positive">${avgSharpe}</span></span>
-      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Risk guard</span><span class="mtm-methodology-value">30% drawdown halt</span></span>
-      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Fee model</span><span class="mtm-methodology-value">Net of taker fees</span></span>
-      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Liquidation</span><span class="mtm-methodology-value">Bid-marked book</span></span>
-    </div>`;
-
-  return `<div id="eb-mtm-container"><h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
-    ${sizingButtonsHtml}
-    <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Sharpe</th><th>Max DD</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table></div>`;
 }
+document.addEventListener('click', _ebOnViewTabClick);
 
 function renderEdgeBoard(d) {
-  const board = d.edge_board || [], comp = d.models_comparison || [];
+  _restoreKiteSourcePanel();
+  const board = d.edge_board || [];
   _ebLastData = d;
   _ebBoardData = board;
   _ebPage = 0;
-  const pnl = d.paper_pnl, ll = d.lead_lag;
+  const ll = d.lead_lag;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   // Never surface a degenerate metric (a 0% / −100% read off a handful of points).
   // Below EB_MIN_N samples a metric reads "building n=…" instead of a misleading zero.
@@ -9254,24 +9502,6 @@ function renderEdgeBoard(d) {
       <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Foresea follows market</div></div>
     </div>
     <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">${coverageNote}</p>`;
-  let compHtml;
-  if (comp.length) {
-    const crowdRoi = ((pnl || {}).crowd_baseline || {}).roi;
-    const compCurves = _ebModelCurves(comp, EB_MIN_N, 9);
-    const compChart = compCurves.length
-      ? `<div id="eb-model-comparison-svg">${_equitySvg(compCurves, 760, 180, {asPct: false, yPrefix: '$'})}</div>`
-      : '';
-    compHtml = `${compChart}<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Smart ROI</th><th>vs crowd</th></tr></thead><tbody>` +
-      comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
-        const modelSmartRoi = m.paper_roi_smart != null ? m.paper_roi_smart : (m.model === 'crowd-follow' ? m.paper_roi : null);
-        const roiDelta = modelSmartRoi != null && crowdRoi != null ? modelSmartRoi - crowdRoi : null;
-        return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
-        `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
-        `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
-        `<td>${enough ? _roiPct(modelSmartRoi) : '·'}</td><td>${enough ? _roiDeltaPct(roiDelta) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
-  } else {
-    compHtml = `<p class="text-sm text-gray-500">Model comparison across SCADS-hosted models fills in as forecasts resolve.</p>`;
-  }
   const byHorizon = d.by_horizon || [];
   const _hOrder = { '30d+': 0, '14-30d': 1, '7-14d': 2, '3-7d': 3, '1-3d': 4, '<1d': 5 };
   let calibHtml;
@@ -9286,16 +9516,18 @@ function renderEdgeBoard(d) {
   }
   const boardHtml = `<div id="eb-board-section">${_renderBoardPage(board, 0)}</div>`;
   const viewTabs = `<div class="eb-view-tabs" role="tablist" aria-label="Edge board views">
-    <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" data-eb-view="markets">Markets</button>
-    <button type="button" class="eb-view-tab ${_ebView === 'mtm' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'mtm'}" data-eb-view="mtm">MTM</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" data-eb-view="markets">Prediction Markets</button>
     <button type="button" class="eb-view-tab ${_ebView === 'agentic' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'agentic'}" data-eb-view="agentic">Agentic</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'indices' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'indices'}" data-eb-view="indices">Indices</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'pairs' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'pairs'}" data-eb-view="pairs">Commodity Pairs</button>
   </div>`;
   const marketsPageHtml = `${stats}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live Foresea forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
-  const mtmPageHtml = _renderMtmPage(d);
   const agenticPageHtml = `<div id="eb-agentic-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
-  const activePageHtml = _ebView === 'mtm' ? mtmPageHtml : _ebView === 'agentic' ? agenticPageHtml : marketsPageHtml;
+  const indicesPageHtml = `<div id="eb-indices-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
+  const pairsPageHtml = `<div id="eb-pairs-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
+  const activePageHtml = _ebView === 'agentic' ? agenticPageHtml : _ebView === 'indices' ? indicesPageHtml : _ebView === 'pairs' ? pairsPageHtml : marketsPageHtml;
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced - and our track record of being right about it</h3>
@@ -9615,14 +9847,28 @@ function _builtinModelLabel(key) {
 }
 function getActiveBuiltinModelId() {
   const key = _activeBuiltinModel();
-  return _builtinModelByKey(key) ? key : 'gpt-oss-120b';
+  return _builtinModelByKey(key) ? key : (builtinChatModels[0]?.key || 'gpt-oss-120b');
 }
 function setBuiltinChatModel(key) {
-  if (!key || !_builtinModelByKey(key)) key = 'gpt-oss-120b';
+  if (key === 'device:add') {
+    renderBuiltinChatModelSelect();
+    openSettingsModal('device-models');
+    return;
+  }
+  if (key && key.startsWith('device:') && _deviceModelByKey(key)) {
+    localStorage.setItem('foresea_chat_model', key);
+    localStorage.setItem('or_active', '');
+    renderBuiltinChatModelSelect();
+    _renderDeviceModels();
+    _updateModelLabel();
+    return;
+  }
+  if (!key || !_builtinModelByKey(key)) key = getActiveBuiltinModelId();
   localStorage.setItem('foresea_chat_model', key);
   if (key) localStorage.setItem('or_active', '');
   renderBuiltinChatModelSelect();
   renderModelList();
+  _renderDeviceModels();
   _updateModelLabel();
 }
 function renderBuiltinChatModelSelect() {
@@ -9633,15 +9879,19 @@ function renderBuiltinChatModelSelect() {
     const suffix = (m.fallbacks || []).length ? ` (fallbacks: ${(m.fallbacks || []).join(' -> ')})` : '';
     return `<option value="${escAttr(m.key)}" title="${escAttr((m.model || m.key) + suffix)}">${escHtml(m.label || m.key)}</option>`;
   });
+  let groups = `<optgroup label="Foresea Hosted">${options.join('')}</optgroup>`;
   if (userChatModels && userChatModels.length) {
     const userOpts = userChatModels.map(m => {
       return `<option value="${escAttr(m.key)}" title="${escAttr(m.model || m.key)}">${escHtml(m.label || m.key)}</option>`;
     });
-    select.innerHTML = `<optgroup label="Foresea Hosted">${options.join('')}</optgroup><optgroup label="Your Connected Models">${userOpts.join('')}</optgroup>`;
-  } else {
-    select.innerHTML = options.join('');
+    groups += `<optgroup label="Your Connected Models">${userOpts.join('')}</optgroup>`;
   }
-  select.value = active;
+  const deviceOpts = _deviceModels().map(m =>
+    `<option value="device:${escAttr(m.id)}" title="${escAttr(m.baseUrl)}">${escHtml(m.model)}</option>`);
+  deviceOpts.push('<option value="device:add">Add a model on this device…</option>');
+  select.innerHTML = groups + `<optgroup label="On this device">${deviceOpts.join('')}</optgroup>`;
+  const device = getActiveDeviceModel();
+  select.value = device ? `device:${device.id}` : active;
 }
 async function loadBuiltinChatModels() {
   renderBuiltinChatModelSelect();
@@ -9866,8 +10116,9 @@ function loadOrSettings() {
 function _updateModelLabel() {
   const m = getActiveModelConfig();
   const builtin = getActiveBuiltinModelId();
+  const device = getActiveDeviceModel();
   const label = document.getElementById('activeModelLabel');
-  if (label) label.textContent = m ? m.model.split('/').pop() : _builtinModelLabel(builtin);
+  if (label) label.textContent = device ? device.model : m ? m.model.split('/').pop() : _builtinModelLabel(builtin);
 }
 
 // ── Exchange accounts (bring-your-own trading) ───────────────────────────────
@@ -10010,6 +10261,460 @@ function _initVenueAccounts() {
   renderVenueStatus();
   if (removedLegacy) _venueErr('Security update: browser-stored exchange credentials were removed. Reconnect securely to trade.');
   _loadVenueConnections();
+}
+
+// Private Kite data stays in this panel, outside chat context and browser storage.
+let _kiteMarketVersion = 0;
+function clearKiteMarketData() {
+  _kiteMarketVersion++;
+  for (const id of ['kiteMarketData', 'kiteMarketMessage']) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = '';
+  }
+}
+function renderKiteMarket(resource, data, target) {
+  let columns, rows;
+  if (resource === 'quotes') {
+    columns = ['Symbol', 'Last price', 'Open', 'High', 'Low', 'Previous close', 'Volume', 'Quote time (IST)'];
+    rows = Object.entries(data.quotes).map(([symbol, quote]) => [symbol, quote.last_price, quote.ohlc?.open, quote.ohlc?.high, quote.ohlc?.low, quote.ohlc?.close, quote.volume, quote.timestamp]);
+    if (data.missing_instruments.length) {
+      const missing = document.createElement('p');
+      missing.textContent = 'No quote returned for: ' + data.missing_instruments.join(', ');
+      target.append(missing);
+    }
+  } else {
+    const candles = data.candles;
+    const caption = document.createElement('p');
+    caption.textContent = data.instrument + ' · ' + candles.length + ' candles · ' + data.interval + ' · IST. Latest 200 rows shown, newest first.';
+    target.append(caption);
+    if (candles.length > 1) {
+      // Bound chart work while retaining the first and last close; table retains exact values.
+      const points = candles.filter((_, i) => i % Math.max(1, Math.ceil(candles.length / 800)) === 0 || i === candles.length - 1);
+      const times = points.map(row => Date.parse(row[0]));
+      const prices = points.map(row => row[4]);
+      let low = Infinity, high = -Infinity;
+      for (const candle of candles) { low = Math.min(low, candle[4]); high = Math.max(high, candle[4]); }
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 800 180');
+      svg.setAttribute('role', 'img');
+      svg.setAttribute('aria-label', 'Closing price over time in exchange units. Range ' + low + ' to ' + high + (candles.length > 800 ? '. Sampled for display.' : '.'));
+      svg.style.cssText = 'display:block;width:100%;min-width:250px;max-height:180px';
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      line.setAttribute('fill', 'none');
+      line.setAttribute('stroke', 'currentColor');
+      line.setAttribute('stroke-width', '2');
+      line.setAttribute('points', prices.map((price, i) => (10 + (times[i] - times[0]) / (times.at(-1) - times[0]) * 780) + ',' + (170 - (price - low) / (high - low || 1) * 160)).join(' '));
+      svg.append(line);
+      target.append(svg);
+      const range = document.createElement('p');
+      range.textContent = 'Close: ' + low + '–' + high + ' · ' + candles[0][0] + ' to ' + candles.at(-1)[0] + (candles.length > 800 ? ' · Chart sampled for display.' : '');
+      target.append(range);
+    }
+    columns = ['Time (IST)', 'Open', 'High', 'Low', 'Close', 'Volume', 'Open interest'];
+    rows = candles.slice(-200).reverse();
+  }
+  if (!rows.length) {
+    const empty = document.createElement('p'); empty.textContent = 'No data for this selection.'; target.append(empty); return;
+  }
+  const table = document.createElement('table'); table.className = 'eb-table';
+  const header = table.createTHead().insertRow();
+  columns.forEach(label => { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = label; header.append(cell); });
+  const body = table.createTBody();
+  rows.forEach(values => { const row = body.insertRow(); columns.forEach((_, i) => { row.insertCell().textContent = values[i] == null ? '—' : String(values[i]); }); });
+  target.append(table);
+}
+async function kiteMarketAction(resource) {
+  clearKiteMarketData();
+  const version = _kiteMarketVersion, session = authHeaders().Authorization;
+  const target = document.getElementById('kiteMarketData'), message = document.getElementById('kiteMarketMessage');
+  if (!target || !message) return;
+  if (!session) { message.textContent = 'Sign in and connect Kite below to load market data.'; return; }
+  const current = () => version === _kiteMarketVersion && session === authHeaders().Authorization && target.isConnected && _ebVenueFilter === 'kite' && _ebView === 'markets';
+  const symbol = document.getElementById('kiteMarketSymbol').value.trim();
+  const params = new URLSearchParams(resource === 'quotes' ? {i: symbol} : {
+    instrument: symbol, interval: document.getElementById('kiteMarketInterval').value,
+    from: document.getElementById('kiteMarketFrom').value, to: document.getElementById('kiteMarketTo').value,
+  });
+  message.textContent = 'Loading Kite market data…';
+  try {
+    const response = await fetch('/integrations/kite/' + resource + '?' + params, {headers: authHeaders(), cache: 'no-store'});
+    const reply = await response.json();
+    if (!current()) return;
+    if (!response.ok) throw new Error(typeof reply.detail === 'string' ? reply.detail : 'Kite market-data request failed.');
+    renderKiteMarket(resource, reply.data, target);
+    message.textContent = 'Fetched ' + new Date(reply.fetched_at).toLocaleTimeString() + '. Snapshot data in exchange units; quote time may be earlier when the market is closed.';
+  } catch (error) {
+    if (current()) { target.replaceChildren(); message.textContent = error.message || 'Kite market data is unavailable.'; }
+  }
+}
+let _kiteRequestVersion = 0;
+function clearKiteAccount() {
+  _kiteRequestVersion++;
+  for (const id of ['kiteApiKey', 'kiteAccessToken']) { const input = document.getElementById(id); if (input) input.value = ''; }
+  const data = document.getElementById('kiteAccountData');
+  if (data) data.textContent = '';
+  const message = document.getElementById('kiteAccountMessage');
+  if (message) message.textContent = '';
+  const chip = document.getElementById('kiteChip');
+  if (chip) chip.textContent = 'Read-only · Not connected';
+}
+function renderKiteAccount(resource, data) {
+  const target = document.getElementById('kiteAccountData');
+  target.replaceChildren();
+  let columns, rows;
+  if (resource === 'funds') {
+    columns = ['Segment', 'Net (INR)', 'Cash (INR)', 'Collateral (INR)'];
+    rows = Object.entries(data).map(([segment, funds]) => [segment, funds?.net, funds?.available?.cash, funds?.available?.collateral]);
+  } else {
+    const items = resource === 'positions'
+      ? [...(data.net || []).map(item => ({...item, segment: 'Net'})), ...(data.day || []).map(item => ({...item, segment: 'Day'}))] : data;
+    columns = resource === 'orders'
+      ? ['Symbol', 'Exchange', 'Side', 'Quantity', 'Filled', 'Status']
+      : ['Symbol', 'Exchange', 'Quantity', 'Average (INR)', 'Last (INR)', 'P&L (INR)'];
+    rows = items.map(item => resource === 'orders'
+      ? [item.tradingsymbol, item.exchange, item.transaction_type, item.quantity, item.filled_quantity, item.status]
+      : [item.tradingsymbol, item.exchange, item.quantity, item.average_price, item.last_price, item.pnl]);
+    if (resource === 'positions') { columns.unshift('View'); rows.forEach((row, i) => row.unshift(items[i].segment)); }
+  }
+  if (!rows.length) { target.textContent = 'No ' + resource + ' to show.'; return; }
+  const table = document.createElement('table');
+  const head = table.createTHead().insertRow();
+  columns.forEach(label => { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = label; cell.style.padding = '6px'; head.append(cell); });
+  const body = table.createTBody();
+  rows.forEach(values => {
+    const row = body.insertRow();
+    values.forEach(value => { const cell = row.insertCell(); cell.textContent = value == null ? '—' : String(value); cell.style.padding = '6px'; });
+  });
+  target.append(table);
+}
+async function kiteAccountAction(action) {
+  if (action === 'connect' || action === 'disconnect') clearKiteMarketData();
+  const version = ++_kiteRequestVersion;
+  const session = authHeaders().Authorization;
+  const message = document.getElementById('kiteAccountMessage');
+  if (!session) { clearKiteAccount(); message.textContent = 'Sign in to connect your Kite account.'; return; }
+  const current = () => version === _kiteRequestVersion && session === authHeaders().Authorization;
+  const resource = document.getElementById('kiteResource').value;
+  const options = { headers: { ...authHeaders(), 'Content-Type': 'application/json' }, cache: 'no-store' };
+  if (action === 'connect') {
+    options.method = 'PUT';
+    options.body = JSON.stringify({ api_key: document.getElementById('kiteApiKey').value.trim(), access_token: document.getElementById('kiteAccessToken').value.trim() });
+  } else if (action === 'disconnect') options.method = 'DELETE';
+  document.getElementById('kiteApiKey').value = '';
+  document.getElementById('kiteAccessToken').value = '';
+  document.getElementById('kiteAccountData').replaceChildren();
+  message.textContent = 'Loading Kite account…';
+  try {
+    const response = await fetch('/integrations/kite' + (action === 'read' ? '/' + resource : ''), options);
+    const data = await response.json();
+    if (!current()) return;
+    if (!response.ok) {
+      if (response.status === 409) document.getElementById('kiteChip').textContent = 'Read-only · Reconnect required';
+      throw new Error(typeof data.detail === 'string' ? data.detail : 'Kite account request failed.');
+    }
+    if (action === 'read') {
+      renderKiteAccount(resource, data.data);
+      message.textContent = 'Updated ' + new Date(data.fetched_at).toLocaleTimeString() + '. Account values in INR.';
+      document.getElementById('kiteChip').textContent = 'Read-only · Connected';
+    } else {
+      document.getElementById('kiteChip').textContent = data.connected ? 'Read-only · Session stored' : 'Read-only · Not connected';
+      message.textContent = action === 'connect' ? 'Connected. Choose an account view and refresh.'
+        : action === 'disconnect' ? 'Stored session removed from Foresea.'
+        : data.enabled === false ? 'Kite is not enabled on this server.'
+        : data.connected ? 'Session stored. Refresh to check it is still valid.' : 'Connect a daily Kite session to view your account.';
+    }
+  } catch (error) {
+    if (current()) message.textContent = error.message || 'Kite account is unavailable.';
+  } finally {
+    // Status/account reads may supersede this UI request while a connection change is pending.
+    if ((action === 'connect' || action === 'disconnect') && session === authHeaders().Authorization) clearKiteMarketData();
+  }
+}
+
+// ── Models on this device ─────────────────────────────────────────────────────
+// foresea.ink cannot reach a model on the visitor's computer, but their browser
+// can. The server researches and writes the prompt (/predict/device/prepare),
+// the browser streams it through the local model, and the server parses the
+// reply (/predict/device/finish). The model's address and key stay here.
+const _DEVICE_PRESETS = {
+  ollama: {
+    url: 'http://localhost:11434',
+    hint: () => `Start Ollama so it accepts this site: <code>OLLAMA_ORIGINS=${escHtml(location.origin)} ollama serve</code>`,
+  },
+  lmstudio: {
+    url: 'http://localhost:1234',
+    hint: () => 'In LM Studio, open the Developer tab, start the server and turn on <b>Enable CORS</b>.',
+  },
+  llamacpp: {
+    url: 'http://localhost:8080',
+    hint: () => 'Start <code>llama-server -m your-model.gguf</code>. It accepts browser requests by default.',
+  },
+  mlx: {
+    url: 'http://localhost:8080',
+    hint: () => 'Start <code>mlx_lm.server --model your-model</code>. It accepts browser requests by default.',
+  },
+};
+function _deviceModels() {
+  try { return JSON.parse(localStorage.getItem('foresea_device_models') || '[]') || []; }
+  catch { return []; }
+}
+function _saveDeviceModels(models) {
+  try { localStorage.setItem('foresea_device_models', JSON.stringify(models)); } catch {}
+}
+function _deviceModelByKey(key) {
+  return _deviceModels().find(m => `device:${m.id}` === key) || null;
+}
+function getActiveDeviceModel() {
+  return _deviceModelByKey(_activeBuiltinModel());
+}
+function _deviceBaseUrl(raw) {
+  return String(raw || '').trim().replace(/\/+$/, '').replace(/\/v1(\/chat\/completions|\/models)?$/i, '');
+}
+function _deviceHeaders(apiKey, json) {
+  const headers = json ? { 'Content-Type': 'application/json' } : {};
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  return headers;
+}
+function _deviceUnreachable(baseUrl) {
+  return `Couldn't reach ${baseUrl}. Check that the server is running and accepts requests from ${location.origin} ` +
+    '(the On this device page in Settings shows the setup line for each server).';
+}
+function _dmError(msg) {
+  const el = document.getElementById('dmError');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.hidden = !msg;
+  if (msg) _dmStatus('');
+}
+function _dmStatus(msg) {
+  const el = document.getElementById('dmStatus');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+function _deviceUsePreset(name) {
+  const preset = _DEVICE_PRESETS[name];
+  if (!preset) return;
+  document.getElementById('dmBaseUrl').value = preset.url;
+  document.getElementById('dmSetupHint').innerHTML = preset.hint();
+  document.querySelectorAll('#deviceModelPresets .mp-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.preset === name);
+  });
+  _dmError('');
+}
+function _renderDeviceModels() {
+  const host = document.getElementById('deviceModelList');
+  const models = _deviceModels();
+  const badge = document.getElementById('settingsDeviceModelsBadge');
+  if (badge) badge.textContent = models.length ? String(models.length) : '';
+  if (!host) return;
+  const active = getActiveDeviceModel();
+  const hosted = getActiveBuiltinModelId();
+  const rows = [`
+    <div class="model-row ${active ? '' : 'active'}" onclick="setBuiltinChatModel('${escAttr(hosted)}')">
+      <span class="model-radio"></span>
+      <div class="model-meta">
+        <div class="model-name">${escHtml(_builtinModelLabel(hosted))}</div>
+        <div class="model-sub">Hosted by Foresea</div>
+      </div>
+    </div>`];
+  models.forEach(m => {
+    rows.push(`
+      <div class="model-row ${active?.id === m.id ? 'active' : ''}" onclick="setBuiltinChatModel('device:${escAttr(m.id)}')">
+        <span class="model-radio"></span>
+        <div class="model-meta">
+          <div class="model-name">${escHtml(m.model)}</div>
+          <div class="model-sub">${escHtml(m.baseUrl)}</div>
+        </div>
+        <span class="model-badge">Device</span>
+        <div class="model-actions">
+          <button type="button" class="model-icon-btn" title="Remove" onclick="event.stopPropagation();_deviceRemoveModel('${escAttr(m.id)}')">${uiIcon('x')}</button>
+        </div>
+      </div>`);
+  });
+  host.innerHTML = rows.join('');
+  const hint = document.getElementById('dmSetupHint');
+  if (hint && !hint.innerHTML) _deviceUsePreset('ollama');
+}
+async function _deviceFindModels() {
+  const baseUrl = _deviceBaseUrl(document.getElementById('dmBaseUrl').value);
+  const apiKey = document.getElementById('dmKey').value.trim();
+  if (!/^https?:\/\/[^/]+/i.test(baseUrl)) { _dmError('Enter the server address, e.g. http://localhost:11434.'); return; }
+  const btn = document.getElementById('dmFind');
+  btn.disabled = true;
+  btn.textContent = 'Looking…';
+  _dmError('');
+  try {
+    const resp = await fetch(`${baseUrl}/v1/models`, { headers: _deviceHeaders(apiKey) });
+    if (!resp.ok) {
+      _dmError(`${baseUrl} answered HTTP ${resp.status}.${resp.status === 401 || resp.status === 403 ? ' Check the API key.' : ''}`);
+      return;
+    }
+    const data = await resp.json();
+    const ids = (data.data || data.models || []).map(m => m.id || m.name || m.model).filter(Boolean);
+    if (!ids.length) { _dmError('The server is running but lists no models. Load or pull a model first.'); return; }
+    document.getElementById('dmModelOptions').innerHTML = ids.map(id => `<option value="${escAttr(id)}"></option>`).join('');
+    const modelInput = document.getElementById('dmModel');
+    if (!ids.includes(modelInput.value.trim())) modelInput.value = ids[0];
+    _dmStatus(`Connected: ${ids.length} model${ids.length === 1 ? '' : 's'} on this server.`);
+  } catch (err) {
+    _dmError(_deviceUnreachable(baseUrl));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Find models on this server';
+  }
+}
+function _deviceSaveModel() {
+  const baseUrl = _deviceBaseUrl(document.getElementById('dmBaseUrl').value);
+  const apiKey = document.getElementById('dmKey').value.trim();
+  const model = document.getElementById('dmModel').value.trim();
+  if (!/^https?:\/\/[^/]+/i.test(baseUrl)) { _dmError('Enter the server address, e.g. http://localhost:11434.'); return; }
+  if (!model) { _dmError('Choose a model. "Find models on this server" lists them.'); return; }
+  const models = _deviceModels();
+  let entry = models.find(m => m.baseUrl === baseUrl && m.model === model);
+  if (entry) entry.apiKey = apiKey;
+  else {
+    entry = { id: 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), baseUrl, model, apiKey };
+    models.push(entry);
+  }
+  _saveDeviceModels(models);
+  setBuiltinChatModel(`device:${entry.id}`);
+  _dmError('');
+  _dmStatus(`Saved. New forecasts use ${model} on this device.`);
+}
+function _deviceRemoveModel(id) {
+  const wasActive = getActiveDeviceModel()?.id === id;
+  _saveDeviceModels(_deviceModels().filter(m => m.id !== id));
+  if (wasActive) localStorage.removeItem('foresea_chat_model');
+  renderBuiltinChatModelSelect();
+  _renderDeviceModels();
+  _updateModelLabel();
+}
+
+// The same server-sent events /predict/stream sends (meta, delta, done,
+// error), produced in the browser, so streamPredict renders a device forecast
+// exactly like a hosted one.
+function _deviceForecastResponse(body, model, signal) {
+  const encoder = new TextEncoder();
+  const local = new AbortController();
+  const onAbort = () => local.abort();
+  signal.addEventListener('abort', onAbort, { once: true });
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event, data) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      const fail = detail => { send('error', { detail }); controller.close(); };
+      try {
+        send('meta', { status: 'preparing' });
+        const prepResp = await fetch('/predict/device/prepare', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(body),
+          signal: local.signal,
+        });
+        const prepared = await _readJson(prepResp);
+        if (!prepResp.ok) { fail(prepared?.detail || 'Could not prepare the forecast.'); return; }
+        send('meta', {
+          status: 'streaming',
+          evidence_sources: prepared.evidence_articles || [],
+          evidence_error: prepared.evidence_error,
+        });
+
+        const baseUrl = _deviceBaseUrl(model.baseUrl);
+        let resp;
+        try {
+          resp = await fetch(`${baseUrl}/v1/chat/completions`, {
+            method: 'POST',
+            headers: _deviceHeaders(model.apiKey, true),
+            body: JSON.stringify({
+              model: model.model,
+              messages: prepared.messages,
+              temperature: prepared.temperature,
+              // Local reasoning models think before they answer.
+              max_tokens: Math.max(prepared.max_tokens || 0, 2048),
+              stream: true,
+            }),
+            signal: local.signal,
+          });
+        } catch (err) {
+          if (err?.name === 'AbortError') throw err;
+          fail(_deviceUnreachable(baseUrl));
+          return;
+        }
+        if (!resp.ok || !resp.body) {
+          const detail = (await resp.text().catch(() => '')).slice(0, 300);
+          fail(`${model.model} at ${baseUrl} answered HTTP ${resp.status}${detail ? `: ${detail}` : '.'}`);
+          return;
+        }
+
+        let raw = '';
+        let shown = '';
+        const show = () => {
+          if ('<think>'.startsWith(raw.trimStart())) return;
+          const visible = raw.replace(/<think>[\s\S]*?(?:<\/think>|$)\s*/g, '');
+          if (visible.length > shown.length && visible.startsWith(shown)) {
+            send('delta', { text: visible.slice(shown.length) });
+            shown = visible;
+          }
+        };
+        if ((resp.headers.get('content-type') || '').includes('application/json')) {
+          // A server that ignored stream: true.
+          const data = await resp.json();
+          raw = data?.choices?.[0]?.message?.content || '';
+          show();
+        } else {
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          read: while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              if (!line.startsWith('data:')) continue;
+              const payload = line.slice(5).trim();
+              if (payload === '[DONE]') break read;
+              let chunk;
+              try { chunk = JSON.parse(payload); } catch { continue; }
+              if (chunk.error) {
+                fail(`${model.model}: ${chunk.error.message || chunk.error}`);
+                return;
+              }
+              const piece = chunk.choices?.[0]?.delta?.content || '';
+              if (!piece) continue;
+              raw += piece;
+              show();
+            }
+          }
+        }
+        if (!raw.trim()) { fail(`${model.model} returned no text.`); return; }
+
+        const finResp = await fetch('/predict/device/finish', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            request: prepared.request,
+            content: raw,
+            evidence_articles: prepared.evidence_articles || [],
+            evidence_error: prepared.evidence_error,
+            served_model_name: model.model,
+          }),
+          signal: local.signal,
+        });
+        const finished = await _readJson(finResp);
+        if (!finResp.ok) { fail(finished?.detail || 'Could not read the model reply.'); return; }
+        send('done', { response: finished });
+        controller.close();
+      } catch (err) {
+        controller.error(err);
+      } finally {
+        signal.removeEventListener('abort', onAbort);
+      }
+    },
+    cancel() { local.abort(); },
+  });
+  return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
 }
 
 // ── BYO Model Providers Manager ───────────────────────────────────────────────
@@ -11689,6 +12394,7 @@ function _agentReportData(report) {
   return {
     question_type: 'chat',
     question: d.question || '',
+    options: d.options || [],
     thesis: d.thesis || '',
     rationale: _agentReportToMarkdown(d, { includeSources: false }),
     model_key: 'agent',
@@ -12176,6 +12882,7 @@ function _loadStoredSession() {
 }
 
 function _saveSession(token, user) {
+  if (token !== authHeaders().Authorization?.replace(/^Bearer /, '')) { clearKiteAccount(); clearKiteMarketData(); }
   try {
     localStorage.setItem('foresea_session', token);
     localStorage.setItem('foresea_user', JSON.stringify(user));
@@ -12203,6 +12910,8 @@ async function _afterSignIn(user, source = 'auth') {
 }
 
 function _clearSession() {
+  clearKiteAccount();
+  clearKiteMarketData();
   localStorage.removeItem('foresea_session');
   localStorage.removeItem('foresea_user');
   currentUser = null;
@@ -12409,6 +13118,7 @@ function closeAuthModal({ preserveLedgerIntent = false } = {}) {
 
 // ── Settings modal ───────────────────────────────────────────────────────────
 function openSettingsModal(section) {
+  _restoreKiteSourcePanel();
   _closeAcctMenu();
   _showSettingsSection(section || 'connections');
   renderVenueStatus();
@@ -12422,12 +13132,14 @@ function closeSettingsModal() {
   const overlay = document.getElementById('settingsOverlay');
   overlay.classList.remove('show');
   overlay.setAttribute('aria-hidden', 'true');
+  _mountKiteSourcePanel();
 }
 
 function _showSettingsSection(name) {
   const sections = {
     connections: 'settingsSectionConnections',
     'model-providers': 'settingsSectionModelProviders',
+    'device-models': 'settingsSectionDeviceModels',
   };
   if (!sections[name]) return;
   document.querySelectorAll('.settings-nav-item').forEach(btn => {
@@ -12438,6 +13150,9 @@ function _showSettingsSection(name) {
   });
   if (name === 'model-providers') {
     _loadModelProviders();
+  }
+  if (name === 'device-models') {
+    _renderDeviceModels();
   }
 }
 

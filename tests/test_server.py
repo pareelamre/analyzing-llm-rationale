@@ -345,6 +345,9 @@ class ServerTests(unittest.TestCase):
             side_effect=fake_require_auth
         )
         self._require_auth_mock = self._require_auth_patch.start()
+        # Most tests count provider calls; the consensus estimates have their own tests.
+        self._estimate_patch = mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 0)
+        self._estimate_patch.start()
         _local_cache.clear()
         _rate_limiter._log.clear()
         _predict_rate_limiter._log.clear()
@@ -370,6 +373,7 @@ class ServerTests(unittest.TestCase):
     def tearDown(self):
         self._logger_patch.stop()
         self._require_auth_patch.stop()
+        self._estimate_patch.stop()
         self._datastore_patch.stop()
         server_module._ANALYTICS_DB = self._original_analytics_db
         _state.clear()
@@ -1259,7 +1263,10 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.json()["question_type"], "chat")
         system_message = self.provider.calls[0][0]["content"]
         user_message = self.provider.calls[0][-1]["content"]
-        self.assertEqual(system_message, _CHAT_SYSTEM_PROMPT)
+        self.assertEqual(
+            system_message,
+            _CHAT_SYSTEM_PROMPT + "\n\nKeep the whole reply under 102 words, so it ends with the marker line.",
+        )
         # No forecast/JSON typing instruction is appended in chat mode.
         self.assertNotIn("Only binary questions", user_message)
         self.assertNotIn('"type":', user_message)
@@ -1444,6 +1451,539 @@ class ServerTests(unittest.TestCase):
         prompt = self.provider.calls[0][-1]["content"]
         self.assertIn("Already supplied venue background.", prompt)
         self.assertIn("Already supplied venue rules.", prompt)
+
+    def test_chat_forecasts_are_told_to_fit_the_token_cap(self):
+        # Replies cut off at the cap lost the [p:] marker, so the forecast had
+        # no probability. The test server's cap is 256 tokens.
+        response = self.client.post(
+            "/predict",
+            json={"question": "Will the Fed cut rates before July 31, 2026?", "chat_mode": True,
+                  "attach_evidence": False},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Keep the whole reply under 102 words, so it ends with the marker line.",
+                      self.provider.calls[0][0]["content"])
+
+    def test_chat_forecast_is_the_median_of_quick_estimates(self):
+        # One greedy reply from the 9B swung from 15% to 95% on the same link;
+        # the median of several sampled estimates holds steady.
+        self.provider.responses = [
+            "[p:0.20]", "[p:0.80]", "[p:0.25]", "[p:0.30]", "[p:0.22]",
+            "Rain looks likely to me.\n[p:0.90]",
+        ]
+        with mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 5):
+            response = self.client.post(
+                "/predict",
+                json={"question": "Will it rain in Tampa today?", "market_probability": 0.24,
+                      "chat_mode": True, "attach_evidence": False},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.provider.calls), 6)
+        self.assertEqual(self.provider.max_tokens[:5], [12] * 5)
+        self.assertIn("reply with only your probability", self.provider.calls[0][-1]["content"])
+        reply_prompt = self.provider.calls[5][-1]["content"]
+        self.assertIn("Your forecast for this question is 25%", reply_prompt)
+        self.assertIn("end with the marker line [p:0.25]", reply_prompt)
+        # The reply's own number doesn't override the median.
+        self.assertEqual(response.json()["model_probability"], 0.25)
+        self.assertTrue(response.json()["rationale"].startswith("**Forecast: 25%**"))
+
+    def test_chat_without_a_market_skips_the_estimates(self):
+        # Without a market price the quick estimates drift to ~50%, so only a
+        # market's forecast is a median; other questions get the single reply.
+        self.provider.response = "A hike looks more likely than a cut.\n[p:0.15]"
+        with mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 5):
+            for question in ("Will the Fed cut rates in December 2026?",
+                             "What are the main stories in the news right now?"):
+                response = self.client.post(
+                    "/predict", json={"question": question, "chat_mode": True, "attach_evidence": False},
+                )
+                self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(len(self.provider.calls), 2)
+        self.assertEqual(response.json()["model_probability"], 0.15)
+
+    def test_estimates_stop_when_the_model_gives_no_probability(self):
+        self.provider.responses = ["I can't put a number on that.", "Hard to say.\n[p:0.40]"]
+        with mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 5):
+            response = self.client.post(
+                "/predict",
+                json={"question": "Will the bill pass?", "market_probability": 0.4, "chat_mode": True,
+                      "attach_evidence": False},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.provider.calls), 2)
+        self.assertNotIn("Your forecast for this question", self.provider.calls[1][-1]["content"])
+
+    def test_a_question_about_a_pasted_page_gets_no_forecast(self):
+        def forecast(question):
+            req = server_module.PredictRequest(question=question, chat_mode=True)
+            return server_module._build_chat_response(req, "The budget leads.\n[p:0.92]", [], None)
+
+        news = forecast("What are the main stories on https://www.bbc.com/news right now?")
+        self.assertIsNone(news.model_probability)
+        self.assertNotIn("Forecast:", news.rationale)
+        # Forecast questions keep it, with or without a page.
+        self.assertEqual(forecast("Fed cut in December?").model_probability, 0.92)
+        self.assertEqual(forecast("Will this pass? https://example.com/bill").model_probability, 0.92)
+
+    @staticmethod
+    def _rain_event_quote():
+        """A Kalshi "where will it rain" event link, quoted on its most contested city."""
+        options = [
+            {"label": label, "question": f"Will it rain in {label} on Nov 2?", "probability": p,
+             "quoted": label == "Boston", "ticker": f"KXRAIN-02-{label[:3].upper()}"}
+            for label, p in (("Miami", 0.9), ("Boston", 0.4), ("Denver", 0.1))
+        ]
+        return {
+            "platform": "Kalshi", "ident": "KXRAIN-02-BOS", "question": "Will it rain in Boston on Nov 2?",
+            "market_url": "https://kalshi.com/markets/kxrain", "outcome": "Yes", "probability": 0.4,
+            "yes_bid": 0.39, "yes_ask": 0.41,
+            "description": "Outcomes in this event (market price): Miami 90%; Boston 40%; Denver 10%.",
+            "resolution_criteria": "If it rains in Boston on Nov 2, Yes.",
+            "event_title": "Rain on Nov 2?", "event_exclusive": False, "event_options": options,
+        }
+
+    _RAIN_ESTIMATES = [
+        "Miami: 0.80\nBoston: 0.30\nDenver: 0.10",
+        "- **Miami**: 0.90\n- **Boston**: 0.50\n- **Denver** (market 10%): 0.20",
+        "Miami: 0.85\nBoston: 0.35",
+        "Boston: [p:0.40]\nMiami: 0.95\nDenver: 0.05",
+        "Miami: 0.70\nBoston: 0.20\nDenver: 0.10",
+    ]
+
+    def test_an_event_link_gets_a_forecast_per_option(self):
+        import analyzing_llm_rationale.market_data as md
+
+        self.provider.responses = [*self._RAIN_ESTIMATES, "Showers are likely in Miami.\n[p:0.99]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ) as fetch_evidence,
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+                "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.provider.calls), 6)
+        self.assertEqual(self.provider.max_tokens[:5], [52] * 5)
+        # The prompt is about the event, not the one market the link was quoted on.
+        prompt = self.provider.calls[0][-2]["content"]
+        self.assertIn("Linked event: Rain on Nov 2?. Each option is its own Yes/No market", prompt)
+        self.assertNotIn("Market-Implied Probability", prompt)
+        self.assertIn("(One option's market; the others follow the same template.) If it rains", prompt)
+        self.assertEqual(fetch_evidence.call_args.args[0], "Rain on Nov 2?")
+        ask = self.provider.calls[0][-1]["content"]
+        self.assertIn("- Miami\n- Boston\n- Denver\n", ask)
+        self.assertIn('like "Miami: 0.42"', ask)
+        reply_prompt = self.provider.calls[5][-1]["content"]
+        self.assertIn("Your forecasts for these options are: Miami 85%; Boston 35%; Denver 10%.", reply_prompt)
+        self.assertIn("do not state any other probability", reply_prompt)
+        # The quoted option's [p:] is pinned, not shown: a reply about another
+        # option took it for that option's forecast.
+        self.assertNotIn("0.35", reply_prompt)
+        body = response.json()
+        # The reply's [p:] is the quoted market's forecast, compared with its price.
+        self.assertEqual(body["model_probability"], 0.35)
+        self.assertEqual(body["market_analysis"]["market_probability"], 0.4)
+        self.assertEqual(body["options"], [
+            {"label": "Miami", "probability": 0.85}, {"label": "Boston", "probability": 0.35},
+            {"label": "Denver", "probability": 0.1},
+        ])
+        self.assertTrue(body["rationale"].startswith(
+            "**Forecast by option**\n\n| Option | Foresea | Market |\n|---|---|---|\n"
+            "| Miami | 85% | 90% |\n| Boston | 35% | 40% |\n| Denver | 10% | 10% |\n\nShowers are likely"
+        ))
+
+    def test_signed_in_market_questions_get_the_same_forecast(self):
+        # The research agent wrote one greedy JSON forecast, so neither the
+        # median nor the per-option table reached signed-in users.
+        import analyzing_llm_rationale.market_data as md
+
+        self.provider.responses = list(self._RAIN_ESTIMATES)
+        self.provider.stream_response = "Showers are likely in Miami.\n[p:0.99]"
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/agent/analyze/stream", json={
+                "question": "will it rain in denver? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        report = json.loads(response.text.rsplit("event: done\ndata: ", 1)[1])["report"]
+        self.assertEqual(report["question_type"], "chat")
+        self.assertEqual(report["model_probability"], 0.35)
+        self.assertEqual(report["outcome"], "Boston")
+        self.assertEqual([o["label"] for o in report["options"]], ["Miami", "Boston", "Denver"])
+        self.assertTrue(report["thesis"].startswith("**Forecast by option**"))
+        self.assertIn("Linked event: Rain on Nov 2?", self.provider.calls[0][-2]["content"])
+
+    def test_a_named_option_is_searched_by_its_own_question(self):
+        # The event's title ("Where will it rain on Nov 5?") found rain in
+        # Dresden; the named city's own market finds its forecast.
+        import analyzing_llm_rationale.market_data as md
+
+        def search(question, top_k, *, source):
+            place = "Miami" if "Miami" in question else "Event"
+            articles = [{"title": f"{place} {i}", "url": f"https://news.test/{place}/{i}", "summary": "Rain."}
+                        for i in range(top_k)]
+            return articles, None, "fresh_nonempty"
+
+        self.provider.responses = [*self._RAIN_ESTIMATES, "Showers are likely in Miami.\n[p:0.99]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(side_effect=search),
+            ) as fetch_evidence,
+            mock.patch.object(server_module, "_EVIDENCE_TOP_K_MAX", 4),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "will it rain in miami? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+                "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [c.args[0] for c in fetch_evidence.call_args_list],
+            ["Rain on Nov 2?", "Will it rain in Miami on Nov 2?"],
+        )
+        # The searches share the article budget, the named option's first.
+        self.assertEqual(
+            [a["title"] for a in response.json()["evidence_articles"]],
+            ["Miami 0", "Event 0", "Miami 1", "Event 1"],
+        )
+        # Given the named option as the example line, the 9B often answered
+        # only that option.
+        self.assertIn('like "Boston: 0.42"', self.provider.calls[0][-1]["content"])
+
+    def test_a_weather_market_gets_its_stations_forecast(self):
+        # The NWS / WeatherNext research only reached the trading agents and
+        # the weather radar: a pasted rain market got news about Dresden.
+        import analyzing_llm_rationale.market_data as md
+        import analyzing_llm_rationale.weather_research as wr
+
+        research = {
+            "source_status": "nws_observation_available",
+            "weather_market": {"station": "KMIA", "market_type": "precipitation",
+                               "settlement_source_label": "NWS Daily Climate Report"},
+            "observations": [{"timestamp": "2026-11-02T12:00:00Z", "temperature_f": 81.0}],
+            "forecast_periods": [
+                {"start_time": "2026-11-02T14:00:00-05:00", "temperature_f": 84, "short_forecast": "Showers",
+                 "precipitation_probability": 70},
+                {"start_time": "2026-11-02T15:00:00-05:00", "temperature_f": 83, "short_forecast": "Showers",
+                 "precipitation_probability": 60},
+            ],
+            "forecast_day_periods": [
+                {"name": "Monday", "detailed_forecast": "Showers likely. High near 84.", "precipitation_probability": 80},
+                {"name": "Monday Night", "detailed_forecast": "Showers. Chance of precipitation is 60%.",
+                 "precipitation_probability": 55},
+            ],
+            # A rain contract isn't priced on the day's high.
+            "model_forecast": {"provider": "open-meteo", "projected_high_f": 84.0, "projected_low_f": 75.0},
+        }
+        self.provider.responses = [*self._RAIN_ESTIMATES, "Showers are likely in Miami.\n[p:0.99]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()) as fetch_kalshi,
+            mock.patch.object(wr, "research_weather_market", return_value=research) as research_market,
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "will it rain in miami? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+                "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        # The named option's own market, not the one the link was quoted on.
+        self.assertEqual(fetch_kalshi.call_args_list[-1].args, ("KXRAIN-02-MIA",))
+        self.assertEqual(research_market.call_count, 1)
+        weather = response.json()["evidence_articles"][0]
+        self.assertEqual(weather["title"], "Weather forecast for KMIA")
+        self.assertEqual(weather["source"], "National Weather Service")
+        self.assertTrue(weather["summary"].startswith(
+            "NWS forecast for KMIA: Monday: Showers likely. High near 84 (chance of precipitation 80%)."
+            " Monday Night: Showers. Chance of precipitation is 60%."
+        ))
+        self.assertIn("in any one hour peaks at 70% around 14:00; temperatures 83-84°F; Showers", weather["summary"])
+        self.assertIn("Latest NWS observation at KMIA", weather["summary"])
+        self.assertNotIn("Open-Meteo", weather["summary"])
+        self.assertIn("Weather forecast for KMIA", self.provider.calls[0][-2]["content"])
+        # Half the estimates copied the market against the station forecast.
+        self.assertIn("official weather forecast for an option", self.provider.calls[0][-1]["content"])
+
+    def test_estimates_weigh_a_station_forecast_only_when_there_is_one(self):
+        import analyzing_llm_rationale.market_data as md
+
+        self.provider.responses = [*self._RAIN_ESTIMATES, "Showers are likely in Miami.\n[p:0.99]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02", "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("official weather forecast", self.provider.calls[0][-1]["content"])
+
+    def test_an_event_reply_without_option_forecasts_has_no_lone_forecast(self):
+        # Its number is for whichever option it discussed: "Forecast: 35%"
+        # for Tampa was compared with the quoted market, Providence.
+        import analyzing_llm_rationale.market_data as md
+
+        self.provider.responses = ["I can't say.", "No idea.", "Showers are likely in Miami.\n[p:0.35]"]
+        with (
+            mock.patch.object(md, "fetch_kalshi", return_value=self._rain_event_quote()),
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ),
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 7),
+        ):
+            response = self.client.post("/predict", json={
+                "question": "will it rain in miami? https://kalshi.com/markets/kxrain/where-will-it-rain-daily/kxrain-02",
+                "chat_mode": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIsNone(body["model_probability"])
+        self.assertEqual(body["options"], [])
+        self.assertTrue(body["rationale"].startswith("Showers are likely in Miami."))
+
+    def test_event_options_are_the_quoted_named_and_most_informative(self):
+        def options(event_exclusive, asked):
+            labels = ["Alice", "Bob", "Carol", "Dan", "Eve", "Fay", "Gus", "Hal", "Ida", "Jo"]
+            prices = [0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.01]
+            quote = {"question": "Will Gus?", "event_title": "Who?", "event_exclusive": event_exclusive,
+                     "event_options": [{"label": label, "question": f"Will {label}?", "probability": p,
+                                        "quoted": label == "Gus"} for label, p in zip(labels, prices)]}
+            req = server_module.PredictRequest(question="Who will win the race?", chat_mode=True)
+            event = server_module._chat_event_options(req, quote, asked=asked)
+            return [o["label"] for o in event["options"]], event["total"]
+
+        # Candidates: the likeliest, plus the quoted market and any named one.
+        self.assertEqual(options(True, "what about jo?"),
+                         (["Alice", "Bob", "Carol", "Dan", "Eve", "Fay", "Gus", "Jo"], 10))
+        # Independent markets (rain in each city): the most contested.
+        self.assertEqual(options(False, ""), (["Bob", "Carol", "Dan", "Eve", "Fay", "Gus", "Hal", "Ida"], 10))
+        # A label inside a longer word isn't a mention.
+        self.assertNotIn("Jo", options(True, "the jobs report")[0])
+
+    def test_exclusive_option_forecasts_add_up_to_one(self):
+        event = {"title": "Who wins?", "quoted_question": "Will A win?", "total": 2, "exclusive": True,
+                 "options": [{"label": "A", "question": "Will A win?", "probability": 0.5, "quoted": True},
+                             {"label": "B", "question": "Will B win?", "probability": 0.5, "quoted": False}]}
+        req = server_module.PredictRequest(question="Who will win the race?", chat_mode=True)
+        self.provider.responses = ["A: 0.60\nB: 0.60"] * 3
+        with mock.patch.object(server_module, "_CHAT_OPTION_ESTIMATE_SAMPLES", 3):
+            _, lead = asyncio.run(server_module._chat_option_consensus(
+                req, self.provider, [{"role": "user", "content": "Who wins?"}], event,
+            ))
+
+        self.assertEqual(lead, 0.5)
+        self.assertEqual([o["forecast"] for o in req._option_forecasts["options"]], [0.5, 0.5])
+
+    def test_option_estimates_survive_a_sample_without_numbers_and_inline_lists(self):
+        event = {"title": "Who wins?", "quoted_question": "Will A win?", "total": 3, "exclusive": False,
+                 "options": [{"label": "A", "question": "Will A win?", "probability": 0.5, "quoted": True},
+                             {"label": "B", "question": "Will B win?", "probability": 0.4, "quoted": False},
+                             {"label": "C", "question": "Will C win?", "probability": 0.1, "quoted": False}]}
+        req = server_module.PredictRequest(question="Who will win the race?", chat_mode=True)
+        self.provider.responses = [
+            "Let me weigh the evidence first.", "A: 0.60 | B: 0.40 | C: 0.10", "A: 0.62; B: 0.42; C: 0.12",
+            "A: 0.64\nB: 0.44\nC: 0.14",
+        ]
+        with mock.patch.object(server_module, "_CHAT_OPTION_ESTIMATE_SAMPLES", 4):
+            _, lead = asyncio.run(server_module._chat_option_consensus(
+                req, self.provider, [{"role": "user", "content": "Who wins?"}], event,
+            ))
+
+        self.assertEqual(lead, 0.62)
+        self.assertEqual([o["forecast"] for o in req._option_forecasts["options"]], [0.62, 0.42, 0.12])
+
+    def test_option_estimates_stop_after_two_samples_without_numbers(self):
+        event = {"title": "Who wins?", "quoted_question": "Will A win?", "total": 2, "exclusive": False,
+                 "options": [{"label": "A", "question": "Will A win?", "probability": 0.5, "quoted": True},
+                             {"label": "B", "question": "Will B win?", "probability": 0.4, "quoted": False}]}
+        req = server_module.PredictRequest(question="Who will win the race?", chat_mode=True)
+        self.provider.responses = ["I can't say.", "No idea.", "A: 0.6\nB: 0.4"]
+        with mock.patch.object(server_module, "_CHAT_OPTION_ESTIMATE_SAMPLES", 5):
+            _, lead = asyncio.run(server_module._chat_option_consensus(
+                req, self.provider, [{"role": "user", "content": "Who wins?"}], event,
+            ))
+
+        self.assertIsNone(lead)
+        self.assertEqual(len(self.provider.calls), 2)
+
+    def test_streamed_chat_forecast_uses_the_median_of_quick_estimates(self):
+        self.provider.responses = ["[p:0.40]", "[p:0.30]", "[p:0.35]"]
+        self.provider.stream_response = "It could go either way.\n[p:0.90]"
+        with (
+            mock.patch.object(server_module, "_CHAT_ESTIMATE_SAMPLES", 3),
+            mock.patch.object(server_module, "_INTERACTIVE_DEFAULT_MODEL", ""),
+        ):
+            response = self.client.post(
+                "/predict/stream",
+                json={"question": "Will it rain in Tampa today?", "market_probability": 0.3,
+                      "chat_mode": True, "attach_evidence": False},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        done = json.loads(response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0])
+        self.assertEqual(done["response"]["model_probability"], 0.35)
+        self.assertIn("Your forecast for this question is 35%", self.provider.calls[3][-1]["content"])
+
+    def test_predict_reads_a_kalshi_link_pasted_into_the_question(self):
+        import analyzing_llm_rationale.market_data as md
+
+        with mock.patch.object(md, "fetch_kalshi", return_value={
+            "platform": "Kalshi", "ident": "KXNATO-99-B", "question": "Will Bob be the next NATO chief?",
+            "market_url": "https://kalshi.com/markets/kxnato", "outcome": "Yes", "probability": 0.6,
+            "resolution_criteria": "Resolves Yes if Bob is appointed.",
+        }) as fetch_kalshi:
+            self.provider.response = "Bob is the favourite.\n[p:0.7]"
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "thoughts? https://kalshi.com/markets/kxnato/next-nato-chief/kxnato-99",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fetch_kalshi.assert_called_once_with("kxnato-99")
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Linked market: Will Bob be the next NATO chief?", prompt)
+        self.assertIn("Resolves Yes if Bob is appointed.", prompt)
+        # The forecast is compared with the linked market's price (this used
+        # to raise a validation error and return 500).
+        analysis = response.json()["market_analysis"]
+        self.assertEqual((analysis["market_probability"], analysis["model_probability"]), (0.6, 0.7))
+        self.assertEqual(analysis["stance"], "model_above_market")
+
+    def test_device_prepare_returns_the_prompt_without_calling_a_model(self):
+        response = self.client.post(
+            "/predict/device/prepare",
+            json={
+                "question": "Will the Fed cut rates before July 31, 2026?",
+                "chat_mode": True,
+                "attach_evidence": False,
+                "openrouter_model": "some/model",
+                "openrouter_api_key": "sk-should-not-echo",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.provider.calls, [])
+        payload = response.json()
+        self.assertIn("Will the Fed cut rates", payload["messages"][-1]["content"])
+        self.assertEqual(payload["request"]["question"], "Will the Fed cut rates before July 31, 2026?")
+        self.assertNotIn("sk-should-not-echo", response.text)
+
+    def test_device_finish_parses_the_reply_of_a_local_model(self):
+        response = self.client.post(
+            "/predict/device/finish",
+            json={
+                "request": {
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "chat_mode": True,
+                    "market_probability": 0.4,
+                    "market_outcome": "Yes",
+                },
+                "content": "<think>Base rates first.</think>A cut looks likely.\n[p:0.7]",
+                "served_model_name": "llama3.2",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.provider.calls, [])
+        payload = response.json()
+        self.assertEqual(payload["model_probability"], 0.7)
+        self.assertNotIn("Base rates first", payload["rationale"])
+        self.assertIn("A cut looks likely.", payload["rationale"])
+        self.assertEqual(payload["model_key"], "llama3.2 (your device)")
+        self.assertEqual(payload["market_analysis"]["stance"], "model_above_market")
+
+    def test_a_market_link_pasted_mid_conversation_is_searched_by_its_title(self):
+        # A bare link is one word, which used to count as a short follow-up:
+        # the search ran on the previous question plus the URL.
+        import analyzing_llm_rationale.market_data as md
+
+        with (
+            mock.patch.object(md, "fetch_polymarket", return_value={
+                "platform": "Polymarket", "ident": "will-bvb-win", "question": "Will Dortmund win on 2026-11-04?",
+                "market_url": "https://polymarket.com/market/will-bvb-win", "outcome": "Yes", "probability": 0.8,
+            }) as fetch_polymarket,
+            mock.patch.object(
+                server_module, "_fetch_evidence_with_cache", new=mock.AsyncMock(return_value=([], None, "ok")),
+            ) as fetch_evidence,
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "https://polymarket.com/event/ucl-bvb-bet-2026-11-04",
+                    "history": [{"role": "user", "content": "Will it rain in Tampa today?"},
+                                {"role": "assistant", "content": "Probably not."}],
+                    "chat_mode": True,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fetch_polymarket.assert_called_once_with(slug="ucl-bvb-bet-2026-11-04")
+        self.assertEqual(fetch_evidence.call_args.args[0], "Will Dortmund win on 2026-11-04?")
+
+    def test_predict_reads_article_links_pasted_into_the_question(self):
+        from analyzing_llm_rationale import web_page
+
+        def read_page(url, timeout_s=12.0):
+            if "blocked" in url:
+                raise web_page.PageFetchError("The page returned HTTP 403.")
+            return {"title": "Fed holds rates", "text": "The Fed held rates steady on Wednesday.",
+                    "source": "news.example", "url": url, "publish_date": "2026-11-04"}
+
+        with mock.patch.object(web_page, "read_page", side_effect=read_page) as reader:
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Does https://news.example/fed-story change the odds? See also https://blocked.example/x.",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(reader.call_count, 2)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("The Fed held rates steady on Wednesday.", prompt)
+        self.assertIn(
+            "Note: the linked page https://blocked.example/x could not be read (The page returned HTTP 403).",
+            prompt,
+        )
+        self.assertEqual(response.json()["evidence_sources"][0]["url"], "https://news.example/fed-story")
+
+    def test_extract_refuses_urls_the_page_reader_rejects(self):
+        response = self.client.post("/extract", data={"url": "http://169.254.169.254/computeMetadata/v1/"})
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Only public web pages can be read.", response.json()["detail"])
 
     def test_markets_kalshi_not_found_maps_to_404(self):
         import analyzing_llm_rationale.market_data as md
@@ -2154,7 +2694,7 @@ class ServerTests(unittest.TestCase):
 
         expected = scads_hosted_model_allowlist(server_module._REPO_ROOT / "configs" / "models.yaml")
         self.assertEqual(server_module._SCADS_MODEL_ALLOWLIST, expected)
-        self.assertIn("scads-alias-reasoning", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertNotIn("scads-alias-reasoning", server_module._SCADS_MODEL_ALLOWLIST)
         self.assertIn("qwen3-8-27b", server_module._SCADS_MODEL_ALLOWLIST)
         self.assertIn("gemma-4-26b-a4b-it", server_module._SCADS_MODEL_ALLOWLIST)
         self.assertNotIn("deepseek-v3", server_module._SCADS_MODEL_ALLOWLIST)
@@ -2275,7 +2815,56 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["events"][0]["attribution"], "anonymous")
         self.assertEqual(payload["events"][0]["metadata"]["model"], "test-model")
 
+    def _operator_get(self, path):
+        """GET with OPERATOR_API_KEY configured and the matching header sent."""
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", "op-key"):
+            return self.client.get(path, headers={"X-Operator-Key": "op-key"})
+
+    def test_registered_users_are_refused_when_no_operator_key_is_configured(self):
+        """covers: R1 (S1.1). Production ran with no key and served every account.
+
+        On 2026-11-02 an anonymous GET returned all registered emails,
+        because the only guard was _check_api_key, which admits everyone
+        when API_KEY is unset. An unset operator key must mean closed.
+        """
+        server_module._sync_user_duckdb(
+            "user_closed_1",
+            "closed@example.com",
+            "Closed",
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", None), \
+                mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
+            response = self.client.get("/analytics/users")
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("closed@example.com", response.text)
+
+    def test_registered_users_reject_a_wrong_operator_key(self):
+        """covers: R1 (S1.2)."""
+        server_module._sync_user_duckdb(
+            "user_closed_2",
+            "wrongkey@example.com",
+            "Wrong Key",
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", "op-key"):
+            missing = self.client.get("/analytics/users")
+            wrong = self.client.get("/analytics/users", headers={"X-Operator-Key": "nope"})
+            # Raw latin-1 bytes reach the app as a non-ASCII str, which
+            # hmac.compare_digest rejects with TypeError if handed str.
+            non_ascii = self.client.get(
+                "/analytics/users", headers={"X-Operator-Key": "op-kéy".encode("latin-1")}
+            )
+        for response in (missing, wrong, non_ascii):
+            self.assertEqual(response.status_code, 401)
+            self.assertNotIn("wrongkey@example.com", response.text)
+
     def test_registered_users_endpoint_returns_user_list(self):
+        """covers: R1 (S1.3)."""
         server_module._sync_user_duckdb(
             "user_test_123",
             "trader@example.com",
@@ -2284,7 +2873,7 @@ class ServerTests(unittest.TestCase):
             datetime.now(timezone.utc),
             datetime.now(timezone.utc),
         )
-        response = self.client.get("/analytics/users?limit=50")
+        response = self._operator_get("/analytics/users?limit=50")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("users", payload)
@@ -2293,6 +2882,7 @@ class ServerTests(unittest.TestCase):
         self.assertIsNotNone(user)
         self.assertEqual(user["name"], "Test Trader")
         self.assertEqual(user["user_id"], "user_test_123")
+        self.assertEqual(response.headers.get("cache-control"), "no-store")
 
     def test_analytics_export_returns_csv(self):
         server_module._sync_user_duckdb(
@@ -2311,7 +2901,7 @@ class ServerTests(unittest.TestCase):
             "/analytics/event",
             json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test", "model": "gpt-oss-120b"}},
         )
-        response = self.client.get("/analytics/export")
+        response = self._operator_get("/analytics/export")
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/csv", response.headers.get("content-type", ""))
         self.assertIn("attachment;", response.headers.get("content-disposition", ""))
@@ -2319,7 +2909,67 @@ class ServerTests(unittest.TestCase):
         self.assertIn("forecast_completed", response.text)
         self.assertIn("gpt-oss-120b", response.text)
         self.assertIn("Total Registered Users", response.text)
+        # covers: R2 (S2.2)
         self.assertIn("export_trader@example.com", response.text)
+        self.assertEqual(response.headers.get("cache-control"), "no-store")
+        # CORSMiddleware appends "Origin"; the operator key must still be a Vary token.
+        self.assertIn("X-Operator-Key", [v.strip() for v in response.headers.get("vary", "").split(",")])
+
+    def test_analytics_export_omits_accounts_without_the_operator_key(self):
+        """covers: R2 (S2.1). The dashboard's Export button sends no key.
+
+        It should still get the traffic numbers, which are public on
+        /analytics/summary anyway, but not the list of accounts.
+        """
+        server_module._sync_user_duckdb(
+            "user_export_anon",
+            "anon_export@example.com",
+            "Anon Export",
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", None), \
+                mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
+            response = self.client.get("/analytics/export")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Total Visits (30d)", response.text)
+        self.assertNotIn("anon_export@example.com", response.text)
+        self.assertNotIn("user_export_anon", response.text)
+
+    def test_analytics_export_omits_accounts_for_a_wrong_operator_key(self):
+        """covers: R2 (S2.1) once a key is configured -- the realistic attack."""
+        server_module._sync_user_duckdb(
+            "user_export_wrong",
+            "wrong_export@example.com",
+            "Wrong Export",
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        with mock.patch.object(server_module, "_OPERATOR_API_KEY", "op-key"), \
+                mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
+            responses = [
+                self.client.get("/analytics/export"),
+                self.client.get("/analytics/export", headers={"X-Operator-Key": "nope"}),
+                self.client.get(
+                    "/analytics/export", headers={"X-Operator-Key": "op-kéy".encode("latin-1")}
+                ),
+            ]
+        for response in responses:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Total Visits (30d)", response.text)
+            self.assertNotIn("wrong_export@example.com", response.text)
+            self.assertNotIn("user_export_wrong", response.text)
+            self.assertIn("X-Operator-Key", [v.strip() for v in response.headers.get("vary", "").split(",")])
+
+    def test_dashboard_says_the_account_list_is_operator_only(self):
+        """The page cannot send the key; an empty table would look like no users."""
+        with mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
+            response = self.client.get("/analytics/dashboard")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("uRes.status === 401 || uRes.status === 403", response.text)
+        self.assertIn("The account list is operator-only", response.text)
 
     def test_analytics_export_survives_a_hostile_display_name(self):
         """The export is parsed back, not substring-matched.
@@ -2341,7 +2991,7 @@ class ServerTests(unittest.TestCase):
             datetime.now(timezone.utc),
             datetime.now(timezone.utc),
         )
-        response = self.client.get("/analytics/export")
+        response = self._operator_get("/analytics/export")
         self.assertEqual(response.status_code, 200)
 
         rows = list(csv.reader(io.StringIO(response.text)))
@@ -2364,7 +3014,7 @@ class ServerTests(unittest.TestCase):
             datetime.now(timezone.utc),
             datetime.now(timezone.utc),
         )
-        response = self.client.get("/analytics/export")
+        response = self._operator_get("/analytics/export")
         rows = list(csv.reader(io.StringIO(response.text)))
         row = next((r for r in rows if r and r[0] == "user_formula_790"), None)
         self.assertIsNotNone(row)
@@ -4634,6 +5284,8 @@ class ServerTests(unittest.TestCase):
             ("/edge", "edge", "no-cache"),
             ("/edge/mtm", "edge", "no-cache"),
             ("/edge/agentic", "edge", "no-cache"),
+            ("/edge/indices", "edge", "no-cache"),
+            ("/edge/pairs", "edge", "no-cache"),
             ("/track", "track", "no-cache"),
             ("/ledger", "ledger", "no-cache"),
             ("/chat/conv_123", "chat", "no-cache"),
@@ -4659,6 +5311,49 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(r.status_code, 404)
 
+    def test_index_forecast_serves_the_published_payload_with_its_age(self):
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "as_of": "2026-11-06",
+            "indices": [{"name": "Nifty 50", "close": 25030.35, "horizons": []}],
+            "holidays": ["2026-11-24"],
+        }
+        with mock.patch.object(server_module._INDEX_FORECAST_READER, "read", return_value=payload):
+            r = self.client.get("/markets/index-forecast")
+
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["indices"][0]["name"], "Nifty 50")
+        self.assertFalse(body["freshness"]["stale"])
+        self.assertNotIn("holidays", body)
+        self.assertEqual(r.headers.get("cache-control"), "public, max-age=300")
+
+    def test_commodity_pairs_serves_the_published_payload_with_its_age(self):
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data_through": "2026-11-06",
+            "pairs": [{"key": "gold-silver", "label": "Gold / Silver", "z": 1.02}],
+        }
+        with mock.patch.object(server_module._COMMODITY_PAIRS_READER, "read", return_value=payload):
+            r = self.client.get("/markets/commodity-pairs")
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["pairs"][0]["key"], "gold-silver")
+        self.assertFalse(r.json()["freshness"]["stale"])
+
+    def test_commodity_pairs_is_404_before_the_first_publish(self):
+        with mock.patch.object(server_module._COMMODITY_PAIRS_READER, "read", return_value=None):
+            r = self.client.get("/markets/commodity-pairs")
+
+        self.assertEqual(r.status_code, 404)
+
+    def test_index_forecast_is_404_before_the_first_publish(self):
+        with mock.patch.object(server_module._INDEX_FORECAST_READER, "read", return_value=None):
+            r = self.client.get("/markets/index-forecast")
+
+        self.assertEqual(r.status_code, 404)
+        self.assertIn("next NSE close", r.json()["detail"])
+
     def test_chat_page_route_does_not_reflect_hostile_path_input(self):
         r = self.client.get("/chat/conv_%22%3E%3Cimg%20src=x%20onerror=alert(1)%3E")
 
@@ -4672,6 +5367,29 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("application/json", r.headers.get("content-type", ""))
         self.assertNotIn("<html", r.text.lower())
+
+    def test_chat_models_lists_self_hosted_default_without_scads_key(self):
+        env = {k: v for k, v in os.environ.items() if k != "SCADS_AI_API_KEY"}
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.dict(server_module._state, {"model_key": "qwen3.5-9b-selfhosted"}),
+        ):
+            body = self.client.get("/chat/models").json()
+
+        self.assertEqual(body["default_model"], "qwen3.5-9b-selfhosted")
+        self.assertEqual([m["key"] for m in body["models"]], ["qwen3.5-9b-selfhosted"])
+        self.assertTrue(body["models"][0]["default"])
+
+    def test_chat_models_keeps_scads_options_with_scads_key(self):
+        with (
+            mock.patch.dict(os.environ, {"SCADS_AI_API_KEY": "test-key"}, clear=False),
+            mock.patch.dict(server_module._state, {"model_key": "gpt-oss-120b"}),
+        ):
+            body = self.client.get("/chat/models").json()
+
+        keys = [m["key"] for m in body["models"]]
+        self.assertIn("gpt-oss-120b", keys)
+        self.assertNotIn("qwen3.5-9b-selfhosted", keys)
 
     def test_agent_manifest(self):
         r = self.client.get("/.well-known/agent.json")
@@ -4753,6 +5471,12 @@ class ServerTests(unittest.TestCase):
         r = self.client.get("/openapi.json")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["info"]["title"], "Foresea Intelligence API")
+
+    def test_api_docs_do_not_link_the_source_repository(self):
+        """The owner asked (2026-11-02) to keep the repo out of /docs and /redoc."""
+        info = self.client.get("/openapi.json").json()["info"]
+        self.assertNotIn("github.com", info.get("description", ""))
+        self.assertNotIn("github.com", info.get("contact", {}).get("url", ""))
 
     def test_track_record_tick_endpoint_removed(self):
         # The compute-bearing tick now runs in a GitHub Action, not on Cloud Run.
@@ -6199,6 +6923,15 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(
             _parse_market_url("check https://kalshi.com/markets/KXFED-26SEP now"),
             ("kalshi", "ticker", "KXFED-26SEP"),
+        )
+        # Kalshi web links: /markets/{series}/{slug}/{event or market ticker}.
+        self.assertEqual(
+            _parse_market_url("odds? https://kalshi.com/markets/kxfeddecision/fed-meeting/kxfeddecision-26dec)."),
+            ("kalshi", "ticker", "kxfeddecision-26dec"),
+        )
+        self.assertEqual(
+            _parse_market_url("https://kalshi.com/markets/kxfeddecision/fed-meeting"),
+            ("kalshi", "ticker", "kxfeddecision"),
         )
         self.assertIsNone(_parse_market_url("just text"))
 

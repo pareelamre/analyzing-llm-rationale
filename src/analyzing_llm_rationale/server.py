@@ -8,6 +8,7 @@ import hmac
 import html
 import io
 import ipaddress
+import itertools
 import json
 import logging
 import math
@@ -17,17 +18,18 @@ import random
 import re
 import secrets
 import smtplib
+import statistics
 import threading
 import time
 import traceback
 import uuid
-from collections import OrderedDict, defaultdict
+from collections import Counter, OrderedDict, defaultdict
 from contextlib import AsyncExitStack, asynccontextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Literal, Optional
+from typing import Annotated, Any, Callable, Dict, Iterable, List, Literal, Optional
 from urllib.parse import quote as url_quote
 from urllib.parse import urlparse
 
@@ -73,12 +75,14 @@ from analyzing_llm_rationale import (
     rag,
     server_security,
     venue_mcp,
+    web_page,
     webhooks,
 )
 from analyzing_llm_rationale import (
     live_track_record as live_track_record_support,
 )
 from analyzing_llm_rationale.config import (
+    load_model_configs,
     scads_agent_trading_identities,
     scads_chat_model_options,
     scads_hosted_model_allowlist,
@@ -108,6 +112,10 @@ _MCP_ENDPOINT = f"{_CANONICAL}/mcp/"
 _PAGE_CONTEXT_SCRIPT_ID = "foresea-page-context"
 
 _REQUIRED_API_KEY: Optional[str] = os.environ.get("API_KEY")
+#: Opens the registered-account list. Separate from API_KEY because setting
+#: API_KEY also makes /predict require sign-in, so it stays unset in
+#: production; unset here means the account list is closed to everyone.
+_OPERATOR_API_KEY: Optional[str] = (os.environ.get("OPERATOR_API_KEY") or "").strip() or None
 _GOOGLE_CLIENT_ID: Optional[str] = os.environ.get("GOOGLE_CLIENT_ID")
 _GITHUB_CLIENT_ID: Optional[str] = os.environ.get("GITHUB_CLIENT_ID")
 _GITHUB_CLIENT_SECRET: Optional[str] = os.environ.get("GITHUB_CLIENT_SECRET")
@@ -176,6 +184,26 @@ _MARK_TO_MARKET_LIVE_TIMEOUT = int(
 _MARK_TO_MARKET_STALE_AFTER_S = int(
     os.environ.get("MARK_TO_MARKET_STALE_AFTER_S", str(_EDGE_BOARD_STALE_AFTER_S))
 )
+# NSE index range forecasts (scripts/index_forecast_tick.py, published by
+# .github/workflows/index-forecast.yml once per trading day after the close).
+# A weekend leaves the newest payload from Friday evening, so it is stale only
+# after four days without a publish.
+_INDEX_FORECAST_URL = os.environ.get(
+    "INDEX_FORECAST_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/index_forecast_live.json",
+)
+_INDEX_FORECAST_TTL = int(os.environ.get("INDEX_FORECAST_TTL", "300"))
+_INDEX_FORECAST_STALE_AFTER_S = int(os.environ.get("INDEX_FORECAST_STALE_AFTER_S", str(4 * 86400)))
+# Commodity pair tracker (scripts/commodity_pairs_tick.py, published by
+# .github/workflows/commodity-pairs.yml once a day from complete sessions).
+_COMMODITY_PAIRS_URL = os.environ.get(
+    "COMMODITY_PAIRS_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/commodity_pairs_live.json",
+)
+_COMMODITY_PAIRS_TTL = int(os.environ.get("COMMODITY_PAIRS_TTL", "300"))
+_COMMODITY_PAIRS_STALE_AFTER_S = int(os.environ.get("COMMODITY_PAIRS_STALE_AFTER_S", str(4 * 86400)))
 # Agentic shadow-trading board (scripts/build_agent_trading_board.py, published by
 # .github/workflows/agent-trading-board-publish.yml on its own cadence, separate
 # from the deterministic-Kelly mark-to-market ledgers above). Shadow/paper only.
@@ -284,6 +312,15 @@ logger = logging.getLogger("foresea")
 # the live /predict + agent paths up to the same standard.
 _PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "2"))      # attempts = retries + 1
 _PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "90"))       # per-attempt wall-clock budget
+# Cap on timeout retries when a call sets none. A single self-hosted model that
+# times out is overloaded, not flaky: the retry queues behind the abandoned
+# request, because asyncio cannot cancel the executor thread still waiting on
+# it. Unset keeps timeouts on the general retry budget.
+_PROVIDER_MAX_TIMEOUT_RETRIES = (
+    int(os.environ["PROVIDER_MAX_TIMEOUT_RETRIES"])
+    if os.environ.get("PROVIDER_MAX_TIMEOUT_RETRIES", "").strip()
+    else None
+)
 # Long enough to clear a one-minute token quota window, with a little margin.
 _TOKEN_RATE_LIMIT_COOLDOWN_S = float(
     os.environ.get("PROVIDER_TOKEN_RATE_LIMIT_COOLDOWN_S", "65")
@@ -377,6 +414,23 @@ _INTERACTIVE_DEFAULT_MODEL = os.environ.get("INTERACTIVE_DEFAULT_MODEL", "gemma-
 _INTERACTIVE_MAX_TOKENS = int(os.environ.get("INTERACTIVE_MAX_TOKENS", "768"))
 _CHAT_PROVIDER_TIMEOUT_S = float(os.environ.get("CHAT_PROVIDER_TIMEOUT_S", "15"))
 _CHAT_PROVIDER_MAX_RETRIES = int(os.environ.get("CHAT_PROVIDER_MAX_RETRIES", "1"))
+# Quick probability estimates taken before a chat forecast; their median is the
+# forecast (see _chat_consensus). 0 turns this off.
+_CHAT_ESTIMATE_SAMPLES = int(os.environ.get("CHAT_ESTIMATE_SAMPLES", "7"))
+_CHAT_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_ESTIMATE_BUDGET_S", "20"))
+# A pasted event link (one market per option) gets a forecast per option: the
+# median of this many estimates of all its options at once (see
+# _chat_option_consensus). The first pays the whole prompt's prefill (14-19 s
+# with a station forecast in the evidence), the rest ~7 s each: at 35 s the
+# fifth timed out and too few were left for a table.
+_CHAT_OPTION_ESTIMATE_SAMPLES = int(os.environ.get("CHAT_OPTION_ESTIMATE_SAMPLES", "5"))
+_CHAT_OPTION_ESTIMATE_BUDGET_S = float(os.environ.get("CHAT_OPTION_ESTIMATE_BUDGET_S", "45"))
+_CHAT_EVENT_OPTIONS_MAX = 8
+# Options a question names are also searched for evidence, up to this many.
+_CHAT_NAMED_OPTION_SEARCHES = 2
+# A weather market's station forecasts (NWS, WeatherNext / Open-Meteo) are
+# fetched beside the news searches, within this many seconds.
+_WEATHER_EVIDENCE_TIMEOUT_S = float(os.environ.get("WEATHER_EVIDENCE_TIMEOUT_S", "15"))
 # A "deep"-tier question is deliberately allowed to reason harder (see
 # _REASONING_EFFORT_BY_TIER below), which routinely exceeds the 15s chat
 # budget above -- give it a bigger one instead of just timing out more often.
@@ -434,6 +488,13 @@ _CHAT_SYSTEM_PROMPT = (
 )
 
 _CHAT_PROB_RE = re.compile(r"\[p:(0(?:\.\d+)?|1(?:\.0+)?)\]\s*$", re.MULTILINE)
+# Any sign that a question is about an outcome. A first question about a pasted
+# page with none of these gets no forecast, even if the reply carries a marker.
+_FORECAST_TALK_RE = re.compile(
+    r"\b(?:will|won't|going\s+to|odds|chances?|likel(?:y|ihood)|probab\w*|forecast\w*|predict\w*"
+    r"|bets?|betting|markets?|prices?|priced|edge)\b",
+    re.IGNORECASE,
+)
 
 # Defense-in-depth for the tool-loop path: build_grounding_note()'s text is
 # meant as background context, never a quotable answer -- strip it if a model
@@ -706,12 +767,6 @@ X-API-Key: <your-key>
 The `/health` endpoint is always unauthenticated. Per-user endpoints such as
 RAG, chat history, and trading require an `Authorization: Bearer <session-token>`
 header returned by the sign-in endpoints.
-
----
-
-## Source code
-
-[github.com/pareelamle/analyzing-llm-rationale](https://github.com/pareelamre/analyzing-llm-rationale)
 """
 
 _TAGS = [
@@ -1642,6 +1697,9 @@ _evidence_prefetch_inflight: set[str] = set()
 _LOCAL_CACHE_MAX = int(os.environ.get("LOCAL_CACHE_MAX", "1024"))
 _EVIDENCE_CACHE_TTL = int(os.environ.get("EVIDENCE_CACHE_TTL", "900"))
 _EVIDENCE_PREFETCH_TOP_N = int(os.environ.get("EVIDENCE_PREFETCH_TOP_N", "3"))
+# Upper bound on articles per forecast. A small self-hosted model reads ~800
+# prompt tokens per article, so 20-40 articles can blow its time budget.
+_EVIDENCE_TOP_K_MAX = max(1, min(int(os.environ.get("EVIDENCE_TOP_K_MAX", "100")), 100))
 _EVIDENCE_TIMEOUT_S = float(os.environ.get("EVIDENCE_TIMEOUT_S", "0"))
 _EVIDENCE_MAX_CONCURRENCY = max(1, int(os.environ.get("EVIDENCE_MAX_CONCURRENCY", "4")))
 _evidence_fetch_slots = threading.BoundedSemaphore(_EVIDENCE_MAX_CONCURRENCY)
@@ -2243,6 +2301,40 @@ _MARK_TO_MARKET_READER = live_track_record_support.LiveTrackRecordReader(
     source=_gcs_payload_source("MARK_TO_MARKET", "mark_to_market_live.json"),
 )
 _read_mark_to_market_record = _MARK_TO_MARKET_READER.read
+_INDEX_FORECAST_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_INDEX_FORECAST_URL,
+        ttl_seconds=_INDEX_FORECAST_TTL,
+        stale_after_seconds=_INDEX_FORECAST_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "index_forecast_live.json",
+        request_timeout_seconds=_TRACK_RECORD_LIVE_TIMEOUT,
+        cache_namespace="index_forecast_live",
+        cache_version="v1",
+        resource_label="index range forecasts",
+        user_agent="Foresea/index-forecast",
+    ),
+    logger=logger,
+)
+_COMMODITY_PAIRS_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_COMMODITY_PAIRS_URL,
+        ttl_seconds=_COMMODITY_PAIRS_TTL,
+        stale_after_seconds=_COMMODITY_PAIRS_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "commodity_pairs_live.json",
+        request_timeout_seconds=_TRACK_RECORD_LIVE_TIMEOUT,
+        cache_namespace="commodity_pairs_live",
+        cache_version="v1",
+        resource_label="commodity pair tracker",
+        user_agent="Foresea/commodity-pairs",
+    ),
+    logger=logger,
+)
 _AGENT_TRADING_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
     cache_key=_cache_key,
     cache_get=_cache_get,
@@ -2492,7 +2584,6 @@ def _refuse_to_serve_with_the_default_session_secret() -> None:
 # service with these. The startup warning makes the state visible instead of
 # leaving it to be discovered by request.
 _API_KEY_GUARDED_ENDPOINTS = (
-    "/analytics/users",
     "/analytics/dashboard",
     "/analytics/export",
     "/analytics/summary",
@@ -2502,10 +2593,13 @@ _API_KEY_GUARDED_ENDPOINTS = (
     "/market/forecast/stream",
 )
 
-#: The subset that returns personal data, called out separately because an
-#: open traffic counter and an open list of registered users are not the same
-#: kind of open.
-_API_KEY_GUARDED_PERSONAL_DATA = ("/analytics/users",)
+#: Endpoints that return personal data (registered accounts, their email
+#: addresses and last login). They call _require_operator_key, which fails
+#: closed, because an open traffic counter and an open list of registered
+#: users are not the same kind of open. /analytics/export is not listed: it
+#: stays behind _check_api_key and writes its account rows only for the
+#: operator key.
+_OPERATOR_ONLY_ENDPOINTS = ("/analytics/users",)
 
 
 def _warn_if_api_key_guard_is_inert() -> None:
@@ -2514,13 +2608,42 @@ def _warn_if_api_key_guard_is_inert() -> None:
         return
     logger.warning(
         "API_KEY is not set, so _check_api_key passes every request and these "
-        "%d endpoints are public: %s. Of those, %s return personal data "
-        "(registered accounts, their email addresses and last login). Set the "
-        "API_KEY environment variable to close them.",
+        "%d endpoints are public: %s. The personal data endpoints (%s) are not "
+        "among them: they need OPERATOR_API_KEY and refuse every request while "
+        "it is unset, and /analytics/export adds account rows only for that "
+        "key. Set the API_KEY environment variable to close the rest.",
         len(_API_KEY_GUARDED_ENDPOINTS),
         ", ".join(_API_KEY_GUARDED_ENDPOINTS),
-        ", ".join(_API_KEY_GUARDED_PERSONAL_DATA),
+        ", ".join(_OPERATOR_ONLY_ENDPOINTS),
     )
+
+
+#: A static header secret on a public service is only as strong as its
+#: entropy; `openssl rand -hex 32` gives 64 characters.
+_OPERATOR_KEY_MIN_LENGTH = 32
+
+
+def _report_operator_key_state() -> None:
+    """Say at startup whether the account list is reachable, and how well kept."""
+    key = _OPERATOR_API_KEY
+    if not key:
+        logger.info(
+            "OPERATOR_API_KEY is not set: /analytics/users returns 403 and "
+            "/analytics/export omits account rows."
+        )
+        return
+    if not (key.isascii() and key.isprintable()):
+        logger.warning(
+            "OPERATOR_API_KEY contains non-ASCII or non-printable characters; "
+            "an HTTP header cannot carry it reliably, so it will never match."
+        )
+    elif len(key) < _OPERATOR_KEY_MIN_LENGTH:
+        logger.warning(
+            "OPERATOR_API_KEY is %d characters; use at least %d random ones "
+            "(openssl rand -hex 32), since it alone guards every account.",
+            len(key),
+            _OPERATOR_KEY_MIN_LENGTH,
+        )
 
 
 @asynccontextmanager
@@ -2547,6 +2670,7 @@ async def lifespan(app: FastAPI):
     _refuse_to_serve_with_the_default_session_secret()
     _warn_if_the_analytics_salt_is_the_published_one()
     _warn_if_api_key_guard_is_inert()
+    _report_operator_key_state()
     logger.info("foresea server starting up")
     async with AsyncExitStack() as stack:
         if _PUBLIC_MCP is not None:
@@ -2567,7 +2691,7 @@ app = FastAPI(
     contact={
         "name": "Pareel Amre",
         "email": "pareel.amre@gmail.com",
-        "url": "https://github.com/pareelamre/analyzing-llm-rationale",
+        "url": _CANONICAL,
     },
     license_info={
         "name": "MIT",
@@ -2920,7 +3044,10 @@ _SECURITY_HEADERS = {
         "img-src 'self' data: https:; "
         "font-src 'self' https://fonts.gstatic.com data:; "
         "connect-src 'self' https://api.openai.com https://openrouter.ai https://accounts.google.com "
-        "https://www.gstatic.com; "
+        "https://www.gstatic.com "
+        # A model on the visitor's own computer, called from their browser
+        # (Settings → On this device).
+        "http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*; "
         "frame-src https://accounts.google.com; "
         "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
     ),
@@ -3026,8 +3153,13 @@ async def _provider_chat(
         if max_retries is None and policy is None
         else (policy[0] if max_retries is None else max(0, max_retries))
     )
+    default_max_timeout_retries = (
+        effective_max_retries
+        if _PROVIDER_MAX_TIMEOUT_RETRIES is None
+        else min(effective_max_retries, max(0, _PROVIDER_MAX_TIMEOUT_RETRIES))
+    )
     effective_max_timeout_retries = (
-        (policy[1] if policy is not None else effective_max_retries)
+        (policy[1] if policy is not None else default_max_timeout_retries)
         if max_timeout_retries is None
         else max(0, max_timeout_retries)
     )
@@ -3335,8 +3467,8 @@ async def edge_page(request: Request) -> Response:
 
 @app.get("/edge/{panel:path}", include_in_schema=False)
 async def edge_panel_page(panel: str, request: Request) -> Response:
-    """Refresh-safe URL for one edge-board sub-panel (markets/mtm/agentic)."""
-    if panel not in ("mtm", "agentic"):
+    """Refresh-safe URL for one edge-board sub-panel (markets/mtm/agentic/indices/pairs)."""
+    if panel not in ("mtm", "agentic", "indices", "pairs"):
         raise HTTPException(status_code=404)
     return await _spa_page(request, "edge")
 
@@ -5299,6 +5431,13 @@ class PredictRequest(BaseModel):
             raise ValueError("ollama_base_url host is not allowed.")
         return value
 
+    # A pasted multi-option event link: the options to forecast (set while
+    # preparing the prompt) and their forecasts (set by _chat_option_consensus).
+    # Server state, never read from the request body.
+    _event_options: Optional[Dict[str, Any]] = PrivateAttr(default=None)
+    _option_forecasts: Optional[Dict[str, Any]] = PrivateAttr(default=None)
+    _station_forecast: bool = PrivateAttr(default=False)
+
 
 class OptionProb(BaseModel):
     """A single option and its probability in a multiple-choice forecast."""
@@ -5374,6 +5513,13 @@ class MarketQuote(BaseModel):
     )
     series_ticker: Optional[str] = Field(None, description="Kalshi series ticker -- the 'extra' id /market/batch needs for candlesticks.")
     token_id: Optional[str] = Field(None, description="Polymarket YES-outcome CLOB token id -- the 'extra' id /market/batch needs for order book/price history.")
+    event_title: Optional[str] = Field(None, description="For an event link (one market per option): the event's title.")
+    event_exclusive: Optional[bool] = Field(None, description="For an event link: whether exactly one option can win.")
+    event_options: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="For an event link: each open option's `label`, market `question` and `probability`; "
+        "the quoted market has `quoted` set.",
+    )
 
 
 class VenueCredentials(BaseModel):
@@ -5832,6 +5978,9 @@ class LiveTradeIntent(BaseModel):
 class AgentReport(BaseModel):
     """End-to-end analysis of a live question produced by the agent."""
     question: str
+    options: List[OptionProb] = Field(
+        default_factory=list, description="Per-option forecasts, for an event link with several options."
+    )
     served_model_name: Optional[str] = Field(
         None,
         description="Exact upstream model that served the final agent response, when reported by the provider.",
@@ -6374,6 +6523,10 @@ def _check_api_key(request: Request) -> None:
     server_security.check_api_key(request, _REQUIRED_API_KEY)
 
 
+def _require_operator_key(request: Request) -> None:
+    server_security.require_operator_key(request, _OPERATOR_API_KEY)
+
+
 def _check_rate_limit(request: Request) -> None:
     server_security.check_rate_limit(
         request,
@@ -6855,20 +7008,34 @@ def _build_chat_response(
         except ValueError:
             pass
         text = _CHAT_PROB_RE.sub("", text).rstrip()
-    if chat_prob is not None:
+    if (
+        chat_prob is not None
+        and not req.history
+        and req.market_probability is None
+        and not req.market_url
+        and web_page.find_links(req.question or "")
+        and not _FORECAST_TALK_RE.search(req.question or "")
+    ):
+        # A question about a pasted page isn't a forecast, but the 9B tags it
+        # anyway ("what are the main stories on bbc.com/news?" came back 92%).
+        chat_prob = None
+    if req._event_options and not req._option_forecasts:
+        # The per-option estimates fell short, so the reply's lone number is
+        # for whichever option it discussed: "Forecast: 35%" for Tampa was
+        # compared with the price of Providence, the market quoted.
+        chat_prob = None
+    option_forecasts = req._option_forecasts if chat_prob is not None else None
+    if option_forecasts:
+        text = f"{_option_forecast_table(option_forecasts)}\n\n{text}"
+    elif chat_prob is not None:
         text = f"**Forecast: {chat_prob:.0%}**\n\n{text}"
 
-    chat_market_analysis: Optional[MarketAnalysis] = None
-    if chat_prob is not None:
-        _purl = _parse_market_url(req.question or "")
-        _url_m = re.search(r"https?://\S+", req.question or "")
-        if _purl and _url_m:
-            _venue, _kind, _mid = _purl
-            chat_market_analysis = MarketAnalysis(
-                platform=_venue,
-                market_url=_url_m.group(0).rstrip("),."),
-                model_probability=chat_prob,
-            )
+    # The chat forecast is a probability for the market's Yes side. A pasted
+    # market link fills req.market_* during preparation; without a market
+    # price there is nothing to compare.
+    chat_market_analysis = (
+        _build_market_analysis(req, "binary", "Yes", chat_prob, []) if chat_prob is not None else None
+    )
 
     return PredictResponse(
         question_type="chat",
@@ -6882,7 +7049,27 @@ def _build_chat_response(
         evidence_articles=_news_articles(evidence_articles),
         evidence_error=evidence_error,
         market_analysis=chat_market_analysis,
+        options=[
+            OptionProb(label=o["label"], probability=o["forecast"])
+            for o in (option_forecasts or {}).get("options", []) if o.get("forecast") is not None
+        ],
     )
+
+
+def _option_forecast_table(event: Dict[str, Any]) -> str:
+    """Each option's forecast beside its market price, as a markdown table."""
+    rows = "\n".join(
+        f"| {o['label'].replace('|', '/')} | "
+        f"{'—' if o.get('forecast') is None else format(o['forecast'], '.0%')} | {o['probability']:.0%} |"
+        for o in event["options"]
+    )
+    table = f"**Forecast by option**\n\n| Option | Foresea | Market |\n|---|---|---|\n{rows}"
+    if event["total"] > len(event["options"]):
+        table += (
+            f"\n\nShowing {len(event['options'])} of {event['total']} options. "
+            "Name another in your question to include it."
+        )
+    return table
 
 
 def _interactive_default_model_for_request(req: "PredictRequest") -> Optional[str]:
@@ -6928,20 +7115,285 @@ def _max_tokens_for_request(req: "PredictRequest") -> int:
     return server_max
 
 
+def _chat_length_budget(req: "PredictRequest") -> str:
+    """Tell a chat reply its length, so it ends before the token cap.
+
+    A reply cut off at the cap loses its final [p:] marker, and with it the
+    forecast. About 2.5 tokens per word leaves room for the marker.
+    """
+    words = _max_tokens_for_request(req) * 2 // 5
+    return f"\n\nKeep the whole reply under {words} words, so it ends with the marker line."
+
+
+_CHAT_ESTIMATE_ASK = (
+    "Before you explain anything: reply with only your probability for Yes, as [p:0.XX]. No other text."
+)
+_CHAT_ESTIMATE_RE = re.compile(r"\[p:\s*(0(?:\.\d+)?|1(?:\.0+)?)\s*\]")
+# With an NWS forecast for the contract's station in the evidence, half the
+# estimates still copied the market (Tampa rain 28% against an 11% forecast)
+# and the reply then argued for the forecast. Told to weigh "the station
+# forecast", 3 of 6 still copied it; told to weigh "the evidence, such as an
+# official weather forecast", 0 of 6 did, but 4 of 10 moved every city, with
+# or without a forecast. Scoped to the options a forecast covers, the other
+# cities kept their prices in 10 of 10, and Denver's brackets still moved.
+_CHAT_STATION_FORECAST_ASK = (
+    " Where the evidence has an official weather forecast for an option, weigh it against that option's"
+    " market price instead of copying the price; keep the other options at their prices."
+)
+
+
+async def _chat_consensus(
+    req: "PredictRequest", provider, messages: List[Dict[str, str]]
+) -> tuple[List[Dict[str, str]], Optional[float]]:
+    """Make a forecast on a market the median of several quick estimates.
+
+    One greedy reply from the self-hosted 9B swings with trivial prompt
+    changes, and a market's prompt changes on every price tick: moving the
+    timestamp by 21 seconds took one forecast from 35% to 25%, and replies to
+    the same Kalshi link ranged from 15% to 95%. Sampled estimates of one
+    prompt scatter around a stable centre; the median of 7 stayed within a
+    few points of the market across perturbed prompts. The estimates share
+    the reply's prompt, so a server with a prefix cache (mlx-lm) answers each
+    in under a second.
+
+    Only questions with a market (a pasted link or a price) qualify. Without
+    one, the quick estimates drift to ~50% (a December Fed cut came out at
+    45-52% beside a reply expecting a hike), while the single greedy reply,
+    whose prompt barely changes, gave 15% every time. The model can't be
+    asked whether it's a forecast either: offered a "none" answer, it gives
+    that for a bare market link.
+
+    Returns the messages for the reply, told to explain the median, and the
+    median; or the messages unchanged and None.
+    """
+    if not req.chat_mode or _CHAT_ESTIMATE_SAMPLES < 3 or provider is not _state.get("provider"):
+        return messages, None
+    if req.market_probability is None and not req.market_url:
+        return messages, None
+    if req._event_options:
+        return await _chat_option_consensus(req, provider, messages, req._event_options)
+    ask = [*messages, {"role": "user", "content": _CHAT_ESTIMATE_ASK
+                       + (_CHAT_STATION_FORECAST_ASK if req._station_forecast else "")}]
+    deadline = time.monotonic() + _CHAT_ESTIMATE_BUDGET_S
+    attempts = 0
+    estimates: List[float] = []
+    while attempts < _CHAT_ESTIMATE_SAMPLES and deadline - time.monotonic() > 1:
+        attempts += 1
+        try:
+            reply = await _provider_chat(
+                provider, ask, 0.8, 12,
+                timeout_s=deadline - time.monotonic(), max_retries=0, max_timeout_retries=0,
+                call_site="chat_estimate",
+            )
+        except Exception as exc:
+            logger.warning("chat forecast estimate failed; answering without it error=%s", type(exc).__name__)
+            break
+        match = _CHAT_ESTIMATE_RE.search(reply or "")
+        if match:
+            estimates.append(float(match.group(1)))
+        elif attempts == 1:
+            # No number: the model won't give one for this question.
+            logger.info("chat forecast estimates skipped: the model gave no probability")
+            return messages, None
+    if len(estimates) < 3 or len(estimates) * 2 <= attempts:
+        logger.info("chat forecast estimates unused: %d of %d parsed", len(estimates), attempts)
+        return messages, None
+    median = round(statistics.median(estimates), 2)
+    logger.info("chat forecast estimates median=%.2f from %s", median, sorted(estimates))
+    otel_trace.get_current_span().set_attributes({
+        "forecast.estimate.samples": len(estimates),
+        "forecast.estimate.median": median,
+        "forecast.estimate.spread": round(max(estimates) - min(estimates), 2),
+    })
+    # Appended to the last message, so the reply reuses the estimates' cached prompt.
+    explain = (
+        f"\n\nYour forecast for this question is {median:.0%}: the median of several estimates you "
+        "made from this same evidence. Explain this forecast without giving a different number, "
+        f"and end with the marker line [p:{median:.2f}]."
+    )
+    return [*messages[:-1], {**messages[-1], "content": messages[-1]["content"] + explain}], median
+
+
+# The quoted market's fields describe one option. In an event's prompt they
+# would make the reply about that option alone.
+_OPTION_MARKET_FIELDS = (
+    "market_probability", "market_outcome", "market_bid", "market_ask", "market_last_trade_price",
+    "market_volume", "market_liquidity", "market_price_change_24h", "market_price_change_7d",
+    "market_no_sub_title", "market_floor_strike", "market_cap_strike",
+)
+
+
+def _chat_event_options(
+    req: "PredictRequest", quote: Dict[str, Any], asked: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """The options of an event link to forecast one by one, or None.
+
+    At most _CHAT_EVENT_OPTIONS_MAX: the quoted market (the reply's [p:] is its
+    forecast, compared with its price), those the question names, then the
+    likeliest of exclusive options (candidates) or the most contested of
+    independent ones (rain in each city). Listed by market price. "named"
+    holds the options named, whose own markets are searched for evidence too.
+    """
+    options = [o for o in quote.get("event_options") or [] if o.get("probability") is not None]
+    if not req.chat_mode or len(options) < 2:
+        return None
+    asked = (req.question if asked is None else asked).lower()
+    named = [o for o in options if re.search(rf"\b{re.escape(o['label'].lower())}\b", asked)]
+    if quote.get("event_exclusive") is False:
+        rest = sorted(options, key=lambda o: abs(o["probability"] - 0.5))
+    else:
+        rest = sorted(options, key=lambda o: -o["probability"])
+    chosen: List[Dict[str, Any]] = []
+    for option in [*(o for o in options if o.get("quoted")), *named, *rest]:
+        if option not in chosen and len(chosen) < _CHAT_EVENT_OPTIONS_MAX:
+            chosen.append(option)
+    chosen.sort(key=lambda o: -o["probability"])
+    return {
+        "title": str(quote.get("event_title") or quote.get("question") or ""),
+        "quoted_question": str(quote.get("question") or ""),
+        "options": [dict(o) for o in chosen],
+        "named": [dict(o) for o in named],
+        "total": len(options),
+        "exclusive": quote.get("event_exclusive") is True,
+    }
+
+
+_CHAT_OPTION_ESTIMATE_ASK = (
+    "Options, each its own Yes/No market:\n{options}\n\n"
+    "Before you explain anything: reply with only your probability for Yes on each option, "
+    'one line each, like "{example}: 0.42". No other text.'
+)
+_CHAT_OPTION_ESTIMATE_RE = re.compile(
+    r"(?m)^[\s*•-]*(?:\d+[.)]\s+)?(.+?)\**\s*:\s*\**\s*(?:\[p:\s*)?(0(?:\.\d+)?|1(?:\.0+)?)(?![\d.])"
+)
+
+
+def _option_key(label: str) -> str:
+    """An option's label, matched however the model formats it ("**Boston** (market 38%)")."""
+    return re.sub(r"[^a-z0-9]", "", re.sub(r"\(.*?\)", "", label.lower()))
+
+
+async def _chat_option_consensus(
+    req: "PredictRequest", provider, messages: List[Dict[str, str]], event: Dict[str, Any]
+) -> tuple[List[Dict[str, str]], Optional[float]]:
+    """Forecast each option of a pasted event link: the median of several
+    estimates of all its options at once.
+
+    One prompt for every option keeps the estimates in mlx-lm's prompt cache.
+    Qwen3.5's recurrent layers can't reuse a cached prefix, so a prompt per
+    option would cost a full prefill each (8 s for a weather event). Asked
+    for a bare list of numbers, the 9B misaligned them with the options;
+    asked for a labelled line per option, it kept each near its own market.
+
+    Sets req._option_forecasts and returns the reply's messages, told to
+    explain the forecasts, with the quoted market's forecast; or the messages
+    unchanged and None.
+    """
+    options = event["options"]
+    estimates: Dict[str, List[float]] = {_option_key(o["label"]): [] for o in options}
+    # With the asked-about option as the example ("will it rain in tampa?",
+    # like "Tampa: 0.42"), half the samples gave only "Tampa: 0.26". With
+    # the first listed one, every sample covered every option.
+    named = {o["label"] for o in event.get("named") or []}
+    example = next((o["label"] for o in options if o["label"] not in named), options[0]["label"])
+    ask_text = _CHAT_OPTION_ESTIMATE_ASK.format(
+        options="\n".join(f"- {o['label']}" for o in options),
+        example=example,
+    )
+    ask = [*messages, {"role": "user", "content": ask_text
+                       + (_CHAT_STATION_FORECAST_ASK if req._station_forecast else "")}]
+    deadline = time.monotonic() + _CHAT_OPTION_ESTIMATE_BUDGET_S
+    attempts = 0
+    while attempts < _CHAT_OPTION_ESTIMATE_SAMPLES and deadline - time.monotonic() > 1:
+        attempts += 1
+        try:
+            reply = await _provider_chat(
+                provider, ask, 0.8, 12 * len(options) + 16,
+                timeout_s=deadline - time.monotonic(), max_retries=0, max_timeout_retries=0,
+                call_site="chat_option_estimate",
+            )
+        except Exception as exc:
+            logger.warning("chat option estimate failed; answering without it error=%s", type(exc).__name__)
+            break
+        found: Dict[str, float] = {}
+        # One sample in ten put them on one line: "Chicago: 0.68 | Milwaukee: 0.55".
+        for label, value in _CHAT_OPTION_ESTIMATE_RE.findall(re.sub(r"\s*[|;]\s*", "\n", reply or "")):
+            key = _option_key(label)
+            if key in estimates and key not in found:
+                found[key] = float(value)
+        if not found and not any(estimates.values()):
+            # A live Tampa answer lost its table to one sample without numbers;
+            # two in a row is a model that won't give them.
+            if attempts == 2:
+                logger.info("chat option estimates skipped: the model gave no probabilities")
+                return messages, None
+            continue
+        for key, value in found.items():
+            estimates[key].append(value)
+    forecasts = {
+        key: statistics.median(values)
+        for key, values in estimates.items() if len(values) >= 3 and len(values) * 2 > attempts
+    }
+    quoted = next((_option_key(o["label"]) for o in options if o.get("quoted")), None)
+    if quoted not in forecasts or len(forecasts) < 2:
+        logger.info("chat option estimates unused: %d of %d options after %d attempts",
+                    len(forecasts), len(options), attempts)
+        return messages, None
+    total = sum(forecasts.values())
+    if event["exclusive"] and total > 0 and (total > 1 or len(forecasts) == event["total"]):
+        # Exactly one option wins: the forecasts can't add up past 1, and
+        # add up to 1 when every option is listed.
+        forecasts = {key: value / total for key, value in forecasts.items()}
+    for option in options:
+        value = forecasts.get(_option_key(option["label"]))
+        option["forecast"] = round(value, 2) if value is not None else None
+    req._option_forecasts = event
+    lead = round(forecasts[quoted], 2)
+    logger.info("chat option forecasts %s after %d attempts",
+                {o["label"]: o["forecast"] for o in options}, attempts)
+    otel_trace.get_current_span().set_attributes({
+        "forecast.estimate.samples": attempts,
+        "forecast.estimate.options": len(forecasts),
+        "forecast.estimate.median": lead,
+    })
+    listing = "; ".join(f"{o['label']} {o['forecast']:.0%}" for o in options if o["forecast"] is not None)
+    # Told only not to give "different numbers", the reply still said "I
+    # estimate 20%" for an option the table put at its 26% market price.
+    # Shown the quoted option's [p:] (Providence 43%), a reply about the
+    # option asked for said "I estimate 43%" for Tampa (23% in the table).
+    # The marker is pinned anyway, so the reply sees only the table's numbers.
+    # Told not to write one, it wrote a bare "[0.23]", which isn't stripped.
+    explain = (
+        f"\n\nYour forecasts for these options are: {listing}. Each is the median of several estimates "
+        "you made from this same evidence. Explain them briefly. These are your final numbers: do not state "
+        "any other probability or estimate for these options, and where a forecast equals its market price, "
+        "say you agree with the market."
+    )
+    return [*messages[:-1], {**messages[-1], "content": messages[-1]["content"] + explain}], lead
+
+
+def _pin_chat_probability(content: str, probability: Optional[float]) -> str:
+    """Make the reply's [p:] marker the consensus forecast, even if the model
+    wrote another number or was cut off before writing one."""
+    if probability is None:
+        return content
+    return f"{_CHAT_PROB_RE.sub('', content).rstrip()}\n[p:{probability:.2f}]"
+
+
 def _fetch_live_odds(
     platform: Optional[str], ident: Optional[str], market_url: Optional[str]
 ) -> Optional[Dict[str, Any]]:
     """Fetch the current quote for a referenced market (for live-odds context).
-    Resolves a Polymarket slug from the URL when no ident is given."""
+    Resolves a Polymarket slug or Kalshi ticker from the URL when no ident is given."""
     from analyzing_llm_rationale import market_data as _md
 
     plat = (platform or "").lower()
     ident = (ident or "").strip()
     url = (market_url or "").strip()
     if not ident and url:
-        tail = url.rstrip("/").split("/")[-1]
-        if "polymarket" in url.lower():
-            plat, ident = "polymarket", tail
+        parsed = _parse_market_url(url)
+        if parsed:
+            plat, _kind, ident = parsed
     if "poly" in plat and ident:
         return _md.fetch_polymarket(slug=ident)
     if "kalshi" in plat and ident:
@@ -6994,6 +7446,159 @@ async def _fetch_market_context(
         return quote
 
 
+def _weather_evidence_article(
+    research: Dict[str, Any], day: Optional[str], subjects: Optional[List[str]] = None, *, daily_low: bool = False
+) -> Optional[Dict[str, Any]]:
+    """One weather contract's station research (weather_research) as an
+    evidence item, or None when there was no source-matched lookup.
+    ``subjects`` are the temperature contracts to price from it: the market
+    itself, or every option of its event ("56° to 57°")."""
+    from analyzing_llm_rationale.weather_research import contract_probabilities
+
+    if research.get("source_status") != "nws_observation_available":
+        return None
+    brief = research.get("weather_market") or {}
+    station = brief.get("station") or "the station"
+    temperature = "temperature" in str(brief.get("market_type") or "")
+    facts: List[str] = []
+    sources = ["National Weather Service"]
+    days = [p for p in research.get("forecast_day_periods") or [] if p.get("detailed_forecast")]
+    if days:
+        # The NWS text can state its own chance: "Chance of precipitation is
+        # 20%" sat beside the grid's 15% when both were given.
+        facts.append(f"NWS forecast for {station}: " + " ".join(
+            f"{p.get('name')}: {p['detailed_forecast'].rstrip('. ')}"
+            + (f" (chance of precipitation {p['precipitation_probability']:.0f}%)"
+               if isinstance(p.get("precipitation_probability"), (int, float))
+               and "chance of precipitation" not in p["detailed_forecast"].lower() else "") + "."
+            for p in days
+        ))
+    periods = [p for p in research.get("forecast_periods") or [] if isinstance(p, dict)]
+    if periods:
+        peak = max(periods, key=lambda p: p.get("precipitation_probability") or 0)
+        temps = [p["temperature_f"] for p in periods if isinstance(p.get("temperature_f"), (int, float))]
+        skies = [sky for sky, _ in Counter(p.get("short_forecast") for p in periods if p.get("short_forecast")).most_common(2)]
+        facts.append(
+            f"NWS hourly forecast for {station} {f'on {day}' if day else 'for the next hours'} "
+            f"({len(periods)} hours from {str(periods[0].get('start_time'))[11:16]} local): the chance of "
+            f"precipitation in any one hour peaks at {peak.get('precipitation_probability') or 0:.0f}% around "
+            f"{str(peak.get('start_time'))[11:16]}"
+            + (f"; temperatures {min(temps)}-{max(temps)}°F" if temps else "")
+            + (f"; {' then '.join(skies)}" if skies else "") + "."
+        )
+    observation = next(iter(research.get("observations") or []), {})
+    if isinstance(observation.get("temperature_f"), (int, float)):
+        rain = observation.get("precipitation_last_hour_mm")
+        facts.append(
+            f"Latest NWS observation at {station} ({observation.get('timestamp')}): "
+            f"{observation['temperature_f']:.0f}°F"
+            + (f", {rain} mm of precipitation in the last hour" if isinstance(rain, (int, float)) else "") + "."
+        )
+    model = research.get("model_forecast") or {}
+    if temperature and isinstance(model.get("projected_high_f"), (int, float)):
+        name = {
+            "google_maps_weather": "Google DeepMind WeatherNext/MetNet",
+            "open-meteo": "Open-Meteo multi-model",
+        }.get(model.get("provider"), str(model.get("provider")))
+        sources.append(name)
+        offset = model.get("station_bias_offset_f") or 0
+        facts.append(
+            f"{name} forecast {'for ' + model['forecast_day_local'] if model.get('forecast_day_local') else 'for the next 24 hours'}: "
+            f"high {model['projected_high_f']}°F, low {model.get('projected_low_f')}°F"
+            + (f" (with a {offset:+.1f}°F correction for this station)" if offset else "") + "."
+        )
+    ensemble = research.get("ensemble_forecast") or {}
+    members = temperature and not daily_low and ensemble.get("member_count")
+    if members:
+        ensemble_name = {"gfs025": "NOAA GFS"}.get(ensemble.get("model"), str(ensemble.get("model")))
+        sources.append(f"{ensemble_name} ensemble")
+        facts.append(
+            f"{members}-member {ensemble_name} ensemble: the day's high averages "
+            f"{ensemble.get('ensemble_mean_high_f')}°F (members range {ensemble.get('ensemble_min_high_f')}-"
+            f"{ensemble.get('ensemble_max_high_f')}°F)."
+        )
+    if temperature and subjects:
+        chances = contract_probabilities(research, subjects, daily_low=daily_low)
+        method = (
+            f"share of the {members} ensemble members, in the whole degrees the NWS reports" if members
+            else "the model forecast with a 1.8°F error, in the whole degrees the NWS reports"
+        )
+        priced = [(subject, p) for subject, p in chances.items() if p is not None]
+        if len(subjects) == 1 and priced:
+            facts.append(f"Weather-model chance this contract resolves Yes: {priced[0][1]:.0%} ({method}).")
+        elif priced:
+            facts.append(
+                f"Weather-model chance for each option ({method}): "
+                + "; ".join(f"{subject} {p:.0%}" for subject, p in priced) + "."
+            )
+    if not facts:
+        return None
+    facts.append(
+        f"The contract settles on the {brief.get('settlement_source_label') or 'source in its rules'} for "
+        f"{station}; these are forecasts, not that report."
+    )
+    return {
+        "title": f"Weather forecast for {station}" + (f" on {day}" if day else ""),
+        "source": ", ".join(sources),
+        "url": f"https://www.weather.gov/wrh/timeseries?site={station}",
+        "publish_date": datetime.now(timezone.utc).isoformat(),
+        "summary": " ".join(facts),
+        "text": " ".join(facts),
+    }
+
+
+async def _weather_evidence(req: "PredictRequest", quote: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Station forecasts for a weather market: the NWS forecasts and the
+    WeatherNext / Open-Meteo models of weather_research, which until now only
+    the trading agents and the weather radar read. On an event link they are
+    for the options the question names (each its own station), else for the
+    market itself, priced for every option of a temperature event. [] for any
+    other market."""
+    from analyzing_llm_rationale.weather_markets import classify_weather_market
+
+    market = quote or {
+        "question": req.question,
+        "description": req.description,
+        "resolution_criteria": req.resolution_criteria,
+        "ticker": req.market_ident,
+    }
+    brief = classify_weather_market(market)
+    if not brief.is_weather:
+        return []
+    event = req._event_options or {}
+    tickers = [o["ticker"] for o in event.get("named") or [] if o.get("ticker")][:_CHAT_NAMED_OPTION_SEARCHES]
+    subject = " ".join(str(market.get(k) or "") for k in ("question", "subtitle")).strip()
+    subjects = [o["label"] for o in event.get("options") or []] or [subject]
+    daily_low = bool(re.search(r"\b(?:lowest|minimum|low temp)", subject, re.IGNORECASE))
+
+    def research(ticker: Optional[str]) -> Optional[Dict[str, Any]]:
+        from analyzing_llm_rationale import market_data as md
+        from analyzing_llm_rationale.weather_research import contract_day, research_weather_market
+
+        contract = md.fetch_kalshi(ticker) if ticker else market
+        day = contract_day(contract)
+        return _weather_evidence_article(
+            research_weather_market(contract, target_day=day), day,
+            None if ticker else subjects, daily_low=daily_low,
+        )
+
+    loop = asyncio.get_running_loop()
+    try:
+        found = await asyncio.wait_for(
+            asyncio.gather(*(loop.run_in_executor(None, research, t) for t in tickers or [None]),
+                           return_exceptions=True),
+            timeout=_WEATHER_EVIDENCE_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("weather evidence timed out after %.0f s", _WEATHER_EVIDENCE_TIMEOUT_S)
+        return []
+    for error in (f for f in found if isinstance(f, BaseException)):
+        logger.warning("weather evidence unavailable: %s", type(error).__name__)
+    articles = [a for a in found if isinstance(a, dict)]
+    otel_trace.get_current_span().set_attribute("forecast.evidence.weather", len(articles))
+    return articles
+
+
 async def _fetch_evidence_with_cache(
     evidence_question: str,
     top_k: int,
@@ -7018,7 +7623,7 @@ async def _fetch_evidence_with_cache(
             _forecast_evidence_requests.add(1, {**attrs, "outcome": "unconfigured"})
             return [], f"Evidence pipeline is not configured on this server: {exc}", "unconfigured"
 
-    top_k = max(1, min(top_k, 100))
+    top_k = max(1, min(top_k, _EVIDENCE_TOP_K_MAX))
     evidence_cache_key = _cache_key("evidence", evidence_question, top_k)
     cached = _cache_get(evidence_cache_key)
     if cached is not None:
@@ -7111,6 +7716,22 @@ async def _prepare_predict_messages(
     system_prompt = _state["system_prompt"]
 
     record = req.model_dump()
+    # A market link pasted into the question is the market reference, so the
+    # model sees the contract and its price instead of a bare URL.
+    pasted_market = (
+        None if (record.get("market_url") or record.get("market_ident"))
+        else _parse_market_url(req.question)
+    )
+    if pasted_market:
+        record["market_platform"] = record.get("market_platform") or pasted_market[0].capitalize()
+        record["market_ident"] = pasted_market[2]
+    # Any other pasted link (a news article, a report) is read as evidence the
+    # user supplied.
+    attached_urls = {str(article.url or "").strip() for article in req.news_articles}
+    linked_urls = [
+        url for url in web_page.find_links(req.question)
+        if not _parse_market_url(url) and url not in attached_urls
+    ][:_MAX_LINKED_PAGES]
     simple_chat_has_market_context = any((
         record.get("market_url"),
         record.get("market_platform"),
@@ -7129,6 +7750,7 @@ async def _prepare_predict_messages(
         req.chat_mode
         and not req.attach_evidence
         and not req.news_articles
+        and not linked_urls
         and not rag_user_id
         and not simple_chat_has_market_context
         and not _detect_trading_intent(req.question)
@@ -7148,7 +7770,7 @@ async def _prepare_predict_messages(
             "rules_present": "false",
             "outcome": "skipped_simple_chat",
         })
-        system_prompt = _CHAT_SYSTEM_PROMPT + _greeting_system_prompt_addition(req)
+        system_prompt = _CHAT_SYSTEM_PROMPT + _greeting_system_prompt_addition(req) + _chat_length_budget(req)
         user_prompt = build_user_prompt(record, "[question]", "full")
         steering = (req.conversation_steer or "").strip()
         if steering:
@@ -7228,26 +7850,65 @@ async def _prepare_predict_messages(
                 record.get("market_platform"), record.get("market_ident"),
                 exc_info=True,
             )
+    if pasted_market and quote and quote.get("question"):
+        record["question"] = f"{req.question.strip()}\n\nLinked market: {quote['question']}"
+        if quote.get("replaced_closed_event"):
+            record["question"] += (
+                f' (The linked event, "{quote["replaced_closed_event"]}", has already closed; how it settled is'
+                " in the market description. This is the same series' current market.)"
+            )
+        # Let the response compare the forecast with this market's price.
+        for field in ("market_probability", "market_platform", "market_url", "market_outcome"):
+            if getattr(req, field) is None and record.get(field) is not None:
+                setattr(req, field, record[field])
+        req._event_options = _chat_event_options(req, quote)
+    if req._event_options:
+        # A forecast per option: the prompt names the event, and the
+        # description lists every option's price.
+        event = req._event_options
+        linked = (
+            f"Linked event: {event['title']}. Each option is its own Yes/No market; "
+            "their prices are in the description."
+        )
+        if f"Linked market: {event['quoted_question']}" in record["question"]:
+            record["question"] = record["question"].replace(f"Linked market: {event['quoted_question']}", linked, 1)
+        elif record["question"].strip() == event["quoted_question"].strip():
+            # The agent asks the quoted market's question when given only a link.
+            record["question"] = linked
+        else:
+            record["question"] = f"{record['question']}\n\n{linked}"
+        for field in _OPTION_MARKET_FIELDS:
+            record.pop(field, None)
+        if record.get("resolution_criteria"):
+            record["resolution_criteria"] = (
+                "(One option's market; the others follow the same template.) " + record["resolution_criteria"]
+            )
     venue_articles = (
         quote.get("venue_news_articles") or []
         if quote
         else []
     )
     caller_articles = [article.model_dump() for article in req.news_articles]
+    if linked_urls:
+        linked_articles, unreadable = await _linked_page_articles(linked_urls)
+        caller_articles = linked_articles + caller_articles
+        for url, reason in unreadable:
+            record["question"] = f"{record['question']}\n\nNote: the linked page {url} could not be read ({reason})."
     supplied_articles = _merge_evidence_articles(venue_articles, caller_articles)
     retrieved_articles: List[Dict[str, Any]] = []
     evidence_articles = list(supplied_articles)
     evidence_error = None
-    evidence_question = (
-        str(quote.get("question") or "").strip()
-        if quote
-        else ""
-    ) or req.question
+    evidence_question = str(
+        (req._event_options or {}).get("title") or (quote or {}).get("question") or ""
+    ).strip() or req.question
 
     # A short follow-up in an ongoing thread ("WE is 90+", "why?") is a poor
     # standalone search query. Keep retrieval on, but anchor it to the latest
     # substantive user question so the forecast still receives raw evidence.
-    short_followup = bool(req.history) and len(req.question.split()) <= 6
+    # A pasted market link is a new question, searched by the market's title.
+    short_followup = (
+        bool(req.history) and not (pasted_market and quote) and len(req.question.split()) <= 6
+    )
     evidence_top_k = req.evidence_top_k
     if short_followup:
         previous_user_questions = [
@@ -7263,11 +7924,34 @@ async def _prepare_predict_messages(
             evidence_top_k = max(evidence_top_k, 5)
 
     if req.attach_evidence:
-        retrieved_articles, evidence_error, _ = await _fetch_evidence_with_cache(
-            evidence_question,
-            evidence_top_k,
-            source="forecast",
-        )
+        # An option the question names ("will it rain in tampa?") is also
+        # searched by its own market's question: the event's title ("Where
+        # will it rain on Nov 5?") finds rain in Dresden. The searches run
+        # together and share the article budget, so the prompt is no longer.
+        option_questions = [
+            str(o["question"]) for o in (req._event_options or {}).get("named") or [] if o.get("question")
+        ][:_CHAT_NAMED_OPTION_SEARCHES]
+        weather = asyncio.ensure_future(_weather_evidence(req, quote))
+        searches = await asyncio.gather(*(
+            _fetch_evidence_with_cache(question, evidence_top_k, source="forecast")
+            for question in [evidence_question, *option_questions]
+        ))
+        # Station forecasts come first, beside the venue's own context.
+        station_forecasts = await weather
+        req._station_forecast = bool(station_forecasts)
+        supplied_articles = _merge_evidence_articles(station_forecasts, supplied_articles)
+        retrieved_articles, evidence_error, _ = searches[0]
+        if option_questions:
+            found = [s[0] for s in [*searches[1:], searches[0]]]
+            interleaved = [a for row in itertools.zip_longest(*found) for a in row if a]
+            retrieved_articles = _merge_evidence_articles([], interleaved)[
+                :min(evidence_top_k, _EVIDENCE_TOP_K_MAX)
+            ]
+            if retrieved_articles:
+                evidence_error = None
+            otel_trace.get_current_span().set_attribute(
+                "forecast.evidence.option_searches", len(option_questions)
+            )
 
     evidence_articles = _merge_evidence_articles(supplied_articles, retrieved_articles)
     evidence_articles = [_clean_article(a) for a in evidence_articles]
@@ -7386,6 +8070,7 @@ async def _prepare_predict_messages(
                     "edge board order context unavailable; replying without it",
                     exc_info=True,
                 )
+        system_prompt += _chat_length_budget(req)
         user_prompt = build_user_prompt(record, "[question]", "full")
     else:
         user_prompt = build_user_prompt(record, prompt_text, req.evidence_detail)
@@ -7481,24 +8166,47 @@ def _extract_pdf_bytes(content: bytes) -> str:
         raise HTTPException(status_code=422, detail=f"PDF extraction failed: {exc}") from exc
 
 
-def _extract_url_sync(url: str) -> Dict[str, Any]:
-    import re
-    from urllib.parse import urlparse
-    try:
-        import requests as _req
-        from bs4 import BeautifulSoup
-        resp = _req.get(url, timeout=20, headers={"User-Agent": "Foresea/1.0"}, allow_redirects=True)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
-            tag.decompose()
-        title = (soup.title.string or "").strip() if soup.title else urlparse(url).netloc
-        text = re.sub(r"\n{3,}", "\n\n", soup.get_text(separator="\n", strip=True))
-        return {"title": title, "text": text[:20000], "source": urlparse(url).netloc, "url": url}
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"URL extraction failed: {exc}") from exc
+async def _read_linked_page(url: str) -> Dict[str, Any]:
+    """Text of a public page a user linked, cached; raises web_page.PageFetchError.
+
+    web_page refuses private, loopback, link-local and metadata addresses on
+    every redirect hop, so a pasted or attached link cannot probe the server's
+    own network.
+    """
+    cache_key = _cache_key("extract_url", url)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    page = await asyncio.get_running_loop().run_in_executor(None, web_page.read_page, url)
+    _cache_set(cache_key, page, _EXTRACT_CACHE_TTL)
+    return page
+
+
+_MAX_LINKED_PAGES = 3
+# ~1.5k tokens per page: enough for an article body without slowing prefill on
+# the self-hosted model.
+_LINKED_PAGE_CHARS = 6000
+
+
+async def _linked_page_articles(urls: List[str]) -> tuple[List[Dict[str, Any]], List[tuple[str, str]]]:
+    """Read pasted links in parallel -> (evidence articles, [(url, why unreadable)])."""
+    results = await asyncio.gather(*(_read_linked_page(url) for url in urls), return_exceptions=True)
+    articles: List[Dict[str, Any]] = []
+    unreadable: List[tuple[str, str]] = []
+    for url, result in zip(urls, results):
+        if isinstance(result, web_page.PageFetchError):
+            unreadable.append((url, str(result).rstrip(".")))
+        elif isinstance(result, Exception):
+            logger.warning("linked page read failed url=%s", url, exc_info=result)
+            unreadable.append((url, "unexpected error"))
+        elif isinstance(result, BaseException):
+            raise result
+        elif not result.get("text"):
+            unreadable.append((url, "no readable text"))
+        else:
+            text = result["text"][:_LINKED_PAGE_CHARS]
+            articles.append({**result, "text": text, "summary": text[:800]})
+    return articles, unreadable
 
 
 def _analytics_conn():
@@ -8656,11 +9364,19 @@ async def recent_analytics_events(
 )
 async def list_registered_users(
     request: Request,
+    response: Response,
     limit: int = Query(500, ge=1, le=1000, description="Max users to return"),
 ) -> RegisteredUsersResponse:
     """Return the list of registered accounts and verified email IDs for operators."""
-    _check_api_key(request)
+    _require_operator_key(request)
+    # Same URL, different body per header: keep it out of any shared cache.
+    response.headers["Cache-Control"] = "no-store"
     lim = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else 500
+    return await _registered_users(lim)
+
+
+async def _registered_users(lim: int) -> RegisteredUsersResponse:
+    """Read the account list. Callers must have checked the operator key."""
     if _get_datastore() is not None:
         try:
             users = await asyncio.get_running_loop().run_in_executor(
@@ -8701,12 +9417,16 @@ def _csv_cell(value: Any) -> str:
     summary="Export aggregate privacy-preserving analytics summary and registered users in CSV format",
 )
 async def export_analytics_csv(request: Request) -> Response:
-    """Export 30-day aggregate traffic, event counts, and registered users in CSV format."""
+    """Export 30-day aggregate traffic, event counts, and (for operators) registered users in CSV format."""
     _check_api_key(request)
-    visits_task = analytics_summary(request)
-    events_task = analytics_events_summary(request)
-    users_task = list_registered_users(request, limit=500)
-    visits, events, users = await asyncio.gather(visits_task, events_task, users_task)
+    visits, events = await asyncio.gather(
+        analytics_summary(request), analytics_events_summary(request)
+    )
+    # The aggregates above are public on their own endpoints; the account
+    # list is not, so it is only written for a request with the operator key.
+    users = None
+    if server_security.operator_key_matches(request, _OPERATOR_API_KEY):
+        users = await _registered_users(500)
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
@@ -8748,24 +9468,33 @@ async def export_analytics_csv(request: Request) -> Response:
     for row in events.by_model:
         writer.writerow([_csv_cell(row.get("model")), row.get("count", 0)])
     writer.writerow([])
-    writer.writerow(["User ID", "Email", "Name", "Created At", "Last Login"])
-    for u in users.users:
-        writer.writerow(
-            [
-                _csv_cell(u.user_id),
-                _csv_cell(u.email),
-                _csv_cell(u.name),
-                _csv_cell(u.created_at),
-                _csv_cell(u.last_login),
-            ]
-        )
+    if users is None:
+        writer.writerow(["# Registered users omitted: send X-Operator-Key to include them."])
+    else:
+        writer.writerow(["User ID", "Email", "Name", "Created At", "Last Login"])
+        for u in users.users:
+            writer.writerow(
+                [
+                    _csv_cell(u.user_id),
+                    _csv_cell(u.email),
+                    _csv_cell(u.name),
+                    _csv_cell(u.created_at),
+                    _csv_cell(u.last_login),
+                ]
+            )
 
     csv_content = buf.getvalue()
     filename = f"foresea_analytics_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
     return Response(
         content=csv_content,
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # The body differs by X-Operator-Key; a cache keyed on the URL
+            # alone could hand an operator's copy to the next caller.
+            "Cache-Control": "no-store",
+            "Vary": "X-Operator-Key",
+        },
     )
 
 
@@ -9170,6 +9899,8 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
         const events = await eRes.json();
         const recents = rRes.ok ? await rRes.json() : { events: [] };
         const usersData = uRes.ok ? await uRes.json() : { total: 0, users: [] };
+        // 401/403: the list needs X-Operator-Key, which this page never sends.
+        const usersLocked = uRes.status === 401 || uRes.status === 403;
 
         // 1. Stats
         const regTotal = events.attribution && events.attribution.total_registered_users != null
@@ -9303,6 +10034,9 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
               <td style="text-align:right; color:var(--emerald); font-size:12px; font-weight:500;">${lDate}</td>
             </tr>`;
           }).join('');
+        } else if (usersLocked) {
+          countBadge.innerText = 'operator only';
+          userTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-dim)">The account list is operator-only: request /analytics/users with the X-Operator-Key header.</td></tr>';
         } else {
           countBadge.innerText = '0 accounts';
           userTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-dim)">No registered users found</td></tr>';
@@ -9800,6 +10534,46 @@ async def agent_debate(req: DebateRequest) -> Dict[str, Any]:
         ),
     )
     return res
+
+
+@app.get(
+    "/markets/index-forecast",
+    tags=["Markets"],
+    summary="Calibrated range forecasts for ten NSE indices",
+)
+async def markets_index_forecast() -> JSONResponse:
+    """Today's 1-, 5- and 21-session range forecasts for ten NSE indices and their track record.
+
+    Built once per trading day from Upstox's NSE index closes and India VIX by
+    scripts/index_forecast_tick.py. The forecasts are ranges and the chance of closing above
+    round levels, not direction calls: a walk-forward test found no up/down skill.
+    """
+    payload = await asyncio.get_running_loop().run_in_executor(None, _INDEX_FORECAST_READER.read)
+    if not payload or not payload.get("indices"):
+        raise HTTPException(status_code=404, detail="Index forecasts publish after the next NSE close.")
+    body = {**payload, "freshness": _INDEX_FORECAST_READER.freshness(payload)}
+    body.pop("holidays", None)
+    return JSONResponse(body, headers={"Cache-Control": "public, max-age=300"})
+
+
+@app.get(
+    "/markets/commodity-pairs",
+    tags=["Markets"],
+    summary="Statistical-arbitrage tracker for ten commodity pairs",
+)
+async def markets_commodity_pairs() -> JSONResponse:
+    """How stretched ten commodity pair spreads are, and the live record of stretched-pair signals.
+
+    Built once a day from MCX futures (Upstox), FRED spot prices and gold and platinum snapshots by
+    scripts/commodity_pairs_tick.py. A
+    monitor, not a strategy: the same signal rule lost money on half the pairs in a
+    2011-2026 backtest, which the payload carries per pair.
+    """
+    payload = await asyncio.get_running_loop().run_in_executor(None, _COMMODITY_PAIRS_READER.read)
+    if not payload or not payload.get("pairs"):
+        raise HTTPException(status_code=404, detail="The commodity pair tracker has not published yet.")
+    body = {**payload, "freshness": _COMMODITY_PAIRS_READER.freshness(payload)}
+    return JSONResponse(body, headers={"Cache-Control": "public, max-age=300"})
 
 
 @app.get(
@@ -11813,6 +12587,180 @@ async def delete_trading_connection(platform: str, request: Request) -> TradingC
             raise _trading_http_exception(exc) from exc
 
 
+# Kite Personal stays separate from prediction-market execution and public MCP.
+_kite_slots = threading.BoundedSemaphore(4)
+
+
+def _kite_connection_mutation(
+    user_id: str, action: str, credentials: Any = None, intent: Optional[str] = None,
+) -> Any:
+    """Persist ordering across replicas; disconnect supersedes pending connects."""
+    from analyzing_llm_rationale import datastore_backend as ds
+
+    client = _get_datastore()
+    if client is None:
+        raise HTTPException(503, "Secure durable account storage is not configured.")
+    key = client.key("User", user_id, "KiteConnectionIntent", "current")
+    if action == "begin":
+        generation = uuid.uuid4().hex
+        entity = ds.Entity(key=key)
+        entity.update(generation=generation)
+        client.put(entity)
+        return generation
+    with client.transaction():
+        if action == "save":
+            current = client.get(key)
+            if not current or current.get("generation") != intent:
+                raise HTTPException(409, "Kite connection changed. Reconnect if you still want to save it.")
+            return _put_trading_connection(user_id, "kite", credentials).model_dump()
+        entity = ds.Entity(key=key)
+        entity.update(generation=uuid.uuid4().hex)
+        client.put(entity)
+        _delete_trading_connection(user_id, "kite")
+        return {"platform": "kite", "connected": False}
+
+
+def _kite_operation(user_id: str, action: str, payload: Any = None) -> Dict[str, Any]:
+    if action not in {"status", "disconnect"} and not _trading_guardrail_env_bool("FORESEA_ENABLE_KITE_PERSONAL", False):
+        raise HTTPException(503, "Kite Personal is not enabled on this server.")
+    # Reject excess work without occupying the shared threadpool waiting for slots.
+    if not _kite_slots.acquire(blocking=False):
+        raise HTTPException(429, "Kite account is busy. Wait before refreshing.")
+    try:
+        with _tracer.start_as_current_span("kite.account.operation", record_exception=False) as span:
+            span.set_attributes({"user.id": user_id, "kite.action": action})
+            try:
+                result = _kite_operation_inner(user_id, action, payload)
+            except HTTPException as exc:
+                span.set_attributes({"outcome": "error", "http.response.status_code": exc.status_code})
+                span.set_status(Status(StatusCode.ERROR))
+                logger.info("Kite account access: user_id=%s action=%s status=%s", user_id, action, exc.status_code)
+                raise
+            span.set_attribute("outcome", "success")
+            logger.info("Kite account access: user_id=%s action=%s status=success", user_id, action)
+            return result
+    finally:
+        _kite_slots.release()
+
+
+def _kite_operation_inner(user_id: str, action: str, payload: Any = None) -> Dict[str, Any]:
+    from analyzing_llm_rationale import kite_account
+
+    try:
+        if action == "status":
+            return {
+                **_connection_status(user_id, "kite").model_dump(),
+                "encryption_configured": _secure_connection_configured(),
+                "enabled": _trading_guardrail_env_bool("FORESEA_ENABLE_KITE_PERSONAL", False),
+                "read_only": True,
+            }
+        if action == "disconnect":
+            return {**_kite_connection_mutation(user_id, "disconnect"), "read_only": True}
+        if action == "connect":
+            credentials = kite_account.validate_credentials(payload)
+            if not _secure_connection_configured() or _get_datastore() is None:
+                raise HTTPException(503, "Secure durable account storage is not configured.")
+            intent = _kite_connection_mutation(user_id, "begin")
+            kite_account.read_account(credentials, "profile")
+            return {**_kite_connection_mutation(user_id, "save", credentials, intent), "read_only": True}
+        credentials = _stored_trading_credentials(user_id, "kite")
+        if credentials is None:
+            raise HTTPException(409, "Connect your Kite account in Settings first.")
+        if action in {"quotes", "history"}:
+            from analyzing_llm_rationale import kite_market_data
+
+            data = kite_market_data.quotes(credentials, payload) if action == "quotes" else kite_market_data.history(credentials, **payload)
+        else:
+            data = kite_account.read_account(credentials, action)
+        return {
+            "platform": "kite", "resource": action, "read_only": True,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "data": data,
+        }
+    except kite_account.KiteAccountError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from None
+    except HTTPException:
+        raise
+    except Exception as exc:  # aqg: top-level boundary; suppress storage/KMS exception details
+        logger.warning("Kite account operation failed: action=%s kind=%s", action, type(exc).__name__)
+        raise HTTPException(503, "Kite connection is unavailable. Try again or reconnect.") from None
+
+
+@app.get("/integrations/kite", tags=["Kite Personal"], summary="Private Kite connection status")
+async def kite_connection_status(request: Request) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "status")
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.put("/integrations/kite", tags=["Kite Personal"], summary="Validate and encrypt a daily Kite session")
+async def kite_connect(request: Request) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    # Parse here so validation errors cannot echo credential input in a 422 body.
+    try:
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 2048:
+                raise HTTPException(413, "Kite connection request exceeds 2 KB.")
+            body.extend(chunk)
+        payload = json.loads(body)
+    except ValueError:
+        raise HTTPException(422, "Provide a JSON object with api_key and access_token.") from None
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "connect", payload)
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.delete("/integrations/kite", tags=["Kite Personal"], summary="Remove your stored Kite session")
+async def kite_disconnect(request: Request) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "disconnect")
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/integrations/kite/quotes", tags=["Kite Connect"], summary="Read your subscribed Kite market snapshots")
+async def kite_market_quotes(request: Request, instruments: Annotated[List[str], Query(alias="i", min_length=1, max_length=500)]) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "quotes", instruments)
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/integrations/kite/history", tags=["Kite Connect"], summary="Read your subscribed Kite OHLCV candles")
+async def kite_market_history(
+    request: Request, instrument: str = Query(..., max_length=120), interval: str = Query("day", max_length=10),
+    start: str = Query(..., alias="from", max_length=40), end: str = Query(..., alias="to", max_length=40),
+) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], "history", {"instrument": instrument, "interval": interval, "start": start, "end": end})
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/integrations/kite/{resource}", tags=["Kite Personal"], summary="Read private Kite account data")
+async def kite_account_resource(
+    resource: Literal["holdings", "positions", "funds", "orders"], request: Request,
+) -> JSONResponse:
+    from starlette.concurrency import run_in_threadpool
+
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    result = await run_in_threadpool(_kite_operation, claims["sub"], resource)
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
 # ── BYO Model Providers Endpoints ─────────────────────────────────────────────
 
 @app.get(
@@ -12753,13 +13701,10 @@ async def extract_attachment(  # noqa: B008
         url = url.strip()
         if not url.startswith(("http://", "https://")):
             raise HTTPException(status_code=422, detail="URL must start with http:// or https://")
-        url_cache_key = _cache_key("extract_url", url)
-        cached = _cache_get(url_cache_key)
-        if cached is not None:
-            return cached
-        extracted = await loop.run_in_executor(None, _extract_url_sync, url)
-        _cache_set(url_cache_key, extracted, _EXTRACT_CACHE_TTL)
-        return extracted
+        try:
+            return await _read_linked_page(url)
+        except web_page.PageFetchError as exc:
+            raise HTTPException(status_code=422, detail=f"URL extraction failed: {exc}") from exc
     raise HTTPException(status_code=400, detail="Provide either a PDF file or a url.")
 
 
@@ -13161,7 +14106,7 @@ async def chat_models(request: Request) -> Dict[str, Any]:
             "fallbacks": list(cfg.fallback_model_chain),
             "default": cfg.name == default_key,
         }
-        for cfg in _SCADS_CHAT_MODEL_OPTIONS
+        for cfg in _chat_model_options()
     ]
     user_models = []
     user_id = _optional_user_id(request)
@@ -13627,7 +14572,10 @@ async def rag_ingest(req: RagIngestRequest, request: Request) -> Dict[str, Any]:
     if not text and url:
         if not url.startswith(("http://", "https://")):
             raise HTTPException(status_code=422, detail="url must start with http:// or https://")
-        extracted = await loop.run_in_executor(None, _extract_url_sync, url)
+        try:
+            extracted = await _read_linked_page(url)
+        except web_page.PageFetchError as exc:
+            raise HTTPException(status_code=422, detail=f"URL extraction failed: {exc}") from exc
         text = (extracted or {}).get("text") or ""
         title = title or (extracted or {}).get("title") or url
         source = (extracted or {}).get("source") or url
@@ -13983,6 +14931,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         return response
 
     provider, temperature, max_tokens = _select_predict_provider(req)
+    messages, consensus = await _chat_consensus(req, provider, messages)
 
     try:
         content, served_provider = await _provider_chat_with_chat_fallbacks(
@@ -13998,7 +14947,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     if req.chat_mode:
         response = _build_chat_response(
             req,
-            content,
+            _pin_chat_probability(content, consensus),
             evidence_articles,
             evidence_error,
             _provider_served_model_name(served_provider),
@@ -14064,6 +15013,110 @@ async def _finalize_predict_response(
             }])
         except Exception:
             pass
+
+
+# ── Models on the user's own device ──────────────────────────────────────────
+# foresea.ink cannot reach a model on a visitor's laptop (Ollama, LM Studio,
+# llama.cpp, MLX), but their browser can. The server does the research and
+# builds the prompt; the browser sends it to the local model and posts the
+# reply back to be parsed. The model's address and any key never reach us.
+
+_THINK_RE = re.compile(r"<think>.*?(?:</think>|$)\s*", re.DOTALL)
+
+
+class DevicePrepareResponse(BaseModel):
+    """The forecast prompt for a model on the user's device."""
+
+    messages: List[Dict[str, str]] = Field(..., description="Chat messages to send to the local model.")
+    temperature: float
+    max_tokens: int
+    request: Dict[str, Any] = Field(
+        ..., description="The request after preparation (a pasted market link fills its market fields). "
+        "Send it back unchanged to /predict/device/finish."
+    )
+    evidence_articles: List[Dict[str, Any]] = Field(default_factory=list)
+    evidence_error: Optional[str] = None
+
+
+class DeviceFinishRequest(BaseModel):
+    """A local model's reply to a prompt from /predict/device/prepare."""
+
+    request: PredictRequest
+    content: str = Field(..., max_length=200_000, description="The model's full reply.")
+    evidence_articles: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
+    evidence_error: Optional[str] = Field(None, max_length=2000)
+    served_model_name: Optional[str] = Field(None, max_length=200, description="The local model's name.")
+
+
+@app.post(
+    "/predict/device/prepare",
+    tags=["Inference"],
+    summary="Build the forecast prompt for a model on your own device",
+    response_model=DevicePrepareResponse,
+)
+async def predict_device_prepare(req: PredictRequest, request: Request) -> DevicePrepareResponse:
+    """Gather evidence and build the forecast prompt without calling a model.
+
+    Send the returned `messages` to your own model (any OpenAI-compatible
+    `/v1/chat/completions` server), then post its reply with the returned
+    `request` and evidence to `/predict/device/finish`.
+    """
+    _check_rate_limit(request)
+    _check_predict_rate_limit(request)
+    claims = _optional_predict_claims(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+    if req.variant not in _state["variants"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown variant '{req.variant}'. Valid: {sorted(_state['variants'])}",
+        )
+    # Fields that pick a server-side model mean nothing here, and a key must not
+    # be echoed back in `request`.
+    req = req.model_copy(update={
+        "model": None, "openrouter_model": None, "openrouter_api_key": None,
+        "provider_base_url": None, "ollama_base_url": None,
+    })
+    messages, evidence_articles, evidence_error = await _prepare_predict_messages(
+        req, claims.get("sub") if claims else None
+    )
+    return DevicePrepareResponse(
+        messages=messages,
+        temperature=0.7,
+        max_tokens=_max_tokens_for_request(req),
+        request=req.model_dump(mode="json"),
+        evidence_articles=evidence_articles,
+        evidence_error=evidence_error,
+    )
+
+
+@app.post(
+    "/predict/device/finish",
+    tags=["Inference"],
+    summary="Turn your device model's reply into a forecast",
+    response_model=PredictResponse,
+)
+async def predict_device_finish(body: DeviceFinishRequest, request: Request) -> PredictResponse:
+    """Parse a local model's reply into the same `PredictResponse` that `/predict` returns.
+
+    Nothing is cached, scored or added to the track record: the reply comes
+    from the caller's own model.
+    """
+    _check_rate_limit(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+    req = body.request
+    content = _THINK_RE.sub("", body.content).strip()
+    model_name = (body.served_model_name or "").strip() or "Your device model"
+    if req.chat_mode:
+        response = _build_chat_response(req, content, body.evidence_articles, body.evidence_error, model_name)
+    else:
+        response = _build_typed_response(
+            req, _parse_json_dict(content), content, body.evidence_articles, body.evidence_error, model_name
+        )
+    response.model_key = response.served_model_name = f"{model_name} (your device)"
+    _append_chat_source_attribution(response)
+    return response
 
 
 def _sse_event(event: str, data: Dict[str, Any]) -> str:
@@ -14222,6 +15275,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             yield _sse_event("done", {"response": response.model_dump(mode="json")})
             return
 
+        messages, consensus = await _chat_consensus(req, provider, messages)
         chunks: List[str] = []
         first_delta_sent = False
         used_provider_ref: Dict[str, Any] = {"provider": provider}
@@ -14301,7 +15355,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
         if req.chat_mode:
             response = _build_chat_response(
                 req,
-                text,
+                _pin_chat_probability(text, consensus),
                 evidence_articles,
                 evidence_error,
                 served_model_name,
@@ -14684,6 +15738,30 @@ except Exception as exc:  # pragma: no cover - defensive production fallback.
         "glm-5-3": 6000,
         "llama-3.3-70b-instruct": 6000,
     }
+try:
+    _SERVER_MODEL_CONFIGS = load_model_configs(_REPO_ROOT / "configs" / "models.yaml")
+except Exception as exc:  # pragma: no cover - defensive production fallback.
+    logger.warning("failed to load model configs: %s", exc)
+    _SERVER_MODEL_CONFIGS = {}
+
+
+def _chat_model_options() -> List[Any]:
+    """Server-hosted models for the chat selector.
+
+    The server's own default comes first when it is not a SCADS model (e.g. a
+    self-hosted endpoint). SCADS options are offered only while the server holds
+    a SCADS key; without one every request to them fails.
+    """
+    default_key = _state.get("model_key") or "gpt-oss-120b"
+    options = list(_SCADS_CHAT_MODEL_OPTIONS) if os.environ.get("SCADS_AI_API_KEY") else []
+    default_cfg = _SERVER_MODEL_CONFIGS.get(default_key)
+    if (
+        default_cfg is not None
+        and default_cfg.chat_interface_enabled
+        and all(cfg.name != default_key for cfg in options)
+    ):
+        options.insert(0, default_cfg)
+    return options
 
 
 def _scads_alt_provider(
@@ -15235,11 +16313,13 @@ def _parse_market_url(text: str) -> Optional[tuple]:
     """Extract (venue, kind, identifier) from a Polymarket/Kalshi URL in `text`.
 
     Polymarket: the slug is the last path segment
-    (e.g. .../lpl/lol-al-we-2026-06-01 -> slug). Kalshi: the segment after
-    /markets/ is the ticker. Returns None if no recognised URL is present.
+    (e.g. .../lpl/lol-al-we-2026-06-01 -> slug). Kalshi web links are
+    /markets/{series}[/{slug}[/{event or market ticker}]]: the last segment
+    that extends the series ticker is the most specific one, else the series.
+    Returns None if no recognised URL is present.
     """
     for token in re.findall(r"https?://\S+", text or ""):
-        parsed = urlparse(token)
+        parsed = urlparse(token.rstrip(").,;"))
         host = (parsed.hostname or "").lower()
         parts = [p for p in parsed.path.split("/") if p]
         if not parts:
@@ -15247,9 +16327,10 @@ def _parse_market_url(text: str) -> Optional[tuple]:
         if "polymarket.com" in host:
             return ("polymarket", "slug", parts[-1])
         if "kalshi.com" in host and "markets" in parts:
-            i = parts.index("markets")
-            if i + 1 < len(parts):
-                return ("kalshi", "ticker", parts[i + 1])
+            rest = parts[parts.index("markets") + 1:]
+            if rest:
+                series = rest[0].lower()
+                return ("kalshi", "ticker", next((p for p in reversed(rest) if p.lower().startswith(series)), rest[0]))
     return None
 
 
@@ -15446,6 +16527,8 @@ def _agent_prediction_request(
     question: str,
     quote: Optional[MarketQuote],
     grounding_note: Optional[str],
+    *,
+    market_chat: bool = False,
 ) -> PredictRequest:
     has_market_context = bool(
         quote
@@ -15470,7 +16553,7 @@ def _agent_prediction_request(
     # caps at 12 -- truncate here (keeping the most recent turns, so an appended
     # grounding_note always survives) or construction below raises a ValidationError.
     history = history[-12:]
-    return PredictRequest(
+    pred_req = PredictRequest(
         question=question,
         description=(
             req.description
@@ -15492,7 +16575,9 @@ def _agent_prediction_request(
         # hatch, and either hallucinates a fake Yes/No forecast about "hello"
         # or breaks format in a way nothing downstream is designed to expect.
         attach_evidence=not is_greeting,
-        chat_mode=is_greeting,
+        # market_chat: a market forecast as a chat reply, the median of quick
+        # estimates (see _chat_consensus), the same as /predict gives.
+        chat_mode=is_greeting or (market_chat and quote is not None),
         effort_tier=req.effort_tier,
         evidence_top_k=req.evidence_top_k,
         variant=req.variant,
@@ -15517,6 +16602,9 @@ def _agent_prediction_request(
         model=req.model,
         provider_base_url=req.provider_base_url,
     )
+    if quote is not None and quote.event_options:
+        pred_req._event_options = _chat_event_options(pred_req, quote.model_dump(), asked=req.question)
+    return pred_req
 
 
 def _select_agent_provider(req: "AgentAnalyzeRequest"):
@@ -15588,7 +16676,7 @@ async def _run_agent_skills(
     pred_req: PredictRequest,
     result: PredictResponse,
 ) -> tuple[List[AgentSkillResult], bool, Optional[str]]:
-    if pred_req.chat_mode:
+    if pred_req.chat_mode and pred_req.market_probability is None and not pred_req.market_url:
         # A greeting/meta reply never tried to forecast anything -- running a
         # research skill (base rate, red team, ...) against "hello" makes no
         # sense and would be pure wasted LLM spend.
@@ -15611,10 +16699,14 @@ async def _run_agent_skills(
     sources_txt = "\n".join(
         f"- {s.source}: {s.title}" for s in result.evidence_sources[:8]
     ) or "(no evidence retrieved)"
+    answer, confidence = result.predicted_answer, result.confidence
+    if answer is None and result.model_probability is not None:
+        # A chat forecast is a probability for Yes.
+        answer, confidence = "Yes", result.model_probability
     context = (
         f"Question: {question}\n"
-        f"Forecast: {result.predicted_answer} "
-        f"(confidence {result.confidence if result.confidence is not None else 'n/a'})\n"
+        f"Forecast: {answer} "
+        f"(confidence {confidence if confidence is not None else 'n/a'})\n"
         f"Market-implied probability: {pred_req.market_probability}\n"
         f"Thesis: {result.model_rationale or result.rationale or ''}\n"
         f"Evidence:\n{sources_txt}"
@@ -15641,6 +16733,10 @@ async def _agent_report_from_prediction(
     model_probability = analysis.model_probability if analysis else _model_probability_from_prediction(result)
     stance = analysis.stance if analysis else None
     outcome = (quote.outcome if quote else None) or "Yes"
+    option_forecasts = pred_req._option_forecasts
+    if option_forecasts:
+        # The edge is on the quoted option's market; "Yes" alone wouldn't say which.
+        outcome = next((o["label"] for o in option_forecasts["options"] if o.get("quoted")), outcome)
     recommendation, detail = _agent_recommendation(edge, outcome)
     if analysis is not None:
         pipeline.append("price_edge")
@@ -15669,6 +16765,7 @@ async def _agent_report_from_prediction(
     )
     report = AgentReport(
         question=question,
+        options=list(result.options) if option_forecasts else [],
         served_model_name=result.served_model_name,
         pipeline=pipeline,
         platform=market_platform,
@@ -15797,7 +16894,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         )
 
     # 2. Evidence + forecast + edge — reuse the /predict pipeline.
-    pred_req = _agent_prediction_request(req, question, quote, grounding_note)
+    pred_req = _agent_prediction_request(req, question, quote, grounding_note, market_chat=True)
     _agent_counter.add(1, {"agent.platform": req.platform or "unknown"})
     result = await predict(pred_req, kb_user_id=(claims.get("sub") if claims else None))
     return await _agent_report_from_prediction(
@@ -15855,7 +16952,7 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
                 "question": question,
                 "pipeline": pipeline,
             })
-            pred_req = _agent_prediction_request(req, question, quote, grounding_note)
+            pred_req = _agent_prediction_request(req, question, quote, grounding_note, market_chat=True)
             rag_user_id = claims.get("sub")
             messages, evidence_articles, evidence_error = await _prepare_predict_messages(
                 pred_req, rag_user_id
@@ -15886,6 +16983,7 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
             "evidence_error": evidence_error,
         })
 
+        messages, consensus = await _chat_consensus(pred_req, provider, messages)
         chunks: List[str] = []
         try:
             async for chunk in _provider_stream_chat(provider, messages, temperature, max_tokens):
@@ -15914,7 +17012,9 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         # never becomes "chat", and the frontend renders full report chrome
         # (probability tag, grounding note) around what should be a plain reply.
         if pred_req.chat_mode:
-            result = _build_chat_response(pred_req, text, evidence_articles, evidence_error)
+            result = _build_chat_response(
+                pred_req, _pin_chat_probability(text, consensus), evidence_articles, evidence_error
+            )
         else:
             parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
                                                  "rationale", "options", "p10", "p50", "p90", "unit"))

@@ -205,6 +205,28 @@ def check_api_key(request: Request, required_api_key: Optional[str]) -> None:
         raise HTTPException(status_code=401, detail="Missing or invalid X-API-Key header.")
 
 
+def operator_key_matches(request: Request, operator_api_key: Optional[str]) -> bool:
+    """True only when an operator key is configured and the request sends it.
+
+    The opposite default to check_api_key: no configured key means no one.
+    Bytes, not str, because compare_digest raises on non-ASCII str.
+    """
+    if not operator_api_key:
+        return False
+    supplied = request.headers.get("X-Operator-Key", "")
+    return hmac.compare_digest(supplied.encode("utf-8"), operator_api_key.encode("utf-8"))
+
+
+def require_operator_key(request: Request, operator_api_key: Optional[str]) -> None:
+    if not operator_api_key:
+        raise HTTPException(
+            status_code=403,
+            detail="Operator endpoints are disabled until OPERATOR_API_KEY is configured.",
+        )
+    if not operator_key_matches(request, operator_api_key):
+        raise HTTPException(status_code=401, detail="Missing or invalid X-Operator-Key header.")
+
+
 def check_rate_limit(
     request: Request,
     limiter: RateLimiter,

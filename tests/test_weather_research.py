@@ -5,6 +5,8 @@ import unittest
 
 from analyzing_llm_rationale.weather_research import (
     calculate_bracket_probability,
+    contract_day,
+    contract_probabilities,
     parse_market_strike,
     research_weather_market,
 )
@@ -277,6 +279,128 @@ class WeatherResearchTests(unittest.TestCase):
         self.assertEqual(spec2["strike_high_f"], 80.0)
         p2 = calculate_bracket_probability(75.0, spec2, uncertainty_std_f=2.0)
         self.assertGreater(p2["model_probability"], 0.98)
+
+
+def _station_get(day_highs, periods=(), google_hours=None):
+    """A fake HTTP get for KORD: Open-Meteo hours per local day (one at each
+    day's high, the rest 10°F lower), NWS hourly periods, and optionally
+    Google forecast hours."""
+    def get(url, **_kwargs):
+        if url.endswith("/observations/latest"):
+            return _Response({"properties": {"temperature": {"value": 10.0}}, "geometry": {"coordinates": [-87.9, 41.9]}})
+        if "/points/" in url:
+            return _Response({"properties": {"forecastHourly": "https://example.test/hourly"}})
+        if url == "https://example.test/hourly":
+            return _Response({"properties": {"periods": list(periods)}})
+        if "weather.googleapis.com" in url:
+            return _Response({"forecastHours": google_hours or []})
+        if "ensemble-api" in url:
+            return _Response({"hourly": {"time": []}})
+        times, temps = [], []
+        for day, high in day_highs:
+            times += [f"{day}T{h:02d}:00" for h in range(24)]
+            temps += [high - 10.0] * 14 + [high] + [high - 10.0] * 9
+        return _Response({"hourly": {"time": times, "temperature_2m": temps}})
+    return get
+
+
+class WeatherContractDayTests(unittest.TestCase):
+    def setUp(self):
+        from analyzing_llm_rationale import weather_research
+
+        weather_research._reset_runtime_state_for_test()
+        self._env = {k: os.environ.pop(k) for k in ("GOOGLE_WEATHER_API_KEY", "GMP_API_KEY") if k in os.environ}
+
+    def tearDown(self):
+        from analyzing_llm_rationale import weather_research
+
+        weather_research._reset_runtime_state_for_test()
+        os.environ.pop("GOOGLE_WEATHER_API_KEY", None)
+        os.environ.update(self._env)
+
+    @staticmethod
+    def _quote(subject):
+        return {"question": f"Highest temperature in Chicago on Nov 5, 2026? {subject}", "category": "Weather",
+                "resolution_criteria": "NWS Daily Climate Report, station KORD."}
+
+    def test_contract_day_reads_the_question_or_the_kalshi_ticker(self):
+        self.assertEqual(contract_day({"question": "Will it rain in Tampa on Nov 5, 2026?"}), "2026-11-05")
+        self.assertEqual(contract_day({"question": "Rain?", "ticker": "KXRAIN-26NOV05-TPA"}), "2026-11-05")
+        self.assertIsNone(contract_day({"question": "Will it rain in Tampa today?"}))
+
+    def test_an_events_brackets_are_priced_in_whole_degrees(self):
+        # Read literally, "56° to 57°" and "58° to 59°" left a 57.3°F high in
+        # neither bracket, so a 57°F ensemble put 10% on 58-59.
+        research = {
+            "weather_market": {"station": "KORD"},
+            "ensemble_forecast": {"member_maxima_f": [55.2, 56.4, 57.3, 57.6, 58.1, 59.4] * 2 + [61.0] * 3},
+            "model_forecast": {"projected_high_f": 57.0, "projected_low_f": 40.0},
+        }
+        options = ["55° or below", "56° to 57°", "58° to 59°", "60° or above"]
+
+        chances = contract_probabilities(research, options)
+
+        self.assertEqual([round(chances[o] * 15) for o in options], [2, 4, 6, 3])
+        self.assertAlmostEqual(sum(chances.values()), 1.0)
+        low = contract_probabilities(research, ["Will the low be <40° on Nov 5, 2026?"], daily_low=True)
+        self.assertAlmostEqual(low["Will the low be <40° on Nov 5, 2026?"], 0.39, places=2)
+
+    def test_cached_station_data_prices_each_bracket_itself(self):
+        # Cached per station, the whole result gave every Denver bracket the
+        # first one's strike and probability.
+        get = _station_get([("2026-11-05", 59.0)])
+        first = research_weather_market(self._quote("56° to 57°"), http_get=get)
+        second = research_weather_market(self._quote("59° to 60°"), http_get=get)
+
+        self.assertTrue(second["research_cached"])
+        self.assertEqual(second["bracket_probability"]["strike_spec"]["strike_low_f"], 59.0)
+        self.assertGreater(second["bracket_probability"]["model_probability"],
+                           first["bracket_probability"]["model_probability"])
+
+    def test_a_contract_day_selects_that_days_forecasts(self):
+        # Late on Nov 4 the first full local day was the 4th, so tomorrow's
+        # contract was priced on today's high.
+        periods = [{"startTime": f"{day}T{h}:00:00-06:00", "temperature": 50, "shortForecast": "Rain",
+                    "probabilityOfPrecipitation": {"value": 40}} for day in ("2026-11-04", "2026-11-05") for h in (21, 22)]
+        get = _station_get([("2026-11-04", 70.0), ("2026-11-05", 60.0)], periods)
+        quote = self._quote("59° to 60°")
+
+        result = research_weather_market(quote, http_get=get, target_day="2026-11-05")
+        default = research_weather_market(quote, http_get=get)
+
+        self.assertEqual(result["model_forecast"]["forecast_day_local"], "2026-11-05")
+        self.assertEqual(result["model_forecast"]["projected_high_f"], 60.0)
+        self.assertEqual([p["start_time"][:10] for p in result["forecast_periods"]], ["2026-11-05"] * 2)
+        self.assertEqual(default["model_forecast"]["forecast_day_local"], "2026-11-04")
+        self.assertEqual(len(default["forecast_periods"]), 4)
+
+    def test_google_forecast_for_a_contract_day_spans_that_local_day(self):
+        hours = [{"interval": {"startTime": f"2026-11-0{5 + (h + 6) // 24}T{(h + 6) % 24:02d}:00:00Z"},
+                  "displayDateTime": {"year": 2026, "month": 11, "day": 5, "hours": h},
+                  "temperature": {"unit": "FAHRENHEIT", "degrees": 62.0 if h == 15 else 50.0}} for h in range(24)]
+        hours.append({"interval": {"startTime": "2026-11-06T06:00:00Z"},
+                      "displayDateTime": {"year": 2026, "month": 11, "day": 6, "hours": 0},
+                      "temperature": {"unit": "FAHRENHEIT", "degrees": 75.0}})
+        os.environ["GOOGLE_WEATHER_API_KEY"] = "test-gmp-key"
+
+        result = research_weather_market(
+            self._quote("61° to 62°"), http_get=_station_get([], google_hours=hours), target_day="2026-11-05"
+        )
+        model = result["model_forecast"]
+        self.assertEqual((model["provider"], model["forecast_day_local"]), ("google_maps_weather", "2026-11-05"))
+        self.assertEqual(model["projected_high_f"], 62.0)
+
+        # Without local dates, the day can't be checked: Open-Meteo's is used.
+        for hour in hours:
+            hour.pop("displayDateTime")
+        from analyzing_llm_rationale import weather_research
+        weather_research._reset_runtime_state_for_test()
+        result = research_weather_market(
+            self._quote("61° to 62°"), http_get=_station_get([("2026-11-05", 58.0)], google_hours=hours),
+            target_day="2026-11-05",
+        )
+        self.assertEqual(result["model_forecast"]["provider"], "open-meteo")
+        self.assertEqual(result["model_forecast"]["projected_high_f"], 58.0)
 
 
 if __name__ == "__main__":

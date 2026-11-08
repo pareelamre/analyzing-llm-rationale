@@ -189,6 +189,20 @@ def scads_track_model_labels(path: Path) -> Tuple[str, ...]:
     )
 
 
+def self_hosted_chat_model_options(path: Path) -> Tuple[ModelConfig, ...]:
+    """Owner-hosted (on-device) chat models, reached with SELF_HOSTED_LLM_API_KEY."""
+    return tuple(
+        cfg
+        for cfg in load_model_configs(path).values()
+        if (
+            cfg.chat_interface_enabled
+            and cfg.provider == "openai-compatible"
+            and cfg.forecasting_enabled
+            and cfg.api_key_env_var == "SELF_HOSTED_LLM_API_KEY"
+        )
+    )
+
+
 def scads_chat_model_options(path: Path) -> Tuple[ModelConfig, ...]:
     """SCADS-hosted text chat models exposed in the interactive composer."""
     return tuple(
@@ -217,7 +231,8 @@ def scads_agent_trading_model_labels(path: Path) -> Tuple[str, ...]:
     """
     selected: list[str] = []
     identities: Dict[str, str] = {}
-    for cfg in scads_chat_model_options(path):
+    # On-device models count too: since SCADS retired, the board runs on one.
+    for cfg in (*scads_chat_model_options(path), *self_hosted_chat_model_options(path)):
         if not cfg.agent_trading_enabled:
             continue
         identity = cfg.agent_model_identity or cfg.router_model_name
@@ -240,14 +255,11 @@ def scads_agent_trading_identities(path: Path) -> frozenset:
     credited to whoever asked for it. These identities are what an
     agent-trading fallback chain must refuse.
     """
-    identities = set()
-    for cfg in load_model_configs(path).values():
-        if not getattr(cfg, "agent_trading_enabled", False):
-            continue
-        identity = getattr(cfg, "agent_model_identity", None) or cfg.router_model_name
-        if identity:
-            identities.add(str(identity).strip())
-    return frozenset(identities)
+    return frozenset(
+        str(cfg.agent_model_identity or cfg.router_model_name).strip()
+        for cfg in load_model_configs(path).values()
+        if cfg.agent_trading_enabled and (cfg.agent_model_identity or cfg.router_model_name)
+    )
 
 
 def scads_hosted_model_fallbacks(path: Path) -> Dict[str, Tuple[str, ...]]:

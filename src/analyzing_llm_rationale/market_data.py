@@ -28,6 +28,7 @@ tracer = trace.get_tracer(__name__)
 venue_requests = metrics.get_meter(__name__).create_counter("market_data.requests", unit="1")
 
 POLYMARKET_GAMMA_URL = "https://gamma-api.polymarket.com/markets"
+POLYMARKET_EVENTS_URL = "https://gamma-api.polymarket.com/events"
 POLYMARKET_TAGS_URL = "https://gamma-api.polymarket.com/tags"
 # Gamma caps /tags at 100 rows per page and defaults to 50.
 POLYMARKET_TAGS_PAGE_LIMIT = 100
@@ -382,8 +383,68 @@ def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None
     else:
         market = None
     if not market:
+        if slug and not market_id:
+            # polymarket.com/event/... links name an event, not one market.
+            return _fetch_polymarket_event(slug)
         raise MarketDataError("Polymarket market not found.")
     return _polymarket_quote(market)
+
+
+def _fetch_polymarket_event(slug: str) -> Dict[str, Any]:
+    """Quote one market of a Polymarket event.
+
+    An event holds one market per outcome (each candidate, or win/draw/win).
+    As for Kalshi events, the description lists every open outcome's price,
+    `event_options` lists them for a forecast per option, and a closed event
+    says how it resolved.
+    """
+    data = _get_json(POLYMARKET_EVENTS_URL, params={"slug": slug})
+    event = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else {}
+    # _polymarket_quote reads the description and resolution source from the
+    # market's parent event, which nested markets don't carry.
+    parent = {k: v for k, v in event.items() if k != "markets"}
+    quoted = [
+        (m, _polymarket_quote({**m, "events": [parent]}))
+        for m in event.get("markets") or [] if isinstance(m, dict)
+    ]
+    if not quoted:
+        raise MarketDataError("Polymarket market not found.")
+
+    def label(m: Dict[str, Any], q: Dict[str, Any]) -> str:
+        return str(m.get("groupItemTitle") or q["question"])
+
+    # Inactive markets are placeholders for candidates not yet listed.
+    ranked = sorted(
+        ((q["probability"], m, q) for m, q in quoted
+         if m.get("active") and not m.get("closed") and q["probability"] is not None),
+        key=lambda r: r[0], reverse=True,
+    )
+    closed_note = None
+    if not ranked:
+        won = [label(m, q) for m, q in quoted if (q["probability"] or 0) >= 0.99]
+        closed_note = f'The linked event "{event.get("title") or slug}" has closed.'
+        if won:
+            closed_note += f" Resolved Yes: {', '.join(won)}."
+        ranked = [max(((q["probability"] or 0, m, q) for m, q in quoted), key=lambda r: r[0])]
+    if event.get("negRisk") is False:
+        # Independent markets (each state in a map): the most contested one
+        # is the informative forecast, not one already priced at 99%.
+        result = min(ranked, key=lambda r: abs(r[0] - 0.5))[2]
+    else:
+        result = ranked[0][2]
+    if closed_note is None and len(ranked) > 1:
+        result["event_title"] = str(event.get("title") or slug)
+        result["event_exclusive"] = event.get("negRisk") if isinstance(event.get("negRisk"), bool) else None
+        result["event_options"] = [
+            {"label": label(m, q), "question": q["question"], "probability": p, "quoted": q is result}
+            for p, m, q in ranked
+        ]
+    field = "; ".join(f"{label(m, q)} {p:.0%}" for p, m, q in ranked[:40]) if len(ranked) > 1 else ""
+    parts = [closed_note, result.get("description"), field and f"Outcomes in this event (market price): {field}"]
+    parts = [part.strip() for part in parts if part and part.strip()]
+    if parts:
+        result["description"] = " ".join(p if p[-1] in ".?!" else f"{p}." for p in parts)
+    return result
 
 
 _CATEGORY_KEYWORDS = {
@@ -646,7 +707,11 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     if "/" in ticker:
         ticker = ticker.rsplit("/", 1)[-1]
     ticker = ticker.upper()
-    data = _kalshi_market_detail(ticker)
+    try:
+        data = _kalshi_market_detail(ticker)
+    except MarketDataNotFound:
+        # Kalshi web links name an event or a whole series, not one contract.
+        return _fetch_kalshi_event(ticker)
     market = data.get("market") if isinstance(data, dict) else None
     if not market:
         raise MarketDataError("Kalshi market not found.")
@@ -665,7 +730,114 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     event = (market.get("events") or [{}])[0]
     event_category = event.get("category") if isinstance(event, dict) else None
     quote["category"] = _market_category(quote.get("question"), event_category)
+    result = str(market.get("result") or "").strip().lower()
+    if str(market.get("status") or "").strip().lower() in ("settled", "finalized") and result in ("yes", "no"):
+        # The last price of a settled contract reads like a live forecast.
+        quote["description"] = " ".join(filter(None, [
+            f"This market has closed and settled {result.capitalize()}.", quote.get("description"),
+        ]))
     return quote
+
+
+def _kalshi_series_open_event(series_ticker: str) -> Optional[Dict[str, Any]]:
+    """The soonest-closing open event of a series, if it has one."""
+    data = _get_json(KALSHI_EVENTS_URL, params={
+        "series_ticker": series_ticker, "status": "open", "with_nested_markets": "true", "limit": 200,
+    })
+    events = [e for e in (data.get("events") or [] if isinstance(data, dict) else []) if e.get("markets")]
+    if not events:
+        return None
+    return min(events, key=lambda e: min(str(m.get("close_time") or "9999") for m in e["markets"]))
+
+
+def _kalshi_event(ticker: str) -> Dict[str, Any]:
+    """The event `ticker` names, else the soonest-closing open event of the series it names."""
+    try:
+        data = _get_json(f"{KALSHI_EVENTS_URL}/{quote(ticker, safe='')}", params={"with_nested_markets": "true"})
+        event = data.get("event") if isinstance(data, dict) else None
+        if isinstance(event, dict) and event.get("markets"):
+            return event
+    except MarketDataNotFound:
+        pass
+    event = _kalshi_series_open_event(ticker)
+    if event is None:
+        raise MarketDataNotFound("Kalshi market not found.")
+    return event
+
+
+def _kalshi_open_markets(event: Dict[str, Any]) -> List[tuple]:
+    """(price, market) for the event's tradable non-parlay markets, highest price first."""
+    ranked: List[tuple] = []
+    for market in event.get("markets") or []:
+        market_status = str(market.get("status") or "").strip().lower()
+        if market.get("mve_collection_ticker") or (market_status and market_status not in {"active", "open", "trading"}):
+            continue
+        prob = _kalshi_quote(market, event)["probability"]
+        ranked.append((prob if prob is not None else -1.0, market))
+    return sorted(ranked, key=lambda r: r[0], reverse=True)
+
+
+def _kalshi_settled_note(event: Dict[str, Any], ticker: str) -> str:
+    settled: Dict[str, List[str]] = {"yes": [], "no": []}
+    for market in event.get("markets") or []:
+        result = str(market.get("result") or "").strip().lower()
+        if result in settled:
+            settled[result].append(str(market.get("yes_sub_title") or market.get("ticker")))
+    outcome = " ".join(f"Settled {r.capitalize()}: {', '.join(names)}." for r, names in settled.items() if names)
+    return f'The linked event "{event.get("title") or ticker}" has closed. {outcome}'.strip()
+
+
+def _fetch_kalshi_event(ticker: str) -> Dict[str, Any]:
+    """Quote one open market of an event (or series) ticker.
+
+    A multi-outcome event lists every outcome's price in the description, so a
+    forecast made from one contract still sees the whole field, and in
+    `event_options` for a forecast per option. A closed event
+    (yesterday's weather, a finished game) says how it settled, then quotes the
+    series' current event when there is one.
+    """
+    event = _kalshi_event(ticker)
+    ranked = _kalshi_open_markets(event)
+    closed_note = replaced_title = None
+    if not ranked:
+        closed_note = _kalshi_settled_note(event, ticker)
+        series = str(event.get("series_ticker") or "").strip()
+        current = _kalshi_series_open_event(series) if series else None
+        if current is not None:
+            replaced_title = event.get("title") or ticker
+            event, ranked = current, _kalshi_open_markets(current)
+            closed_note += f' The market below is from the series\' current event, "{current.get("title")}".'
+        elif event.get("markets"):
+            ranked = [(-1.0, min(event["markets"], key=lambda m: str(m.get("result") or "").lower() != "yes"))]
+    if not ranked:
+        raise MarketDataNotFound("Kalshi market not found.")
+    if event.get("mutually_exclusive") is False:
+        # Independent contracts (rain in each city): the most contested one is
+        # the informative forecast, not one already priced at 99%.
+        leader = min(ranked, key=lambda r: abs(r[0] - 0.5))[1]
+    else:
+        leader = ranked[0][1]
+    result = fetch_kalshi(leader["ticker"])
+    options = [
+        {"label": str(m.get("yes_sub_title") or m.get("ticker")), "question": str(m.get("title") or ""),
+         "probability": p, "quoted": m is leader, "ticker": m.get("ticker")}
+        for p, m in ranked if p >= 0
+    ]
+    if len(options) > 1:
+        result["event_title"] = str(event.get("title") or ticker)
+        exclusive = event.get("mutually_exclusive")
+        result["event_exclusive"] = exclusive if isinstance(exclusive, bool) else None
+        result["event_options"] = options
+    field = "; ".join(
+        f"{m.get('yes_sub_title') or m.get('ticker')} {p:.0%}" for p, m in ranked[:40] if p >= 0
+    ) if len(ranked) > 1 else ""
+    parts = [closed_note, result.get("description"), field and f"Outcomes in this event (market price): {field}"]
+    parts = [part.strip().rstrip(".") for part in parts if part and part.strip()]
+    if parts:
+        result["description"] = ". ".join(parts) + "."
+    if replaced_title:
+        result["replaced_closed_event"] = replaced_title
+    return result
 
 
 def list_kalshi(limit: int = 5, query: Optional[str] = None,
