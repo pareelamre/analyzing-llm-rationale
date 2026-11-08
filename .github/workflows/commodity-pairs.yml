@@ -1,11 +1,10 @@
 name: Commodity pair tracker
 
-# Daily statistical-arbitrage tracker for ten commodity pairs from Tapetide
-# commodity prices. It uses complete sessions only, so any hour after midnight
-# IST works; GitHub drops most scheduled slots here
-# (docs/SCHEDULED_WORKFLOW_DELIVERY.md), hence hourly. The script spends no
-# Tapetide quota once the newest weekday is published and waits six hours
-# between fetches while Tapetide catches up.
+# Daily statistical-arbitrage tracker for ten commodity pairs from MCX futures
+# (Upstox open data) and FRED spot prices, no secret. It uses complete sessions
+# only, so any hour after midnight IST works; GitHub drops most scheduled slots
+# here (docs/SCHEDULED_WORKFLOW_DELIVERY.md), hence hourly. The script fetches
+# nothing once the newest weekday is published.
 
 on:
   schedule:
@@ -40,17 +39,15 @@ jobs:
         run: pip install --quiet 'numpy>=1.26' requests
 
       - name: Track pairs
-        env:
-          TAPETIDE_API_TOKEN: ${{ secrets.TAPETIDE_API_TOKEN }}
         run: python scripts/commodity_pairs_tick.py ${{ inputs.force && '--force' || '' }}
 
       - name: Commit tracker
         env:
-          GIT_REBASE_KEEP_THEIRS: "static/commodity_pairs_live.json,data/commodity_pairs_ledger.jsonl"
+          GIT_REBASE_KEEP_THEIRS: "static/commodity_pairs_live.json,data/commodity_pairs_ledger.jsonl,data/commodity_prices.jsonl"
           MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add static/commodity_pairs_live.json data/commodity_pairs_ledger.jsonl 2>/dev/null || true
+          git add static/commodity_pairs_live.json data/commodity_pairs_ledger.jsonl data/commodity_prices.jsonl 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No tracker changes to commit."
             exit 0

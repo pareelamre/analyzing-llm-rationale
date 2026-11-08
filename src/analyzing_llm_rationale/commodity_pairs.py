@@ -1,4 +1,4 @@
-"""Statistical-arbitrage tracker for ten commodity pairs, from Tapetide daily commodity prices.
+"""Statistical-arbitrage tracker for ten commodity pairs, from MCX futures and benchmark spot prices.
 
 Each pair's spread is the log price of one leg minus a hedge ratio times the log price of the
 other, with the hedge ratio refit every day by least squares on up to 250 sessions. The spread's
@@ -6,34 +6,44 @@ z-score against its last 60 sessions says how stretched the pair is. A pair is "
 |z| >= 2, and the tracker records that as a signal, then follows it until |z| falls below 0.5
 (reverted) or 20 sessions pass (timed out).
 
+Prices: MCX front-month futures from Upstox's open candle route, stitched across rolls and
+ratio-adjusted so a roll is not read as a move, then stored daily (data/commodity_prices.jsonl)
+because expired contracts leave the route. Brent, WTI and Henry Hub gas are daily spot prices
+from FRED. Gold and platinum in USD are a daily snapshot from the open fawazahmed0 currency API,
+also stored. The gold import-parity pair is paused: it needs the world gold price at MCX's close,
+and that snapshot is taken about 12 hours earlier.
+
 This is a tracker, not a strategy with an edge: the same rule on 2010-2026 US futures history
 mostly lost money or broke even after costs (see BACKTEST). Live signals are recorded only on
 the newest session at the time of a run, so the ledger never adds a signal after the fact.
 """
 from __future__ import annotations
 
+import gzip
+import json
 import math
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Callable, Iterable, Optional, Sequence
+from typing import Any, Callable, Optional, Sequence
+from urllib.parse import quote
 
 import numpy as np
 import requests
 
 #: key, label, first leg, second leg, price source, why traders watch it.
-#: international: benchmark USD price. india: domestic exchange (MCX) price in INR.
-#: parity: the domestic exchange price against the import-parity (landed) cost, hedge fixed at 1.
+#: international: benchmark USD spot price (FRED). india: MCX front-month futures in INR.
+#: parity: the MCX price against the import-parity (landed) cost, hedge fixed at 1.
 PAIRS: tuple[dict[str, str], ...] = (
-    {"key": "gold-silver", "a": "gold", "b": "silver", "source": "international", "label": "Gold / Silver",
+    {"key": "gold-silver", "a": "gold", "b": "silver", "source": "india", "label": "Gold / Silver (MCX)",
      "why": "The gold-silver ratio, the most watched precious-metals spread."},
     {"key": "brent-wti", "a": "brentcrude", "b": "crudeoil", "source": "international", "label": "Brent / WTI",
      "why": "The benchmark crude spread between the North Sea and US grades."},
     {"key": "wti-natgas", "a": "crudeoil", "b": "naturalgas", "source": "international", "label": "WTI / Natural gas",
      "why": "The oil-gas ratio: energy priced as liquid fuel against gas."},
-    {"key": "copper-gold", "a": "copper", "b": "gold", "source": "international", "label": "Copper / Gold",
+    {"key": "copper-gold", "a": "copper", "b": "gold", "source": "india", "label": "Copper / Gold (MCX)",
      "why": "The copper-gold ratio, read as growth against safety."},
     {"key": "gold-platinum", "a": "gold", "b": "platinum", "source": "international", "label": "Gold / Platinum",
      "why": "Monetary against industrial precious metal."},
-    {"key": "copper-aluminium", "a": "copper", "b": "aluminium", "source": "international", "label": "Copper / Aluminium",
+    {"key": "copper-aluminium", "a": "copper", "b": "aluminium", "source": "india", "label": "Copper / Aluminium (MCX)",
      "why": "The two largest base metals, substitutes in wiring and cable."},
     {"key": "zinc-lead", "a": "zinc", "b": "lead", "source": "india", "label": "Zinc / Lead (MCX)",
      "why": "Mined together and traded as a classic base-metal pair."},
@@ -52,7 +62,6 @@ ENTRY_Z = 2.0
 EXIT_Z = 0.5
 MAX_HOLD = 20
 COST_PER_SIDE = 0.001
-FIRST_DATE = date(2026, 4, 1)
 #: The first session the live tracker evaluated. Signals before it come only from the replay.
 LIVE_SINCE = date(2026, 11, 6)
 
@@ -72,78 +81,243 @@ BACKTEST: dict[str, Any] = {
 }
 
 HttpGet = Callable[..., Any]
+IST = timezone(timedelta(hours=5, minutes=30))
+USER_AGENT = "Foresea/commodity-pairs (+https://foresea.ink)"
+
+#: Upstox's candle route and instrument list are open data: no account or token.
+UPSTOX_BASE_URL = "https://api.upstox.com"
+MCX_INSTRUMENTS_URL = "https://assets.upstox.com/market-quote/instruments/exchange/MCX.json.gz"
+#: Commodity and its full-size MCX futures symbol.
+MCX_SYMBOLS = {"gold": "GOLD", "silver": "SILVER", "copper": "COPPER", "aluminium": "ALUMINIUM", "zinc": "ZINC", "lead": "LEAD", "nickel": "NICKEL"}
+#: MCX quotes gold per 10 g and the other metals per kg. Gold is put per kg so the gold-silver
+#: ratio reads in its usual form.
+MCX_PER_KG = {"gold": 100.0}
+#: The series moves to the next contract this many calendar days before the front one expires.
+ROLL_DAYS = 7
+#: How far back the first run looks; contracts listed now rarely go further.
+MCX_BACKFILL_DAYS = 400
+#: Daily spot prices on FRED (from the US EIA); the CSV download needs no key.
+FRED_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+FRED_SERIES = {"brentcrude": "DCOILBRENTEU", "crudeoil": "DCOILWTICO", "naturalgas": "DHHNGSP"}
+#: Enough FRED history for a full hedge window plus the z-score window.
+FRED_DAYS = 600
+#: Gold and platinum per troy ounce in USD from the fawazahmed0 currency API (CC0, no key or rate
+#: limit), one snapshot a day at about 05:30 UTC. Its gold-platinum score tracked one from US
+#: futures closes at 0.94 correlation over 2025-26. Cloudflare Pages is its fallback host.
+METALS_URLS = (
+    "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{day}/v1/currencies/usd.json",
+    "https://{day}.currency-api.pages.dev/v1/currencies/usd.json",
+)
+METALS_CODES = {"gold": "xau", "platinum": "xpt"}
+#: How far back the first run looks: a full hedge window plus the z-score window.
+METALS_BACKFILL_DAYS = 450
+#: The (commodity, source) series some feed supplies. A pair needing any other is paused.
+FEEDS = frozenset(
+    {(c, "international") for c in (*FRED_SERIES, *METALS_CODES)} | {(c, "india") for c in MCX_SYMBOLS}
+)
 
 
-TAPETIDE_BASE_URL = "https://api.tapetide.com"
+class FeedError(RuntimeError):
+    """A price feed request failed."""
 
 
-class TapetideError(RuntimeError):
-    """A Tapetide request failed or returned no data."""
+def _get(url: str, *, http_get: HttpGet, params: Optional[dict] = None, accept: str = "application/json") -> Any:
+    resp = http_get(url, params=params, timeout=30, headers={"Accept": accept, "User-Agent": USER_AGENT})
+    status = getattr(resp, "status_code", None)
+    if status != 200:
+        raise FeedError(f"{url} returned HTTP {status}")
+    return resp
 
 
-def tapetide_get(path: str, token: str, params: Optional[dict] = None, *, http_get: HttpGet = requests.get) -> list[dict]:
-    """GET one Tapetide list route and return its ``data`` rows, following cursors."""
-    rows: list[dict] = []
-    params = dict(params or {})
-    for _ in range(10):
-        resp = http_get(
-            f"{TAPETIDE_BASE_URL}{path}", params=params, timeout=30,
-            headers={"Authorization": f"Bearer {token}", "User-Agent": "Foresea/commodity-pairs"},
-        )
-        status = getattr(resp, "status_code", None)
-        try:
-            body = resp.json()
-        except ValueError:
-            body = None
-        if status != 200 or not isinstance(body, dict):
-            code = ((body or {}).get("error") or {}).get("code") if isinstance(body, dict) else None
-            raise TapetideError(f"Tapetide {path} returned HTTP {status}{f' ({code})' if code else ''}")
-        if body.get("data") is None:
-            notice = body.get("notice") or {}
-            raise TapetideError(f"Tapetide {path} returned no data ({notice.get('code') or 'no notice'})")
-        rows.extend(row for row in body["data"] if isinstance(row, dict))
-        cursor = (body.get("meta") or {}).get("next_cursor")
-        if not cursor:
-            return rows
-        params["cursor"] = cursor
-    raise TapetideError(f"Tapetide {path} paged more than 10 times")
+def fetch_fred(today: date, *, http_get: HttpGet = requests.get) -> dict[tuple[str, str], list[tuple[date, float]]]:
+    """Weekday spot prices of each FRED series over the last FRED_DAYS, complete sessions only."""
+    start = (today - timedelta(days=FRED_DAYS)).isoformat()
+    out = {}
+    for commodity, series_id in FRED_SERIES.items():
+        text = _get(FRED_CSV_URL, params={"id": series_id, "cosd": start}, accept="text/csv", http_get=http_get).text
+        prices = {}
+        for line in text.splitlines()[1:]:
+            day, _, value = line.partition(",")
+            try:
+                d, v = date.fromisoformat(day.strip()), float(value)
+            except ValueError:
+                continue  # FRED leaves market holidays blank
+            if d.weekday() < 5 and d < today and math.isfinite(v) and v > 0:
+                prices[d] = v
+        out[(commodity, "international")] = sorted(prices.items())
+    return out
 
 
-def fetch_prices(token: str, today: date, *, http_get: HttpGet = requests.get) -> list[dict]:
-    """Every daily commodity row from Tapetide since prices began (about 11 rows a day)."""
-    start = max(FIRST_DATE, today - timedelta(days=400))
-    return tapetide_get(
-        "/v1/macro/commodities", token,
-        {"from": start.isoformat(), "to": today.isoformat(), "limit": 1000, "order": "asc"},
-        http_get=http_get,
-    )
-
-
-def price_series(rows: Iterable[dict]) -> dict[tuple[str, str], list[tuple[date, float]]]:
-    """Weekday prices per (commodity, source). Weekend rows repeat Friday and are dropped."""
-    fields = {"international": "international_price_usd", "india": "india_market_price_inr", "landed": "india_landed_price_inr"}
-    out: dict[tuple[str, str], dict[date, float]] = {}
+def mcx_contracts(*, http_get: HttpGet = requests.get) -> dict[str, list[dict]]:
+    """The listed futures of each MCX commodity, nearest expiry first."""
+    rows = json.loads(gzip.decompress(_get(MCX_INSTRUMENTS_URL, accept="application/gzip", http_get=http_get).content))
+    commodity_of = {symbol: commodity for commodity, symbol in MCX_SYMBOLS.items()}
+    out: dict[str, list[dict]] = {commodity: [] for commodity in MCX_SYMBOLS}
     for row in rows:
+        commodity = commodity_of.get(row.get("underlying_symbol"))
+        if commodity and row.get("instrument_type") == "FUT" and row.get("expiry") and row.get("instrument_key"):
+            out[commodity].append({
+                "key": row["instrument_key"], "contract": row.get("trading_symbol") or row["instrument_key"],
+                "expiry": datetime.fromtimestamp(row["expiry"] / 1000, IST).date(),
+            })
+    return {commodity: sorted(listed, key=lambda c: c["expiry"]) for commodity, listed in out.items()}
+
+
+def contract_candles(contract: dict, start: date, through: date, *, http_get: HttpGet = requests.get) -> dict[date, tuple[float, float]]:
+    """Weekday (close, volume) of one MCX contract from ``start`` through ``through``."""
+    path = f"/v3/historical-candle/{quote(contract['key'], safe='')}/days/1/{through.isoformat()}/{start.isoformat()}"
+    try:
+        body = _get(f"{UPSTOX_BASE_URL}{path}", http_get=http_get).json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict) or body.get("status") != "success":
+        raise FeedError(f"Upstox {path} returned no candles")
+    out = {}
+    for candle in (body.get("data") or {}).get("candles") or []:
         try:
-            day = date.fromisoformat(str(row["date"]))
-        except (KeyError, ValueError):
+            day, close, volume = date.fromisoformat(str(candle[0])[:10]), float(candle[4]), float(candle[5] or 0)
+        except (IndexError, TypeError, ValueError):
             continue
-        if day.weekday() >= 5:
+        if day.weekday() < 5 and start <= day <= through and math.isfinite(close) and close > 0:
+            out[day] = (close, volume)
+    return out
+
+
+def front_rows(commodity: str, listed: Sequence[dict], candles: dict[str, dict], start: date, through: date,
+               after: Optional[dict] = None) -> list[dict]:
+    """One stored row per session: the front contract's close and the next contract's that day.
+
+    The front is the nearest contract with trades that session that is more than ROLL_DAYS from
+    expiry (the furthest one with trades, when none is). A session no contract traded is skipped:
+    a far month's candle without volume repeats a stale price. The front never steps back to an
+    earlier month than the last stored row's, so the series rolls forward only.
+    """
+    rows, floor = [], date.fromisoformat(after["expiry"]) if after else date.min
+    day = start
+    while day <= through:
+        traded = [c for c in listed if c["expiry"] >= floor and day in candles.get(c["contract"], {})]
+        active = [c for c in traded if candles[c["contract"]][day][1] > 0]
+        if active:
+            front = next((c for c in active if (c["expiry"] - day).days > ROLL_DAYS), active[-1])
+            later = [c for c in traded if c["expiry"] > front["expiry"]]
+            row = {"date": day.isoformat(), "commodity": commodity, "source": "india", "contract": front["contract"],
+                   "expiry": front["expiry"].isoformat(), "close": candles[front["contract"]][day][0]}
+            if later:
+                row.update({"next_contract": later[0]["contract"], "next_close": candles[later[0]["contract"]][day][0]})
+            rows.append(row)
+            floor = front["expiry"]
+        day += timedelta(days=1)
+    return rows
+
+
+def fetch_mcx(stored: Sequence[dict], today: date, *, http_get: HttpGet = requests.get) -> list[dict]:
+    """New stored rows for each MCX commodity, for the complete sessions after its last stored one.
+
+    A commodity whose candles fail to load is skipped; the next run fetches from the same point.
+    """
+    contracts = mcx_contracts(http_get=http_get)
+    last: dict[str, dict] = {}
+    for row in stored:
+        if row.get("source", "india") != "india":
             continue
-        for source, field in fields.items():
-            if source != "india" and row.get("international_stale"):
-                continue
-            value = row.get(field)
-            if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0:
-                out.setdefault((str(row.get("commodity")), source), {})[day] = float(value)
-    return {key: sorted(values.items()) for key, values in out.items()}
+        if row["commodity"] not in last or row["date"] > last[row["commodity"]]["date"]:
+            last[row["commodity"]] = row
+    through, new = today - timedelta(days=1), []
+    for commodity, listed in contracts.items():
+        after = last.get(commodity)
+        start = date.fromisoformat(after["date"]) + timedelta(days=1) if after else today - timedelta(days=MCX_BACKFILL_DAYS)
+        listed = [c for c in listed if not after or c["expiry"] >= date.fromisoformat(after["expiry"])][:3]
+        if start > through or not listed:
+            continue
+        try:
+            candles = {c["contract"]: contract_candles(c, start, through, http_get=http_get) for c in listed}
+        except FeedError:
+            continue
+        new.extend(front_rows(commodity, listed, candles, start, through, after))
+    return new
+
+
+def _metals_snapshot(day: date, *, http_get: HttpGet) -> Optional[dict]:
+    for template in METALS_URLS:
+        try:
+            body = _get(template.format(day=day.isoformat()), http_get=http_get).json()
+        except (FeedError, ValueError, requests.RequestException):
+            continue
+        if isinstance(body, dict) and isinstance(body.get("usd"), dict):
+            return body["usd"]
+    return None
+
+
+def fetch_metals(stored: Sequence[dict], today: date, *, http_get: HttpGet = requests.get) -> list[dict]:
+    """New gold and platinum rows for the weekdays after the last stored snapshot, before today.
+
+    A day's snapshot is used from the next IST day on, like an MCX session, so the newest metals
+    date never runs ahead of the newest MCX one. An old day missing from both hosts is skipped;
+    a missing one from the last three days stops the run there, and the next run retries it.
+    """
+    last = max((r["date"] for r in stored if r.get("source") == "international"), default=None)
+    day = date.fromisoformat(last) + timedelta(days=1) if last else today - timedelta(days=METALS_BACKFILL_DAYS)
+    rows = []
+    while day < today:
+        if day.weekday() < 5:
+            rates = _metals_snapshot(day, http_get=http_get)
+            if rates is None and (today - day).days <= 3:
+                break
+            for commodity, code in METALS_CODES.items():
+                rate = (rates or {}).get(code)
+                if isinstance(rate, (int, float)) and math.isfinite(rate) and rate > 0:
+                    rows.append({"date": day.isoformat(), "commodity": commodity, "source": "international", "close": round(1 / rate, 4)})
+        day += timedelta(days=1)
+    return rows
+
+
+def _roll_ratio(earlier: Sequence[dict], new_contract: str) -> float:
+    """The new contract's price over the old one's on the last session both traded."""
+    old = earlier[-1].get("contract")
+    for row in reversed(earlier):
+        if row.get("contract") != old:
+            break
+        if row.get("next_contract") == new_contract and row.get("next_close"):
+            return row["next_close"] / row["close"]
+    return 1.0
+
+
+def continuous(rows: Sequence[dict]) -> list[tuple[date, float]]:
+    """One commodity's stored front-month closes, ratio-adjusted back from the newest contract.
+
+    At each roll the earlier prices are scaled by the new contract's price over the old one's, so
+    the step between contract months is not read as a move. The newest prices are the real ones.
+    """
+    rows = sorted(rows, key=lambda r: r["date"])
+    out, factor = [], 1.0
+    for i in range(len(rows) - 1, -1, -1):
+        out.append((date.fromisoformat(rows[i]["date"]), rows[i]["close"] * factor))
+        if i and rows[i - 1].get("contract") != rows[i].get("contract"):
+            factor *= _roll_ratio(rows[:i], rows[i]["contract"])
+    return out[::-1]
+
+
+def build_series(stored: Sequence[dict], fred: dict) -> dict[tuple[str, str], list[tuple[date, float]]]:
+    """Every (commodity, source) price series the pairs read."""
+    series = dict(fred)
+    grouped: dict[tuple[str, str], list[dict]] = {}
+    for row in stored:
+        grouped.setdefault((row["commodity"], row.get("source", "india")), []).append(row)
+    for (commodity, source), rows in grouped.items():
+        scale = MCX_PER_KG.get(commodity, 1.0) if source == "india" else 1.0
+        series[(commodity, source)] = [(day, price * scale) for day, price in continuous(rows)]
+    return series
+
+
+def _needs(pair: dict[str, str]) -> tuple[tuple[str, str], tuple[str, str]]:
+    if pair["source"] == "parity":
+        return (pair["a"], "india"), (pair["b"], "landed")
+    return (pair["a"], pair["source"]), (pair["b"], pair["source"])
 
 
 def aligned(pair: dict[str, str], series: dict) -> tuple[list[date], np.ndarray, np.ndarray]:
-    if pair["source"] == "parity":
-        a, b = series.get((pair["a"], "india"), []), series.get((pair["b"], "landed"), [])
-    else:
-        a, b = series.get((pair["a"], pair["source"]), []), series.get((pair["b"], pair["source"]), [])
+    key_a, key_b = _needs(pair)
+    a, b = series.get(key_a, []), series.get(key_b, [])
     b_by_day = dict(b)
     days = [d for d, _ in a if d in b_by_day]
     a_by_day = dict(a)
@@ -261,6 +435,9 @@ def _state(pair: dict[str, str], z: float) -> dict[str, Any]:
 def track_pair(pair: dict[str, str], series: dict) -> Optional[dict[str, Any]]:
     """The tracker row for one pair: today's hedge, z-score, diagnostics and a replay."""
     fixed = pair["source"] == "parity"
+    if any(need not in FEEDS for need in _needs(pair)):
+        return {"key": pair["key"], "label": pair["label"], "why": pair["why"], "source": pair["source"], "sessions": 0,
+                "paused": True, "note": "Paused: this needs the world gold price at MCX's close, and the free daily gold price is taken about 12 hours earlier."}
     days, la, lb = aligned(pair, series)
     if len(days) < MIN_SESSIONS:
         return {"key": pair["key"], "label": pair["label"], "why": pair["why"], "source": pair["source"],
@@ -304,11 +481,14 @@ def update_ledger(ledger: list[dict], rows: list[dict], now: datetime) -> int:
         entry_i = days.index(date.fromisoformat(event["entry_date"])) if date.fromisoformat(event["entry_date"]) in days else None
         if entry_i is None:
             continue
+        # Measured on today's series: a roll rescales earlier MCX prices, so both ends of the
+        # trade must share one basis. Without a roll this equals the recorded entry spread.
+        entry_spread = la[entry_i] - event["beta"] * lb[entry_i]
         for h in row["_hist"]:
             if h["i"] <= entry_i:
                 continue
             held = h["i"] - entry_i
-            move = (la[h["i"]] - event["beta"] * lb[h["i"]]) - event["entry_spread"]
+            move = (la[h["i"]] - event["beta"] * lb[h["i"]]) - entry_spread
             if abs(h["z"]) < EXIT_Z or held >= MAX_HOLD:
                 event.update({
                     "status": "reverted" if abs(h["z"]) < EXIT_Z else "timed_out", "exit_date": h["date"].isoformat(),
@@ -331,8 +511,7 @@ def update_ledger(ledger: list[dict], rows: list[dict], now: datetime) -> int:
     return added
 
 
-def run(rows_in: list[dict], ledger: list[dict], now: datetime) -> tuple[dict, list[dict]]:
-    series = price_series(rows_in)
+def run(series: dict, ledger: list[dict], now: datetime) -> tuple[dict, list[dict]]:
     rows = [track_pair(pair, series) for pair in PAIRS]
     update_ledger(ledger, rows, now)
     live = {}
@@ -344,7 +523,7 @@ def run(rows_in: list[dict], ledger: list[dict], now: datetime) -> tuple[dict, l
     payload = {
         "generated_at": now.astimezone(timezone.utc).isoformat(),
         "data_through": max(dated) if dated else None,
-        "source": "Tapetide (international benchmark and Indian exchange commodity prices)",
+        "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold and platinum)",
         "rule": {
             "hedge_window": HEDGE_WINDOW, "z_window": Z_WINDOW, "entry_z": ENTRY_Z, "exit_z": EXIT_Z,
             "max_hold": MAX_HOLD, "cost_per_side": COST_PER_SIDE, "min_sessions": MIN_SESSIONS,

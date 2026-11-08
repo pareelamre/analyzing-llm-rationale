@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import gzip
 import importlib.util
+import json
 import sys
 import unittest
 from datetime import date, datetime, timedelta, timezone
@@ -29,13 +31,9 @@ def _weekdays(start: date, n: int) -> list[date]:
     return out
 
 
-def _rows(days, gold, silver):
-    rows = []
-    for d, g, s in zip(days, gold, silver):
-        rows.append({"date": d.isoformat(), "commodity": "gold", "international_price_usd": g,
-                     "india_market_price_inr": g * 3.5, "india_landed_price_inr": g * 3.2})
-        rows.append({"date": d.isoformat(), "commodity": "silver", "international_price_usd": s})
-    return rows
+def _series(days, gold, silver):
+    return {("gold", GOLD_SILVER["source"]): list(zip(days, map(float, gold))),
+            ("silver", GOLD_SILVER["source"]): list(zip(days, map(float, silver)))}
 
 
 def _cointegrated(n=200, seed=1, shock_at=None):
@@ -51,32 +49,161 @@ def _cointegrated(n=200, seed=1, shock_at=None):
     return np.exp(lg), np.exp(ls)
 
 
-class SeriesTests(unittest.TestCase):
-    def test_weekends_and_stale_international_prices_are_dropped(self):
-        rows = [
-            {"date": "2026-11-06", "commodity": "zinc", "international_price_usd": 4050, "international_stale": True, "india_market_price_inr": 411.9},
-            {"date": "2026-11-07", "commodity": "gold", "international_price_usd": 4074.9},
-            {"date": "2026-11-06", "commodity": "gold", "international_price_usd": 4066.8, "india_market_price_inr": None},
-        ]
-        series = cp.price_series(rows)
+class _Resp:
+    def __init__(self, status, body=None, text="", content=b""):
+        self.status_code, self._body, self.text, self.content = status, body, text, content
 
-        self.assertEqual(series[("gold", "international")], [(date(2026, 11, 6), 4066.8)])
-        self.assertNotIn(("zinc", "international"), series)
-        self.assertEqual(series[("zinc", "india")], [(date(2026, 11, 6), 411.9)])
+    def json(self):
+        return self._body
+
+
+def _contract(symbol, expiry):
+    return {"key": f"MCX_FO|{symbol}{expiry:%m%d}", "contract": f"{symbol} FUT {expiry:%d %b %y}".upper(), "expiry": expiry}
+
+
+def _listed(symbol, key, expiry):
+    return {"instrument_type": "FUT", "underlying_symbol": symbol, "instrument_key": key, "trading_symbol": f"{symbol} FUT",
+            "expiry": int(datetime.combine(expiry, datetime.min.time(), tzinfo=cp.IST).timestamp() * 1000) + 86_399_000}
+
+
+class FeedTests(unittest.TestCase):
+    def test_fred_skips_blank_holidays_weekends_and_today(self):
+        csv = "observation_date,X\n2026-11-02,107.39\n2026-11-03,\n2026-11-07,99.0\n2026-11-09,101.5\n"
+        seen = []
+
+        def get(url, params, timeout, headers):
+            seen.append(params["id"])
+            self.assertEqual(params["cosd"], (date(2026, 11, 9) - timedelta(days=cp.FRED_DAYS)).isoformat())
+            self.assertIn("Foresea", headers["User-Agent"])
+            return _Resp(200, text=csv)
+
+        series = cp.fetch_fred(date(2026, 11, 9), http_get=get)
+
+        self.assertEqual(sorted(seen), sorted(cp.FRED_SERIES.values()))
+        self.assertEqual(series[("brentcrude", "international")], [(date(2026, 11, 2), 107.39)])
+
+    def test_the_front_rolls_before_expiry_and_never_steps_back(self):
+        nov, dec = _contract("COPPER", date(2026, 11, 30)), _contract("COPPER", date(2026, 12, 31))
+        candles = {
+            nov["contract"]: {date(2026, 11, 20): (100.0, 5), date(2026, 11, 23): (101.0, 5), date(2026, 11, 24): (101.5, 0),
+                              date(2026, 11, 25): (102.0, 5)},
+            # No December trades on the 20th or the 25th; a candle without volume on the 24th.
+            dec["contract"]: {date(2026, 11, 20): (102.0, 0), date(2026, 11, 23): (103.0, 5), date(2026, 11, 24): (103.5, 0)},
+        }
+        rows = cp.front_rows("copper", [nov, dec], candles, date(2026, 11, 20), date(2026, 11, 25))
+
+        # 20th: November, ten days out. 23rd: seven days out, so December. 24th: nothing traded.
+        # 25th: only November traded, and the series does not step back to it.
+        self.assertEqual([(r["date"], r["contract"], r["close"]) for r in rows],
+                         [("2026-11-20", nov["contract"], 100.0), ("2026-11-23", dec["contract"], 103.0)])
+        self.assertEqual((rows[0]["next_contract"], rows[0]["next_close"]), (dec["contract"], 102.0))
+
+    def test_a_roll_rescales_earlier_prices_and_keeps_every_daily_move(self):
+        rows = [
+            {"date": "2026-11-19", "contract": "NOV", "close": 100.0, "next_contract": "DEC", "next_close": 102.0},
+            {"date": "2026-11-20", "contract": "NOV", "close": 101.0, "next_contract": "DEC", "next_close": 103.0},
+            {"date": "2026-11-23", "contract": "DEC", "close": 104.0},
+        ]
+        series = cp.continuous(rows)
+
+        self.assertEqual(series[-1], (date(2026, 11, 23), 104.0))
+        prices = [price for _, price in series]
+        self.assertAlmostEqual(prices[1] / prices[0], 101 / 100)
+        self.assertAlmostEqual(prices[2] / prices[1], 104 / 103)
+
+    def test_mcx_backfills_once_then_appends_after_the_last_stored_session(self):
+        listed = [_listed("COPPER", "MCX_FO|1", date(2026, 11, 30)), _listed("COPPERM", "MCX_FO|2", date(2026, 11, 30)),
+                  _listed("ZINC", "MCX_FO|3", date(2026, 11, 30))]
+        calls = []
+
+        def get(url, params, timeout, headers):
+            calls.append(url)
+            if url == cp.MCX_INSTRUMENTS_URL:
+                return _Resp(200, content=gzip.compress(json.dumps(listed).encode()))
+            if "MCX_FO%7C3" in url:
+                return _Resp(500)
+            frm = date.fromisoformat(url.rsplit("/", 1)[-1])
+            candles = [[f"{d.isoformat()}T00:00:00+05:30", 0, 0, 0, 100.0 + d.day, 10, 0]
+                       for d in (date(2026, 11, 5), date(2026, 11, 6)) if d >= frm]
+            return _Resp(200, {"status": "success", "data": {"candles": candles}})
+
+        # Zinc's candles fail to load: it is skipped, and the mini copper contract is never fetched.
+        first = cp.fetch_mcx([], date(2026, 11, 7), http_get=get)
+        self.assertEqual([(r["commodity"], r["date"], r["close"], r["expiry"]) for r in first],
+                         [("copper", "2026-11-05", 105.0, "2026-11-30"), ("copper", "2026-11-06", 106.0, "2026-11-30")])
+        self.assertNotIn("MCX_FO%7C2", "".join(calls))
+
+        # A stored world-price copper row is not the MCX series' last session.
+        world = [{"date": "2026-11-06", "commodity": "copper", "source": "international", "close": 1.0}]
+        self.assertEqual(len(cp.fetch_mcx(world, date(2026, 11, 7), http_get=get)), 2)
+
+        calls.clear()
+        later = cp.fetch_mcx(first[:1], date(2026, 11, 9), http_get=get)
+        self.assertTrue(any(c.endswith("MCX_FO%7C1/days/1/2026-11-08/2026-11-06") for c in calls))
+        self.assertEqual([r["date"] for r in later], ["2026-11-06"])
+
+    def test_gold_is_put_per_kg_alongside_the_fred_series(self):
+        stored = [{"date": "2026-11-06", "commodity": "gold", "contract": "GOLD", "close": 142167.0}]
+        fred = {("crudeoil", "international"): [(date(2026, 11, 3), 99.64)]}
+        series = cp.build_series(stored, fred)
+
+        self.assertEqual(series[("gold", "india")], [(date(2026, 11, 6), 14216700.0)])
+        self.assertEqual(series[("crudeoil", "international")], fred[("crudeoil", "international")])
+
+    def test_only_the_parity_pair_is_paused(self):
+        paused = [p["key"] for p in cp.PAIRS if cp.track_pair(p, {}).get("paused")]
+        self.assertEqual(paused, ["gold-parity"])
+        self.assertNotIn("z", cp.track_pair(cp.PAIRS[-1], {}))
+
+    def test_metals_use_the_fallback_host_and_stop_at_a_recent_gap(self):
+        rates = {"xau": 1 / 4000, "xpt": 1 / 1500, "inr": 94.0}
+        calls = []
+
+        def get(url, params, timeout, headers):
+            calls.append(url)
+            if "2026-11-04" in url and "jsdelivr" in url:
+                return _Resp(503)
+            if "2026-11-05" in url or "2026-10-21" in url:
+                return _Resp(404)
+            return _Resp(200, {"date": "x", "usd": rates})
+
+        stored = [{"date": "2026-11-02", "commodity": "gold", "source": "international", "close": 3990.0},
+                  {"date": "2026-11-06", "commodity": "gold", "source": "india", "contract": "GOLD", "close": 142000.0}]
+        rows = cp.fetch_metals(stored, date(2026, 11, 7), http_get=get)
+
+        # 3rd from the main host, 4th from the fallback; the 5th is missing on both and recent, so
+        # the run stops there and the 6th waits for the next run.
+        self.assertEqual([(r["date"], r["commodity"], r["close"]) for r in rows],
+                         [("2026-11-03", "gold", 4000.0), ("2026-11-03", "platinum", 1500.0),
+                          ("2026-11-04", "gold", 4000.0), ("2026-11-04", "platinum", 1500.0)])
+        self.assertFalse(any("2026-11-06" in c for c in calls))
+
+        # An old missing day is skipped rather than retried.
+        older = cp.fetch_metals([{**stored[0], "date": "2026-10-20"}], date(2026, 10, 27), http_get=get)
+        self.assertEqual(sorted({r["date"] for r in older}), ["2026-10-22", "2026-10-23", "2026-10-26"])
+
+    def test_world_and_mcx_gold_are_kept_apart(self):
+        stored = [{"date": "2026-11-06", "commodity": "gold", "source": "india", "contract": "GOLD", "close": 142167.0},
+                  {"date": "2026-11-06", "commodity": "gold", "source": "international", "close": 4042.89}]
+        series = cp.build_series(stored, {})
+
+        self.assertEqual(series[("gold", "india")], [(date(2026, 11, 6), 14216700.0)])
+        self.assertEqual(series[("gold", "international")], [(date(2026, 11, 6), 4042.89)])
 
     def test_parity_pairs_the_exchange_price_with_the_landed_cost(self):
         days = _weekdays(date(2026, 4, 6), 3)
-        series = cp.price_series(_rows(days, [100, 101, 102], [1, 1, 1]))
+        series = {("gold", "india"): [(d, 350.0 + i) for i, d in enumerate(days)],
+                  ("gold", "landed"): [(d, 320.0 + i) for i, d in enumerate(days)]}
         _, la, lb = cp.aligned(cp.PAIRS[-1], series)
 
-        np.testing.assert_allclose(np.exp(la - lb), [3.5 / 3.2] * 3)
+        np.testing.assert_allclose(np.exp(la - lb), [350 / 320, 351 / 321, 352 / 322])
 
 
 class TrackerTests(unittest.TestCase):
     def test_a_cointegrated_pair_reads_cointegrated_with_a_short_half_life(self):
         days = _weekdays(date(2025, 6, 2), 320)
         gold, silver = _cointegrated(320)
-        row = cp.track_pair(GOLD_SILVER, cp.price_series(_rows(days, gold, silver)))
+        row = cp.track_pair(GOLD_SILVER, _series(days, gold, silver))
 
         self.assertEqual(row["hedge"], "regression")
         self.assertAlmostEqual(row["beta"], 0.9, delta=0.15)
@@ -88,7 +215,7 @@ class TrackerTests(unittest.TestCase):
     def test_a_shock_to_the_gap_makes_the_pair_stretched_with_the_rich_leg_named(self):
         days = _weekdays(date(2025, 6, 2), 200)
         gold, silver = _cointegrated(200, shock_at=199)
-        row = cp.track_pair(GOLD_SILVER, cp.price_series(_rows(days, gold, silver)))
+        row = cp.track_pair(GOLD_SILVER, _series(days, gold, silver))
 
         self.assertGreater(row["z"], cp.ENTRY_Z)
         self.assertEqual((row["stretched"], row["rich"], row["cheap"]), (True, "Gold", "Silver"))
@@ -96,7 +223,7 @@ class TrackerTests(unittest.TestCase):
     def test_the_move_back_to_usual_closes_the_gap_in_either_leg(self):
         days = _weekdays(date(2025, 6, 2), 200)
         gold, silver = _cointegrated(200, shock_at=199)
-        row = cp.track_pair(GOLD_SILVER, cp.price_series(_rows(days, gold, silver)))
+        row = cp.track_pair(GOLD_SILVER, _series(days, gold, silver))
         last, beta = row["_hist"][-1], row["_hist"][-1]["beta"]
         la, lb = row["_la"][-1], row["_lb"][-1]
 
@@ -112,7 +239,7 @@ class TrackerTests(unittest.TestCase):
         days = _weekdays(date(2026, 3, 2), 200)
         self.assertGreater(days[-1], cp.LIVE_SINCE)
         gold, silver = _cointegrated(200, shock_at=199)
-        payload, ledger = cp.run(_rows(days, gold, silver), [], datetime(2026, 12, 8, tzinfo=timezone.utc))
+        payload, ledger = cp.run(_series(days, gold, silver), [], datetime(2026, 12, 8, tzinfo=timezone.utc))
         row = next(p for p in payload["pairs"] if p["key"] == "gold-silver")
 
         self.assertEqual(payload["track_record"]["live_since"], cp.LIVE_SINCE.isoformat())
@@ -125,13 +252,13 @@ class TrackerTests(unittest.TestCase):
         rng = np.random.default_rng(3)
         common = np.cumsum(rng.normal(0, 0.01, 120))
         gold, silver = np.exp(8 + common), np.exp(3 - common)
-        row = cp.track_pair(GOLD_SILVER, cp.price_series(_rows(days, gold, silver)))
+        row = cp.track_pair(GOLD_SILVER, _series(days, gold, silver))
 
         self.assertEqual((row["hedge"], row["beta"]), ("ratio", 1.0))
 
     def test_too_little_history_gives_a_note_instead_of_a_z_score(self):
         days = _weekdays(date(2026, 7, 6), 40)
-        row = cp.track_pair(GOLD_SILVER, cp.price_series(_rows(days, np.full(40, 4000.0), np.full(40, 50.0))))
+        row = cp.track_pair(GOLD_SILVER, _series(days, np.full(40, 4000.0), np.full(40, 50.0)))
 
         self.assertNotIn("z", row)
         self.assertIn("40 sessions", row["note"])
@@ -139,7 +266,7 @@ class TrackerTests(unittest.TestCase):
     def test_history_uses_no_later_data(self):
         days = _weekdays(date(2025, 6, 2), 200)
         gold, silver = _cointegrated(200, seed=5)
-        series = cp.price_series(_rows(days, gold, silver))
+        series = _series(days, gold, silver)
         d_all, la, lb = cp.aligned(GOLD_SILVER, series)
         full = cp.history(d_all, la, lb)
         cut = cp.history(d_all[:150], la[:150], lb[:150])
@@ -152,7 +279,7 @@ class LedgerTests(unittest.TestCase):
         days = _weekdays(date(2025, 6, 2), n)
         gold, silver = _cointegrated(n, seed=seed, shock_at=shock_at)
         now = datetime.combine(days[-1] + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
-        return cp.run(_rows(days, gold, silver), ledger, now)
+        return cp.run(_series(days, gold, silver), ledger, now)
 
     def test_a_signal_opens_on_the_newest_session_and_closes_when_the_gap_closes(self):
         payload, ledger = self._payload(200, [], shock_at=199)
@@ -169,6 +296,19 @@ class LedgerTests(unittest.TestCase):
         self.assertIn(gs[0]["status"], ("reverted", "timed_out"))
         self.assertLessEqual(gs[0]["sessions"], cp.MAX_HOLD)
         self.assertIn("spread_return", gs[0])
+
+    def test_a_rescaled_history_leaves_a_signals_return_unchanged(self):
+        # A roll ratio-adjusts every earlier MCX price, so a signal's move is measured on one basis.
+        _, ledger = self._payload(200, [], shock_at=199)
+        days = _weekdays(date(2025, 6, 2), 225)
+        gold, silver = _cointegrated(225, shock_at=199)
+        now = datetime.combine(days[-1] + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+        _, plain = cp.run(_series(days, gold, silver), [dict(e) for e in ledger], now)
+        _, scaled = cp.run(_series(days, gold * 1.05, silver), [dict(e) for e in ledger], now)
+        plain, scaled = (next(e for e in led if e["pair"] == "gold-silver") for led in (plain, scaled))
+
+        self.assertIn(plain["status"], ("reverted", "timed_out"))
+        self.assertAlmostEqual(scaled["spread_return"], plain["spread_return"], places=6)
 
     def test_rerunning_the_same_session_adds_nothing(self):
         _, ledger = self._payload(200, [], shock_at=199)
@@ -193,40 +333,6 @@ class LedgerTests(unittest.TestCase):
         self.assertAlmostEqual(trades[0]["spread_return"], expected, places=6)
 
 
-class _Resp:
-    def __init__(self, status, body):
-        self.status_code, self._body = status, body
-
-    def json(self):
-        return self._body
-
-
-class TapetideClientTests(unittest.TestCase):
-    def test_pages_follow_the_cursor(self):
-        pages = [
-            _Resp(200, {"data": [{"date": "2026-11-05", "close": 1}], "meta": {"next_cursor": "c2"}}),
-            _Resp(200, {"data": [{"date": "2026-11-06", "close": 2}], "meta": {"next_cursor": None}}),
-        ]
-        seen = []
-
-        def get(url, params, timeout, headers):
-            seen.append(dict(params))
-            self.assertEqual(headers["Authorization"], "Bearer tok")
-            return pages.pop(0)
-
-        rows = cp.tapetide_get("/v1/indices/nifty-50/levels", "tok", {"limit": 2}, http_get=get)
-        self.assertEqual([r["close"] for r in rows], [1, 2])
-        self.assertEqual(seen[1]["cursor"], "c2")
-
-    def test_a_plan_notice_or_http_error_raises(self):
-        notice = _Resp(200, {"data": None, "notice": {"code": "api_access_not_in_plan"}})
-        with self.assertRaisesRegex(cp.TapetideError, "api_access_not_in_plan"):
-            cp.tapetide_get("/v1/market/vix/history", "tok", http_get=lambda *a, **k: notice)
-        limited = _Resp(429, {"error": {"code": "quota_exhausted", "message": "x"}})
-        with self.assertRaisesRegex(cp.TapetideError, "quota_exhausted"):
-            cp.tapetide_get("/v1/market/vix/history", "tok", http_get=lambda *a, **k: limited)
-
-
 class TickScheduleTests(unittest.TestCase):
     def test_skips_once_the_newest_weekday_is_published(self):
         monday = datetime(2026, 11, 9, 3, 0, tzinfo=timezone.utc)
@@ -234,7 +340,8 @@ class TickScheduleTests(unittest.TestCase):
         self.assertTrue(tick.already_published(previous, monday))
         tuesday = monday + timedelta(days=1)
         self.assertFalse(tick.already_published(previous, tuesday))
-        self.assertTrue(tick.already_published({**previous, "generated_at": "2026-11-10T01:00:00+00:00"}, tuesday))
+        # No quota to protect: every run fetches until the new weekday is in.
+        self.assertFalse(tick.already_published({**previous, "generated_at": "2026-11-10T01:00:00+00:00"}, tuesday))
 
 
 if __name__ == "__main__":
