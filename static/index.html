@@ -1029,11 +1029,9 @@
     html[data-boot-view]:not([data-boot-view="landing"]) #landingPage { display: none !important; }
     html[data-boot-view="chat"] #appShell,
     html[data-boot-view="app"] #appShell,
-    html[data-boot-view="track-app"] #appShell,
     html[data-boot-view="edge-app"] #appShell,
     html[data-boot-view="watch-app"] #appShell,
     html[data-boot-view="ledger-app"] #appShell { display: flex !important; }
-    html[data-boot-view^="track-"] #trackOverlay,
     html[data-boot-view^="edge-"] #edgeOverlay,
     html[data-boot-view^="watch-"] #watchOverlay,
     html[data-boot-view^="ledger-"] #ledgerOverlay { display: flex !important; }
@@ -2323,7 +2321,7 @@
       try {
         var path = location.pathname.replace(/\/+$/, '') || '/';
         var pathView = {
-          '/': 'landing', '/ask': 'app', '/track': 'track-landing',
+          '/': 'landing', '/ask': 'app', '/track': 'edge-landing',
           '/edge': 'edge-landing', '/watchlist': 'watch-landing', '/ledger': 'ledger-landing',
         }[path];
         var isEdge = /^\/edge(?:\/(mtm|agentic))?$/.test(path);
@@ -2403,7 +2401,6 @@
       <span class="brand text-xl">Foresea</span>
     </button>
     <div class="landing-data-links">
-      <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
       <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <button type="button" class="topbar-link" onclick="openMcpModal()" style="font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981"></span>Connect MCP</button>
@@ -2556,57 +2553,6 @@
           </div>
           <h3 style="font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 8px;">Automated Edge Detection</h3>
           <p style="font-size: 13.5px; color: var(--text-dim); line-height: 1.5; margin: 0;">Foresea maps its probabilities directly to order-book pricing on Polymarket and Kalshi. It flags significant contract discrepancies, helping you spot arbitrage, hedges, and mispriced markets instantly.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Reliability and Transparency Section -->
-    <section class="transparency-section" style="margin-top: 80px; padding: 48px 24px; background: var(--panel); border: 1px solid var(--border); border-radius: 20px; width:100%">
-      <div style="display: grid; grid-template-columns: 1fr; gap: 40px; align-items: center;">
-        <div style="max-width: 580px;">
-          <p class="label" style="color: #4f46e5; margin-bottom: 8px;">Transparency & Trust</p>
-          <h2 style="font-size: clamp(24px, 3.5vw, 32px); font-weight: 700; color: var(--ink); line-height: 1.1; margin-bottom: 16px;">Is the AI forecast actually reliable?</h2>
-          <p style="font-size: 14px; color: var(--text); line-height: 1.6; margin-bottom: 16px;">
-            Prediction markets are difficult to beat because they represent the financial stakes of thousands of active traders. To establish trust, <strong>every Foresea forecast is logged in public and scored against final real-world outcomes</strong>.
-          </p>
-          <p style="font-size: 14px; color: var(--text); line-height: 1.6; margin-bottom: 24px;">
-            We evaluate the forecast calibration: if we group all predictions where we estimated a 75% probability, about 75% of those events should occur. We track these results transparently in our public database and track record sheets.
-          </p>
-          <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-            <button type="button" class="hero-action primary ui-icon-label" onclick="openTrackRecord()">View Detailed Track Record <svg class="ui-icon" aria-hidden="true"><use href="#ui-arrow-right"></use></svg></button>
-            <a href="mailto:pareel.amre@gmail.com?subject=Foresea%20source%20code" class="hero-action" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
-              <span>Get in touch</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- Live calibration stats, refreshed from GET /track-record. -->
-        <div id="transparencyPerformancePanel" data-resolved-count="" style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02);">
-          <h3 style="font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">Verified System Performance</h3>
-
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
-            <div style="text-align: center; border-right: 1px solid var(--border); padding-right: 8px;">
-              <span id="trustAccuracy" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">?</span>
-              <span style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 500;">Model Accuracy</span>
-            </div>
-            <div style="text-align: center; border-right: 1px solid var(--border); padding-right: 8px;">
-              <span id="trustResolved" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">?</span>
-              <span style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 500;">Scored Snapshots</span>
-            </div>
-            <div style="text-align: center;">
-              <span id="trustBrier" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">?</span>
-              <span style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 500;">Model Brier Score</span>
-            </div>
-          </div>
-
-          <h4 style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Calibration Accuracy (Observed Rates vs Predicted)</h4>
-
-          <div id="trustCalibrationRows" aria-busy="true" style="display: flex; flex-direction: column; gap: 8px;">
-            <p style="font-size: 12px; color: var(--text-dim); margin: 0;">Loading resolved calibration?</p>
-          </div>
-          <p id="trustPanelStatus" role="status" aria-live="polite" style="font-size: 10.5px; color: var(--text-mute); margin-top: 14px; line-height: 1.3;">
-            Loading the live resolved track record?
-          </p>
         </div>
       </div>
     </section>
@@ -3294,21 +3240,6 @@ print(f"Probability: {forecast.get('probability', 0):.1%}")</code></pre>
       </section>
     </div>
   </div>
-</div>
-
-<!-- ── Track record overlay ── -->
-<div id="trackOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="trackDialogTitle" aria-hidden="true" tabindex="-1">
-  <div class="tr-head">
-    <div class="flex items-center gap-2">
-      <button type="button" class="brand-home" onclick="closeTrackRecord()" aria-label="Close and return">
-        <span class="logo-dot"></span>
-        <span class="brand text-lg">Foresea</span>
-      </button>
-      <h2 id="trackDialogTitle" class="sr-only">Foresea track record</h2>
-    </div>
-    <button id="trackCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeTrackRecord()">Close</button>
-  </div>
-  <div id="trackBody" class="tr-body" data-lenis-prevent></div>
 </div>
 
 <div id="edgeOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="edgeDialogTitle" aria-hidden="true" tabindex="-1">
@@ -5759,8 +5690,6 @@ function updateVariantDesc() {
 const _VIEW_URL = {
   'landing':       '/',
   'app':           '/ask',
-  'track-landing': '/track',
-  'track-app':     '/track',
   'edge-landing':  '/edge',
   'edge-app':      '/edge',
   'watch-landing': '/watchlist',
@@ -5771,15 +5700,15 @@ const _VIEW_URL = {
 const _PATH_VIEW = {
   '/': 'landing',
   '/ask': 'app',
-  '/track': 'track-landing',
+  '/track': 'edge-landing',
   '/edge': 'edge-landing',
   '/watchlist': 'watch-landing',
   '/ledger': 'ledger-landing',
 };
 const _LEGACY_HASH_VIEW = {
   '#ask': 'app',
-  '#track': 'track-landing',
-  '#track-app': 'track-app',
+  '#track': 'edge-landing',
+  '#track-app': 'edge-app',
   '#edge': 'edge-landing',
   '#edge-app': 'edge-app',
   '#watchlist': 'watch-landing',
@@ -5881,7 +5810,6 @@ function showLanding({ updateHistory = true } = {}) {
   const wasLandingAlreadyVisible = currentView === 'landing' && !landing.classList.contains('hidden-view');
 
   closeSidebar();
-  closeTrackRecord({ updateHistory: false, immediate: true });
   closeEdgeBoard({ updateHistory: false, immediate: true });
   closeWatchlistPage({ updateHistory: false, immediate: true });
   closePersonalLedger({ updateHistory: false, immediate: true });
@@ -5913,14 +5841,12 @@ function showLanding({ updateHistory = true } = {}) {
   }
 
   currentView = 'landing';
-  startTransparencyAutoRefresh();
   if (updateHistory) setHistoryState('landing');
 }
 function launchApp({ updateHistory = true } = {}) {
   document.documentElement?.removeAttribute?.('data-boot-view');
   const app = document.getElementById('appShell');
   document.getElementById('landingPage').classList.add('hidden-view');
-  stopTransparencyAutoRefresh();
   app.classList.remove('hidden-view');
   document.body.style.overflow = 'hidden';
   currentView = 'app';
@@ -6126,88 +6052,7 @@ function trackEvent(eventName, metadata = {}) {
   _sendAnalytics('/analytics/event', payload);
 }
 
-// ── Track record ─────────────────────────────────────────────────────────────
-let trackLoaded = false;
-async function openTrackRecord({ updateHistory = true } = {}) {
-  const ov = document.getElementById('trackOverlay');
-  if (ov.classList.contains('open')) return;
-  lastFocusedBeforeDialog = document.activeElement;
-  ov.classList.add('open');
-  ov.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-  trackEvent('track_record_opened', { source: currentView === 'app' ? 'app' : 'landing' });
-  if (updateHistory) setHistoryState(currentView === 'app' ? 'track-app' : 'track-landing');
-  if (!_bootRouting && window.Motion && !prefersReduced()) {
-    Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
-  }
-  if (!trackLoaded) { trackLoaded = true; await loadTrackRecord(); }
-  setTimeout(() => document.getElementById('trackCloseBtn')?.focus(), 0);
-}
-function closeTrackRecord({ updateHistory = true, immediate = false } = {}) {
-  const ov = document.getElementById('trackOverlay');
-  if (!ov.classList.contains('open')) return;
-  const finish = () => {
-    ov.classList.remove('open');
-    ov.setAttribute('aria-hidden', 'true');
-    ov.style.opacity = '';
-    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
-    document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
-    if (!immediate && lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) {
-      lastFocusedBeforeDialog.focus();
-    }
-  };
-  if (!immediate && window.Motion && !prefersReduced()) {
-    Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
-  } else { finish(); }
-
-  if (updateHistory) {
-    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
-    const targetView = isAppVisible ? 'app' : 'landing';
-    setHistoryState(targetView, 'push');
-  }
-}
 function pct(x) { return Math.round((x || 0) * 100); }
-async function loadTrackRecord() {
-  const host = document.getElementById('trackBody');
-  host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading track record…</p></div>';
-  try {
-    const r = await _liveJsonFetch('/track-record');
-    if (!r.ok) throw new Error('unavailable');
-    const d = await _readJson(r);
-    _ebLastData = d;
-    host.innerHTML = renderTrackRecord(d);
-    if (window.Motion && !prefersReduced()) {
-      const stats = host.querySelectorAll('.tr-stat');
-      if (stats.length) {
-        Motion.animate(stats,
-          { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
-          { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
-      }
-      const calibRows = host.querySelectorAll('.tr-calib-row');
-      if (calibRows.length) {
-        Motion.animate(calibRows,
-          { opacity: [0, 1] }, { delay: Motion.stagger(0.02), duration: 0.4, easing: EASE });
-      }
-      // Scroll-reveal the resolved log as it enters view
-      const logRows = host.querySelectorAll('.tr-log-row');
-      if (logRows.length && Motion.inView) {
-        logRows.forEach(el => { el.style.opacity = '0'; });
-        Motion.inView(logRows, (entry) => {
-          Motion.animate(entry.target,
-            { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
-            { duration: 0.4, easing: EASE });
-        }, { amount: 0.15 });
-      }
-    }
-  } catch (e) {
-    console.warn('loadTrackRecord failed:', e);
-    // See the matching comment in loadEdgeBoard()'s catch block -- same
-    // stuck-until-hard-refresh bug, same fix.
-    trackLoaded = false;
-    host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Track record is not available yet. '
-      + '<a href="#" onclick="event.preventDefault(); loadTrackRecord();" style="text-decoration:underline">Retry</a></p></div>';
-  }
-}
 let edgeLoaded = false;
 let _edgePriceTimer = null;
 let _ebForecastTimer = null;
@@ -6261,10 +6106,6 @@ async function refreshEdgePrices() {
           entry_price: entry,
           payout_odds: payoutOdds,
           edge,
-          lead_track_record: {
-            skill_significant: row.dataset.leadSkill === 'validated',
-            n: row.dataset.leadN ? Number(row.dataset.leadN) : null,
-          },
         });
       }
     });
@@ -6278,37 +6119,12 @@ function _formatEdgeSignal(e) {
   if (!side) return '<span style="color:var(--text-dim)">No signal</span>';
   const entry = Number(e.entry_price);
   const edge = Math.abs(Number(e.edge || 0));
-  const tr = e.lead_track_record || {};
-  const leadN = Number(tr.n || 0);
-  const validated = _leadSkillState(tr).key === 'validated';
   const entryText = e.entry_price != null && Number.isFinite(entry) ? ` @ ${Math.round(entry * 100)}¢` : '';
   const oddsText = e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '';
-  if (validated) {
-    return `Validated ${side}${entryText}${oddsText}`;
-  }
   if (edge < 0.03) {
     return `<span style="color:var(--text-dim)">No trade · ${side}${entryText}</span>`;
   }
-  const evidence = leadN ? `n=${leadN}` : 'low evidence';
-  return `<span style="color:var(--text-dim)">Watch ${side}${entryText} · unproven ${evidence}</span>`;
-}
-
-function _leadSkillState(tr) {
-  if (!tr) return { key: 'none', label: '—', proven: false };
-  const n = Number(tr.n || 0);
-  const brierBetter = tr.skill_significant === true;
-  const directionOk = tr.accuracy == null || Number(tr.accuracy) >= 0.30;
-  const enoughN = n >= 10;
-  if (brierBetter && directionOk && enoughN) return { key: 'validated', label: `validated (n=${n})`, proven: true };
-  if (brierBetter && !directionOk) return { key: 'direction_wrong', label: `Brier better, direction wrong (n=${n})`, proven: false };
-  if (brierBetter && !enoughN) return { key: 'small_sample', label: `small sample (n=${n})`, proven: false };
-  return { key: 'unproven', label: `unproven (n=${n})`, proven: false };
-}
-
-function _leadSkillBadge(tr) {
-  const state = _leadSkillState(tr);
-  if (state.key === 'none') return '—';
-  return `<span class="eb-badge ${state.proven ? 'eb-sig' : ''}">${state.label}</span>`;
+  return `Watch ${side}${entryText}${oddsText}`;
 }
 
 const _MTM_MODEL_COLORS = {
@@ -6705,10 +6521,6 @@ async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
   loadCrypto5mEquity();
   _startEdgeTimers();
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
-}
-async function openForecastDrift() {
-  await openEdgeBoard();
-  setTimeout(() => document.getElementById('forecastDriftPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 }
 // `immediate` closes without the fade, for callers that navigate somewhere
 // else in the same tick. The fade defers finish() by 220ms, and any routing
@@ -8292,128 +8104,6 @@ async function loadLandingPanels() {
   } catch (_) { /* leave placeholders */ }
 }
 
-const TRANSPARENCY_REFRESH_MS = 60_000;
-let _transparencyRefreshTimer = null;
-let _transparencyRefreshInFlight = null;
-let _transparencyLastResolved = null;
-
-function _transparencyCalibrationBin(bin) {
-  if (bin?.bin) return String(bin.bin).replace(/-/g, ' - ');
-  const predicted = Number(bin?.avg_predicted);
-  if (!Number.isFinite(predicted)) return 'N/A';
-  const low = Math.min(90, Math.floor(predicted * 10) * 10);
-  return `${low}% - ${low + 10}%`;
-}
-
-function _selectTransparencyCalibration(calibration) {
-  const valid = (calibration || []).filter(bin =>
-    Number.isFinite(Number(bin.avg_predicted)) &&
-    Number.isFinite(Number(bin.observed_yes_rate))
-  );
-  const targets = [0.95, 0.75, 0.55, 0.05];
-  const selected = [];
-  for (const target of targets) {
-    const nearest = valid
-      .filter(bin => !selected.includes(bin))
-      .sort((a, b) =>
-        Math.abs(Number(a.avg_predicted) - target) -
-        Math.abs(Number(b.avg_predicted) - target)
-      )[0];
-    if (nearest) selected.push(nearest);
-  }
-  return selected;
-}
-
-function _renderTransparencyPerformance(d) {
-  const ov = d.overall || {};
-  const accuracy = Number(ov.accuracy ?? d.accuracy);
-  const brier = Number(ov.model_brier ?? d.brier_score);
-  const resolved = Number(d.n_snapshots_resolved ?? d.n_resolved ?? ov.n);
-  if (![accuracy, brier, resolved].every(Number.isFinite)) {
-    throw new Error('track record summary is incomplete');
-  }
-
-  document.getElementById('trustAccuracy').textContent = `${(accuracy * 100).toFixed(1)}%`;
-  document.getElementById('trustResolved').textContent = Math.round(resolved).toLocaleString();
-  document.getElementById('trustBrier').textContent = brier.toFixed(3);
-
-  const panel = document.getElementById('transparencyPerformancePanel');
-  panel.dataset.resolvedCount = String(Math.round(resolved));
-
-  const calibration = _selectTransparencyCalibration(d.calibration);
-  const rows = document.getElementById('trustCalibrationRows');
-  rows.setAttribute('aria-busy', 'false');
-  rows.innerHTML = calibration.length ? calibration.map(bin => {
-    const observed = Math.max(0, Math.min(1, Number(bin.observed_yes_rate)));
-    const observedText = `${(observed * 100).toFixed(1)}%`;
-    const sample = Number(bin.n);
-    const title = Number.isFinite(sample) ? `Based on ${sample.toLocaleString()} resolved forecasts` : '';
-    return `<div title="${escAttr(title)}" style="display: grid; grid-template-columns: 80px 1fr 44px; align-items: center; font-size: 12px; color: var(--text);">
-      <span style="font-weight: 500;">${escHtml(_transparencyCalibrationBin(bin))}</span>
-      <div style="height: 6px; background: var(--paper); border-radius: 3px; overflow: hidden; margin: 0 8px;">
-        <div style="height: 100%; width: ${observed * 100}%; background: #4f46e5; border-radius: 3px;"></div>
-      </div>
-      <span style="font-weight: 600; text-align: right;">${observedText}</span>
-    </div>`;
-  }).join('') : '<p style="font-size: 12px; color: var(--text-dim); margin: 0;">Calibration builds as forecasts resolve.</p>';
-
-  const newlyResolved = _transparencyLastResolved === null
-    ? 0
-    : Math.max(0, Math.round(resolved) - _transparencyLastResolved);
-  _transparencyLastResolved = Math.round(resolved);
-  const generatedAt = d.generated_at ? new Date(d.generated_at) : null;
-  const updated = generatedAt && !Number.isNaN(generatedAt.getTime())
-    ? generatedAt.toLocaleString()
-    : 'just now';
-  document.getElementById('trustPanelStatus').textContent = newlyResolved
-    ? `${newlyResolved.toLocaleString()} new ${newlyResolved === 1 ? 'snapshot' : 'snapshots'} scored ? updated ${updated}.`
-    : `Live resolved track record ? updated ${updated} ? refreshes automatically.`;
-}
-
-async function refreshTransparencyPanel() {
-  if (_transparencyRefreshInFlight) return _transparencyRefreshInFlight;
-  _transparencyRefreshInFlight = (async () => {
-    const rows = document.getElementById('trustCalibrationRows');
-    try {
-      const r = await _liveJsonFetch('/track-record');
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      _renderTransparencyPerformance(await _readJson(r));
-    } catch (_) {
-      if (!_transparencyLastResolved) {
-        rows?.setAttribute('aria-busy', 'false');
-        if (rows) rows.innerHTML = '<p style="font-size: 12px; color: var(--text-dim); margin: 0;">Live calibration is temporarily unavailable.</p>';
-      }
-      const status = document.getElementById('trustPanelStatus');
-      if (status) status.textContent = 'Live track record temporarily unavailable ? retrying automatically.';
-    } finally {
-      _transparencyRefreshInFlight = null;
-    }
-  })();
-  return _transparencyRefreshInFlight;
-}
-
-function stopTransparencyAutoRefresh() {
-  if (_transparencyRefreshTimer) {
-    clearInterval(_transparencyRefreshTimer);
-    _transparencyRefreshTimer = null;
-  }
-}
-
-function startTransparencyAutoRefresh() {
-  if (document.hidden) return;
-  refreshTransparencyPanel();
-  if (!_transparencyRefreshTimer) {
-    _transparencyRefreshTimer = setInterval(() => {
-      if (currentView === 'landing' && !document.hidden) refreshTransparencyPanel();
-    }, TRANSPARENCY_REFRESH_MS);
-  }
-}
-
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) stopTransparencyAutoRefresh();
-  else if (currentView === 'landing') startTransparencyAutoRefresh();
-});
-
 function _renderLandingMarketTable(items) {
   const el = document.getElementById('landingMarketTable');
   if (!el) return;
@@ -9389,7 +9079,7 @@ function _renderBoardPage(board, page) {
       <button type="button" class="eb-filter-pill ${_ebQualityFilter === 'exclude_thin' ? 'active' : ''}" onclick="_onEbQualityFilter('exclude_thin')" title="Exclude thin liquidity and wide spreads">Liquid only</button>
       <span style="font-size:11px;color:var(--text-dim);margin-left:4px">Horizon:</span>
       <button type="button" class="eb-filter-pill ${_ebHorizonFilter === 'all' ? 'active' : ''}" onclick="_onEbHorizonFilter('all')">All</button>
-      <button type="button" class="eb-filter-pill ${_ebHorizonFilter === '14_30d' ? 'active' : ''}" onclick="_onEbHorizonFilter('14_30d')" title="Validated horizon: 14–30d ahead (+1.40pp empirical skill over market)">14–30d (Validated)</button>
+      <button type="button" class="eb-filter-pill ${_ebHorizonFilter === '14_30d' ? 'active' : ''}" onclick="_onEbHorizonFilter('14_30d')" title="Markets closing 14–30 days from now">14–30d</button>
     </div>
     <div style="display:flex;gap:6px;align-items:center">
       <span style="font-size:11px;color:var(--text-dim)">Sort:</span>
@@ -9407,10 +9097,6 @@ function _renderBoardPage(board, page) {
   }
 
   const rows = slice.map(e => {
-    // Primary link is the lead-time (how-early) track record; fall back to the
-    // edge-size bucket record only if no lead-time record exists.
-    const tr = e.lead_track_record || e.track_record;
-    const badge = _leadSkillBadge(tr);
     const lead = (e.lead_days != null)
       ? (e.lead_days >= 1 ? Math.round(e.lead_days) + 'd' : '<1d') + ' ahead'
       : (e.lead_bucket || '—');
@@ -9433,16 +9119,16 @@ function _renderBoardPage(board, page) {
       ? `<div style="font-size:10px;color:var(--text-dim)" title="Executable edge against book: ${pct(e.executable_edge)}%">book: ${_sg(e.executable_edge)}</div>`
       : '';
 
-    return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${_leadSkillState(tr).key}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
+    return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
       `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}${_credibilityBadge(e)}${_discrepancyBadge(e)}</td>` +
       `<td>${_renderVenueWithFee(e.platform, e.category || e.domain, e.question)}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
       `<td class="eb-live-market">${pct(e.market_probability)}%${crowdSub}</td>` +
       `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b>${execSub}</td>` +
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
-      `<td style="white-space:nowrap">${lead}</td><td>${badge}</td></tr>`;
+      `<td style="white-space:nowrap">${lead}</td></tr>`;
   }).join('');
-  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Foresea odds</th><th>Crowd</th><th>Edge</th><th>Signal</th><th>Lead</th><th>Skill at this lead</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Foresea odds</th><th>Crowd</th><th>Edge</th><th>Signal</th><th>Lead</th></tr></thead><tbody>${rows}</tbody></table>`;
   let pagination = '';
   if (pages > 1) {
     const prev = curPage > 0
@@ -9473,40 +9159,12 @@ function renderEdgeBoard(d) {
   _ebLastData = d;
   _ebBoardData = board;
   _ebPage = 0;
-  const ll = d.lead_lag;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
-  // Never surface a degenerate metric (a 0% / −100% read off a handful of points).
-  // Below EB_MIN_N samples a metric reads "building n=…" instead of a misleading zero.
-  const EB_MIN_N = 5;
-  const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
-  const modelFollowsMkt = (ll && ll.n_markets >= EB_MIN_N && ll.market_converged_to_model_pct != null)
-    ? pct(1 - ll.market_converged_to_model_pct) + '%' : _build(ll && ll.n_markets);
-  const resolvedMarkets = Number(d.n_markets_resolved || 0);
-  const savedSnapshots = Number(d.n_snapshots_resolved || 0);
-  const coverageNote = savedSnapshots && resolvedMarkets
-    ? `${savedSnapshots.toLocaleString()} saved forecasts across ${resolvedMarkets.toLocaleString()} resolved markets. A market can have many forecasts, but only one settlement.`
-    : 'Saved forecasts record research over time. Trading performance uses one settlement per market.';
   const stats = `
     <div class="tr-stats">
       <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div></div>
       <div class="tr-stat"><div class="v">${(d.n_markets_tracked || 0)}</div><div class="k label">Markets tracked</div></div>
-      <div class="tr-stat"><div class="v">${resolvedMarkets.toLocaleString()}</div><div class="k label">Resolved markets (P&amp;L)</div></div>
-      <div class="tr-stat"><div class="v">${savedSnapshots.toLocaleString()}</div><div class="k label">Saved forecasts (research)</div></div>
-      <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Foresea follows market</div></div>
-    </div>
-    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">${coverageNote}</p>`;
-  const byHorizon = d.by_horizon || [];
-  const _hOrder = { '30d+': 0, '14-30d': 1, '7-14d': 2, '3-7d': 3, '1-3d': 4, '<1d': 5 };
-  let calibHtml;
-  if (byHorizon.length) {
-    calibHtml = byHorizon.slice().sort((a, b) => (_hOrder[a.horizon] ?? 9) - (_hOrder[b.horizon] ?? 9)).map(b => {
-      const sig = _leadSkillBadge(b);
-      const accStr = b.accuracy != null ? `<span style="color:var(--text-dim);margin-right:10px">acc ${pct(b.accuracy)}%</span>` : '';
-      return `<div class="eb-calib-row eb-row"><span style="width:90px;font-weight:600">${b.horizon} ahead</span>${accStr}<span style="flex:1">skill ${_sg(b.skill_vs_market)} (n=${b.n})</span>${sig}</div>`;
-    }).join('');
-  } else {
-    calibHtml = `<p class="text-sm text-gray-500">Lead-time calibration — whether forecasts made this early actually pay — builds as markets resolve.</p>`;
-  }
+    </div>`;
   const boardHtml = `<div id="eb-board-section">${_renderBoardPage(board, 0)}</div>`;
   const viewTabs = `<div class="eb-view-tabs" role="tablist" aria-label="Edge board views">
     <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" data-eb-view="markets">Prediction Markets</button>
@@ -9515,16 +9173,15 @@ function renderEdgeBoard(d) {
     <button type="button" class="eb-view-tab ${_ebView === 'pairs' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'pairs'}" data-eb-view="pairs">Commodity Pairs</button>
   </div>`;
   const marketsPageHtml = `${stats}
-    <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
-    <h4 class="eb-h">Live Foresea forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
+    <h4 class="eb-h">Live Foresea forecasts - ranked by disagreement <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
   const agenticPageHtml = `<div id="eb-agentic-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
   const indicesPageHtml = `<div id="eb-indices-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
   const pairsPageHtml = `<div id="eb-pairs-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
   const activePageHtml = _ebView === 'agentic' ? agenticPageHtml : _ebView === 'indices' ? indicesPageHtml : _ebView === 'pairs' ? pairsPageHtml : marketsPageHtml;
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
-    <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced - and our track record of being right about it</h3>
-    <p class="tr-method">Live Foresea-vs-market gaps, ranked. Accuracy, calibration, and lead-time skill are calculated from resolved forecasts saved before each market closed. ${gen ? 'Updated ' + gen + '.' : ''}</p>
+    <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced</h3>
+    <p class="tr-method">Live Foresea-vs-market gaps, ranked. Foresea odds come from the on-device model (Qwen3.5-9B), refreshed nightly. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${viewTabs}
     <div style="margin-top:18px">${activePageHtml}</div>
   </div>`;
@@ -9541,61 +9198,6 @@ function _fmtVolume(value) {
   if (n >= 1000) return '$' + Math.round(n / 1000) + 'K';
   return '$' + Math.round(n);
 }
-function renderTrackRecord(d) {
-  // Normalize live format (d.overall.*) and backtest format (top-level fields).
-  const ov = d.overall || {};
-  const accuracy = ov.accuracy ?? d.accuracy ?? 0;
-  const brierScore = ov.model_brier ?? d.brier_score ?? 0;
-  const skillVsMkt = ov.skill_vs_market ?? null;
-  const nResolved = d.n_snapshots_resolved ?? d.n_resolved ?? ov.n ?? 0;
-  const ece = d.ece ?? null;
-  const logEntries = d.resolved_log ?? d.log ?? [];
-  const logSample = d.log_sample_size ?? logEntries.length;
-  const logCountLabel = logSample > 0 && logSample < nResolved
-    ? `most recent ${logSample} of ${nResolved.toLocaleString()}`
-    : `${nResolved.toLocaleString()} scored`;
-  const stats = `
-    <div class="tr-stats">
-      <div class="tr-stat"><div class="v">${pct(accuracy)}%</div><div class="k label">Accuracy</div></div>
-      <div class="tr-stat"><div class="v">${brierScore.toFixed(3)}</div><div class="k label">Brier score</div></div>
-      ${skillVsMkt !== null
-        ? `<div class="tr-stat"><div class="v" style="color:${skillVsMkt >= 0 ? '#0a7' : '#c33'}">${skillVsMkt >= 0 ? '+' : ''}${skillVsMkt.toFixed(3)}</div><div class="k label">Skill vs market</div></div>`
-        : ece !== null ? `<div class="tr-stat"><div class="v">${ece.toFixed(3)}</div><div class="k label">Calibration error</div></div>` : ''}
-      <div class="tr-stat"><div class="v">${nResolved.toLocaleString()}</div><div class="k label">Resolved</div></div>
-    </div>`;
-  const gen = d.generated_at ? new Date(d.generated_at).toLocaleDateString() : '';
-  const method = `<p class="tr-method">${escHtml(d.methodology || '')} ${gen ? 'Updated ' + gen + '.' : ''}</p>`;
-  const calib = (d.calibration || []).map(b => `
-    <div class="tr-calib-row">
-      <span>${pct(b.avg_predicted)}%</span>
-      <span class="tr-bar"><i style="width:${pct(b.observed_yes_rate)}%"></i></span>
-      <span>${pct(b.observed_yes_rate)}%</span>
-    </div>`).join('');
-  const log = logEntries.map(r => `
-    <div class="tr-log-row">
-      <span class="tr-mark ${r.correct ? 'hit' : 'miss'}" title="${r.correct ? 'Correct' : 'Missed'}"></span>
-      <span>
-        <span class="tr-q">${escHtml(r.question)}</span>
-        <span class="tr-meta">${r.category ? escHtml(r.category) + ' · ' : ''}${r.resolve_time ? escHtml(String(r.resolve_time).slice(0, 10)) : ''}</span>
-      </span>
-      <span class="tr-verdict">
-        ${escHtml(r.predicted)} ${pct(r.confidence)}%<br>
-        <span class="sub">actual ${escHtml(r.actual)}</span>
-      </span>
-    </div>`).join('');
-  return `
-    <div class="tr-inner">
-      <p class="label">Track record</p>
-      <h2 class="display tr-hero-title">Market forecasts, scored against reality.</h2>
-      ${stats}
-      ${method}
-      ${calib ? `<p class="tr-section-title label">Calibration — predicted vs. resolved yes-rate</p><div class="tr-calib">${calib}</div>` : ''}
-      <p class="tr-section-title label">Resolved forecasts · ${logCountLabel}</p>
-      <div class="tr-log">${log || '<p class="text-sm text-gray-500">Resolved log building…</p>'}</div>
-    </div>`;
-}
-
-// ── History + accessibility ─────────────────────────────────────────────────
 function focusableElements(root) {
   if (!root) return [];
   return Array.from(root.querySelectorAll(
@@ -9643,7 +9245,6 @@ function applyHistoryState(state) {
   const edgeScrollTop = Math.max(0, Number(state?.edgeScrollTop) || 0);
 
   // Close all overlays first — avoids every case having to enumerate which to close
-  closeTrackRecord({ updateHistory: false });
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
   closePersonalLedger({ updateHistory: false });
@@ -9655,15 +9256,9 @@ function applyHistoryState(state) {
     }
   } else if (view === 'app') {
     launchApp({ updateHistory: false });
-  } else if (view === 'track-app') {
-    launchApp({ updateHistory: false });
-    openTrackRecord({ updateHistory: false });
   } else if (view === 'edge-app') {
     launchApp({ updateHistory: false });
     openEdgeBoard({ updateHistory: false, panel: edgePanel });
-  } else if (view === 'track-landing') {
-    showLanding({ updateHistory: false });
-    openTrackRecord({ updateHistory: false });
   } else if (view === 'edge-landing') {
     showLanding({ updateHistory: false });
     openEdgeBoard({ updateHistory: false, panel: edgePanel });
@@ -9694,22 +9289,17 @@ function applyHistoryState(state) {
 window.addEventListener('popstate', event => applyHistoryState(event.state));
 window.addEventListener('resize', syncSidebarA11y);
 document.addEventListener('keydown', event => {
-  const track = document.getElementById('trackOverlay');
   const edge = document.getElementById('edgeOverlay');
   const watch = document.getElementById('watchOverlay');
   const ledger = document.getElementById('ledgerOverlay');
   const sidebar = document.getElementById('sidebar');
-  const trackOpen = track.classList.contains('open');
   const edgeOpen = edge.classList.contains('open');
   const watchOpen = watch.classList.contains('open');
   const ledgerOpen = ledger.classList.contains('open');
   const sidebarOpen = sidebar.classList.contains('open');
 
   if (event.key === 'Escape') {
-    if (trackOpen) {
-      event.preventDefault();
-      closeTrackRecord();
-    } else if (edgeOpen) {
+    if (edgeOpen) {
       event.preventDefault();
       closeEdgeBoard();
     } else if (watchOpen) {
@@ -9725,9 +9315,7 @@ document.addEventListener('keydown', event => {
     return;
   }
 
-  if (trackOpen) {
-    trapFocus(event, track);
-  } else if (edgeOpen) {
+  if (edgeOpen) {
     trapFocus(event, edge);
   } else if (watchOpen) {
     trapFocus(event, watch);
@@ -12508,7 +12096,6 @@ const _SLASH_COMMANDS = [
   { cmd: '/analyze',  args: '<url or question>', desc: 'Full agent: evidence + market edge analysis' },
   { cmd: '/scan',     args: '[platform] [topic]', desc: 'Scan for mispriced markets on Polymarket / Kalshi' },
   { cmd: '/edge',     args: '',              desc: 'Show current live edge board' },
-  { cmd: '/track',    args: '',              desc: 'Show track record summary' },
   { cmd: '/orders',   args: '',              desc: 'Suggest orders based on best back-tested strategy' },
   { cmd: '/help',     args: '',              desc: 'List all available commands' },
 ];
@@ -12606,7 +12193,6 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const board = d.edge_board || [];
       if (!board.length) { typing.remove(); _appendInline('<p>No live edge board entries found.</p>'); return true; }
       const rows = board.slice(0, 15).map(e => {
-        const proven = (e.track_record || {}).skill_significant ? uiIcon('check') : '';
         const edgePct = Math.round((e.abs_edge || 0) * 100);
         const mktPct  = Math.round((e.market_probability || 0) * 100);
         const modPct  = Math.round((e.model_probability  || 0) * 100);
@@ -12614,7 +12200,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           <td style="padding:6px 10px 6px 0"><a href="${escAttr(_normalizeMarketUrl(e.market_url, e.platform) || _agenticMarketUrl(e.platform, e.ident) || '#')}" target="_blank" style="color:var(--accent);text-decoration:none">${escHtml((e.question||'').slice(0,60))}${(e.question||'').length>60?'…':''}</a><br><span style="font-size:11px;color:var(--text-mute)">${escHtml(e.platform||'')} · ${escHtml(e.horizon||'')}</span></td>
           <td style="padding:6px 4px;text-align:center"><span class="${e.side==='YES'?'yes-badge':'no-badge'}" style="font-size:12px;padding:2px 8px">${escHtml(e.side||'?')}</span></td>
           <td style="padding:6px 4px;text-align:right;font-size:13px">${mktPct}% ${uiIcon('arrow-right')} ${modPct}%</td>
-          <td style="padding:6px 0 6px 8px;text-align:right;font-size:13px;color:var(--accent);font-weight:600">${edgePct}pp ${proven}</td>
+          <td style="padding:6px 0 6px 8px;text-align:right;font-size:13px;color:var(--accent);font-weight:600">${edgePct}pp</td>
         </tr>`;
       }).join('');
       typing.remove();
@@ -12628,78 +12214,8 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">${uiIcon('check')} = statistically proven edge bucket. Entry prices from last tick.</p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Entry prices from last tick.</p>`);
     } catch(e) { typing.remove(); _appendError('Could not load edge board: ' + e.message); }
-    return true;
-  }
-
-  if (cmd === '/track') {
-    const typing = addTyping();
-    try {
-      const r = await _liveJsonFetch('/track-record');
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      const ov = d.overall || {};
-      const pp = d.paper_pnl || {};
-      const smart = pp.smart || {};
-      const crowd = pp.crowd_baseline || {};
-      const smartDelta = smart.roi != null && crowd.roi != null ? smart.roi - crowd.roi : null;
-      const _trackCurve = (s, color, label, dash) => {
-        const points = _ebPnlCurve(s);
-        if (!points) return null;
-        const times = _ebCurveTimes(s);
-        const curve = { points, color, label };
-        if (dash) curve.dash = true;
-        if (times.length === points.length) curve.times = times;
-        return curve;
-      };
-      const trackCurves = [
-        _trackCurve(smart, '#10b981', 'Smart ROI'),
-        _trackCurve(crowd, '#94a3b8', 'crowd-follow baseline', true),
-      ].filter(Boolean);
-      const trackChart = trackCurves.length
-        ? `<div style="margin:0 0 12px">${_equitySvg(trackCurves, 460, 112, {asPct:false, yPrefix:'$'})}</div>`
-        : '';
-      const rows = (d.models_comparison || []).slice(0,5).map(m =>
-        `<tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:5px 10px 5px 0;font-family:monospace;font-size:12px">${escHtml(m.model||'?')}</td>
-          <td style="padding:5px 4px;text-align:right">${m.brier!=null?m.brier.toFixed(3):'—'}</td>
-          <td style="padding:5px 0 5px 8px;text-align:right;color:${(m.paper_roi_smart ?? m.paper_roi ?? 0)>=0?'var(--accent)':'#e55'}">${m.paper_roi_smart!=null?(m.paper_roi_smart>=0?'+':'')+(m.paper_roi_smart*100).toFixed(1)+'%':(m.model==='crowd-follow'&&m.paper_roi!=null?(m.paper_roi>=0?'+':'')+(m.paper_roi*100).toFixed(1)+'%':'—')}</td>
-        </tr>`
-      ).join('');
-      typing.remove();
-      _appendInline(`
-        <p style="margin-bottom:10px"><strong>Track record</strong></p>
-        ${trackChart}
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-          <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:22px;font-weight:700;color:var(--ink)">${ov.n_resolved||0}</div>
-            <div style="font-size:12px;color:var(--text-dim)">Resolved</div>
-          </div>
-          <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:22px;font-weight:700;color:var(--ink)">${ov.brier!=null?ov.brier.toFixed(3):'—'}</div>
-            <div style="font-size:12px;color:var(--text-dim)">Brier score</div>
-          </div>
-          <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:22px;font-weight:700;color:${(smart.roi||0)>=0?'var(--accent)':'#e55'}">${smart.roi!=null?(smart.roi>=0?'+':'')+(smart.roi*100).toFixed(1)+'%':'—'}</div>
-            <div style="font-size:12px;color:var(--text-dim)">Smart ROI</div>
-          </div>
-          <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:22px;font-weight:700;color:${(smartDelta||0)>=0?'var(--accent)':'#e55'}">${smartDelta!=null?_roiDeltaPct(smartDelta):'—'}</div>
-            <div style="font-size:12px;color:var(--text-dim)">vs crowd-follow</div>
-          </div>
-        </div>
-        ${rows ? `<p style="margin-bottom:6px;font-size:13px;color:var(--text-dim);font-weight:600">Models</p>
-        <table style="border-collapse:collapse;width:100%;font-size:13px">
-          <thead><tr style="border-bottom:2px solid var(--border)">
-            <th style="padding:4px 10px 4px 0;text-align:left;color:var(--text-dim)">Model</th>
-            <th style="padding:4px;text-align:right;color:var(--text-dim)">Brier</th>
-            <th style="padding:4px 0 4px 8px;text-align:right;color:var(--text-dim)">Smart ROI</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>` : ''}
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. Smart ROI uses the filtered strategy; crowd-follow is the zero-edge baseline. <a href="/track" class="ui-icon-label" style="color:var(--accent)">Full track record ${uiIcon('arrow-right')}</a></p>`);
-    } catch(e) { typing.remove(); _appendError('Could not load track record: ' + e.message); }
     return true;
   }
 

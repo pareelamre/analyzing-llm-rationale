@@ -82,7 +82,9 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("TRACK_RECORD_API_BASE_URL: ${{ vars.SELF_HOSTED_LLM_URL }}", workflow)
         self.assertIn('TRACK_RECORD_LOCAL_MODEL: "qwen3.5-9b-selfhosted"', workflow)
         self.assertIn('PROVIDER_TIMEOUT_CAP_S: "300"', workflow)
-        self.assertIn('TRACK_MODEL: "qwen3.5-9b-selfhosted"', workflow)
+        # Publishing keeps the track record on the council; only the Edge
+        # board shows the on-device model.
+        self.assertIn('TRACK_MODEL: "council"\n          EDGE_MODEL: "qwen3.5-9b-selfhosted"', workflow)
         self.assertIn('TZ=Asia/Kolkata date +%H', workflow)
         self.assertNotIn("'council', *scads_agent_trading_model_labels", workflow)
         self.assertNotIn("SCADS_AI_API_KEY", workflow)
@@ -674,6 +676,7 @@ class TrackRecordTickTests(unittest.TestCase):
             temperature=track_record_tick.TEMPERATURE,
             cycle_minutes=track_record_tick.CYCLE_INTERVAL_MINUTES,
             tracked_models=track_record_tick.ALL_TRACK_MODELS,
+            edge_model=track_record_tick.EDGE_MODEL,
         )
 
     def test_main_retries_snapshot_pass_when_first_pass_has_only_failures(self):

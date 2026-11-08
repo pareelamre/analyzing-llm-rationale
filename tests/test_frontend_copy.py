@@ -36,9 +36,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertNotIn("paper trading", renderer.lower())
         self.assertNotIn("paper roi", renderer.lower())
         self.assertIn("live foresea forecasts", renderer.lower())
-        self.assertIn("resolved markets (p&amp;l)", renderer.lower())
-        self.assertIn("saved forecasts (research)", renderer.lower())
-        self.assertIn("one settlement", renderer.lower())
+        self.assertNotIn("resolved markets", renderer.lower())
 
     def test_market_desk_and_radar_render_venue_fee_transparency(self):
         for path in ("frontend/index.html", "static/index.html"):
@@ -107,7 +105,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("function _startEdgeTimers()", index)
         self.assertIn("function _stopEdgeTimers()", index)
         opener = index.split("async function openEdgeBoard(", 1)[1].split(
-            "async function openForecastDrift", 1
+            "function closeEdgeBoard(", 1
         )[0]
         self.assertIn("_startEdgeTimers()", opener)
         # The early-return path must still revive the timers.
@@ -164,7 +162,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("window.location.reload()", pull)
         self.assertIn("{ passive: false }", pull)
         opener = index.split("async function openEdgeBoard(", 1)[1].split(
-            "async function openForecastDrift", 1
+            "function closeEdgeBoard(", 1
         )[0]
         self.assertIn("_installEdgeBoardPullToRefresh()", opener)
 
@@ -179,7 +177,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("host.addEventListener('scroll'", index)
 
         opener = index.split("async function openEdgeBoard(", 1)[1].split(
-            "async function openForecastDrift", 1
+            "function closeEdgeBoard(", 1
         )[0]
         self.assertIn("_installEdgeBoardScrollMemory()", opener)
         self.assertIn("_restoreEdgeBoardScroll()", opener)
@@ -778,7 +776,6 @@ function escHtml(s) {
         # dialog like the adjacent Close button does. Confirmed live before
         # the fix: currentView flipped from 'app' to 'landing' on click.
         overlays = [
-            ("trackOverlay", "closeTrackRecord()"),
             ("edgeOverlay", "closeEdgeBoard()"),
             ("watchOverlay", "closeWatchlistPage()"),
             ("ledgerOverlay", "closePersonalLedger()"),
@@ -810,16 +807,17 @@ function escHtml(s) {
                 self.assertIn("loadEdgeBoard();", catch_block)
                 self.assertIn(">Retry<", catch_block)
 
-    def test_track_record_load_failure_resets_the_loaded_flag_and_offers_retry(self):
+    def test_track_record_is_off_the_site(self):
+        # Retired 2026-11-08: the data stays at GET /track-record, the page,
+        # landing stats, /track command and per-row skill labels are gone.
         for name, index in self._both().items():
             with self.subTest(file=name):
-                loader = index.split("async function loadTrackRecord() {", 1)[1].split(
-                    "let edgeLoaded", 1
-                )[0]
-                catch_block = loader.split("} catch (e) {", 1)[1]
-                self.assertIn("trackLoaded = false", catch_block)
-                self.assertIn("loadTrackRecord();", catch_block)
-                self.assertIn(">Retry<", catch_block)
+                for gone in ("openTrackRecord", "trackOverlay", "transparencyPerformancePanel",
+                             "refreshTransparencyPanel", "cmd: '/track'", "Skill at this lead",
+                             "_leadSkillState", "forecastDriftPanel", "Validated ${side}"):
+                    self.assertNotIn(gone, index)
+                self.assertIn("'/track': 'edge-landing'", index)
+                self.assertIn("Foresea odds come from the on-device model (Qwen3.5-9B), refreshed nightly.", index)
 
     def test_agentic_section_error_state_offers_retry(self):
         for name, index in self._both().items():
@@ -857,12 +855,6 @@ function escHtml(s) {
                 self.assertIn("if (stats.length) {", edge_loader)
                 self.assertNotIn("Motion.animate('#edgeBody .tr-stat'", edge_loader)
 
-                track_loader = index.split("async function loadTrackRecord() {", 1)[1].split(
-                    "let edgeLoaded", 1
-                )[0]
-                self.assertIn("const stats = host.querySelectorAll('.tr-stat');", track_loader)
-                self.assertIn("if (stats.length) {", track_loader)
-                self.assertNotIn("Motion.animate('#trackBody .tr-stat'", track_loader)
 
     def test_manual_trade_input_and_board_support_decimal_contracts(self):
         for name, index in self._both().items():
@@ -876,8 +868,8 @@ function escHtml(s) {
             with self.subTest(file=name):
                 self.assertIn("_ebHorizonFilter = 'all'", index)
                 self.assertIn("function _onEbHorizonFilter(horizon)", index)
-                self.assertIn("14–30d (Validated)", index)
-                self.assertIn("Validated horizon: 14–30d ahead", index)
+                self.assertIn('title="Markets closing 14–30 days from now">14–30d</button>', index)
+                self.assertNotIn("(Validated)", index)
                 self.assertIn("_ebHorizonFilter === '14_30d'", index)
 
 

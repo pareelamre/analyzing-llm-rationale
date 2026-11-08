@@ -63,6 +63,9 @@ jobs:
         env:
           FORESEA_BASE_URL: https://foresea.ink
           TRACK_MODEL: "council"
+          # The Edge board shows the on-device model's nightly forecasts; the
+          # track record stays on the council.
+          EDGE_MODEL: "qwen3.5-9b-selfhosted"
           CYCLE_INTERVAL_MINUTES: "5"
         run: python scripts/track_record_tick.py --mtm-only
 

@@ -322,8 +322,10 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           FORESEA_BASE_URL: https://foresea.ink
-          # The Edge board's Foresea odds are the on-device model's.
-          TRACK_MODEL: "qwen3.5-9b-selfhosted"
+          # The Edge board's Foresea odds are the on-device model's; the
+          # track record stays on the council.
+          TRACK_MODEL: "council"
+          EDGE_MODEL: "qwen3.5-9b-selfhosted"
           CYCLE_INTERVAL_MINUTES: "5"
           MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
         run: |

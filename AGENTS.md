@@ -32,6 +32,12 @@ Edge board's Foresea odds to the on-device model, `qwen3.5-9b-selfhosted`
   R2 bootstrap stay disabled.
 - Do not load another model copy on the Mac's mlx server, and do not switch
   branches in the owner's main checkout (`~/Documents/foresea`); use worktrees.
+- The track record stays exactly as it was: `TRACK_MODEL` is `council` in
+  every workflow. The Edge board picks its odds with a separate `EDGE_MODEL`
+  (`qwen3.5-9b-selfhosted`), so the board can change without touching the
+  record. The owner removed the track record from the site (page, landing
+  stats, `/track` chat command, per-row skill labels); `/track` redirects to
+  `/edge`, and the data stays at `GET /track-record`.
 
 ### 2026-11-02 — Paid Kite Connect market data source (Codex)
 
