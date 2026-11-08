@@ -150,10 +150,50 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(series[("gold", "india")], [(date(2026, 11, 6), 14216700.0)])
         self.assertEqual(series[("crudeoil", "international")], fred[("crudeoil", "international")])
 
-    def test_only_the_parity_pair_is_paused(self):
-        paused = [p["key"] for p in cp.PAIRS if cp.track_pair(p, {}).get("paused")]
-        self.assertEqual(paused, ["gold-parity"])
-        self.assertNotIn("z", cp.track_pair(cp.PAIRS[-1], {}))
+    def test_every_pair_has_a_feed(self):
+        self.assertEqual([p["key"] for p in cp.PAIRS if cp.track_pair(p, {}).get("paused")], [])
+
+    def test_the_morning_price_is_the_half_hour_from_10_30_ist_fetched_a_quarter_at_a_time(self):
+        seen = []
+
+        def get(url, params, timeout, headers):
+            seen.append(url.split("/minutes/30/")[1])
+            return _Resp(200, {"status": "success", "data": {"candles": [
+                ["2026-11-06T11:00:00+05:30", 0, 0, 0, 142300.0, 7, 0],
+                ["2026-11-06T10:30:00+05:30", 0, 0, 0, 142200.0, 5, 0],
+                ["2026-11-06T10:00:00+05:30", 0, 0, 0, 142100.0, 9, 0],
+            ]}})
+
+        out = cp.contract_candles(_contract("GOLD", date(2026, 12, 4)), date(2026, 5, 1), date(2026, 11, 6), http_get=get, morning=True)
+
+        self.assertEqual(out, {date(2026, 11, 6): (142200.0, 5.0)})
+        self.assertEqual(seen, ["2026-11-06/2026-08-09", "2026-08-08/2026-05-11", "2026-05-10/2026-05-01"])
+
+    def test_mcx_gold_is_stored_at_its_close_and_at_11_ist(self):
+        listed = [_listed("GOLD", "MCX_FO|9", date(2026, 12, 4))]
+
+        def get(url, params, timeout, headers):
+            if url == cp.MCX_INSTRUMENTS_URL:
+                return _Resp(200, content=gzip.compress(json.dumps(listed).encode()))
+            stamp = "10:30" if "/minutes/30/" in url else "00:00"
+            close = 142200.0 if stamp == "10:30" else 142167.0
+            return _Resp(200, {"status": "success", "data": {"candles": [[f"2026-11-06T{stamp}:00+05:30", 0, 0, 0, close, 5, 0]]}})
+
+        # The daily close is already stored, so only the morning series backfills.
+        stored = [{"date": "2026-11-06", "commodity": "gold", "source": "india", "contract": "GOLD FUT", "expiry": "2026-12-04", "close": 142167.0}]
+        rows = cp.fetch_mcx(stored, date(2026, 11, 7), http_get=get)
+
+        self.assertEqual([(r["source"], r["close"]) for r in rows], [("india_am", 142200.0)])
+
+    def test_the_landed_cost_follows_the_import_duty_in_force_that_day(self):
+        before, after = date(2026, 5, 12), date(2026, 5, 13)
+        stored = [{"date": d.isoformat(), "commodity": c, "source": "international", "close": v}
+                  for d in (before, after) for c, v in (("gold", 4000.0), ("usdinr", 94.0))]
+        landed = dict(cp.build_series(stored, {})[("gold", "landed")])
+        per_kg = 4000.0 * 94.0 * 1000 / cp.TROY_OUNCE_G
+
+        self.assertAlmostEqual(landed[before], per_kg * 1.06, places=2)
+        self.assertAlmostEqual(landed[after], per_kg * 1.15, places=2)
 
     def test_metals_use_the_fallback_host_and_stop_at_a_recent_gap(self):
         rates = {"xau": 1 / 4000, "xpt": 1 / 1500, "inr": 94.0}
@@ -167,20 +207,35 @@ class FeedTests(unittest.TestCase):
                 return _Resp(404)
             return _Resp(200, {"date": "x", "usd": rates})
 
-        stored = [{"date": "2026-11-02", "commodity": "gold", "source": "international", "close": 3990.0},
-                  {"date": "2026-11-06", "commodity": "gold", "source": "india", "contract": "GOLD", "close": 142000.0}]
+        stored = [{"date": "2026-11-02", "commodity": c, "source": "international", "close": 1.0} for c in cp.SNAPSHOT_CODES]
+        stored.append({"date": "2026-11-06", "commodity": "gold", "source": "india", "contract": "GOLD", "close": 142000.0})
         rows = cp.fetch_metals(stored, date(2026, 11, 7), http_get=get)
 
         # 3rd from the main host, 4th from the fallback; the 5th is missing on both and recent, so
-        # the run stops there and the 6th waits for the next run.
+        # the run stops there and the 6th waits for the next run. Metals are inverted to USD per
+        # ounce; the rupee stays per USD.
         self.assertEqual([(r["date"], r["commodity"], r["close"]) for r in rows],
-                         [("2026-11-03", "gold", 4000.0), ("2026-11-03", "platinum", 1500.0),
-                          ("2026-11-04", "gold", 4000.0), ("2026-11-04", "platinum", 1500.0)])
+                         [("2026-11-03", "gold", 4000.0), ("2026-11-03", "platinum", 1500.0), ("2026-11-03", "usdinr", 94.0),
+                          ("2026-11-04", "gold", 4000.0), ("2026-11-04", "platinum", 1500.0), ("2026-11-04", "usdinr", 94.0)])
         self.assertFalse(any("2026-11-06" in c for c in calls))
 
         # An old missing day is skipped rather than retried.
-        older = cp.fetch_metals([{**stored[0], "date": "2026-10-20"}], date(2026, 10, 27), http_get=get)
+        older = cp.fetch_metals([{**r, "date": "2026-10-20"} for r in stored[:3]], date(2026, 10, 27), http_get=get)
         self.assertEqual(sorted({r["date"] for r in older}), ["2026-10-22", "2026-10-23", "2026-10-26"])
+
+    def test_a_series_new_to_the_store_backfills_without_refetching_the_others(self):
+        calls = []
+
+        def get(url, params, timeout, headers):
+            calls.append(url)
+            return _Resp(200, {"usd": {"xau": 1 / 4000, "xpt": 1 / 1500, "inr": 94.0}})
+
+        stored = [{"date": "2026-11-05", "commodity": c, "source": "international", "close": 1.0} for c in ("gold", "platinum")]
+        rows = cp.fetch_metals(stored, date(2026, 11, 7), http_get=get)
+
+        self.assertEqual({r["commodity"] for r in rows if r["date"] < "2026-11-06"}, {"usdinr"})
+        self.assertEqual({r["commodity"] for r in rows if r["date"] == "2026-11-06"}, set(cp.SNAPSHOT_CODES))
+        self.assertEqual(len(calls), len({r["date"] for r in rows}))
 
     def test_world_and_mcx_gold_are_kept_apart(self):
         stored = [{"date": "2026-11-06", "commodity": "gold", "source": "india", "contract": "GOLD", "close": 142167.0},
@@ -192,7 +247,7 @@ class FeedTests(unittest.TestCase):
 
     def test_parity_pairs_the_exchange_price_with_the_landed_cost(self):
         days = _weekdays(date(2026, 4, 6), 3)
-        series = {("gold", "india"): [(d, 350.0 + i) for i, d in enumerate(days)],
+        series = {("gold", "india_am"): [(d, 350.0 + i) for i, d in enumerate(days)],
                   ("gold", "landed"): [(d, 320.0 + i) for i, d in enumerate(days)]}
         _, la, lb = cp.aligned(cp.PAIRS[-1], series)
 
