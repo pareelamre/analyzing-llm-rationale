@@ -541,8 +541,9 @@
     }
     @media (min-width: 1024px) {
       .hero-grid {
-        grid-template-columns: 1.15fr 0.85fr;
+        grid-template-columns: 1.08fr 0.92fr;
         gap: 64px;
+        align-items: center;
       }
     }
     .hero-copy {
@@ -2402,7 +2403,6 @@
     </button>
     <div class="landing-data-links">
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
-      <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <button type="button" class="topbar-link" onclick="openMcpModal()" style="font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981"></span>Connect MCP</button>
       <a href="/agents" target="_blank" class="topbar-link nav-collapse">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
@@ -2424,10 +2424,10 @@
     <div class="hero-grid">
       <!-- Left Column: Product proposition -->
       <div class="hero-copy">
-        <p class="hero-eyebrow">AI forecasts, scored in public</p>
-        <h1 class="display hero-title">The intelligence layer for prediction markets.</h1>
+        <p class="hero-eyebrow">Evidence-backed market intelligence</p>
+        <h1 class="display hero-title">See where market odds and the evidence disagree.</h1>
         <p class="hero-text">
-          Fresh evidence, live market pricing, and a transparent record—so every forecast can be examined before you act on it.
+          Foresea reads live news and order books to estimate the real probability of an event, then puts its number next to the market price.
         </p>
         <div class="hero-actions">
           <button class="hero-action primary" type="button" onclick="launchApp()">Open the forecast desk</button>
@@ -2435,70 +2435,19 @@
         </div>
 
         <p class="market-sources">
-          Live contracts matched with
+          Live pricing across
+          <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a>
+          <span aria-hidden="true">·</span>
           <a href="https://polymarket.com" target="_blank" rel="noopener">Polymarket</a>
           <span aria-hidden="true">·</span>
-          <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a>
+          <a href="#edge/indices" onclick="event.preventDefault();openEdgeBoard({ panel: 'indices' })">Indices</a>
+          <span aria-hidden="true">·</span>
+          <a href="#edge/pairs" onclick="event.preventDefault();openEdgeBoard({ panel: 'pairs' })">Commodity Pairs</a>
         </p>
       </div>
 
-      <!-- Right Column: Concrete Example Widget & Live Markets -->
-      <aside class="hero-sidebar" aria-label="Forecast example and live market gaps">
-        <!-- Concrete Example Card -->
-        <section class="landing-demo">
-          <div class="landing-demo-head">
-            <span class="landing-demo-label">Concrete example</span>
-            <span class="landing-demo-stamp">Forecast run</span>
-          </div>
-
-          <div class="landing-demo-flow">
-            <div>
-              <span class="landing-step-label">1. The market question</span>
-              <p class="landing-question">Will SpaceX complete a major Starship milestone before December 31, 2026?</p>
-            </div>
-
-            <div>
-              <span class="landing-step-label">2. Evidence checked</span>
-              <div class="landing-evidence">
-                <div class="landing-evidence-row">
-                  <b>Reuters</b>
-                  <p>FAA issues license for next test, signaling accelerated regulatory approvals.</p>
-                </div>
-                <div class="landing-evidence-row">
-                  <b>NASASpaceflight</b>
-                  <p>Infrastructure checks complete at pad 39A; hot-staging ring integrated.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="landing-metrics">
-              <div class="landing-metric">
-                <span class="landing-metric-label">Foresea AI odds</span>
-                <div class="landing-metric-value">
-                  <strong>72%</strong>
-                  <span class="landing-outcome yes">YES</span>
-                </div>
-              </div>
-              <div class="landing-metric">
-                <span class="landing-metric-label">Prediction market</span>
-                <div class="landing-metric-value">
-                  <strong>58%</strong>
-                  <span class="landing-venue">Polymarket</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="landing-edge">
-              <div>
-                <span class="landing-edge-label">Model-vs-market edge</span>
-                <span class="landing-edge-copy">Model predicts 14 pp higher than the market.</span>
-              </div>
-              <span class="landing-edge-pill">Lean YES +14</span>
-            </div>
-          </div>
-        </section>
-
-        <!-- Live Markets Board Snippet -->
+      <!-- Right Column: Live Platform Gaps -->
+      <aside class="hero-sidebar" aria-label="Live market gaps">
         <section class="landing-live-panel">
           <div class="panel-bar">
             <span style="font-weight: 600; color: var(--ink);">Live Platform Gaps</span>
@@ -2516,43 +2465,22 @@
       </aside>
     </div>
 
-    <!-- Pillar Features Section -->
-    <section class="features-section" style="margin-top: 80px; padding-top: 60px; border-top: 1px solid var(--border); width:100%">
-      <div style="text-align: center; margin-bottom: 48px;">
-        <p class="label" style="color: #4f46e5; margin-bottom: 8px;">Key Intelligence Features</p>
-        <h2 style="font-size: clamp(24px, 3.5vw, 32px); font-weight: 700; color: var(--ink); line-height: 1.1;">Engineered for Prediction Calibration</h2>
-        <p style="font-size: 15px; color: var(--text-dim); max-width: 580px; margin: 12px auto 0; line-height: 1.5;">We run real-time evidence agents to challenge crowd consensus and identify mispriced prediction market contracts.</p>
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
-        <!-- Feature 1: Live News Ingestion -->
+    <!-- 3-Step Workflow Section -->
+    <section class="features-section" style="margin-top: 80px; padding-top: 48px; border-top: 1px solid var(--border); width:100%">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px;">
         <div style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.01);">
-          <div style="width: 44px; height: 44px; border-radius: 12px; background: #eef2ff; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #4f46e5;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <circle cx="10" cy="13" r="3"></circle>
-              <path d="m16 19-3-3"></path>
-            </svg>
-          </div>
-          <h3 style="font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 8px;">Real-Time Evidence Gathering</h3>
-          <p style="font-size: 13.5px; color: var(--text-dim); line-height: 1.5; margin: 0;">Unlike standard static LLMs, Foresea runs automated research agents that scrape live news databases (via news APIs and search engines) to construct an up-to-the-minute evidence brief for every forecast question.</p>
+          <h3 style="font-size: 16px; font-weight: 700; color: var(--ink); margin: 0 0 8px;">1. Read the evidence</h3>
+          <p style="font-size: 14px; color: var(--text-dim); line-height: 1.55; margin: 0;">Ask any binary question. Foresea gathers fresh reporting and primary data so you can inspect the sources behind the probability.</p>
         </div>
 
-        <!-- Feature 2: Market Gaps & Arbitrage -->
         <div style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.01);">
-          <div style="width: 44px; height: 44px; border-radius: 12px; background: #ecfdf5; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #0f766e;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 16 20 4"></path>
-              <path d="m20 4-8 8"></path>
-              <path d="M8 16 4 4"></path>
-              <path d="m4 4 8 8"></path>
-              <path d="M12 4v16"></path>
-              <path d="M3 20h18"></path>
-            </svg>
-          </div>
-          <h3 style="font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 8px;">Automated Edge Detection</h3>
-          <p style="font-size: 13.5px; color: var(--text-dim); line-height: 1.5; margin: 0;">Foresea maps its probabilities directly to order-book pricing on Polymarket and Kalshi. It flags significant contract discrepancies, helping you spot arbitrage, hedges, and mispriced markets instantly.</p>
+          <h3 style="font-size: 16px; font-weight: 700; color: var(--ink); margin: 0 0 8px;">2. Compare the price</h3>
+          <p style="font-size: 14px; color: var(--text-dim); line-height: 1.55; margin: 0;">Put Foresea's probability directly against live order-book odds to see where an outcome is over- or under-priced.</p>
+        </div>
+
+        <div style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.01);">
+          <h3 style="font-size: 16px; font-weight: 700; color: var(--ink); margin: 0 0 8px;">3. Test across prediction markets, indices, and commodity pairs</h3>
+          <p style="font-size: 14px; color: var(--text-dim); line-height: 1.55; margin: 0;">Follow the strongest signals across Kalshi and Polymarket contracts, equity indices, and cointegrated commodity spreads with clear notes on every position.</p>
         </div>
       </div>
     </section>
@@ -2586,9 +2514,6 @@
     </button>
     <button type="button" class="side-nav-link" onclick="openPersonalLedger()">
       <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-chart"></use></svg></span>Personal ledger
-    </button>
-    <button type="button" class="side-nav-link" onclick="openWatchlist()">
-      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>Watchlist
     </button>
   </nav>
 
@@ -2686,7 +2611,6 @@
       </button>
     </div>
     <nav class="hidden md:flex items-center gap-4 flex-shrink-0" aria-label="App navigation">
-      <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <button type="button" class="topbar-link" onclick="openTradeModal()" style="font-weight:600;color:var(--ink)">Trade</button>
       <button type="button" class="topbar-link" onclick="openMcpModal()" style="font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:5px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981"></span>MCP</button>
       <a href="/agents" target="_blank" class="topbar-link">Agents</a>
