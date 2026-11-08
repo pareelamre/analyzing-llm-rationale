@@ -756,6 +756,9 @@ function escHtml(s) {
                 self.assertIn("flat", back)
                 hedge = index.split("function _cptHedge(", 1)[1].split("function _cptBack(", 1)[0]
                 self.assertIn("per ${cur}100 of", hedge)
+                # One currency on the whole board, dollar-priced pairs included.
+                self.assertIn("const cur = '₹';", hedge)
+                self.assertNotIn("'$'", hedge)
 
     def test_commodity_pairs_chart_labels_only_the_side_the_pair_is_on(self):
         # Labelling both halves put "Copper pricier" right after "Zinc is pricier than usual".
