@@ -5,6 +5,16 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-09 — The Foresea Fund is live; the agent no longer trades on its own (Claude)
+
+`FUND_CYCLE_ENABLED` is `true` and `AGENT_TRADING_TICK_ENABLED` is `false`. The
+fund's first cycle (23:10 UTC on 2026-11-08, 04:40 IST) took over the
+on-device agent's account at its entry prices: 8 positions, $6,774.06 cash,
+valued $10,106.64. The fund (`fund_store__foresea-fund.sqlite` in the state
+bucket) is now the one portfolio; the agent's forecasts reach it as the
+`event_model` analyst. Do not re-enable the agent's own trading, or the two
+accounts diverge. The fund trades in the 01:30 and 13:30 IST board dispatches.
+
 ### 2026-11-08 — Forecasts reach the store through staging (Claude)
 
 `track-record-forecast.yml` no longer queues for the `track-record-store-gcs-write`
