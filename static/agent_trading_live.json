@@ -4,26 +4,26 @@
       "agent_id": "qwen3.5-9b-selfhosted",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": false,
+        "positive_return": true,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.00082,
+      "max_drawdown": 0.0,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -0.082,
+      "return_pct": 0.4121,
       "settled_count": 0,
-      "sharpe": -0.3333
+      "sharpe": 0.3333
     }
   },
   "equity_curves": {
     "qwen3.5-9b-selfhosted": {
       "agent_id": "qwen3.5-9b-selfhosted",
-      "current_drawdown": 0.00082,
-      "max_drawdown": 0.00082,
-      "sharpe": -0.3333,
+      "current_drawdown": 0.0,
+      "max_drawdown": 0.0,
+      "sharpe": 0.3333,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -71,9 +71,9 @@
           "ts": "2026-11-08T12:34:07.374527+00:00"
         },
         {
-          "account_value": 9991.796059,
+          "account_value": 10041.21157,
           "event_type": "mark_to_market",
-          "ts": "2026-11-08T18:09:22.705529+00:00"
+          "ts": "2026-11-08T20:07:45.588730+00:00"
         }
       ]
     }
@@ -91,13 +91,19 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-11-08T18:09:22.706915+00:00",
+  "generated_at": "2026-11-08T20:07:45.591110+00:00",
   "latest_theses": {
-    "qwen3.5-9b-selfhosted": null
+    "qwen3.5-9b-selfhosted": {
+      "agent_id": "qwen3.5-9b-selfhosted",
+      "cycle_id": "720m:41531",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence; candidate markets lack verified data or executable edge.\n- **Belief update**: No material change; maintaining HOLD on existing inventory.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: KXHIGHNY-26NOV08-T61 (Kalshi) and will-bilibili-gaming-win-worlds-2026 (Polymarket)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: KXHIGHNY-26NOV08-T61 resolves based on Weather Company max temp <61\u00b0F; will-bilibili-gaming-win-worlds-2026 resolves per Riot Games official winner.\n- **Observation Window**: KXHIGHNY-26NOV08-T61 expires 2026-11-09T06:00:00Z (imminent); will-bilibili-gaming-win-worlds-2026 closes 2026-11-29T04:59:00Z (active).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: N/A vs **Market Price**: 92.5% (YES) / 20.05% (YES)\n- **Information Asymmetry / Rationale**: Weather contract has empty evidence and is expiring; sports contract news is preliminary and market has priced remaining uncertainty appropriately.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Weather data release imminent; Worlds 2026 semifinals/finals pending.\n- **Invalidation Trigger**: Weather Company final report showing temp >=61\u00b0F; official Riot Games announcement of different Worlds 2026 winner.",
+      "ts": "2026-11-08T20:06:39.798492+00:00",
+      "type": "thesis"
+    }
   },
   "leaderboard": [
     {
-      "account_value": 9991.796059,
+      "account_value": 10041.21157,
       "agent_id": "qwen3.5-9b-selfhosted",
       "cash": 6774.0569,
       "fees_paid": 0.0,
@@ -173,49 +179,49 @@
         {
           "avg_entry_price": 0.91,
           "cost_basis": 261.5735,
-          "current_price": 0.91,
+          "current_price": 0.92,
           "ident": "strait-of-hormuz-traffic-returns-to-normal-by-december-31",
           "indicative_price": null,
           "platform": "polymarket",
           "quantity": 287.443442,
           "side": "NO",
-          "unrealized_pnl": 3.2e-05,
+          "unrealized_pnl": 2.874467,
           "valuation_status": "bid_liquidation"
         },
         {
           "avg_entry_price": 0.94,
           "cost_basis": 1141.8962,
-          "current_price": 0.93,
+          "current_price": 0.94,
           "ident": "will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
           "indicative_price": null,
           "platform": "polymarket",
           "quantity": 1214.783211,
           "side": "NO",
-          "unrealized_pnl": -12.147814,
+          "unrealized_pnl": 1.8e-05,
           "valuation_status": "bid_liquidation"
         },
         {
           "avg_entry_price": 0.058,
           "cost_basis": 498.702,
-          "current_price": 0.058,
+          "current_price": 0.062,
           "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
           "indicative_price": null,
           "platform": "polymarket",
           "quantity": 8598.311043,
           "side": "NO",
-          "unrealized_pnl": 4e-05,
+          "unrealized_pnl": 34.393285,
           "valuation_status": "bid_liquidation"
         }
       ],
       "realized_count": 0,
       "realized_pnl": 0.0,
-      "return_pct": -0.082,
+      "return_pct": 0.4121,
       "rule_exit_count": 0,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "total_pnl": -8.203941,
+      "total_pnl": 41.21157,
       "trade_count": 8,
-      "unrealized_pnl": -8.203941,
+      "unrealized_pnl": 41.21157,
       "updated_at": "2026-11-08T12:34:07.373918+00:00",
       "win_rate": null,
       "won_count": 0
@@ -224,29 +230,29 @@
   "mode": "shadow",
   "model_health": {
     "qwen3.5-9b-selfhosted": {
-      "cycle_age_seconds": null,
+      "cycle_age_seconds": 65,
       "delayed_after_seconds": 50400,
-      "detail": "No confirmed agent cycle has been persisted yet.",
+      "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 43200,
       "last_account_updated_at": "2026-11-08T12:34:07.373918+00:00",
       "last_action_at": "2026-11-08T12:34:07.374527+00:00",
-      "last_attempt_at": null,
-      "last_attempt_outcome": null,
-      "last_candidate_count": null,
-      "last_cycle_at": null,
-      "last_cycle_id": null,
-      "last_duration_ms": null,
+      "last_attempt_at": "2026-11-08T20:02:56.281654+00:00",
+      "last_attempt_outcome": "success",
+      "last_candidate_count": 20,
+      "last_cycle_at": "2026-11-08T20:06:39.798492+00:00",
+      "last_cycle_id": "720m:41531",
+      "last_duration_ms": 223524,
       "last_failure_detail": null,
       "last_failure_kind": null,
-      "last_forecast_records": null,
+      "last_forecast_records": 0,
       "last_paper_execution_outcome": null,
-      "last_provider_model": null,
-      "last_thesis_published": null,
-      "last_tool_steps": null,
-      "last_weather_candidates_offered": 0,
+      "last_provider_model": "mlx-community/Qwen3.5-9B-4bit",
+      "last_thesis_published": true,
+      "last_tool_steps": 2,
+      "last_weather_candidates_offered": 1,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 93600,
-      "status": "unverified",
+      "status": "no_trade",
       "store_present": true
     }
   },
@@ -255,21 +261,35 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "operational_health": {
-    "attention_required": [
-      {
-        "agent_id": "qwen3.5-9b-selfhosted",
-        "status": "unverified"
-      }
-    ],
-    "detail": "1 model ledger(s) need maintenance attention.",
+    "attention_required": [],
+    "detail": "All latest model attempts completed without failure.",
     "last_attempt_failures": [],
     "models_total": 1,
-    "models_verified": 0,
-    "models_with_confirmed_cycle": 0,
+    "models_verified": 1,
+    "models_with_confirmed_cycle": 1,
     "provider_paused": [],
-    "status": "attention"
+    "status": "healthy"
   },
   "recent_activity": [
+    {
+      "agent_id": "qwen3.5-9b-selfhosted",
+      "cycle_id": "720m:41531",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence; candidate markets lack verified data or executable edge.\n- **Belief update**: No material change; maintaining HOLD on existing inventory.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: KXHIGHNY-26NOV08-T61 (Kalshi) and will-bilibili-gaming-win-worlds-2026 (Polymarket)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: KXHIGHNY-26NOV08-T61 resolves based on Weather Company max temp <61\u00b0F; will-bilibili-gaming-win-worlds-2026 resolves per Riot Games official winner.\n- **Observation Window**: KXHIGHNY-26NOV08-T61 expires 2026-11-09T06:00:00Z (imminent); will-bilibili-gaming-win-worlds-2026 closes 2026-11-29T04:59:00Z (active).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: N/A vs **Market Price**: 92.5% (YES) / 20.05% (YES)\n- **Information Asymmetry / Rationale**: Weather contract has empty evidence and is expiring; sports contract news is preliminary and market has priced remaining uncertainty appropriately.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Weather data release imminent; Worlds 2026 semifinals/finals pending.\n- **Invalidation Trigger**: Weather Company final report showing temp >=61\u00b0F; official Riot Games announcement of different Worlds 2026 winner.",
+      "ts": "2026-11-08T20:06:39.798492+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3.5-9b-selfhosted",
+      "tags": [
+        "2026-11-08",
+        "no-trade",
+        "weather-pass",
+        "sports-pass"
+      ],
+      "text": "Cycle 2026-11-08: Passed on both candidate markets. KXHIGHNY-26NOV08-T61 (weather) has empty evidence and is expiring soon; short-horizon weather prices are historically unreliable. will-bilibili-gaming-win-worlds-2026 (sports) has recent news but market price (20%) seems reasonable given two rounds remaining. No material edge identified. Holding existing positions.",
+      "ts": "2026-11-08T20:05:34.730599+00:00",
+      "type": "note"
+    },
     {
       "agent_id": "qwen3.5-9b-selfhosted",
       "mode": "transfer",
@@ -375,7 +395,28 @@
       "type": "trade"
     }
   ],
-  "recent_cycle_telemetry": [],
+  "recent_cycle_telemetry": [
+    {
+      "agent_id": "qwen3.5-9b-selfhosted",
+      "candidate_count": 20,
+      "cycle_id": "720m:41531",
+      "duration_ms": 223524,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-11-08T20:06:39.805971+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "mlx-community/Qwen3.5-9B-4bit",
+      "run_id": "49b2e1bf61a7477898ec764272811e97",
+      "settled_count": 0,
+      "started_at": "2026-11-08T20:02:56.281654+00:00",
+      "thesis_published": true,
+      "tool_steps": 2,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 0
+    }
+  ],
   "risk_limits": {
     "concentration_limit": 0.15,
     "max_bid_ask_spread": 0.12,
@@ -383,7 +424,7 @@
     "max_spread_ratio": 0.25
   },
   "weather_operations": {
-    "candidates_offered": 0,
+    "candidates_offered": 1,
     "forecasted": 0,
     "researched": 0,
     "resolved": 0,
