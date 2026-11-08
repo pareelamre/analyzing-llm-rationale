@@ -637,6 +637,16 @@ function escHtml(s) {
                 )[0]
                 self.assertIn("loadAgentTradingSection()", setview)
 
+    def test_agentic_board_describes_the_single_on_device_agent(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                render = index.split("function renderAgentTradingBoard(d) {", 1)[1].split("\nasync function ", 1)[0]
+                self.assertIn("Foresea's on-device model", render)
+                self.assertIn('<h4 class="agentic-panel-title">Account value</h4>', render)
+                for gone in ("SCADS-hosted models given real tool-use", "Kelly-sizing ledgers on the MTM tab",
+                             '<div class="agentic-filterbar">', "${weatherOperationalSummary}"):
+                    self.assertNotIn(gone, render)
+
     def test_mark_to_market_is_gone_from_the_edge_board(self):
         # The MTM tab was retired on 2026-11-08 (its data is archived in R2 under
         # archive/); an old /edge/mtm link lands on Prediction Markets.

@@ -7939,7 +7939,7 @@ function renderAgentTradingBoard(d) {
     : operationalHealth.status === 'attention'
       ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text)"><strong>Agent maintenance attention:</strong> ${escHtml(operationalHealth.detail || 'One or more model ledgers need review.')}</p>`
       : '';
-  const banner = `<p class="tr-method" style="margin-top:0">SCADS-hosted models given real tool-use trading agency — each decides for itself whether and how much to trade, with genuine cash/position accounting and risk guards, unlike the fixed Kelly-sizing ledgers on the MTM tab.${updatedStr}</p>
+  const banner = `<p class="tr-method" style="margin-top:0">Foresea's on-device model (Qwen3.5-9B, running on the owner's Mac) trades one shadow account twice a day, at 02:00 and 14:00 IST, with real tool access: it decides for itself whether and how much to trade, with genuine cash and position accounting and risk guards. It started on 8 November 2026 with the open positions it took over from the retired SCADS agents, whose records are archived.${updatedStr}</p>
     ${availabilityNotice}
     <p class="text-sm" style="margin:0 0 16px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text);font-weight:600">Shadow / paper trading only — no real money is ever at risk.</p>`;
   if (d && d.error) {
@@ -8188,18 +8188,11 @@ function renderAgentTradingBoard(d) {
   host.innerHTML = `
     ${availabilityNotice}
     <section class="agentic-panel">
-      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Account value by model</h4><p class="agentic-panel-copy">Each line is an independently managed shadow account.</p></div></div>
+      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Account value</h4><p class="agentic-panel-copy">The on-device model's shadow account, at today's prices.</p></div></div>
       <div id="agentTradingSvg" class="agentic-chart">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
     </section>
     ${healthSummary ? `<div class="agentic-health-summary"><span class="agentic-health-summary-label">Cycle health</span>${healthSummary}</div>` : ''}
-    ${weatherOperationalSummary}
     <div class="agentic-table-wrap"><table class="eb-table agentic-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades / records</th><th>Open</th></tr></thead><tbody>${tableRows}</tbody></table></div>
-    <div class="agentic-feed-head">
-      <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : _ebModelLabel(activeFilter))}</span>
-    </div>
-    <div class="agentic-filterbar">
-      ${filterPills.join('')}
-    </div>
     ${learningSummary}
     <div class="agentic-activity-list">${activityRows || (activeFilter !== 'all'
       ? `<p class="text-sm text-gray-500">No published thesis for ${escHtml(_ebModelLabel(activeFilter))} yet. Its next scheduled research run will retry automatically.</p>`
