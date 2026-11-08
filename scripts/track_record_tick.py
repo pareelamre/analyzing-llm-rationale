@@ -105,10 +105,10 @@ EVALUATION_PATH = Path(
 
 BASE_URL = os.environ.get("FORESEA_BASE_URL", "https://foresea.ink").rstrip("/")
 MODEL = os.environ.get("TRACK_MODEL", "council").strip()
-# MTM is the forecast-account view for the same direct, non-duplicated SCADS
-# models that trade on the Agentic board.  Do not use the broader historical
-# track-record allowlist here: aliases double-count their backing model and
-# retired records would otherwise keep rendering as active accounts.
+# MTM keeps the forecast accounts of the eight SCADS models that were the
+# Agentic board until 2026-11-08 (those with track_record_enabled; the aliases
+# are off it, so none double-counts its backing model). The board itself now
+# runs on the on-device model; MTM is no longer shown on the site.
 SCADS_MTM_MODELS = tuple(sorted(scads_track_model_labels(ROOT / "configs" / "models.yaml")))
 DEFAULT_TRACK_MODELS = ("council", *SCADS_MTM_MODELS, "crowd-follow")
 
