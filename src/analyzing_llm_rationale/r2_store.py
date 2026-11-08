@@ -1,6 +1,7 @@
 """Private R2 state storage; GCS remains the default until explicit cutover.
 
 Workflow entry point: PYTHONPATH=src python -m analyzing_llm_rationale.r2_store cp SOURCE DEST
+(also ``ls PREFIX`` to print the state objects under a prefix, and ``rm URL`` to delete one).
 Only the state bucket is remapped. Dashboard payloads and backups have separate migrations.
 """
 from __future__ import annotations
@@ -178,15 +179,79 @@ def copy(source: str, destination: str, *, allow_missing: bool = False, missing_
     logger.info("State copy completed (backend=r2, direction=%s)", "download" if downloading else "upload")
 
 
+def _state_key(url: str) -> tuple[str, str]:
+    """(bucket, key) of a gs:// state URL, refusing anything outside the configured state bucket."""
+    parsed = urlsplit(url)
+    expected = os.environ.get("TRACK_STORE_BUCKET_NAME") or urlsplit(
+        os.environ.get("TRACK_STORE_BUCKET") or os.environ.get("AGENT_TRADING_STORE_BUCKET")
+        or "gs://brave-drive-471109-d9-track-record-store"
+    ).netloc
+    if parsed.scheme != "gs" or parsed.netloc != expected:
+        raise ValueError("Only the configured GCS state bucket can be listed or removed")
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def list_urls(prefix: str) -> list[str]:
+    """gs:// URLs of every state object under ``prefix`` (the prefix itself must be non-empty)."""
+    gcs_bucket, key = _state_key(prefix)
+    if not key:
+        raise ValueError("Refusing to list the whole state bucket")
+    backend = os.environ.get("FORESEA_STORAGE_BACKEND", "gcs").strip()
+    if backend == "gcs":
+        from google.cloud import storage
+        return sorted(f"gs://{gcs_bucket}/{b.name}" for b in storage.Client().list_blobs(gcs_bucket, prefix=key))
+    if backend != "r2":
+        raise ValueError("FORESEA_STORAGE_BACKEND must be gcs or r2")
+    bucket = os.environ.get("R2_STATE_BUCKET", "").strip()
+    if not bucket:
+        raise ValueError("R2_STATE_BUCKET is required for R2")
+    client, urls, token = get_client(), [], None
+    while True:
+        page = client.list_objects_v2(Bucket=bucket, Prefix=key, **({"ContinuationToken": token} if token else {}))
+        urls += [f"gs://{gcs_bucket}/{item['Key']}" for item in page.get("Contents") or []
+                 if not item["Key"].endswith(".previous")]
+        if not page.get("IsTruncated"):
+            return sorted(urls)
+        token = page.get("NextContinuationToken")
+
+
+def remove(url: str) -> None:
+    """Delete one state object (a staged batch once merged); a missing one is already gone."""
+    gcs_bucket, key = _state_key(url)
+    if not key:
+        raise ValueError("Refusing to remove the state bucket")
+    backend = os.environ.get("FORESEA_STORAGE_BACKEND", "gcs").strip()
+    if backend == "gcs":
+        from google.cloud import storage
+        blob = storage.Client().bucket(gcs_bucket).blob(key)
+        if blob.exists():
+            blob.delete()
+        return
+    if backend != "r2":
+        raise ValueError("FORESEA_STORAGE_BACKEND must be gcs or r2")
+    bucket = os.environ.get("R2_STATE_BUCKET", "").strip()
+    if not bucket:
+        raise ValueError("R2_STATE_BUCKET is required for R2")
+    get_client().delete_object(Bucket=bucket, Key=key)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["cp"])
+    parser.add_argument("operation", choices=["cp", "ls", "rm"])
     parser.add_argument("source")
-    parser.add_argument("destination")
+    parser.add_argument("destination", nargs="?")
     parser.add_argument("--allow-missing", action="store_true")
     parser.add_argument("--missing-json", action="store_true")
     args = parser.parse_args()
-    copy(args.source, args.destination, allow_missing=args.allow_missing, missing_json=args.missing_json)
+    if args.operation == "ls":
+        for url in list_urls(args.source):
+            print(url)
+    elif args.operation == "rm":
+        remove(args.source)
+    else:
+        if not args.destination:
+            parser.error("cp needs a destination")
+        copy(args.source, args.destination, allow_missing=args.allow_missing, missing_json=args.missing_json)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,34 @@ class R2StoreTests(unittest.TestCase):
             blob.download_to_filename(str(self.path))
         self.assertEqual(self.path.read_bytes(), b"previous")
 
+    def test_staged_batches_are_listed_paged_and_removed_in_the_state_bucket(self):
+        env = {"FORESEA_STORAGE_BACKEND": "r2", "R2_STATE_BUCKET": "private",
+               "TRACK_STORE_BUCKET": "gs://state-bucket"}
+        self.client.list_objects_v2.side_effect = [
+            {"Contents": [{"Key": "track_record_staging/2-1-a.duckdb"},
+                          {"Key": "track_record_staging/2-1-a.duckdb.previous"}],
+             "IsTruncated": True, "NextContinuationToken": "t"},
+            {"Contents": [{"Key": "track_record_staging/1-1-b.duckdb"}], "IsTruncated": False},
+        ]
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(r2_store, "get_client", return_value=self.client):
+            urls = r2_store.list_urls("gs://state-bucket/track_record_staging/")
+            r2_store.remove(urls[0])
+        self.assertEqual(urls, ["gs://state-bucket/track_record_staging/1-1-b.duckdb",
+                                "gs://state-bucket/track_record_staging/2-1-a.duckdb"])
+        self.assertEqual(self.client.list_objects_v2.call_args_list[1].kwargs["ContinuationToken"], "t")
+        self.client.delete_object.assert_called_once_with(Bucket="private", Key="track_record_staging/1-1-b.duckdb")
+
+    def test_list_and_remove_refuse_other_buckets_and_the_whole_bucket(self):
+        with mock.patch.dict(os.environ, {"FORESEA_STORAGE_BACKEND": "r2", "TRACK_STORE_BUCKET": "gs://state-bucket"},
+                             clear=True):
+            with self.assertRaises(ValueError):
+                r2_store.list_urls("gs://other-bucket/track_record_staging/")
+            with self.assertRaises(ValueError):
+                r2_store.list_urls("gs://state-bucket/")
+            with self.assertRaises(ValueError):
+                r2_store.remove("gs://state-bucket/")
+
     def test_credentials_are_not_sent_to_arbitrary_endpoint(self):
         with mock.patch.dict(os.environ, {
             "R2_ENDPOINT_URL": "https://example.com", "R2_ACCESS_KEY_ID": "fixture",

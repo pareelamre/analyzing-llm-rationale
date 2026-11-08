@@ -5,6 +5,16 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-08 — Forecasts reach the store through staging (Claude)
+
+`track-record-forecast.yml` no longer queues for the `track-record-store-gcs-write`
+lock: the 15-minute MTM tick almost always held or awaited it, and GitHub cancels
+a queued job when a newer one asks for the same lock, so nightly batches were
+dropped. Forecast runs now upload each model store to
+`track_record_staging/` in the state bucket; `track-record-tick.yml` merges any
+staged batches (upsert, so a repeat is harmless) before its tick and deletes them
+only after the merged store is uploaded. `r2_store` gained `ls` and `rm` for this.
+
 ### 2026-11-08 — Foresea Fund brief (Claude)
 
 The owner wants one paper portfolio run by a team of owned models with a

@@ -82,9 +82,6 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("TRACK_RECORD_API_BASE_URL: ${{ vars.SELF_HOSTED_LLM_URL }}", workflow)
         self.assertIn('TRACK_RECORD_LOCAL_MODEL: "qwen3.5-9b-selfhosted"', workflow)
         self.assertIn('PROVIDER_TIMEOUT_CAP_S: "300"', workflow)
-        # Publishing keeps the track record on the council; only the Edge
-        # board shows the on-device model.
-        self.assertIn('TRACK_MODEL: "council"\n          EDGE_MODEL: "qwen3.5-9b-selfhosted"', workflow)
         self.assertIn('TZ=Asia/Kolkata date +%H', workflow)
         self.assertNotIn("'council', *scads_agent_trading_model_labels", workflow)
         self.assertNotIn("SCADS_AI_API_KEY", workflow)
@@ -108,13 +105,13 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("needs: [roster, forecast]", workflow)
         self.assertIn("actions/download-artifact@v4", workflow)
         self.assertIn("pattern: track-record-store-*", workflow)
-        self.assertIn("forecast-publish-batch", workflow)
-        self.assertIn("track record: forecast batch [skip ci]", workflow)
+        # Publishing stages each model store for the MTM tick to merge; it no
+        # longer queues for the store lock, where newer ticks cancelled it.
         self.assertIn("No model forecast artifacts were available to publish.", workflow)
-        self.assertIn("python scripts/merge_track_record_store.py", workflow)
         self.assertIn('"${forecast_stores[@]}"', workflow)
-        self.assertIn("python scripts/track_record_tick.py --mtm-only", workflow)
-        self.assertIn("git add static/mark_to_market_live.json", workflow)
+        self.assertIn("track_record_staging/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${name}", workflow)
+        self.assertNotIn("python scripts/track_record_tick.py --mtm-only", workflow)
+        self.assertNotIn("forecast-publish-batch", workflow)
         self.assertIn("pull-requests: write", workflow)
         self.assertNotIn("forecast-publish-${{ matrix.artifact }}", workflow)
         self.assertNotIn("track record: forecast ${{ matrix.model }} [skip ci]", workflow)
@@ -123,9 +120,20 @@ class TrackRecordTickTests(unittest.TestCase):
         # 100MB push limit) -- these lock in the new plumbing.
         self.assertIn("google-github-actions/auth@v2", workflow)
         self.assertIn('r2_store cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"', workflow)
-        self.assertIn('r2_store cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"', workflow)
-        self.assertIn("track-record-store-gcs-write", workflow)
+        # Only the MTM tick writes the store now; forecasts reach it through staging.
+        self.assertNotIn('r2_store cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"', workflow)
+        self.assertNotIn("track-record-store-gcs-write", workflow)
         self.assertNotIn("git add data/track_record_store.duckdb", workflow)
+        tick = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "track-record-tick.yml").read_text(
+            encoding="utf-8")
+        merge = tick.index("Merge staged forecast batches")
+        self.assertLess(tick.index('cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb'), merge)
+        self.assertLess(merge, tick.index("python scripts/track_record_tick.py --mtm-only"))
+        self.assertIn('r2_store ls "$TRACK_STORE_BUCKET/track_record_staging/"', tick)
+        self.assertIn("python scripts/merge_track_record_store.py --target data/track_record_store.duckdb", tick)
+        # Batches are cleared only after the merged store is uploaded.
+        self.assertLess(tick.index('cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"'),
+                        tick.index("Clear merged forecast batches"))
         for model in (
             "council",
             "deepseek-v4-flash",
