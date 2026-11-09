@@ -5,8 +5,9 @@ Models advise; this code decides. Each cycle it:
 1. collects signals in one shape from every analyst it has (a Signal: instrument, side, the
    edge the analyst expects per dollar after costs, how far that analyst is trusted, and the
    facts behind it);
-2. exits positions whose reason is gone (a binary side the model no longer favours, a pair
-   back inside its exit band or past its holding limit);
+2. exits positions whose reason is gone: a binary side only when a fresh forecast values it
+   below its bid by the same margin an entry needs (so an unproven model cannot churn the book
+   on a one-point disagreement), a pair back inside its exit band or past its holding limit;
 3. sizes new positions small: a fraction of Kelly scaled by trust for event contracts, a fixed
    risk budget scaled by trust for pairs, under hard limits (10% of the fund per position, 40%
    per asset class, 15% net per underlying, 20% kept in cash);
@@ -52,6 +53,10 @@ MIN_ORDER_USD = 5.0
 MAX_DISAGREEMENT = 0.30
 #: Markets closing sooner than this leave no time for a forecast to be checked or corrected.
 MIN_LEAD_DAYS = 1.0
+#: A forecast must also differ from the price by this many probability points, whatever its
+#: edge per dollar: on a 6c contract a 2-point gap reads as a 30% edge, yet it is noise for a
+#: model with no graded record. Exits need the same gap as entries.
+MIN_GAP = 0.05
 
 
 @dataclass
@@ -143,7 +148,7 @@ def event_signals(board: Iterable[Mapping[str, Any]], now: datetime, *, analyst:
             if not PRICE_BAND[0] <= price <= PRICE_BAND[1]:
                 continue
             edge = (prob - price) / price - EVENT_COST
-            if edge < MIN_EDGE:
+            if edge < MIN_EDGE or prob - price < MIN_GAP:
                 continue
             source = f"{model_label} forecast {str(row.get('forecasted_at'))[:16].replace('T', ' ')} UTC"
             out.append(Signal(
@@ -221,22 +226,30 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
     exposure = dict(snapshot.get("net_exposure_by_underlying") or {})
     forecasts = dict(forecasts)
 
-    # 1. Exits: a held event side a fresh forecast now values below its bid; a pair back in its
-    #    band or held too long.
+    # 1. Exits, held to the same bar as entries: a held event side is sold only when a fresh
+    #    forecast values it below its bid by MIN_GAP points and MIN_EDGE per dollar after costs,
+    #    and never on a forecast far enough from the market to be a likely model error. A pair
+    #    exits back in its band or after its holding limit.
     for (iid, side), pos in held.items():
         row = forecasts.get(iid)
         if pos["kind"] != "binary" or row is None or pos.get("mark") is None or row.get("model_probability") is None:
             continue
-        p_yes = float(row["model_probability"])
+        p_yes, bid = float(row["model_probability"]), float(pos["mark"])
         worth = p_yes if side == "YES" else 1.0 - p_yes
-        if worth < float(pos["mark"]):
-            source = f"forecast {str(row.get('forecasted_at'))[:16].replace('T', ' ')} UTC"
-            orders.append(Order("sell", {"id": iid, "label": pos.get("label")}, side, pos["quantity"], pos["mark"],
-                                "exit", pos.get("attribution") or {},
-                                [_fact("position", f"{side} {pos.get('label') or iid}", "fund ledger"),
-                                 _fact(f"model probability of {side}", _pct(worth), source),
-                                 _fact("bid now", _cents(float(pos["mark"])), "order book")],
-                                reason="the latest forecast values this side below what it sells for"))
+        market_bid, market_ask = row.get("market_bid"), row.get("market_ask")
+        if market_bid is not None and market_ask is not None and \
+                abs(p_yes - (float(market_bid) + float(market_ask)) / 2) > MAX_DISAGREEMENT:
+            continue
+        if bid <= 0 or bid - worth < MIN_GAP or (bid - worth) / bid - EVENT_COST < MIN_EDGE:
+            continue
+        source = f"forecast {str(row.get('forecasted_at'))[:16].replace('T', ' ')} UTC"
+        orders.append(Order("sell", {"id": iid, "label": pos.get("label")}, side, pos["quantity"], bid,
+                            "exit", pos.get("attribution") or {},
+                            [_fact("position", f"{side} {pos.get('label') or iid}", "fund ledger"),
+                             _fact(f"model probability of {side}", _pct(worth), source),
+                             _fact("bid now", _cents(bid), "order book"),
+                             _fact("bid above the model's value", f"{(bid - worth) * 100:.1f} points", "orchestrator")],
+                            reason="the latest forecast values this side well below what it sells for"))
     for key, entry in dict(held_pairs).items():
         row = dict(pair_rows).get(key) or {}
         z, sessions = row.get("z"), int(entry.get("sessions") or 0)
@@ -255,6 +268,12 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
     for s in sorted(signals, key=lambda s: -(s.edge * s.trust)):
         iid = s.instrument["id"]
         if (iid, s.side) in held:
+            continue
+        other = {"YES": "NO", "NO": "YES"}.get(s.side)
+        if other and (iid, other) in held:
+            # Buying the other side of a held market only pays the spread twice.
+            passed.append({"instrument": iid, "label": s.instrument.get("label"),
+                           "reason": f"the fund holds {other} on this market"})
             continue
         quote = quotes.get(iid) or {}
         if s.instrument.get("asset_class") == "event":
