@@ -909,7 +909,10 @@ function escHtml(s) {
                 )
                 self.assertIn("1. Read the evidence", landing)
                 self.assertIn("2. Compare the price", landing)
-                self.assertIn("3. Test across prediction markets, indices, and commodity pairs", landing)
+                self.assertIn("3. Markets, indices, and commodity pairs", landing)
+                self.assertNotIn("3. Test across prediction markets, indices, and commodity pairs", landing)
+                self.assertIn("commodity spreads", landing)
+                self.assertNotIn("cointegrated commodity spreads", landing)
                 self.assertIn("openEdgeBoard({ panel: 'indices' })", landing)
                 self.assertIn("openEdgeBoard({ panel: 'pairs' })", landing)
                 for gone in (
@@ -920,6 +923,27 @@ function escHtml(s) {
                 ):
                     self.assertNotIn(gone, landing)
                 self.assertNotIn('onclick="openWatchlist()"', index)
+
+
+    def test_the_landing_market_table_preserves_four_columns_on_mobile(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                # Ensure the mobile override does not crush the 4-column table into 2 columns,
+                # which misaligns the 4 headers (Question, Crowd, Foresea, Signal) with data cells.
+                self.assertNotIn(
+                    ".market-table { grid-template-columns: 1fr 1fr; }",
+                    index,
+                )
+                self.assertIn('<div class="market-table-wrap">', index)
+                self.assertIn('.market-table-wrap {', index)
+
+    def test_the_landing_market_timestamps_are_dynamic(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                # "Updated Just Now" must not be hardcoded in the markup
+                self.assertNotIn("Updated Just Now", index)
+                self.assertIn('id="landingMarketStamp"', index)
+                self.assertIn("_renderLandingMarketStamp", index)
 
 
 if __name__ == "__main__":
