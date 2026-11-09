@@ -5,6 +5,14 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-09 ? Landing page fixes: mobile 4-column layout, dynamic timestamps, card 3 simplification (Codex)
+
+Reconciled Claude's top-bar desk button deduplication (PR #755) and resolved landing page issues across `frontend/index.html` and `static/index.html`:
+- Fixed mobile table misalignment: removed `@media (max-width: 600px) { .market-table { grid-template-columns: 1fr 1fr; } }` which split 4-cell table rows across two grid rows and detached headers from values; wrapped `#landingMarketTable` in `.market-table-wrap` (`overflow-x: auto`) and set mobile `min-width: 350px` with 4-column layout (`1.35fr .55fr .55fr .8fr`) and compact padding.
+- Dynamic timestamps: replaced static `"Updated Just Now"` with `#landingMarketStamp` and `_renderLandingMarketStamp()`, rendering live quote timestamp (`d.generated_at` / `d.updated_at`) and model forecast timestamp (`d.forecasted_at` / `item.forecasted_at`). Added `forecasted_at` to `RadarMarket` and `RadarResponse`.
+- Workflow card 3 simplification: shortened heading to `3. Markets, indices, and commodity pairs` and updated copy to refer to `"commodity spreads"` (removing `"cointegrated commodity spreads"` which was unvalidated).
+- Pinned with regression tests in `tests/test_frontend_copy.py`.
+
 ### 2026-11-09 — The Foresea Fund is live; the agent no longer trades on its own (Claude)
 
 `FUND_CYCLE_ENABLED` is `true` and `AGENT_TRADING_TICK_ENABLED` is `false`. The

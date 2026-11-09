@@ -773,11 +773,6 @@ X-API-Key: <your-key>
 The `/health` endpoint is always unauthenticated. Per-user endpoints such as
 RAG, chat history, and trading require an `Authorization: Bearer <session-token>`
 header returned by the sign-in endpoints.
----
-
-## Source code
-
-[github.com/pareelamre/analyzing-llm-rationale](https://github.com/pareelamre/analyzing-llm-rationale)
 """
 
 _TAGS = [
@@ -6502,12 +6497,14 @@ class RadarMarket(BaseModel):
     is_credible: Optional[bool] = None
     weather_brief: Optional[Dict[str, Any]] = None
     bracket_probability: Optional[Dict[str, Any]] = None
+    forecasted_at: Optional[str] = None
 
 
 class RadarResponse(BaseModel):
     updated_at: str
     markets: List[RadarMarket]
     generated_at: Optional[str] = None
+    forecasted_at: Optional[str] = None
     model: Optional[str] = None
     edge_board: List[Dict[str, Any]] = Field(default_factory=list)
     models_comparison: List[Dict[str, Any]] = Field(default_factory=list)
@@ -8883,13 +8880,19 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
             is_credible=audit.get("is_credible"),
             weather_brief=weather_brief_dict,
             bracket_probability=bracket_prob_dict,
+            forecasted_at=row.get("forecasted_at"),
         ))
         if len(markets) >= limit:
             break
+    _latest_forecasted_at = (
+        payload.get("forecasted_at")
+        or next((r.get("forecasted_at") for r in rows if r.get("forecasted_at")), None)
+    )
     response = RadarResponse(
         updated_at=str(payload.get("generated_at") or datetime.now(timezone.utc).isoformat()),
         markets=markets,
         generated_at=payload.get("generated_at"),
+        forecasted_at=_latest_forecasted_at,
         model=payload.get("model"),
         edge_board=rows[:limit],
         models_comparison=payload.get("models_comparison") or [],

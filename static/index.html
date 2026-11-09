@@ -636,6 +636,11 @@
       overflow: hidden;
       box-shadow: 0 18px 56px rgba(15,15,16,.07);
     }
+    .market-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      width: 100%;
+    }
     .market-table {
       display: grid;
       grid-template-columns: 1.2fr .62fr .62fr .78fr;
@@ -880,7 +885,7 @@
     .landing-edge-label { color: #047857; display: block; font-size: 9px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
     .landing-edge-copy { color: #065f46; display: block; font-size: 11px; margin-top: 2px; }
     .landing-edge-pill { background: #047857; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 750; padding: 5px 8px; white-space: nowrap; }
-    .landing-live-panel .panel-bar { background: #f8fafc; border-bottom-color: #e8edf2; padding: 13px 16px; }
+    .landing-live-panel .panel-bar { background: #f8fafc; border-bottom-color: #e8edf2; padding: 13px 16px; flex-wrap: wrap; gap: 6px; }
     .landing-live-panel .market-table > div { border-color: #e8edf2; }
     .product-panel { background: #fff; border: 1px solid var(--border); border-radius: 10px; min-height: 0; }
     .panel-bar {
@@ -938,9 +943,18 @@
        .hero-text { font-size: 15px; margin-top: 16px; }
        .landing-demo { padding: 16px; }
        .landing-edge { align-items: flex-start; flex-direction: column; }
-      .market-table { grid-template-columns: 1fr 1fr; }
-      .market-table > div:nth-child(4n) { border-right: 1px solid var(--border); }
-      .market-table > div:nth-child(2n) { border-right: 0; }
+      .market-table {
+        min-width: 350px;
+        grid-template-columns: 1.35fr .55fr .55fr .8fr;
+        font-size: 11px;
+      }
+      .market-table > div {
+        padding: 10px 8px;
+      }
+      .market-head {
+        font-size: 9px;
+        letter-spacing: .08em;
+      }
       .market-lens-grid { grid-template-columns: 1fr; }
       .intel-row { grid-template-columns: 1fr; gap: 4px; }
       .intel-note { text-align: left; }
@@ -2450,15 +2464,17 @@
         <section class="landing-live-panel">
           <div class="panel-bar">
             <span style="font-weight: 600; color: var(--ink);">Live Platform Gaps</span>
-            <span class="demo-stamp">Updated Just Now</span>
+            <span class="demo-stamp" id="landingMarketStamp">Live quotes &amp; forecasts</span>
           </div>
-          <div class="market-table" id="landingMarketTable" style="border-top:0">
+          <div class="market-table-wrap">
+            <div class="market-table" id="landingMarketTable" style="border-top:0">
             <div class="market-head">Question</div>
             <div class="market-head">Crowd</div>
             <div class="market-head">Foresea</div>
             <div class="market-head">Signal</div>
             <div class="market-question-cell" style="color:var(--text-dim)">Loading live pricing…</div>
             <div></div><div></div><div></div>
+          </div>
           </div>
         </section>
       </aside>
@@ -2478,8 +2494,8 @@
         </div>
 
         <div style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.01);">
-          <h3 style="font-size: 16px; font-weight: 700; color: var(--ink); margin: 0 0 8px;">3. Test across prediction markets, indices, and commodity pairs</h3>
-          <p style="font-size: 14px; color: var(--text-dim); line-height: 1.55; margin: 0;">Follow the strongest signals across Kalshi and Polymarket contracts, equity indices, and cointegrated commodity spreads with clear notes on every position.</p>
+          <h3 style="font-size: 16px; font-weight: 700; color: var(--ink); margin: 0 0 8px;">3. Markets, indices, and commodity pairs</h3>
+          <p style="font-size: 14px; color: var(--text-dim); line-height: 1.55; margin: 0;">Follow the strongest signals across Kalshi and Polymarket contracts, equity indices, and commodity spreads with clear notes on every position.</p>
         </div>
       </div>
     </section>
@@ -8162,8 +8178,43 @@ async function loadLandingPanels() {
     const r = await _liveJsonFetch('/radar?limit=6&include_track_record=false');
     if (!r.ok) return;
     const d = await _readJson(r);
-    _renderLandingMarketTable((d.markets || []).slice(0, 3));
+    const items = (d.markets || []).slice(0, 3);
+    _renderLandingMarketTable(items);
+    _renderLandingMarketStamp(d, items);
   } catch (_) { /* leave placeholders */ }
+}
+
+function _renderLandingMarketStamp(d, items) {
+  const stampEl = document.getElementById('landingMarketStamp');
+  if (!stampEl) return;
+  const quoteIso = d && (d.generated_at || d.updated_at);
+  let forecastIso = d && d.forecasted_at;
+  if (!forecastIso && items && items.length) {
+    for (const it of items) {
+      if (it.forecasted_at) { forecastIso = it.forecasted_at; break; }
+    }
+  }
+  const qStr = _fmtLandingStampTime(quoteIso);
+  const fStr = _fmtLandingStampTime(forecastIso);
+  if (qStr && fStr) {
+    stampEl.textContent = `Quotes: ${qStr} · Forecasts: ${fStr}`;
+  } else if (qStr) {
+    stampEl.textContent = `Quotes: ${qStr}`;
+  } else if (fStr) {
+    stampEl.textContent = `Forecasts: ${fStr}`;
+  }
+}
+
+function _fmtLandingStampTime(iso) {
+  if (!iso) return '';
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return String(iso).slice(0, 16);
+  const now = new Date();
+  const isToday = dt.toDateString() === now.toDateString();
+  const timeStr = dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (isToday) return timeStr;
+  const dateStr = dt.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `${dateStr}, ${timeStr}`;
 }
 
 function _renderLandingMarketTable(items) {
