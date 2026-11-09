@@ -1,10 +1,11 @@
 name: Fund news sentiment evaluation
 
 # The pre-registered GO/NO-GO test for headline sentiment in the Foresea Fund
-# (docs/fund.md, "News sentiment evaluation"): collect three months of GDELT
-# headlines (about 80 minutes at GDELT's one request per 6.5 s), score them with
-# FinBERT and the Apache-2.0 DistilRoBERTa on CPU, and apply the rule unchanged.
-# Re-run monthly while the verdict is NO-GO.
+# (docs/fund.md, "News sentiment evaluation" and its Amendment 1): build dated
+# headlines from the idleengine/financial-news-multisource corpus (public on
+# Hugging Face, non-commercial research terms), score them with FinBERT and the
+# Apache-2.0 DistilRoBERTa on CPU, and apply the rule unchanged. The headlines are
+# not uploaded anywhere; re-running this rebuilds them from the corpus.
 
 on:
   workflow_dispatch: {}
@@ -35,20 +36,10 @@ jobs:
       - name: Install
         run: |
           pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
-          pip install --quiet transformers safetensors requests numpy
+          pip install --quiet transformers safetensors requests numpy pyarrow huggingface_hub
 
-      - name: Collect headlines from GDELT
-        # Stops at 150 minutes and keeps what it has; the evaluation's minimum-sample
-        # check then decides whether that is enough.
-        run: python scripts/fund_news_collect.py --days 89 --out data/fund_news --deadline-minutes 150
-
-      - name: Keep the headlines for reproduction
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fund-news-headlines
-          path: data/fund_news
-          retention-days: 90
+      - name: Build headlines from the corpus
+        run: python scripts/fund_news_corpus.py --out data/fund_news
 
       - name: Score and apply the pre-registered rule
         run: python scripts/fund_finbert_eval.py --news data/fund_news --out reports/fund_finbert_eval
