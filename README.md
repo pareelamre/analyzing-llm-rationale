@@ -430,59 +430,80 @@ gcloud run services update analyzing-llm-rationale --region us-central1 \
 
 ## Using the API
 
-See [additional Kalshi and Polymarket endpoints](docs/venue_api_extensions.md) for historical data, account pagination, order management and native exchange streams.
+> **Complete Documentation**: See the comprehensive [Foresea API Reference](docs/API_REFERENCE.md) for full request/response schemas, error codes, and curl examples across all 120 endpoints.
+> For native exchange contracts, see [Venue API Extensions (49 Operations)](docs/venue_api_extensions.md). For AI agent integrations, see the [MCP Commercial Harness Guide](docs/mcp_commercial_guide.md).
 
-The public Cloud Run API is the easiest integration target. It accepts
-forecasting questions and returns a typed forecast, model rationale, and optional
-evidence articles. It is built for resolvable forecasts, not general Q&A.
+The public Foresea API serves calibrated probability predictions, statistical edge, institutional venue pass-throughs, and autonomous agent loops.
 
-### Endpoints & Web Routes
+### Endpoints & Operational Modules
 
-#### Public Web Views
-- `GET /`: landing desk, real-time market radar, and interactive workflow demo.
-- `GET /chat`, `GET /chat/{id}`: conversational forecast studio with streaming rationales and evidence.
-- `GET /edge`, `GET /edge/markets`: live market edge board with statistical gap rankings and Kelly sizing.
-- `GET /edge/mtm`: mark-to-market performance of open positions across prediction venues.
-- `GET /edge/agentic`: multi-model autonomous trading tournament, equity curves, cycle health, and paper trade tape.
-- `GET /trade`: non-custodial trading terminal for Polymarket and Kalshi with envelope encryption.
-- `GET /watchlist`: tracked favorite markets with daily digest notifications.
-- `GET /forecast/{share_id}`: public read-only forecast share permalink.
-- `GET /embed/forecast/{share_id}`: lightweight iframe-embeddable forecast widget.
-- `GET /widget.js`: drop-in web component `<foresea-card>` for publishing live forecasts.
-
-#### Core Forecasting & Intelligence API
-- `GET /health`: service health check and operational status.
+#### 1. Core Forecasting & Inference
 - `POST /predict`: public probability prediction endpoint with optional evidence retrieval.
-- `POST /agent/analyze`: orchestrated end-to-end analysis of a live market with custom skills and ReAct loops.
-- `GET /agent/scan`: venue scanner identifying mispriced markets ranked by statistical edge.
-- `GET /radar`: homepage market desk payload derived from the live track record.
-- `GET /track-record`: public live track record and historical calibration statistics.
-- `GET /track-record/digest`: shareable markdown summary of the live track record.
-- `GET /pr-agent`: opt-in agent-to-agent outreach packet for Foresea discovery.
+- `POST /predict/stream`: real-time Server-Sent Events (SSE) streaming token output.
+- `POST /predict/batch`: concurrent batch prediction for up to 25 questions.
+- `POST /predict/ensemble`: Brier-weighted multi-model ensemble forecast.
+- `POST /v1/batch/forecast`: enterprise batch forecasting with per-item status and latency telemetry.
 
-#### Venue & Market Data
-- `GET /markets/polymarket`: fetch live normalized Polymarket quotes, orderbooks, and liquidity data.
+#### 2. Prediction Markets & Microstructure
+- `GET /markets/polymarket`: fetch live normalized Polymarket quotes, orderbooks, and liquidity.
 - `GET /markets/kalshi`: fetch live normalized Kalshi quotes, strike ranges, and ticker metadata.
+- `GET /market/batch`: multi-venue batch quotes for up to 50 tickers/slugs in one round-trip.
+- `GET /market/orderbook`: live Level-2 bids and asks orderbook depth.
+- `GET /market/trades`: executed trade tape prints (sizes, execution prices, timestamps).
+- `GET /market/price-history`: historical candlestick OHLCV timeseries data.
+- `GET /market/exchange-status`: operational status and trading halt schedules.
+- `GET /market/history` & `POST /market/explain-shift`: snapshot history and temporal odds shift explanation.
 
-#### Model Context Protocol (MCP)
-- `GET /mcp/`: public remote Model Context Protocol (Streamable-HTTP) endpoint.
-- `GET /.well-known/mcp/server.json`: public MCP discovery manifest.
+#### 3. Statistical Edge, Arbitrage & Whale Flow
+- `GET /edge-board`: ranked live model-vs-market edge board ($P_{model} - P_{market}$).
+- `GET /radar`, `GET /radar/delta`: market desk radar snapshot and incremental updates.
+- `GET /v1/arbitrage/cross-venue`: synthetic arbitrage scanner across Polymarket and Kalshi.
+- `GET /v1/market/whale-flow`: institutional block trades (>= $250 USD) and smart-money positioning index.
 
-#### Analytics, Sharing & Account Sync
-- `POST /analytics/visit`: privacy-preserving page visit tracking (linked only to non-reversible references).
-- `POST /analytics/event`: funnel event recording (`forecast_completed`, `watchlist_add`, `share_created`, `digest_sent`).
-- `GET /analytics/events/summary`: 30-day aggregate product analytics summary.
-- `POST /forecasts/share`: generate an explicit public forecast share ID.
-- `GET|POST /chat/conversations`: cloud conversation sync for authenticated users.
-- `GET|POST|DELETE /favorites`: watchlist management and tracking.
+#### 4. Autonomous Agents & Multi-Agent Debate
+- `POST /agent/analyze`: autonomous pipeline: resolve market -> fetch evidence -> forecast -> edge -> skills -> recommendation.
+- `POST /agent/analyze/stream`: streaming agent research pipeline.
+- `GET /agent/scan`: venue scanner identifying mispriced markets ranked by statistical edge.
+- `POST /agent/debate`: 3-agent adversarial cross-examination (Bull, Bear, Judge) for bias & blind spot detection.
+- `GET /agent/runs`, `GET /agent/runs/{run_id}`: durable research run timeline and report snapshots.
+- `GET /agent-profiles`, `POST /agent-profiles/copy`: private, immutable copied research recipes.
 
-#### Non-Custodial Trading Execution
-- `GET|PUT|DELETE /trading/connections/{platform}`: KMS-encrypted per-user exchange connection credentials.
-- `POST /trading/preview`: dry-run order normalization and limit collar verification.
+#### 5. Autonomous Operator Twin Platform
+- `POST /twin/mandates`, `GET /twin/mandates/{id}`, `POST /twin/mandates/{id}/approve`: mandate governance lifecycle.
+- `GET /twin/status`, `GET /twin/portfolio`, `GET /twin/decisions`, `GET /twin/commands`: autonomous decision and dispatch audit trails.
+- `GET /twin/readiness`, `POST /twin/pause`: pre-flight execution safety check and emergency pause switch.
+
+#### 6. Specialized Alpha Desks & Portfolio Sizing
+- `GET /market/weather-radar`: high-temperature prediction radar against US NWS weather stations.
+- `GET /crypto-5m/equity`, `GET /crypto-5m/kalshi-edge`: high-frequency 5m crypto micro-market calibration.
+- `GET /portfolio/optimal-allocation`: Fractional Kelly position sizing across Grade A/B opportunities.
+- `POST /portfolio/optimize`: custom opportunity list optimization.
+
+#### 7. Guarded Non-Custodial Trading Execution
+- `GET|PUT|DELETE /trading/connections/{platform}`: Cloud KMS envelope-encrypted venue credentials.
+- `GET|PUT /trading/guardrails`: view and narrow user risk boundaries (max order notional, daily loss caps).
+- `POST /trading/preview`: dry-run order normalization, tick size, and limit collar validation.
 - `POST /trading/orders`: live order submission with explicit two-step user confirmation.
 - `GET /trading/portfolio`: authenticated balances, open positions, resting orders, and execution fills.
-- `POST /trading/orders/{audit_order_id}/reconcile`: venue order status and fill reconciliation.
-- `DELETE /trading/orders/{audit_order_id}`: cancel resting orders at venue.
+- `POST /trading/orders/{audit_order_id}/reconcile`, `DELETE /trading/orders/{audit_order_id}`: order status refresh and cancellation.
+- `POST|GET /trading/runs`: durable reviewable live-trade runs.
+
+#### 8. Direct Venue Pass-Through Operations (49 Ops)
+- `GET /market/venue/catalog`, `POST /market/venue/{platform}/{operation}`: public venue catalog and queries.
+- `GET /trading/venue/catalog`, `POST /trading/venue/{platform}/{operation}`: authenticated account reads.
+- `POST /trading/venue/{platform}/actions/{operation}`: guarded order management actions.
+
+#### 9. Real-Time Streaming & Webhooks
+- `GET /feed/stream`, `GET /radar/stream`, `GET /stream/radar`: live Server-Sent Events (SSE) feeds.
+- `WS /ws/venue/{platform}`, `WS /ws/radar`: low-latency native market and orderbook WebSockets.
+- `POST /webhooks/subscribe`, `GET /webhooks/subscriptions`, `DELETE /webhooks/subscriptions/{id}`: external agent webhooks.
+
+#### 10. Public Views, MCP & Analytics
+- `GET /`: landing desk and real-time market radar.
+- `GET /mcp/`: public remote Model Context Protocol (Streamable-HTTP) endpoint with 29 tools & 8 resources.
+- `GET /track-record`, `GET /track-record/digest`: public live track record and calibration scores.
+- `GET /analytics/export.parquet`: compressed Apache Parquet analytical datasets (`edge_board`, `models_comparison`).
+- `POST /rag/ingest`, `GET /rag/search`, `GET /rag/documents`: personal RAG knowledge base.
 
 ### Web app runtime state
 

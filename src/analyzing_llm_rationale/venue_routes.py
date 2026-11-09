@@ -36,24 +36,24 @@ def _credentials(runtime, user_id: str, platform: str) -> dict:
     return credentials
 
 
-@router.get("/market/venue/catalog")
+@router.get("/market/venue/catalog", summary="Discover public venue operations and schemas")
 async def venue_catalog() -> dict:
     return venue_api.catalog()
 
 
-@router.post("/market/venue/{platform}/{operation}")
+@router.post("/market/venue/{platform}/{operation}", summary="Execute public venue operation")
 async def public_venue_data(platform: str, operation: str, req: VenueRequest, request: Request) -> dict:
     _runtime()._check_rate_limit(request)
     return await asyncio.to_thread(venue_api.read, platform, operation, req.parameters, req.body)
 
 
-@router.get("/trading/venue/catalog")
+@router.get("/trading/venue/catalog", summary="Discover authenticated venue account operations and actions")
 async def account_venue_catalog(request: Request) -> dict:
     _runtime()._require_session(request)
     return {"account": venue_api.catalog("account"), "actions": venue_api.catalog("write")}
 
 
-@router.post("/trading/venue/{platform}/{operation}")
+@router.post("/trading/venue/{platform}/{operation}", summary="Execute authenticated venue account read")
 async def account_venue_data(platform: str, operation: str, req: VenueRequest, request: Request) -> dict:
     runtime = _runtime()
     runtime._check_rate_limit(request)
@@ -67,7 +67,7 @@ async def account_venue_data(platform: str, operation: str, req: VenueRequest, r
         raise runtime._trading_http_exception(exc) from exc
 
 
-@router.post("/trading/venue/{platform}/actions/{operation}")
+@router.post("/trading/venue/{platform}/actions/{operation}", summary="Execute guarded venue order action")
 async def venue_action(platform: str, operation: str, req: VenueActionRequest, request: Request) -> dict:
     runtime = _runtime()
     runtime._check_rate_limit(request)

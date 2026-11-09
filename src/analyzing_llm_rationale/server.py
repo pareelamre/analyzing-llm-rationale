@@ -773,32 +773,65 @@ X-API-Key: <your-key>
 The `/health` endpoint is always unauthenticated. Per-user endpoints such as
 RAG, chat history, and trading require an `Authorization: Bearer <session-token>`
 header returned by the sign-in endpoints.
+---
+
+## Source code
+
+[github.com/pareelamre/analyzing-llm-rationale](https://github.com/pareelamre/analyzing-llm-rationale)
 """
 
 _TAGS = [
     {
         "name": "Inference",
-        "description": "Run forecast and market-edge analysis for binary, multiple-choice, numeric, and date questions.",
+        "description": "Probability forecasting, structured rationale generation, multi-model ensembles, and concurrent batch predictions.",
     },
     {
         "name": "Markets",
-        "description": "Fetch live prices from prediction-market venues (Polymarket, Kalshi).",
+        "description": "Real-time and historical quotes, orderbooks, trade tapes, exchange status, whale flow, and arbitrage scanning across Polymarket and Kalshi.",
     },
     {
         "name": "Trading",
-        "description": "Preview and submit guarded prediction-market orders for authenticated users.",
+        "description": "Institutional non-custodial trading: KMS envelope encryption, risk guardrails, pre-trade preview collars, portfolio reconciliation, and Fractional Kelly sizing.",
     },
     {
         "name": "Agents",
-        "description": "Autonomous analysis: orchestrate market fetch, evidence, forecast, edge, and custom skills into one report.",
+        "description": "Autonomous multi-agent intelligence: ReAct execution loops, market scanners, 3-agent adversarial bull-bear debates, durable research runs, and copied recipes.",
+    },
+    {
+        "name": "Autonomous Twin",
+        "description": "Autonomous operator twin execution: mandates, risk approval, automated paper/live decision loops, commands, readiness, and emergency pause controls.",
+    },
+    {
+        "name": "Venue APIs",
+        "description": "Direct venue pass-through endpoints covering 49 paginated REST operations and WebSocket feeds across Kalshi and Polymarket.",
+    },
+    {
+        "name": "Feed",
+        "description": "Unified streaming alpha feed, live agent activities, and real-time market pulse via Server-Sent Events (SSE).",
+    },
+    {
+        "name": "Analytics",
+        "description": "Public dataset exports in compressed Apache Parquet format and product intelligence metrics.",
     },
     {
         "name": "Knowledge",
-        "description": "Per-user RAG knowledge base: ingest documents and retrieve them as evidence.",
+        "description": "Per-user RAG (Retrieval-Augmented Generation) knowledge base: document ingestion, vector/keyword search, and evidence grounding.",
+    },
+    {
+        "name": "Model Providers",
+        "description": "User Bring-Your-Own-Key (BYOK) model provider credentials and live connectivity tests.",
+    },
+    {
+        "name": "Webhooks",
+        "description": "External agent webhook subscription lifecycle for automated market and signal event dispatch.",
+    },
+    {
+        "name": "Auth",
+        "description": "User authentication, OAuth2 (Google & GitHub), personal forecasting ledger, and market watchlists.",
     },
     {
         "name": "System",
-        "description": "Health and liveness checks.",
+        "description": "Institutional health probes, readiness checks, public track record statistics, and operational telemetry.",
     },
 ]
 
@@ -5600,7 +5633,11 @@ class TradingAccountCheckRequest(BaseModel):
     Kept for non-browser compatibility while the public product uses the secure
     account-connection endpoint below.
     """
-    venue_credentials: Optional[VenueCredentials] = None
+    venue_credentials: Optional[VenueCredentials] = Field(
+        None,
+        deprecated=True,
+        description="Legacy transient credentials. Use /trading/connections instead.",
+    )
 
 
 class TradingConnectionRequest(BaseModel):
@@ -5701,6 +5738,7 @@ class TradeOrderRequest(BaseModel):
     confirmation: Optional[str] = Field(None, max_length=80, description="Must equal the server confirmation phrase.")
     venue_credentials: Optional[VenueCredentials] = Field(
         None,
+        deprecated=True,
         description="Deprecated and rejected for public trading requests. Connect the account through /trading/connections first.",
     )
 
@@ -10570,7 +10608,7 @@ async def market_price_history_route(
 # ── Feature #1: Multi-Agent Bull vs. Bear Debate & Blind Spot Analyzer ────────
 
 
-@app.post("/agent/debate", tags=["Agent"], summary="Multi-Agent Bull vs. Bear Adversarial Debate & Blind Spot Analyzer")
+@app.post("/agent/debate", tags=["Agents"], summary="Multi-Agent Bull vs. Bear Adversarial Debate & Blind Spot Analyzer")
 async def agent_debate(req: DebateRequest) -> Dict[str, Any]:
     """Executes a 3-agent adversarial cross-examination (Bull, Bear, Judge) on a forecasting question."""
     from analyzing_llm_rationale.debate_engine import conduct_market_debate
@@ -10913,7 +10951,7 @@ async def arbitrage_cross_venue_route(
 
 @app.post(
     "/v1/batch/forecast",
-    tags=["Predict"],
+    tags=["Inference"],
     summary="Batch forecast multiple prediction market questions concurrently",
 )
 async def batch_forecast_route(req: BatchForecastRequest) -> Dict[str, Any]:
