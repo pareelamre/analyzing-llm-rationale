@@ -70,6 +70,35 @@ class EvaluateTests(unittest.TestCase):
         self.assertFalse(ev.evaluate(rows)["checks"]["rule_net_above_zero"])
 
 
+class FredTests(unittest.TestCase):
+    def test_a_timeout_is_retried_before_giving_up(self):
+        import requests
+
+        calls = []
+
+        class Resp:
+            text = "observation_date,SP500\n2026-11-02,6800.5\n2026-11-03,.\n2026-11-04,6790.1\n"
+
+            def raise_for_status(self):
+                return None
+
+        def http_get(url, **kwargs):
+            calls.append(url)
+            if len(calls) < 3:
+                raise requests.ReadTimeout("slow")
+            return Resp()
+
+        rows = ev.fred_closes("SP500", date(2026, 11, 1), http_get=http_get, sleep=lambda s: None)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(rows, [(date(2026, 11, 2), 6800.5), (date(2026, 11, 4), 6790.1)])
+
+        def always_down(url, **kwargs):
+            raise requests.ReadTimeout("down")
+
+        with self.assertRaises(requests.ReadTimeout):
+            ev.fred_closes("SP500", date(2026, 11, 1), http_get=always_down, sleep=lambda s: None)
+
+
 class RunTests(unittest.TestCase):
     def test_run_writes_a_report_per_model(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """End-to-end evaluation: does headline sentiment earn a place in the Foresea Fund?
 
-Implements the rule pre-registered in docs/fund.md ("News sentiment evaluation") without
-changing it: headlines (fund_news_collect.py) are scored by each sentiment model; for each
+Implements the rule pre-registered in docs/fund.md ("News sentiment evaluation", with its
+Amendment 1) without changing it: headlines (fund_news_corpus.py) are scored by each
+sentiment model; for each
 instrument and trading day, the signal is the mean P(positive) - P(negative) over headlines
 seen in the 24 hours before that instrument's close (at least 5 headlines); the target is
 the next close-to-close return. The first half of the dates only sets the threshold; the
@@ -18,6 +19,7 @@ import csv
 import io
 import json
 import sys
+import time as clock
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional, Sequence
@@ -37,21 +39,31 @@ WINDOW = timedelta(hours=24)
 MIN_TEST_DAYS = 150
 CI = 97.5
 BOOTSTRAPS = 4000
-#: instrument -> (headline group, close time UTC, round-trip cost)
+#: instrument -> (headline group, close time UTC, round-trip cost). Gold is judged on the
+#: forward record instead (Amendment 1: no historical gold series we may fetch).
 INSTRUMENTS = {
     "Nifty 50": ("india_equity", time(10, 0), 0.0005),
     "Nifty Bank": ("india_equity", time(10, 0), 0.0005),
     "S&P 500": ("us_equity", time(20, 0), 0.0005),
-    "MCX gold": ("gold", time(18, 0), 0.0010),
     "WTI crude": ("crude", time(18, 30), 0.0010),
 }
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
+FRED_ATTEMPTS = 4
 
 Scorer = Callable[[Sequence[str]], list[float]]
 
 
-def fred_closes(series: str, start: date) -> list[tuple[date, float]]:
-    text = requests.get(FRED_URL.format(series=series), timeout=60, headers={"User-Agent": "Foresea/fund-eval"}).text
+def fred_closes(series: str, start: date, *, http_get=requests.get, sleep=clock.sleep) -> list[tuple[date, float]]:
+    for attempt in range(FRED_ATTEMPTS):
+        try:
+            resp = http_get(FRED_URL.format(series=series), timeout=120, headers={"User-Agent": "Foresea/fund-eval"})
+            resp.raise_for_status()
+            text = resp.text
+            break
+        except requests.RequestException:
+            if attempt == FRED_ATTEMPTS - 1:
+                raise
+            sleep(15 * (attempt + 1))
     out = []
     for row in csv.reader(io.StringIO(text)):
         try:
@@ -64,17 +76,13 @@ def fred_closes(series: str, start: date) -> list[tuple[date, float]]:
 
 
 def load_prices(start: date, end: date) -> dict[str, list[tuple[date, float]]]:
-    from analyzing_llm_rationale import commodity_pairs, index_forecast
+    from analyzing_llm_rationale import index_forecast
 
-    gold_rows = [json.loads(line) for line in (ROOT / "data" / "commodity_prices.jsonl").open()
-                 if '"gold"' in line and '"india"' in line]
-    gold = [(d, c) for d, c in commodity_pairs.continuous([r for r in gold_rows if r.get("source") == "india"])
-            if start <= d <= end]
+    india_start = max(start, index_forecast.HISTORY_START)
     return {
-        "Nifty 50": index_forecast.daily_closes("NSE_INDEX|Nifty 50", start, end),
-        "Nifty Bank": index_forecast.daily_closes("NSE_INDEX|Nifty Bank", start, end),
+        "Nifty 50": index_forecast.daily_closes("NSE_INDEX|Nifty 50", india_start, end),
+        "Nifty Bank": index_forecast.daily_closes("NSE_INDEX|Nifty Bank", india_start, end),
         "S&P 500": fred_closes("SP500", start),
-        "MCX gold": gold,
         "WTI crude": fred_closes("DCOILWTICO", start),
     }
 
@@ -87,25 +95,40 @@ def load_headlines(news_dir: Path) -> dict[str, list[tuple[datetime, str]]]:
     return out
 
 
+def _windows(prices: dict[str, list[tuple[date, float]]], headlines: dict[str, list[tuple[datetime, str]]]):
+    """(instrument, group, day t, close t, next close, headlines seen in the 24 hours before close t)."""
+    for name, (group, close_at, _) in INSTRUMENTS.items():
+        series = sorted(prices.get(name) or [])
+        items = headlines.get(group) or []
+        stamps = [ts for ts, _ in items]
+        for (day, close), (_, next_close) in zip(series, series[1:]):
+            cutoff = datetime.combine(day, close_at, tzinfo=timezone.utc)
+            lo = bisect.bisect_right(stamps, cutoff - WINDOW)
+            hi = bisect.bisect_right(stamps, cutoff)
+            yield name, group, day, close, next_close, [title for _, title in items[lo:hi]]
+
+
+def needed_titles(prices: dict[str, list[tuple[date, float]]],
+                  headlines: dict[str, list[tuple[datetime, str]]]) -> dict[str, set[str]]:
+    """Per group, the headlines that fall in some instrument's window; only these need scoring."""
+    need: dict[str, set[str]] = {}
+    for _, group, _, _, _, titles in _windows(prices, headlines):
+        need.setdefault(group, set()).update(titles)
+    return need
+
+
 def daily_rows(prices: dict[str, list[tuple[date, float]]], headlines: dict[str, list[tuple[datetime, str]]],
                scores: dict[str, dict[str, float]]) -> list[dict]:
     """One row per (instrument, day t) with at least MIN_HEADLINES headlines in the 24 hours
     before close t, the mean sentiment then, and the return from close t to the next close."""
     rows = []
-    for name, (group, close_at, cost) in INSTRUMENTS.items():
-        series = sorted(prices.get(name) or [])
-        items = headlines.get(group) or []
-        stamps = [ts for ts, _ in items]
+    for name, group, day, close, next_close, titles in _windows(prices, headlines):
         group_scores = scores.get(group) or {}
-        for (day, close), (_, next_close) in zip(series, series[1:]):
-            cutoff = datetime.combine(day, close_at, tzinfo=timezone.utc)
-            lo = bisect.bisect_right(stamps, cutoff - WINDOW)
-            hi = bisect.bisect_right(stamps, cutoff)
-            window = [group_scores[title] for _, title in items[lo:hi] if title in group_scores]
-            if len(window) < MIN_HEADLINES or close <= 0:
-                continue
-            rows.append({"instrument": name, "day": day, "signal": float(np.mean(window)), "headlines": len(window),
-                         "ret": next_close / close - 1.0, "cost": cost})
+        window = [group_scores[title] for title in titles if title in group_scores]
+        if len(window) < MIN_HEADLINES or close <= 0:
+            continue
+        rows.append({"instrument": name, "day": day, "signal": float(np.mean(window)), "headlines": len(window),
+                     "ret": next_close / close - 1.0, "cost": INSTRUMENTS[name][2]})
     return rows
 
 
@@ -184,6 +207,8 @@ def hf_scorer(model_id: str) -> Scorer:
             for labels in clf(list(texts[i:i + 64])):
                 p = {d["label"].lower(): d["score"] for d in labels}
                 out.append(p.get("positive", 0.0) - p.get("negative", 0.0))
+            if i and i % 12_800 == 0:
+                print(f"  {model_id}: {i}/{len(texts)} scored", flush=True)
         return out
     return score
 
@@ -200,13 +225,17 @@ def run(news_dir: Path, out_base: Path, scorers: dict[str, Scorer],
               "headlines": {g: len(v) for g, v in headlines.items()},
               "collection": coverage,
               "price_days": {k: len(v) for k, v in prices.items()},
-              "source": "Data from the GDELT Project (gdeltproject.org); prices from Upstox, FRED and MCX via Upstox",
+              "price_range": {k: [str(min(v)[0]), str(max(v)[0])] if v else None for k, v in prices.items()},
+              "source": "Headlines: idleengine/financial-news-multisource (non-commercial research use); "
+                        "prices: Upstox (Nifty) and FRED (S&P 500, WTI)",
               "models": {}}
+    need = needed_titles(prices, headlines)
+    titles = sorted(set().union(*need.values()))
+    report["scored_headlines"] = len(titles)
+    print(f"{len(titles)} distinct headlines fall in some window", flush=True)
     for name, scorer in scorers.items():
-        scores = {}
-        for group, items in headlines.items():
-            titles = sorted({t for _, t in items})
-            scores[group] = dict(zip(titles, scorer(titles)))
+        by_title = dict(zip(titles, scorer(titles)))
+        scores = {group: {t: by_title[t] for t in group_titles} for group, group_titles in need.items()}
         result = evaluate(daily_rows(prices, headlines, scores))
         report["models"][name] = {"model": MODELS.get(name, name), **result}
         print(f"{name}: {result['decision']} | {json.dumps({k: result.get(k) for k in ('test_instrument_days', 'spearman', 'spearman_ci', 'rule_net_mean', 'rule_net_ci', 'always_long_net_mean')})}")
