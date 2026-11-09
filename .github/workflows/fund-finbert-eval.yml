@@ -38,9 +38,12 @@ jobs:
           pip install --quiet transformers safetensors requests numpy
 
       - name: Collect headlines from GDELT
-        run: python scripts/fund_news_collect.py --days 89 --out data/fund_news
+        # Stops at 150 minutes and keeps what it has; the evaluation's minimum-sample
+        # check then decides whether that is enough.
+        run: python scripts/fund_news_collect.py --days 89 --out data/fund_news --deadline-minutes 150
 
       - name: Keep the headlines for reproduction
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fund-news-headlines
