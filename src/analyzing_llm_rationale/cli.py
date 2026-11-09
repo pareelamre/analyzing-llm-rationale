@@ -849,7 +849,9 @@ def init_server_state(args: argparse.Namespace) -> None:
                 model=args.router_model_name,
                 newsapi_key=newsapi_key,
                 use_query_planner=False,
-                fetch_sources=args.evidence_source or ("web", "gdelt", "google-news"),
+                # "beat" adds the specialist feeds (news_pipeline.BEAT_FEEDS) for questions
+                # on their topic; the general homepage RSS stays off.
+                fetch_sources=args.evidence_source or ("web", "gdelt", "google-news", "beat"),
                 summarize_articles=False,
                 use_embeddings=False,
                 # Serving uses deterministic lexical/BM25 ranking. Loading the
