@@ -1,0 +1,104 @@
+name: Fund rationale check
+
+# Shadow analyst for the Foresea Fund (docs/fund.md): checks each of the on-device
+# model's forecasts against its own rationale with Open-Jev 2B on CPU, and publishes
+# static/fund_rationale_checks.json for the fund to record. It follows every MTM tick,
+# which is when newly staged forecasts reach the store; with nothing new it exits after
+# a store download, before installing the model.
+
+on:
+  workflow_run:
+    workflows: ["Track record MTM tick"]
+    types: [completed]
+  workflow_dispatch: {}
+
+env:
+  GCP_PROJECT_ID: brave-drive-471109-d9
+  FORESEA_STORAGE_BACKEND: ${{ vars.FORESEA_STORAGE_BACKEND || 'gcs' }}
+  R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+  R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+  PYTHONPATH: src
+  TRACK_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
+  TRACK_STORE_OBJECT: track_record_store.duckdb
+  # Pinned: the Open-Jev code, its adapter, and (inside the adapter) the Qwen base revision.
+  OPEN_JEV_COMMIT: bd4118882f733574a3250a4b65fe4d884130c08b
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fund-rationale-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: vars.FUND_CYCLE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install store tools
+        run: >-
+          pip install --quiet 'boto3>=1.35,<2' google-cloud-storage duckdb requests
+          opentelemetry-sdk opentelemetry-instrumentation-requests
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Download track record store
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: python -m analyzing_llm_rationale.r2_store cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
+
+      - name: Find forecasts not yet checked
+        id: pending
+        run: python scripts/fund_rationale_check.py --store data/track_record_store.duckdb --list-only | tee -a "$GITHUB_OUTPUT"
+
+      - name: Cache the checker weights
+        if: steps.pending.outputs.pending != '0'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: open-jev-2b-${{ env.OPEN_JEV_COMMIT }}
+
+      - name: Install the checker (CPU)
+        if: steps.pending.outputs.pending != '0'
+        run: |
+          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet transformers==5.10.2 peft==0.19.1 accelerate==1.13.0 safetensors huggingface_hub \
+            "open-jev @ git+https://github.com/Zefan-Cai/Open-Jev@${OPEN_JEV_COMMIT}"
+
+      - name: Check forecasts against their rationales
+        if: steps.pending.outputs.pending != '0'
+        run: python scripts/fund_rationale_check.py --store data/track_record_store.duckdb
+
+      - name: Commit the checks
+        if: steps.pending.outputs.pending != '0'
+        env:
+          GIT_REBASE_KEEP_THEIRS: "static/fund_rationale_checks.json"
+          MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p ~/.ssh
+          printf '%s' "$MTM_PUBLISH_DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/mtm_publish_deploy_key
+          chmod 600 ~/.ssh/mtm_publish_deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
+          git add static/fund_rationale_checks.json
+          if git diff --cached --quiet; then
+            echo "No new rationale checks."
+            exit 0
+          fi
+          git commit -m "fund: rationale checks [skip ci]"
+          bash .github/scripts/push_with_rebase_retry.sh origin main

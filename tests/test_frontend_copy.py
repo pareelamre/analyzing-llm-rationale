@@ -832,6 +832,7 @@ function escHtml(s) {
                 # The side and the market name read as separate items.
                 self.assertIn("${escHtml(t.side || '')} · ${escHtml(_fundName(t))}", renderer)
                 self.assertIn("Paper trading only.", renderer)
+                self.assertIn("checking, not blocking", renderer)
 
     def test_track_record_is_off_the_site(self):
         # Retired 2026-11-08: the data stays at GET /track-record, the page,

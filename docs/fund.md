@@ -105,6 +105,12 @@ share of the fund's decisions, only from that record.
   market). Raw model forecasts were worse than the market (+0.0076, CI excludes
   0); boosted trees overfit and were dropped. The weights lean on the market
   about nine times more than on the model.
+- **rationale_check** (2026-11-09, `scripts/fund_rationale_check.py`,
+  `.github/workflows/fund-rationale-check.yml`): Open-Jev 2B (Apache-2.0 LoRA
+  and decision head on Qwen3.5-2B, run on GitHub's CPUs) reads each on-device
+  forecast's rationale and says whether it concludes the event is likely; a
+  number pointing the other way is flagged. It is a guard against the
+  2026-11-08 inversions, not a forecaster, and it blocks nothing in shadow.
 
 ## Build order
 
