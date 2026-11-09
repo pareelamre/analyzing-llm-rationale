@@ -561,7 +561,9 @@ class NewsPipelineSourceTests(unittest.TestCase):
 
         articles = pipeline.fetch("Federal Reserve rate cut", top_k=1)
 
-        self.assertEqual([call[0] for call in calls], ["gdelt", "google-news", "stooq"])
+        # Google News runs twice: a recent-only keyword pass, then the plain query.
+        self.assertEqual([call[0] for call in calls], ["gdelt", "google-news", "google-news", "stooq"])
+        self.assertTrue(calls[1][1].endswith(" when:30d"))
         self.assertEqual(len(articles), 3)
 
     def test_fetch_dedupes_same_headline_across_syndicated_urls(self):

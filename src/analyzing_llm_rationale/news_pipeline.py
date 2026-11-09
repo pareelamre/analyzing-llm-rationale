@@ -54,6 +54,62 @@ RSS_FEEDS = [
     "https://feeds.a.dj.com/rss/RSSWorldNews.xml",
 ]
 
+#: Specialist feeds read only when a question touches their beat: each one covers an
+#: Edge-board miss the general feeds and search channels did not. Add an entry per new
+#: miss, with the miss in "found". A feed must answer an honest client; People, E! and
+#: ESPN refuse one and are left out rather than worked around.
+BEAT_FEEDS = (
+    {
+        "beat": "art market",
+        "hints": ("art", "artwork", "artworks", "painting", "paintings", "auction", "auctions", "sotheby",
+                  "sotheby's", "christie", "christie's", "phillips", "sculpture", "artist"),
+        "feeds": ("https://news.artnet.com/feed", "https://www.artnews.com/feed/",
+                  "https://www.theartnewspaper.com/rss.xml"),
+        "found": "2026-11-09, 'Will an artwork sell for $150 million by December 31?': model 5% vs market 93%; "
+                 "the evidence missed Sotheby's guaranteed ~$180M Van Gogh offered on Nov 18",
+    },
+    {
+        "beat": "film and tv",
+        "hints": ("season", "series", "show", "film", "movie", "sequel", "netflix", "hbo", "disney", "streaming",
+                  "episode", "premiere", "release", "released", "trailer", "box office", "oscar", "oscars",
+                  "emmy", "emmys", "golden globe"),
+        "feeds": ("https://deadline.com/feed/", "https://variety.com/feed/", "https://www.hollywoodreporter.com/feed/"),
+        "found": "2026-11-09, 'Will a new season of Prison Break be released worldwide before 2028?': "
+                 "model 15% vs market 52%, no trade-press evidence",
+    },
+    {
+        "beat": "celebrity",
+        "hints": ("married", "marry", "marriage", "engaged", "engagement", "wedding", "divorce", "divorced",
+                  "pregnant", "baby", "dating", "breakup"),
+        "feeds": ("https://pagesix.com/feed/",),
+        "found": "2026-11-09, 'Will Harry Styles and Zoe Kravitz be married before Jul 1, 2027?': "
+                 "model 15% vs market 51%, no entertainment-news evidence",
+    },
+    {
+        "beat": "nfl",
+        "hints": ("nfl", "quarterback", "super bowl", "touchdown", "playoffs", "retire", "retires", "retirement"),
+        "feeds": ("https://www.cbssports.com/rss/headlines/nfl/", "https://www.cbssports.com/rss/headlines/"),
+        "found": "2026-11-09, 'Will Matthew Stafford announce his retirement before the 2027 season?': "
+                 "model 8% vs market 51%, no sports-news evidence",
+    },
+)
+
+#: Prediction-market venues and the sites that mirror their pages. Their text restates the
+#: question and the crowd's price, so as evidence it is circular; most of the artwork
+#: forecast's five "evidence" items were these.
+MARKET_ECHO_DOMAINS = frozenset({
+    "polymarket.com", "kalshi.com", "manifold.markets", "predictit.org", "metaculus.com",
+    "trackerpoly.com", "lines.com", "bitget.com", "polymarkets.co.il", "struct.to", "orrery.me",
+    "polymarketanalytics.com",
+})
+_MARKET_ECHO_NAMES = frozenset({"polymarket", "kalshi", "manifold", "manifold markets", "predictit", "metaculus"})
+
+#: Google News ranks by relevance alone and returned 2018-2025 stories for a 2026 question,
+#: so a keyword search limited to recent weeks runs first.
+GOOGLE_NEWS_RECENT = "when:30d"
+BEAT_TIMEOUT_S = 5
+BEAT_USER_AGENT = "Foresea/evidence (+https://foresea.ink)"
+
 STOOQ_RSS_FEEDS = (
     "https://static.stooq.com/rss/pl/b.rss",
     "https://static.stooq.com/rss/pl/c.rss",
@@ -64,8 +120,9 @@ STOOQ_RSS_FEEDS = (
 # and leaked irrelevant headlines into evidence. It stays available if explicitly
 # configured. `web` prefers a configured provider (Tavily, Serper, Brave, or
 # SearXNG) and otherwise uses the existing keyless DuckDuckGo fallback.
-DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "bing-news", "rss", "open-meteo")
-SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "bing-news", "newsapi", "rss", "stooq", "fred", "open-meteo")
+DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "bing-news", "beat", "rss", "open-meteo")
+SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "bing-news", "newsapi", "beat", "rss", "stooq", "fred",
+                          "open-meteo")
 HIGH_CREDIBILITY_SOURCES = {
     "abc news",
     "al jazeera",
@@ -116,6 +173,7 @@ CHANNEL_CREDIBILITY = {
     "gdelt": 0.72,
     "google-news": 0.70,
     "bing-news": 0.70,
+    "beat": 0.72,       # specialist trade press (BEAT_FEEDS)
     "rss": 0.68,
     "stooq": 0.55,
     "fred": 0.90,       # St. Louis Fed official data
@@ -126,7 +184,7 @@ CHANNEL_CREDIBILITY = {
 # publisher homepage RSS) rather than results matched to the question. Their
 # articles are only kept when they clear a minimum relevance to the question,
 # so they stop padding evidence for unrelated or conversational queries.
-_QUERY_AGNOSTIC_CHANNELS = ("stooq", "rss")
+_QUERY_AGNOSTIC_CHANNELS = ("stooq", "rss", "beat")
 # A 0.1 floor let publisher-homepage headlines (UK politics, obituaries) clear
 # it for finance/politics questions purely on incidental word overlap, and the
 # per-channel diversity pass then *reserved* a slot for them. When every
@@ -320,6 +378,22 @@ def _keyword_search_query(question: str, max_terms: int = 12) -> str:
     return " ".join(kept[:max_terms]) or question
 
 
+def _beats_for(query: str) -> List[dict]:
+    """The BEAT_FEEDS entries whose hints appear in the question."""
+    text = " " + " ".join(re.findall(r"[a-z0-9']+", (query or "").lower())) + " "
+    return [beat for beat in BEAT_FEEDS if any(f" {hint} " in text for hint in beat["hints"])]
+
+
+def _is_market_echo(article: dict) -> bool:
+    """A prediction-market page or a mirror of one, by URL domain or source name."""
+    domain = (urlparse(str(article.get("url") or "")).netloc or "").lower().removeprefix("www.")
+    source = str(article.get("source") or "").lower().strip().removeprefix("www.")
+    for name in (domain, source):
+        if name in MARKET_ECHO_DOMAINS or any(name.endswith("." + d) for d in MARKET_ECHO_DOMAINS):
+            return True
+    return source in _MARKET_ECHO_NAMES
+
+
 def _normalize_article_url(url: str) -> str:
     if not url:
         return ""
@@ -469,6 +543,11 @@ class NewsPipeline:
         """Return up to top_k raw article dicts from configured news sources."""
         articles: List[dict] = []
         per_source_limit = max(top_k, 10)
+        # The beat feeds run alongside the search channels so they add no wait of their own.
+        beat_pool = beat_future = None
+        if "beat" in self._fetch_sources and _beats_for(query):
+            beat_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            beat_future = beat_pool.submit(self._fetch_beats, query)
 
         if "web" in self._fetch_sources:
             articles.extend(self._fetch_web(query, limit=per_source_limit))
@@ -480,6 +559,8 @@ class NewsPipeline:
             articles.extend(self._fetch_gdelt(query, limit=per_source_limit))
 
         if "google-news" in self._fetch_sources:
+            articles.extend(self._fetch_google_news(f"{_keyword_search_query(query)} {GOOGLE_NEWS_RECENT}",
+                                                    limit=per_source_limit))
             articles.extend(self._fetch_google_news(query, limit=per_source_limit))
 
         if "bing-news" in self._fetch_sources:
@@ -494,12 +575,18 @@ class NewsPipeline:
         if "open-meteo" in self._fetch_sources and _is_weather_query(query):
             articles.extend(self._fetch_open_meteo(query))
 
+        if beat_future is not None:
+            articles.extend(beat_future.result())
+            beat_pool.shutdown(wait=False)
+
         if "rss" in self._fetch_sources:
             articles.extend(self._fetch_rss(limit=per_source_limit))
 
         seen_keys: set = set()
         unique: List[dict] = []
         for a in articles:
+            if _is_market_echo(a):
+                continue
             dedupe_keys = _article_dedupe_keys(a)
             if any(key in seen_keys for key in dedupe_keys):
                 continue
@@ -1185,6 +1272,39 @@ class NewsPipeline:
                 _note_source_failure("_fetch_rss")
                 continue
         return articles
+
+    def _fetch_beats(self, query: str) -> List[dict]:
+        """Every entry of the BEAT_FEEDS the question touches, fetched in parallel with a
+        short timeout so a slow feed cannot cost the whole evidence pack."""
+        urls = [url for beat in _beats_for(query) for url in beat["feeds"]]
+        if not urls:
+            return []
+        try:
+            import feedparser
+            import requests
+        except ImportError:
+            return []
+
+        def read(feed_url: str) -> List[dict]:
+            try:
+                resp = requests.get(feed_url, timeout=BEAT_TIMEOUT_S, headers={"User-Agent": BEAT_USER_AGENT})
+                resp.raise_for_status()
+                feed = feedparser.parse(resp.content)
+            except Exception:
+                _note_source_failure("_fetch_beats")
+                return []
+            return [{
+                "title": entry.get("title") or "",
+                "url": entry.get("link") or "",
+                "publish_date": entry.get("published") or "",
+                "text": entry.get("summary") or "",
+                "summary": entry.get("summary") or "",
+                "source": feed.feed.get("title") or feed_url,
+                "source_channel": "beat",
+            } for entry in feed.entries]
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(urls), 6)) as executor:
+            return [a for batch in executor.map(read, urls) for a in batch]
 
     def plan_search_query(self, question: str) -> str:
         """Use a small LangChain planner step to turn a forecast into a news query."""
