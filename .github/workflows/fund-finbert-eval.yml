@@ -1,0 +1,72 @@
+name: Fund news sentiment evaluation
+
+# The pre-registered GO/NO-GO test for headline sentiment in the Foresea Fund
+# (docs/fund.md, "News sentiment evaluation"): collect three months of GDELT
+# headlines (about 80 minutes at GDELT's one request per 6.5 s), score them with
+# FinBERT and the Apache-2.0 DistilRoBERTa on CPU, and apply the rule unchanged.
+# Re-run monthly while the verdict is NO-GO.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fund-finbert-eval
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: src
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet transformers safetensors requests numpy
+
+      - name: Collect headlines from GDELT
+        run: python scripts/fund_news_collect.py --days 89 --out data/fund_news
+
+      - name: Keep the headlines for reproduction
+        uses: actions/upload-artifact@v4
+        with:
+          name: fund-news-headlines
+          path: data/fund_news
+          retention-days: 90
+
+      - name: Score and apply the pre-registered rule
+        run: python scripts/fund_finbert_eval.py --news data/fund_news --out reports/fund_finbert_eval
+
+      - name: Commit the report
+        env:
+          GIT_REBASE_KEEP_THEIRS: "reports/fund_finbert_eval.json"
+          MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p ~/.ssh
+          printf '%s' "$MTM_PUBLISH_DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/mtm_publish_deploy_key
+          chmod 600 ~/.ssh/mtm_publish_deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
+          git add reports/fund_finbert_eval.json
+          if git diff --cached --quiet; then
+            echo "Report unchanged."
+            exit 0
+          fi
+          git commit -m "fund: news sentiment evaluation report [skip ci]"
+          bash .github/scripts/push_with_rebase_retry.sh origin main
