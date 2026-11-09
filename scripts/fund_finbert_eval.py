@@ -49,6 +49,8 @@ INSTRUMENTS = {
 }
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
 FRED_ATTEMPTS = 4
+#: FRED's firewall refuses agents containing "eval", so this one names the test instead.
+USER_AGENT = "Foresea/fund-sentiment (+https://foresea.ink)"
 
 Scorer = Callable[[Sequence[str]], list[float]]
 
@@ -56,7 +58,7 @@ Scorer = Callable[[Sequence[str]], list[float]]
 def fred_closes(series: str, start: date, *, http_get=requests.get, sleep=clock.sleep) -> list[tuple[date, float]]:
     for attempt in range(FRED_ATTEMPTS):
         try:
-            resp = http_get(FRED_URL.format(series=series), timeout=120, headers={"User-Agent": "Foresea/fund-eval"})
+            resp = http_get(FRED_URL.format(series=series), timeout=120, headers={"User-Agent": USER_AGENT})
             resp.raise_for_status()
             text = resp.text
             break
