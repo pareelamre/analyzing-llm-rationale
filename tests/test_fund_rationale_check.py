@@ -80,5 +80,17 @@ class RationaleCheckTests(unittest.TestCase):
         self.assertEqual(payload["checker"]["model"], "ZefanCai/Open-Jev-2B")
 
 
+class ValidationTests(unittest.TestCase):
+    def test_the_fixture_holds_the_four_inversions_and_scoring_counts_them(self):
+        cases = _ROOT / "tests" / "fixtures" / "rationale_check_cases.json"
+        data = json.loads(cases.read_text())
+        self.assertEqual(sum(c["expected"] == "contradicts" for c in data["cases"]), 4)
+        # A checker that reads every rationale as arguing "No" catches every inversion here,
+        # because all four inverted numbers point to Yes, but it would also miss Mojtaba (agrees).
+        result = check.validate(cases, lambda q, r: 0.05)
+        self.assertEqual(result["summary"]["inversions_caught"], "4/4")
+        self.assertEqual(result["summary"]["false_flags"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

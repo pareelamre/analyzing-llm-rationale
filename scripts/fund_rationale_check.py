@@ -14,6 +14,7 @@ and publishes, and nothing is blocked until the flags prove worth trusting.
 Usage:
   fund_rationale_check.py --store STORE.duckdb --list-only   # prints pending=N
   fund_rationale_check.py --store STORE.duckdb               # checks pending forecasts
+  fund_rationale_check.py --validate CASES.json              # scores the checker on known cases
 """
 from __future__ import annotations
 
@@ -125,12 +126,39 @@ def run(store: Path, out_path: Path, ask: Callable[[str, str], float], *, now: O
     return {"checked": len(todo), "kept": len(checks)}
 
 
+def validate(cases_path: Path, ask: Callable[[str, str], float]) -> dict:
+    """Run the checker on known forecasts (tests/fixtures/rationale_check_cases.json: the
+    2026-11-08 inversions and correct forecasts from the same run) and count how many it gets."""
+    cases = json.loads(cases_path.read_text(encoding="utf-8"))["cases"]
+    results = []
+    for case in cases:
+        p_yes = ask(case["question"], case["rationale"][:MAX_RATIONALE_CHARS])
+        got = verdict(float(case["forecast"]), p_yes)
+        results.append({"ident": case["ident"], "forecast": case["forecast"], "rationale_yes": round(p_yes, 4),
+                        "expected": case["expected"], "got": got, "right": got == case["expected"]})
+        print(f"{'OK ' if got == case['expected'] else 'MISS'} expected {case['expected']:11} got {got:11} "
+              f"forecast {float(case['forecast']):.2f} rationale-yes {p_yes:.2f} | {case['ident'][:50]}")
+    caught = sum(1 for r in results if r["expected"] == "contradicts" and r["got"] == "contradicts")
+    inverted = sum(1 for r in results if r["expected"] == "contradicts")
+    false_flags = sum(1 for r in results if r["expected"] == "agrees" and r["got"] == "contradicts")
+    summary = {"cases": len(results), "right": sum(r["right"] for r in results),
+               "inversions_caught": f"{caught}/{inverted}", "false_flags": false_flags}
+    print(json.dumps(summary))
+    return {"summary": summary, "results": results}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--store", type=Path, required=True)
+    parser.add_argument("--store", type=Path)
     parser.add_argument("--out", type=Path, default=OUT_PATH)
     parser.add_argument("--list-only", action="store_true", help="print pending=N and stop (no model needed)")
+    parser.add_argument("--validate", type=Path, help="score the checker on known cases and stop")
     args = parser.parse_args()
+    if args.validate:
+        validate(args.validate, open_jev_checker(device=os.environ.get("JEV_DEVICE", "cpu")))
+        return 0
+    if not args.store:
+        parser.error("--store is required")
     if args.list_only:
         previous = json.loads(args.out.read_text(encoding="utf-8")) if args.out.is_file() else {}
         n = len(pending_forecasts(args.store, {c["key"] for c in previous.get("checks") or []}))
