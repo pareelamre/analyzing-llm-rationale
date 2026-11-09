@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""End-to-end evaluation: does headline sentiment earn a place in the Foresea Fund?
+
+Implements the rule pre-registered in docs/fund.md ("News sentiment evaluation") without
+changing it: headlines (fund_news_collect.py) are scored by each sentiment model; for each
+instrument and trading day, the signal is the mean P(positive) - P(negative) over headlines
+seen in the 24 hours before that instrument's close (at least 5 headlines); the target is
+the next close-to-close return. The first half of the dates only sets the threshold; the
+second half decides GO or NO-GO, with 97.5% intervals bootstrapped over dates.
+
+Usage: fund_finbert_eval.py [--news data/fund_news] [--out reports/fund_finbert_eval]
+"""
+from __future__ import annotations
+
+import argparse
+import bisect
+import csv
+import io
+import json
+import sys
+from datetime import date, datetime, time, timedelta, timezone
+from pathlib import Path
+from typing import Callable, Optional, Sequence
+
+import numpy as np
+import requests
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+MODELS = {
+    "finbert": "ProsusAI/finbert",
+    "distilroberta": "mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis",
+}
+MIN_HEADLINES = 5
+WINDOW = timedelta(hours=24)
+MIN_TEST_DAYS = 150
+CI = 97.5
+BOOTSTRAPS = 4000
+#: instrument -> (headline group, close time UTC, round-trip cost)
+INSTRUMENTS = {
+    "Nifty 50": ("india_equity", time(10, 0), 0.0005),
+    "Nifty Bank": ("india_equity", time(10, 0), 0.0005),
+    "S&P 500": ("us_equity", time(20, 0), 0.0005),
+    "MCX gold": ("gold", time(18, 0), 0.0010),
+    "WTI crude": ("crude", time(18, 30), 0.0010),
+}
+FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
+
+Scorer = Callable[[Sequence[str]], list[float]]
+
+
+def fred_closes(series: str, start: date) -> list[tuple[date, float]]:
+    text = requests.get(FRED_URL.format(series=series), timeout=60, headers={"User-Agent": "Foresea/fund-eval"}).text
+    out = []
+    for row in csv.reader(io.StringIO(text)):
+        try:
+            day, value = date.fromisoformat(row[0]), float(row[1])
+        except (ValueError, IndexError):
+            continue
+        if day >= start:
+            out.append((day, value))
+    return out
+
+
+def load_prices(start: date, end: date) -> dict[str, list[tuple[date, float]]]:
+    from analyzing_llm_rationale import commodity_pairs, index_forecast
+
+    gold_rows = [json.loads(line) for line in (ROOT / "data" / "commodity_prices.jsonl").open()
+                 if '"gold"' in line and '"india"' in line]
+    gold = [(d, c) for d, c in commodity_pairs.continuous([r for r in gold_rows if r.get("source") == "india"])
+            if start <= d <= end]
+    return {
+        "Nifty 50": index_forecast.daily_closes("NSE_INDEX|Nifty 50", start, end),
+        "Nifty Bank": index_forecast.daily_closes("NSE_INDEX|Nifty Bank", start, end),
+        "S&P 500": fred_closes("SP500", start),
+        "MCX gold": gold,
+        "WTI crude": fred_closes("DCOILWTICO", start),
+    }
+
+
+def load_headlines(news_dir: Path) -> dict[str, list[tuple[datetime, str]]]:
+    out = {}
+    for path in sorted(news_dir.glob("*.jsonl")):
+        rows = [json.loads(line) for line in path.open(encoding="utf-8") if line.strip()]
+        out[path.stem] = sorted((datetime.fromisoformat(r["seen"]), r["title"]) for r in rows)
+    return out
+
+
+def daily_rows(prices: dict[str, list[tuple[date, float]]], headlines: dict[str, list[tuple[datetime, str]]],
+               scores: dict[str, dict[str, float]]) -> list[dict]:
+    """One row per (instrument, day t) with at least MIN_HEADLINES headlines in the 24 hours
+    before close t, the mean sentiment then, and the return from close t to the next close."""
+    rows = []
+    for name, (group, close_at, cost) in INSTRUMENTS.items():
+        series = sorted(prices.get(name) or [])
+        items = headlines.get(group) or []
+        stamps = [ts for ts, _ in items]
+        group_scores = scores.get(group) or {}
+        for (day, close), (_, next_close) in zip(series, series[1:]):
+            cutoff = datetime.combine(day, close_at, tzinfo=timezone.utc)
+            lo = bisect.bisect_right(stamps, cutoff - WINDOW)
+            hi = bisect.bisect_right(stamps, cutoff)
+            window = [group_scores[title] for _, title in items[lo:hi] if title in group_scores]
+            if len(window) < MIN_HEADLINES or close <= 0:
+                continue
+            rows.append({"instrument": name, "day": day, "signal": float(np.mean(window)), "headlines": len(window),
+                         "ret": next_close / close - 1.0, "cost": cost})
+    return rows
+
+
+def _spearman(x: np.ndarray, y: np.ndarray) -> float:
+    if len(x) < 3:
+        return float("nan")
+    rx, ry = np.argsort(np.argsort(x)), np.argsort(np.argsort(y))
+    return float(np.corrcoef(rx, ry)[0, 1])
+
+
+def evaluate(rows: list[dict], *, seed: int = 0) -> dict:
+    """The pre-registered test on one model's rows."""
+    days = sorted({r["day"] for r in rows})
+    if len(days) < 4:
+        return {"decision": "NO-GO", "reason": "too few days", "test_instrument_days": 0}
+    split = days[len(days) // 2]
+    calib = [r for r in rows if r["day"] < split]
+    test = [r for r in rows if r["day"] >= split]
+    tau = float(np.median([abs(r["signal"]) for r in calib])) if calib else 0.0
+
+    def stats(sample: list[dict]) -> tuple[float, float, float, int]:
+        s = np.array([r["signal"] for r in sample])
+        y = np.array([r["ret"] for r in sample])
+        pos = np.where(s > tau, 1.0, np.where(s < -tau, -1.0, 0.0))
+        traded = pos != 0
+        costs = np.array([r["cost"] for r in sample])
+        net = pos * y - costs
+        long_net = y - costs
+        trade_mean = float(net[traded].mean()) if traded.any() else float("nan")
+        return _spearman(s, y), trade_mean, float(long_net[traded].mean()) if traded.any() else float("nan"), \
+            int(traded.sum())
+
+    ic, trade_mean, long_mean, n_trades = stats(test)
+    by_day: dict[date, list[dict]] = {}
+    for r in test:
+        by_day.setdefault(r["day"], []).append(r)
+    test_days = list(by_day)
+    rng = np.random.default_rng(seed)
+    ics, trades = [], []
+    for _ in range(BOOTSTRAPS):
+        pick = [r for d in rng.choice(len(test_days), len(test_days)) for r in by_day[test_days[d]]]
+        b_ic, b_trade, _, _ = stats(pick)
+        ics.append(b_ic)
+        trades.append(b_trade)
+    lo_q, hi_q = (100 - CI) / 2, 100 - (100 - CI) / 2
+    ic_ci = [float(np.nanpercentile(ics, lo_q)), float(np.nanpercentile(ics, hi_q))]
+    trade_ci = [float(np.nanpercentile(trades, lo_q)), float(np.nanpercentile(trades, hi_q))]
+    checks = {
+        "enough_test_days": len(test) >= MIN_TEST_DAYS,
+        "correlation_above_zero": ic_ci[0] > 0,
+        "rule_net_above_zero": trade_ci[0] > 0,
+        "rule_beats_always_long": bool(np.isfinite(trade_mean) and trade_mean > long_mean),
+    }
+    return {
+        "decision": "GO" if all(checks.values()) else "NO-GO", "checks": checks,
+        "calibration_days": len({r["day"] for r in calib}), "test_days": len(test_days),
+        "test_instrument_days": len(test), "threshold": round(tau, 4),
+        "spearman": round(ic, 4), "spearman_ci": [round(v, 4) for v in ic_ci],
+        "trades": n_trades, "rule_net_mean": round(trade_mean, 5), "rule_net_ci": [round(v, 5) for v in trade_ci],
+        "always_long_net_mean": round(long_mean, 5),
+        "by_instrument": {name: {"days": sum(1 for r in test if r["instrument"] == name),
+                                 "spearman": round(_spearman(np.array([r["signal"] for r in test if r["instrument"] == name]),
+                                                             np.array([r["ret"] for r in test if r["instrument"] == name])), 4)}
+                          for name in INSTRUMENTS},
+    }
+
+
+def hf_scorer(model_id: str) -> Scorer:
+    from transformers import pipeline
+
+    clf = pipeline("text-classification", model=model_id, top_k=None, truncation=True, device=-1)
+
+    def score(texts: Sequence[str]) -> list[float]:
+        out = []
+        for i in range(0, len(texts), 64):
+            for labels in clf(list(texts[i:i + 64])):
+                p = {d["label"].lower(): d["score"] for d in labels}
+                out.append(p.get("positive", 0.0) - p.get("negative", 0.0))
+        return out
+    return score
+
+
+def run(news_dir: Path, out_base: Path, scorers: dict[str, Scorer],
+        prices: Optional[dict] = None) -> dict:
+    headlines = load_headlines(news_dir)
+    first = min((items[0][0] for items in headlines.values() if items), default=datetime.now(timezone.utc))
+    prices = prices if prices is not None else load_prices(first.date(), datetime.now(timezone.utc).date())
+    report = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+              "rule": "docs/fund.md, News sentiment evaluation (pre-registered 2026-11-09)",
+              "headlines": {g: len(v) for g, v in headlines.items()},
+              "price_days": {k: len(v) for k, v in prices.items()},
+              "source": "Data from the GDELT Project (gdeltproject.org); prices from Upstox, FRED and MCX via Upstox",
+              "models": {}}
+    for name, scorer in scorers.items():
+        scores = {}
+        for group, items in headlines.items():
+            titles = sorted({t for _, t in items})
+            scores[group] = dict(zip(titles, scorer(titles)))
+        result = evaluate(daily_rows(prices, headlines, scores))
+        report["models"][name] = {"model": MODELS.get(name, name), **result}
+        print(f"{name}: {result['decision']} | {json.dumps({k: result.get(k) for k in ('test_instrument_days', 'spearman', 'spearman_ci', 'rule_net_mean', 'rule_net_ci', 'always_long_net_mean')})}")
+    out_base.parent.mkdir(parents=True, exist_ok=True)
+    out_base.with_suffix(".json").write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
+    return report
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--news", type=Path, default=ROOT / "data" / "fund_news")
+    parser.add_argument("--out", type=Path, default=ROOT / "reports" / "fund_finbert_eval")
+    args = parser.parse_args()
+    run(args.news, args.out, {name: hf_scorer(model_id) for name, model_id in MODELS.items()})
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
