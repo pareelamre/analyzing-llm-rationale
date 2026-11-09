@@ -235,6 +235,10 @@ jobs:
           CYCLE_INTERVAL_MINUTES: "5"
           SNAPSHOT_SLOT_MINUTES: "5"
           TRACK_RECORD_EVIDENCE_DETAIL: "summary"
+          # Rank evidence by meaning (sentence-transformers is in the pipeline extra);
+          # word overlap alone ranked unrelated "$150 million" stories above the
+          # Sotheby's sale an artwork market turned on.
+          EVIDENCE_EMBEDDINGS: "1"
           PRICE_DRIFT_THRESHOLD: "0.10"
           SHORT_HORIZON_REFORECAST_LEAD_DAYS: "90"
           SHORT_HORIZON_SLOT_HOURS: "24"
