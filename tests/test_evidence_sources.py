@@ -46,6 +46,18 @@ class BeatRegistryTests(unittest.TestCase):
         self.assertEqual(np_mod._beats_for("Will Smartphone sales rise?"), [])  # "art" inside a word
 
 
+class RecentQueryTests(unittest.TestCase):
+    def test_the_deadline_is_dropped_but_amounts_stay(self):
+        self.assertEqual(np_mod._recent_search_query(ARTWORK), "artwork sell 150 million")
+        self.assertEqual(np_mod._recent_search_query("Will Harry Styles and Zoe Kravitz be married before Jul 1, 2027?"),
+                         "Harry Styles Zoe Kravitz married")
+        self.assertEqual(np_mod._recent_search_query("Will Bitcoin dip to $45,000 by December 31, 2026?"),
+                         "Bitcoin dip 45 000")
+
+    def test_a_question_that_is_all_date_keeps_its_keywords(self):
+        self.assertEqual(np_mod._recent_search_query("December 2026?"), "December 2026")
+
+
 class MarketEchoTests(unittest.TestCase):
     def test_market_pages_and_mirrors_are_echo(self):
         for article in (
@@ -59,6 +71,31 @@ class MarketEchoTests(unittest.TestCase):
     def test_news_about_a_market_is_not_echo(self):
         self.assertFalse(np_mod._is_market_echo({"url": "https://www.si.com/nfl/stafford-kalshi", "source": "si.com"}))
         self.assertFalse(np_mod._is_market_echo({"url": "https://news.artnet.com/market/x", "source": "Artnet News"}))
+
+
+class RestatedQuestionTests(unittest.TestCase):
+    def test_a_page_titled_with_the_question_is_echo(self):
+        q = "Will Harry Styles and Zoe Kravitz be married Before Jul 1, 2027?"
+        self.assertTrue(np_mod._restates_question({"title": q}, q))
+        self.assertTrue(np_mod._restates_question({"title": f"{q} | Predxy"}, q))
+        self.assertTrue(np_mod._restates_question({"title": "Will Harry Styles and Zoë Kravitz be married before Jul 1 2027"}, q))
+
+    def test_a_story_on_the_same_subject_is_not(self):
+        q = "Will Harry Styles and Zoe Kravitz be married Before Jul 1, 2027?"
+        self.assertFalse(np_mod._restates_question({"title": "When Will Harry Styles and Zoë Kravitz Get Married? - NEXT.io"}, q))
+        self.assertFalse(np_mod._restates_question({"title": ""}, q))
+
+    def test_the_full_pipeline_drops_it(self):
+        q = "Will Harry Styles and Zoe Kravitz be married Before Jul 1, 2027?"
+        pipeline = _bare(("web",))
+        pipeline._use_query_planner, pipeline._llm, pipeline._summarize_articles = False, None, False
+        pipeline._use_embeddings, pipeline._embed_fn, pipeline._rerank_fn, pipeline._min_relevance = False, None, None, 0.0
+        pipeline._fetch_web = lambda query, limit: [
+            {"title": q, "url": "https://predxy-like.example/m", "source": "predxy-like.example", "source_channel": "web"},
+            {"title": "Harry Styles and Zoe Kravitz wedding plans reported", "url": "https://news.example/w",
+             "source": "news.example", "source_channel": "web"}]
+        found = pipeline.fetch_summarize_rank(q, top_k=5)
+        self.assertEqual([a["url"] for a in found], ["https://news.example/w"])
 
 
 class FetchTests(unittest.TestCase):
@@ -75,7 +112,7 @@ class FetchTests(unittest.TestCase):
 
         pipeline._fetch_google_news = fake_google
         found = pipeline.fetch(ARTWORK, top_k=5)
-        self.assertEqual(queries, ["artwork sell 150 million December 31 when:30d", ARTWORK])
+        self.assertEqual(queries, ["artwork sell 150 million when:30d", ARTWORK])
         self.assertEqual([a["title"] for a in found], ["Sotheby's sale 1", "Sotheby's sale 2"])
 
     def test_beats_are_fetched_only_when_enabled_and_on_topic(self):

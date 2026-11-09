@@ -810,6 +810,11 @@ def fetch_and_rank_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def evidence_embeddings_enabled() -> bool:
+    """Whether evidence is ranked by meaning (EVIDENCE_EMBEDDINGS=1) rather than word overlap."""
+    return os.environ.get("EVIDENCE_EMBEDDINGS", "").strip() == "1"
+
+
 def init_server_state(args: argparse.Namespace) -> None:
     """Initialise the FastAPI prediction state without starting a server.
 
@@ -853,9 +858,12 @@ def init_server_state(args: argparse.Namespace) -> None:
                 # on their topic; the general homepage RSS stays off.
                 fetch_sources=args.evidence_source or ("web", "gdelt", "google-news", "beat"),
                 summarize_articles=False,
-                use_embeddings=False,
-                # Serving uses deterministic lexical/BM25 ranking. Loading the
-                # sentence-transformer here can exhaust a 512 MiB Cloud Run instance.
+                # Lexical/BM25 ranking by default: loading the sentence-transformer can
+                # exhaust a 512 MiB Cloud Run instance. Hosts with room (the forecast
+                # job's runners) set EVIDENCE_EMBEDDINGS=1 to rank by meaning, so an
+                # abstract question ("an artwork") can find specific news ("a Van Gogh
+                # at Sotheby's") that shares none of its words.
+                use_embeddings=evidence_embeddings_enabled(),
                 min_relevance=float(os.environ.get("EVIDENCE_MIN_RELEVANCE", "0.25")),
             )
         except Exception as exc:

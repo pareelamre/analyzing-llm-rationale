@@ -100,7 +100,7 @@ BEAT_FEEDS = (
 MARKET_ECHO_DOMAINS = frozenset({
     "polymarket.com", "kalshi.com", "manifold.markets", "predictit.org", "metaculus.com",
     "trackerpoly.com", "lines.com", "bitget.com", "polymarkets.co.il", "struct.to", "orrery.me",
-    "polymarketanalytics.com",
+    "polymarketanalytics.com", "predxy.com",
 })
 _MARKET_ECHO_NAMES = frozenset({"polymarket", "kalshi", "manifold", "manifold markets", "predictit", "metaculus"})
 
@@ -378,6 +378,28 @@ def _keyword_search_query(question: str, max_terms: int = 12) -> str:
     return " ".join(kept[:max_terms]) or question
 
 
+_MONTHS = {"jan", "january", "feb", "february", "mar", "march", "apr", "april", "may", "jun", "june", "jul",
+           "july", "aug", "august", "sep", "sept", "september", "oct", "october", "nov", "november", "dec",
+           "december"}
+
+
+def _recent_search_query(question: str) -> str:
+    """Keyword query for the recent-news pass, without the question's deadline (month
+    names, day numbers, years): news text rarely repeats it, and Google News returned
+    nothing for "artwork sell 150 million December 31" but ten auction stories without
+    the date."""
+    kept: List[str] = []
+    after_month = False
+    for term in _keyword_search_query(question).split():
+        low = term.lower()
+        is_day = after_month and re.fullmatch(r"\d{1,2}", low)
+        after_month = low in _MONTHS
+        if after_month or is_day or re.fullmatch(r"(19|20)\d\d", low):
+            continue
+        kept.append(term)
+    return " ".join(kept) or _keyword_search_query(question)
+
+
 def _beats_for(query: str) -> List[dict]:
     """The BEAT_FEEDS entries whose hints appear in the question."""
     text = " " + " ".join(re.findall(r"[a-z0-9']+", (query or "").lower())) + " "
@@ -392,6 +414,21 @@ def _is_market_echo(article: dict) -> bool:
         if name in MARKET_ECHO_DOMAINS or any(name.endswith("." + d) for d in MARKET_ECHO_DOMAINS):
             return True
     return source in _MARKET_ECHO_NAMES
+
+
+def _restates_question(article: dict, question: str) -> bool:
+    """A page titled with the market question itself: an aggregator's copy of the market,
+    whatever its domain (MARKET_ECHO_DOMAINS can't list them all)."""
+    import difflib
+
+    def norm(text: str) -> str:
+        return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+
+    title = re.split(r"\s[-|–]\s", str(article.get("title") or ""))[0]
+    a, b = norm(title), norm(question)
+    # Only a full market question (six words or more) counts: a short search phrase
+    # like "New Zealand election margin" is matched by genuine headlines.
+    return len(b.split()) >= 6 and bool(a) and difflib.SequenceMatcher(None, a, b).ratio() >= 0.95
 
 
 def _normalize_article_url(url: str) -> str:
@@ -559,7 +596,7 @@ class NewsPipeline:
             articles.extend(self._fetch_gdelt(query, limit=per_source_limit))
 
         if "google-news" in self._fetch_sources:
-            articles.extend(self._fetch_google_news(f"{_keyword_search_query(query)} {GOOGLE_NEWS_RECENT}",
+            articles.extend(self._fetch_google_news(f"{_recent_search_query(query)} {GOOGLE_NEWS_RECENT}",
                                                     limit=per_source_limit))
             articles.extend(self._fetch_google_news(query, limit=per_source_limit))
 
@@ -1517,6 +1554,7 @@ class NewsPipeline:
                 futures = [executor.submit(fetch_query, q, max(top_k, 5)) for q in search_queries]
                 concurrent.futures.wait(futures, timeout=8.0)
 
+        raw[:] = [article for article in raw if not _restates_question(article, question)]
         for article in raw:
             if self._summarize_articles:
                 article["summary"] = self.summarize(article)
@@ -1535,6 +1573,7 @@ class NewsPipeline:
         if fallback_query not in search_queries:
             previous_count = len(raw)
             fetch_query(fallback_query, max(top_k * 2, 10))
+            raw[previous_count:] = [a for a in raw[previous_count:] if not _restates_question(a, question)]
             for article in raw[previous_count:]:
                 if self._summarize_articles:
                     article["summary"] = self.summarize(article)
