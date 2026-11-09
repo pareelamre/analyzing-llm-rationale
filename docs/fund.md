@@ -112,6 +112,39 @@ share of the fund's decisions, only from that record.
   number pointing the other way is flagged. It is a guard against the
   2026-11-08 inversions, not a forecaster, and it blocks nothing in shadow.
 
+## News sentiment evaluation (pre-registered 2026-11-09, before any result)
+
+Question: does headline sentiment predict the next day's move well enough to
+trade? Fixed before the data is seen:
+
+- **Models:** ProsusAI/finbert (CC-BY-NC-SA-4.0, evaluated for research only)
+  and mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis
+  (Apache-2.0, the one the fund could deploy). CrudeBERT has no license and
+  is not used.
+- **Headlines:** GDELT DOC 2.0 (free with attribution), English, the last
+  three months, four groups: Indian equities, US equities, gold, crude oil.
+- **Signal:** for each trading day t and instrument, the mean of
+  P(positive) - P(negative) over headlines seen in the 24 hours before that
+  instrument's close; no signal with fewer than 5 headlines. Nothing after
+  the close is used.
+- **Target:** the next close-to-close return. Instruments: Nifty 50 and Nifty
+  Bank (Indian equities, close 10:00 UTC), S&P 500 (US, 20:00 UTC), MCX gold
+  (18:00 UTC), WTI (18:30 UTC).
+- **Split:** the first half of the dates calibrates only the threshold tau
+  (the median |signal|); the sign is fixed (positive sentiment means long).
+  Everything below is measured on the second half.
+- **Metrics:** pooled Spearman correlation of signal and next-day return;
+  a rule that goes long above +tau, short below -tau, holds one day, and pays
+  0.05% per round trip on index futures and 0.10% on gold and oil; its mean
+  net return per trade against always-long on the same days. Confidence
+  intervals bootstrap over dates (keeping same-day instruments together), at
+  97.5% because two models are tested.
+- **GO**, for a model, only if all four hold: at least 150 test
+  instrument-days with a signal; the correlation's interval above 0; the
+  rule's net mean interval above 0; the rule beats always-long. Otherwise
+  **NO-GO**: the model stays a shadow analyst, recording daily, and the test
+  is re-run each month on the growing forward record.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
