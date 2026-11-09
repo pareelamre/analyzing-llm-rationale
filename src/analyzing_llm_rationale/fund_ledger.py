@@ -88,6 +88,21 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             note_source TEXT,
             evidence_json TEXT NOT NULL DEFAULT '[]'
         );
+        CREATE TABLE IF NOT EXISTS analyst_predictions (
+            fund_id TEXT NOT NULL,
+            analyst TEXT NOT NULL,
+            day TEXT NOT NULL,
+            instrument_id TEXT NOT NULL,
+            ts TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            label TEXT,
+            probability REAL NOT NULL,
+            market_probability REAL,
+            side TEXT,
+            price REAL,
+            edge REAL,
+            PRIMARY KEY (fund_id, analyst, day, instrument_id)
+        );
         CREATE TABLE IF NOT EXISTS fund_nav (
             ts TEXT NOT NULL,
             fund_id TEXT NOT NULL,
@@ -304,6 +319,27 @@ def nav(conn: sqlite3.Connection, fund_id: str, quotes: Mapping[str, Mapping[str
         "unrealized_pnl_by_analyst": {k: round(v, 4) for k, v in by_analyst.items()},
         "realized_pnl_by_analyst": {k: round(v, 4) for k, v in realized_by_analyst.items()},
     }
+
+
+def record_predictions(conn: sqlite3.Connection, fund_id: str, analyst: str, mode: str,
+                       rows: Sequence[Mapping[str, Any]], signals: Sequence[Any], *, now: Optional[str] = None) -> int:
+    """Keep an analyst's probability for each market, one per market per day (the latest), with
+    the trade it would have made, so shadow analysts build a gradable record."""
+    ts = now or _now()
+    would = {s.instrument["id"]: s for s in signals}
+    n = 0
+    for row in rows:
+        iid = f"{str(row.get('platform') or 'kalshi').lower()}:{row.get('ident')}"
+        bid, ask = row.get("market_bid"), row.get("market_ask")
+        mid = (float(bid) + float(ask)) / 2 if bid is not None and ask is not None else row.get("market_probability")
+        s = would.get(iid)
+        conn.execute(
+            "INSERT OR REPLACE INTO analyst_predictions (fund_id, analyst, day, instrument_id, ts, mode, label,"
+            " probability, market_probability, side, price, edge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (fund_id, analyst, ts[:10], iid, ts, mode, row.get("question"), float(row["model_probability"]), mid,
+             s.side if s else None, s.price if s else None, s.edge if s else None))
+        n += 1
+    return n
 
 
 def record_nav(conn: sqlite3.Connection, snapshot: Mapping[str, Any], *, now: Optional[str] = None) -> None:

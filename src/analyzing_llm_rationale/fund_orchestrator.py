@@ -22,9 +22,14 @@ Analysts in this first version (and why some are absent):
   after costs. A stretched pair with a losing backtest is skipped with that reason recorded.
 - The index model forecasts ranges, not direction (its median sits within 0.1% of the close),
   so it sizes risk but opens no index trades until a directional analyst joins (step 2).
+
+Shadow analysts are scored, not traded: blend_model (scripts/train_fund_blend.py) re-weighs a
+model forecast against the market price as Foresea's own graded record says it should, and its
+predictions are recorded each day until its live record earns it a place.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional, Sequence
@@ -160,6 +165,30 @@ def event_signals(board: Iterable[Mapping[str, Any]], now: datetime, *, analyst:
                        _fact("expected profit per dollar after costs", _pct(edge), "orchestrator")],
             ))
     return out, skipped
+
+
+def blend_probability(model_p: float, market_p: float, params: Mapping[str, Any]) -> float:
+    """The blend analyst's probability: logistic weights on logit(market), logit(model), gap."""
+    def logit(x: float) -> float:
+        x = min(max(float(x), 0.01), 0.99)
+        return math.log(x / (1 - x))
+    lm, lp = logit(market_p), logit(model_p)
+    z = float(params["intercept"]) + sum(float(c) * v for c, v in zip(params["coef"], (lm, lp, lp - lm)))
+    return 1.0 / (1.0 + math.exp(-z))
+
+
+def blend_board(board: Iterable[Mapping[str, Any]], params: Mapping[str, Any]) -> list[dict]:
+    """Edge board rows with the model's forecast replaced by the blend's (the raw one kept)."""
+    out = []
+    for row in board:
+        p, m = row.get("model_probability"), row.get("market_probability")
+        if m is None and row.get("market_bid") is not None and row.get("market_ask") is not None:
+            m = (float(row["market_bid"]) + float(row["market_ask"])) / 2
+        if p is None or m is None:
+            continue
+        out.append({**row, "raw_model_probability": p,
+                    "model_probability": round(blend_probability(float(p), float(m), params), 4)})
+    return out
 
 
 def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[str, Any]], *,

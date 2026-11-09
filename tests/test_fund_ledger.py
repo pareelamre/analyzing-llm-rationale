@@ -81,6 +81,21 @@ class FundLedgerTests(unittest.TestCase):
         self.assertAlmostEqual(snap["nav_usd"], 10_000.0)
         self.assertFalse(snap["positions"][0]["marked"])
 
+    def test_shadow_predictions_keep_one_row_per_market_per_day(self):
+        row = {"platform": "Kalshi", "ident": "KXA", "question": "A?", "model_probability": 0.4,
+               "market_bid": 0.30, "market_ask": 0.32}
+
+        class _Signal:
+            instrument, side, price, edge = {"id": "kalshi:KXA"}, "YES", 0.32, 0.2
+
+        ledger.record_predictions(self.conn, "fund", "blend_model", "shadow", [row], [], now="2026-11-09T08:00:00+00:00")
+        ledger.record_predictions(self.conn, "fund", "blend_model", "shadow", [row], [_Signal()],
+                                  now="2026-11-09T20:00:00+00:00")
+        ledger.record_predictions(self.conn, "fund", "blend_model", "shadow", [row], [], now="2026-11-10T08:00:00+00:00")
+        rows = self.conn.execute("SELECT day, side, market_probability FROM analyst_predictions ORDER BY day").fetchall()
+        self.assertEqual([(r["day"], r["side"]) for r in rows], [("2026-11-09", "YES"), ("2026-11-10", None)])
+        self.assertAlmostEqual(rows[0]["market_probability"], 0.31)
+
     def test_notes_and_evidence_are_kept_with_the_fill(self):
         ledger.buy(self.conn, "fund", GOLD_PERP, "LONG", 10, 4.0, note="Gold parity premium at 2.1 sd.",
                    note_source="model", evidence=[{"source": "pairs_model", "figure": "z=2.1"}])
