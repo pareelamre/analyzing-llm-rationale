@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sqlite3
 import sys
@@ -51,6 +52,28 @@ class FundCycleTests(unittest.TestCase):
             self.assertEqual(labels, {"kalshi:KXFED": "Fed cuts in December?", "polymarket:iran-slug": "iran-slug"})
             actions = {r[0] for r in fund.execute("SELECT action FROM fund_trades")}
             self.assertEqual(actions, {"transfer"})
+
+    def test_recent_rationale_checks_become_a_shadow_analyst_with_its_flags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            checks = Path(tmp) / "checks.json"
+            checks.write_text(json.dumps({"checks": [
+                {"instrument_id": "polymarket:iran", "question": "Iran?", "forecast": 0.98, "rationale_yes": 0.04,
+                 "verdict": "contradicts", "forecasted_at": "2026-11-09T17:25:00+00:00"},
+                {"instrument_id": "kalshi:KXFED", "question": "Fed?", "forecast": 0.3, "rationale_yes": 0.2,
+                 "verdict": "agrees", "forecasted_at": "2026-11-09T17:26:00+00:00"},
+                {"instrument_id": "kalshi:OLD", "question": "Old?", "forecast": 0.9, "rationale_yes": 0.1,
+                 "verdict": "contradicts", "forecasted_at": "2026-11-01T00:00:00+00:00"},
+            ]}))
+            fund = sqlite3.connect(":memory:")
+            fund_ledger.ensure_schema(fund)
+            with mock.patch.object(cycle, "CHECKS_PATH", checks), \
+                    mock.patch.object(cycle, "BLEND_PATH", Path(tmp) / "absent.json"):
+                shadow = cycle.record_shadow(fund, [], datetime(2026, 11, 10, 0, 0, tzinfo=timezone.utc),
+                                             "2026-11-10T00:00:00+00:00")
+        checker = shadow["rationale_check"]
+        self.assertEqual(checker["markets"], 2)
+        self.assertEqual([f["label"] for f in checker["flags"]], ["Iran?"])
+        self.assertEqual(fund.execute("SELECT COUNT(*) FROM analyst_predictions").fetchone()[0], 2)
 
     def test_polymarket_no_is_the_mirror_of_yes(self):
         quote = cycle.event_quote({"yes_bid": 0.04, "yes_ask": 0.06, "no_bid": None, "no_ask": None})

@@ -44,6 +44,9 @@ UNIVERSE_PATH = ROOT / "static" / "fund_universe.json"
 BOARD_PATH = ROOT / "static" / "mark_to_market_live.json"
 PAIRS_PATH = ROOT / "static" / "commodity_pairs_live.json"
 BLEND_PATH = ROOT / "configs" / "fund_blend.json"
+CHECKS_PATH = ROOT / "static" / "fund_rationale_checks.json"
+#: Rationale checks older than this no longer describe a live forecast.
+CHECKS_MAX_AGE_H = 48
 FX_URLS = (
     "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
     "https://latest.currency-api.pages.dev/v1/currencies/usd.json",
@@ -265,15 +268,30 @@ def run(now: Optional[datetime] = None) -> dict:
 
 def record_shadow(conn: sqlite3.Connection, board: list, now: datetime, stamp: str) -> dict:
     """Shadow analysts: record what each would predict and trade, without trading it."""
+    shadow: dict = {}
+    checks = [c for c in (_load_json(CHECKS_PATH).get("checks") or [])
+              if (orch._age_hours(c.get("forecasted_at"), now) or 1e9) <= CHECKS_MAX_AGE_H]
+    if checks:
+        rows = [{"platform": c["instrument_id"].split(":", 1)[0], "ident": c["instrument_id"].split(":", 1)[1],
+                 "question": c.get("question"), "model_probability": c["rationale_yes"]} for c in checks]
+        ledger.record_predictions(conn, FUND_ID, "rationale_check", "shadow", rows, [], now=stamp)
+        shadow["rationale_check"] = {
+            "mode": "shadow", "kind": "checker", "markets": len(checks),
+            "days_recorded": conn.execute("SELECT COUNT(DISTINCT day) FROM analyst_predictions WHERE fund_id = ?"
+                                          " AND analyst = 'rationale_check'", (FUND_ID,)).fetchone()[0],
+            "checker": "Open-Jev 2B (Qwen3.5-2B base)",
+            "flags": [{"label": c.get("question"), "forecast": c["forecast"], "rationale_yes": c["rationale_yes"],
+                       "forecasted_at": c.get("forecasted_at")} for c in checks if c.get("verdict") == "contradicts"],
+        }
     params = _load_json(BLEND_PATH)
     if not params.get("coef"):
-        return {}
+        return shadow
     rows = orch.blend_board(board, params)
     would, _ = orch.event_signals(rows, now, analyst="blend_model", model_label="the blend analyst")
     ledger.record_predictions(conn, FUND_ID, "blend_model", "shadow", rows, would, now=stamp)
     days = conn.execute("SELECT COUNT(DISTINCT day), COUNT(*) FROM analyst_predictions WHERE fund_id = ?"
                         " AND analyst = 'blend_model'", (FUND_ID,)).fetchone()
-    return {"blend_model": {
+    return {**shadow, "blend_model": {
         "mode": "shadow", "markets": len(rows), "days_recorded": days[0], "predictions_recorded": days[1],
         "test": params.get("time_split_test"), "trained_on": params.get("trained_on"),
         "would_trade": [{"label": s.instrument.get("label"), "side": s.side, "price": s.price,

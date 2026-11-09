@@ -7974,6 +7974,7 @@ const FUND_ANALYST_LABELS = {
   risk_overlay: 'Risk overlay (hedges)',
   agent_transfer: 'Carried over from the agent',
   blend_model: 'Blend analyst (market and model)',
+  rationale_check: 'Rationale checker (Open-Jev 2B)',
 };
 const FUND_CLASS_LABELS = { event: 'Prediction markets', index: 'Indices', commodity: 'Commodities' };
 function _fundAnalystLabel(key) { return FUND_ANALYST_LABELS[key] || String(key || '').replace(/_/g, ' '); }
@@ -8052,6 +8053,10 @@ function renderFundBoard(d) {
     const tested = t.test_markets
       ? ` Tested on ${t.test_markets} markets resolved after ${escHtml(t.cutoff || '')}: Brier ${t.blend_brier} against the market's ${t.market_brier}.`
       : '';
+    if (s.kind === 'checker') {
+      const flags = (s.flags || []).map(f => `${escHtml(f.label || '')} (forecast ${Math.round(Number(f.forecast) * 100)}%, its rationale reads ${Math.round(Number(f.rationale_yes) * 100)}% yes)`).join('; ');
+      return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: checking, not blocking; ${s.markets || 0} recent forecasts read against their own rationales. ${flags ? `Number points away from its reasoning: ${flags}.` : 'No forecast contradicts its own reasoning.'}</li>`;
+    }
     return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading; ${s.days_recorded || 0} day(s) of predictions on ${s.markets || 0} markets.${tested} ${would ? `Would trade: ${would}.` : 'Would trade nothing today.'}</li>`;
   }).join('');
   const passedItems = [...(d.cycle?.skipped || []), ...(d.cycle?.passed || [])]
