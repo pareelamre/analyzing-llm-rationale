@@ -83,6 +83,43 @@ class V1ApiEndpointsTests(unittest.TestCase):
             self.assertEqual(len(data["results"]), 2)
             self.assertEqual(data["results"][0]["status"], "success")
 
+    def test_v1_market_whale_flow(self):
+        sample_flow = {
+            "timestamp": "2026-11-08T20:00:00Z",
+            "min_notional_usd": 250.0,
+            "n_whale_prints": 1,
+            "total_whale_volume_usd": 5000.0,
+            "sentiment_index": 80.0,
+            "sentiment_label": "BULLISH ACCUMULATION",
+            "whale_prints": [{
+                "platform": "Polymarket",
+                "ticker": "will-fed-cut-rates",
+                "market_title": "Will Fed Cut Rates?",
+                "side": "YES",
+                "price": 0.65,
+                "size": 7692,
+                "notional_usd": 5000.0,
+                "timestamp": "2026-11-08T19:59:00Z",
+            }],
+        }
+        with patch("analyzing_llm_rationale.whale_flow.fetch_live_whale_flow", return_value=sample_flow):
+            resp = self.client.get("/v1/market/whale-flow?min_notional=250")
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["n_whale_prints"], 1)
+            self.assertEqual(data["sentiment_label"], "BULLISH ACCUMULATION")
+
+    def test_openapi_tag_consistency(self):
+        schema = app.openapi()
+        tags = set()
+        for _path, methods in schema.get("paths", {}).items():
+            for _method, op in methods.items():
+                if isinstance(op, dict):
+                    for t in op.get("tags", []):
+                        tags.add(t)
+        self.assertNotIn("Agent", tags, "Use 'Agents' instead of singular 'Agent'")
+        self.assertNotIn("Predict", tags, "Use 'Inference' instead of 'Predict'")
+
 
 if __name__ == "__main__":
     unittest.main()

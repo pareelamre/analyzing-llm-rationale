@@ -1,6 +1,6 @@
 # Kalshi and Polymarket operations
 
-Foresea exposes 48 additional or paginated REST operations and native exchange
+Foresea exposes 49 additional or paginated REST operations and native exchange
 WebSocket streams. The checked-in `venue_contracts.json` contains the exact
 operation names, upstream paths, parameter locations and input schemas. Contracts
 were checked against the exchanges' specifications on September 5, 2026:
@@ -46,7 +46,7 @@ connected account because the upstream endpoint requires signed requests.
 
 | Venue | Account reads |
 | --- | --- |
-| Kalshi | `historical_fills`, `historical_orders`, `historical_positions`, `settlements`, `positions`, `orders`, `fills`, `orderbooks`, `order_groups`, `order_group` |
+| Kalshi | `historical_fills`, `historical_orders`, `historical_positions`, `settlements`, `balance`, `positions`, `orders`, `fills`, `orderbooks`, `order_groups`, `order_group` |
 | Polymarket | `activity`, `closed_positions`, `value`, `positions`, `orders`, `fills` |
 
 | Venue | Order actions |
