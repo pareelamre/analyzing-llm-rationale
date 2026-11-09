@@ -7972,6 +7972,7 @@ const FUND_ANALYST_LABELS = {
   pairs_model: 'Pairs model',
   risk_overlay: 'Risk overlay (hedges)',
   agent_transfer: 'Carried over from the agent',
+  blend_model: 'Blend analyst (market and model)',
 };
 const FUND_CLASS_LABELS = { event: 'Prediction markets', index: 'Indices', commodity: 'Commodities' };
 function _fundAnalystLabel(key) { return FUND_ANALYST_LABELS[key] || String(key || '').replace(/_/g, ' '); }
@@ -8044,6 +8045,14 @@ function renderFundBoard(d) {
     </article>`;
   }).join('');
 
+  const shadowItems = Object.entries(d.shadow || {}).map(([name, s]) => {
+    const t = s.test || {};
+    const would = (s.would_trade || []).map(w => `${escHtml(w.side || '')} ${escHtml(w.label || '')}`).join('; ');
+    const tested = t.test_markets
+      ? ` Tested on ${t.test_markets} markets resolved after ${escHtml(t.cutoff || '')}: Brier ${t.blend_brier} against the market's ${t.market_brier}.`
+      : '';
+    return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading; ${s.days_recorded || 0} day(s) of predictions on ${s.markets || 0} markets.${tested} ${would ? `Would trade: ${would}.` : 'Would trade nothing today.'}</li>`;
+  }).join('');
   const passedItems = [...(d.cycle?.skipped || []), ...(d.cycle?.passed || [])]
     .map(s => `<li><b>${escHtml(s.label || s.pair || _fundName({ instrument_id: s.instrument || '' }))}</b>: ${escHtml(s.reason || '')}</li>`).join('');
   const limits = d.limits || {};
@@ -8079,6 +8088,11 @@ function renderFundBoard(d) {
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Trades and their reasons</h4>
         <p class="agentic-panel-copy">A note may only state numbers from its evidence; one that adds anything else is replaced by the plain fact sheet.</p></div></div>
       <div class="agentic-activity-list">${tradeItems || '<p class="text-sm text-gray-500">No trades yet.</p>'}</div>
+    </section>
+    <section class="agentic-panel">
+      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Shadow analysts</h4>
+        <p class="agentic-panel-copy">New models record their predictions and are graded before they may trade.</p></div></div>
+      ${shadowItems ? `<ul class="text-sm" style="margin:0 0 0 18px;display:grid;gap:6px">${shadowItems}</ul>` : '<p class="text-sm text-gray-500">No shadow analysts yet.</p>'}
     </section>
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Passed on this cycle</h4>

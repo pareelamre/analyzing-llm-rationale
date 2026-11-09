@@ -825,7 +825,8 @@ function escHtml(s) {
                 self.assertIn("fund.nav_usd != null", loader)
                 renderer = index.split("function renderFundBoard(d) {", 1)[1].split(
                     "async function removePersonalLedgerEntry", 1)[0]
-                for section in ("Holdings", "Who made the money", "Trades and their reasons", "Passed on this cycle"):
+                for section in ("Holdings", "Who made the money", "Trades and their reasons", "Shadow analysts",
+                                "Passed on this cycle"):
                     self.assertIn(section, renderer)
                 self.assertIn("escHtml(t.note || '')", renderer)
                 # The side and the market name read as separate items.

@@ -43,6 +43,7 @@ PAYLOAD_PATH = ROOT / "static" / "fund_live.json"
 UNIVERSE_PATH = ROOT / "static" / "fund_universe.json"
 BOARD_PATH = ROOT / "static" / "mark_to_market_live.json"
 PAIRS_PATH = ROOT / "static" / "commodity_pairs_live.json"
+BLEND_PATH = ROOT / "configs" / "fund_blend.json"
 FX_URLS = (
     "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
     "https://latest.currency-api.pages.dev/v1/currencies/usd.json",
@@ -251,13 +252,36 @@ def run(now: Optional[datetime] = None) -> dict:
         conn.commit()
         snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
+    shadow = record_shadow(conn, board, now, stamp)
     ledger.record_nav(conn, snapshot, now=stamp)
     conn.commit()
     payload = build_payload(conn, snapshot, universe, now=now, window=why, traded=can_trade, executed=executed,
                             passed=passed, skipped=skipped_events + skipped_pairs, signals=signals, seeded=seeded)
+    payload["shadow"] = shadow
     PAYLOAD_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
     conn.close()
     return payload
+
+
+def record_shadow(conn: sqlite3.Connection, board: list, now: datetime, stamp: str) -> dict:
+    """Shadow analysts: record what each would predict and trade, without trading it."""
+    params = _load_json(BLEND_PATH)
+    if not params.get("coef"):
+        return {}
+    rows = orch.blend_board(board, params)
+    would, _ = orch.event_signals(rows, now, analyst="blend_model", model_label="the blend analyst")
+    ledger.record_predictions(conn, FUND_ID, "blend_model", "shadow", rows, would, now=stamp)
+    days = conn.execute("SELECT COUNT(DISTINCT day), COUNT(*) FROM analyst_predictions WHERE fund_id = ?"
+                        " AND analyst = 'blend_model'", (FUND_ID,)).fetchone()
+    return {"blend_model": {
+        "mode": "shadow", "markets": len(rows), "days_recorded": days[0], "predictions_recorded": days[1],
+        "test": params.get("time_split_test"), "trained_on": params.get("trained_on"),
+        "would_trade": [{"label": s.instrument.get("label"), "side": s.side, "price": s.price,
+                         "edge": round(s.edge, 4)} for s in would],
+        "predictions": [{"label": r.get("question"), "blend": r["model_probability"],
+                         "model": r.get("raw_model_probability"), "market": r.get("market_probability")}
+                        for r in rows],
+    }}
 
 
 def build_payload(conn: sqlite3.Connection, snapshot: dict, universe: dict, *, now: datetime, window: str,

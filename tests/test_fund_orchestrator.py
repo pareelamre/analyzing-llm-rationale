@@ -153,6 +153,23 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(hedge.attribution, {"risk_overlay": 1.0})
 
 
+class BlendTests(unittest.TestCase):
+    PARAMS = {"coef": [0.693864, 0.402811, -0.291052], "intercept": 0.173417}
+
+    def test_the_blend_leans_on_the_market_and_nudges_toward_the_model(self):
+        # The 2026-11-09 weights: about 0.99 x logit(market) + 0.11 x logit(model).
+        artwork = orch.blend_probability(0.05, 0.93, self.PARAMS)
+        self.assertTrue(0.88 < artwork < 0.93)
+        self.assertAlmostEqual(orch.blend_probability(0.5, 0.5, self.PARAMS), 0.5433, places=3)
+
+    def test_the_board_keeps_the_raw_forecast_beside_the_blend(self):
+        rows = orch.blend_board([_row("x", 0.05, 0.92, 0.94), {"ident": "no-price", "model_probability": 0.3}],
+                                self.PARAMS)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["raw_model_probability"], 0.05)
+        self.assertGreater(rows[0]["model_probability"], 0.85)
+
+
 class NoteTests(unittest.TestCase):
     def _order(self):
         signals, _ = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)

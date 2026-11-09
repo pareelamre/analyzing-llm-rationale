@@ -90,6 +90,22 @@ Open-weight models come first; the owner's own fine-tunes follow.
   Indian-index version of CrudeBERT exists), trained on Kaggle or Colab once the
   Wunderfund competition is over. Ask the owner before using Kaggle hours.
 
+## Shadow mode
+
+A new analyst does not trade on arrival. It records its probability for each
+market every day (`analyst_predictions` in the fund store), the trade it would
+have made, and is graded as markets resolve; it earns trust, and with it a
+share of the fund's decisions, only from that record.
+
+- **blend_model** (2026-11-09, `scripts/train_fund_blend.py`): a logistic
+  regression on logit(market), logit(model) and their gap, trained on 80,988
+  graded snapshots from 698 markets, each market weighted once. Time-split test
+  on 116 later markets: Brier 0.1179 against the market's 0.1190 (difference
+  -0.0011, 95% CI -0.0060 to +0.0042, so not yet distinguishable from the
+  market). Raw model forecasts were worse than the market (+0.0076, CI excludes
+  0); boosted trees overfit and were dropped. The weights lean on the market
+  about nine times more than on the model.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
