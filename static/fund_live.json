@@ -6,13 +6,14 @@
   "attribution": {
     "realized": {},
     "unrealized": {
-      "agent_transfer": 64.4893
+      "agent_transfer": 50.1172,
+      "event_model": -49.3853
     }
   },
   "by_asset_class": {
-    "event": 3290.4324
+    "event": 3970.6615
   },
-  "cash_usd": 6774.0569,
+  "cash_usd": 6030.0703,
   "curve": [
     {
       "nav_usd": 10106.6444,
@@ -69,10 +70,14 @@
     {
       "nav_usd": 10064.4893,
       "ts": "2026-11-09T19:18:50.502679+00:00"
+    },
+    {
+      "nav_usd": 10000.7318,
+      "ts": "2026-11-09T20:01:19.050785+00:00"
     }
   ],
   "cycle": {
-    "orders": 0,
+    "orders": 2,
     "passed": [],
     "seeded": null,
     "signals": 2,
@@ -98,11 +103,11 @@
         "reason": "forecast 15.0% is 36 points from the market; treated as a likely model error until the model has a record"
       }
     ],
-    "traded": false,
-    "window": "00:48 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-09T19:18:50.502679+00:00",
+  "generated_at": "2026-11-09T20:01:19.050785+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -110,14 +115,16 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10064.4893,
+  "nav_usd": 10000.7318,
   "net_exposure_by_underlying": {
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
     "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 354.33,
     "kalshi:KXTHC3MG-FED-26DEC10": 356.4,
     "kalshi:KXTHC3MG-FED-26NOV13": 9.2,
     "kalshi:KXUKCHAGOS-28JAN01-26DEC01": 18.4,
+    "kalshi:KXUSAEXPANDTERRITORY-29JAN21": 380.331,
     "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31": 261.5735,
+    "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026": 363.6556,
     "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026": 1141.8962,
     "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026": 498.702
   },
@@ -231,6 +238,27 @@
     {
       "asset_class": "event",
       "attribution": {
+        "event_model": 1.0
+      },
+      "collateral_usd": 380.3310234210526,
+      "entry_price": 0.89,
+      "instrument_id": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "kind": "binary",
+      "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
+      "mark": 0.89,
+      "marked": true,
+      "opened_at": "2026-11-09T20:01:19.050785+00:00",
+      "pair_key": null,
+      "pnl_usd": 0.0,
+      "quantity": 427.3382285629804,
+      "side": "NO",
+      "underlying": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "value_usd": 380.331,
+      "venue": "kalshi"
+    },
+    {
+      "asset_class": "event",
+      "attribution": {
         "agent_transfer": 1.0
       },
       "collateral_usd": 261.5735,
@@ -238,15 +266,36 @@
       "instrument_id": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
       "kind": "binary",
       "label": "Strait of Hormuz traffic returns to normal by December 31?",
-      "mark": 0.9,
+      "mark": 0.85,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -2.8744,
+      "pnl_usd": -17.2466,
       "quantity": 287.443442,
       "side": "NO",
       "underlying": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
-      "value_usd": 258.6991,
+      "value_usd": 244.3269,
+      "venue": "polymarket"
+    },
+    {
+      "asset_class": "event",
+      "attribution": {
+        "event_model": 1.0
+      },
+      "collateral_usd": 363.6555565789475,
+      "entry_price": 0.81,
+      "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "kind": "binary",
+      "label": "US announces end of Iranian blockade by November 30, 2026?",
+      "mark": 0.7,
+      "marked": true,
+      "opened_at": "2026-11-09T20:01:19.050785+00:00",
+      "pair_key": null,
+      "pnl_usd": -49.3853,
+      "quantity": 448.95747725795985,
+      "side": "NO",
+      "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "value_usd": 314.2702,
       "venue": "polymarket"
     },
     {
@@ -293,7 +342,7 @@
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": 0.645,
+  "return_pct": 0.007,
   "shadow": {
     "blend_model": {
       "days_recorded": 1,
@@ -416,6 +465,88 @@
   },
   "starting_value": 10000.0,
   "trades": [
+    {
+      "action": "open",
+      "attribution": {
+        "event_model": 1.0
+      },
+      "cycle_id": "fund-20261109T2001",
+      "evidence": [
+        {
+          "figure": "question: US announces end of Iranian blockade by November 30, 2026?",
+          "source": "venue"
+        },
+        {
+          "figure": "model probability of NO: 92.0%",
+          "source": "the on-device model forecast 2026-11-09 17:28 UTC"
+        },
+        {
+          "figure": "price to buy NO: 81\u00a2",
+          "source": "Polymarket order book"
+        },
+        {
+          "figure": "expected profit per dollar after costs: 11.6%",
+          "source": "orchestrator"
+        },
+        {
+          "figure": "size: 3.6% of the fund",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "label": "US announces end of Iranian blockade by November 30, 2026?",
+      "note": "Buy NO US announces end of Iranian blockade by November 30, 2026?. question: US announces end of Iranian blockade by November 30, 2026? (venue); model probability of NO: 92.0% (the on-device model forecast 2026-11-09 17:28 UTC); price to buy NO: 81\u00a2 (Polymarket order book); expected profit per dollar after costs: 11.6% (orchestrator); size: 3.6% of the fund (orchestrator). Reason: edge 11.6% per dollar after costs.",
+      "note_source": "facts",
+      "notional_usd": 363.6555565789475,
+      "pair_key": null,
+      "price": 0.81,
+      "purpose": "view",
+      "quantity": 448.95747725795985,
+      "realized_pnl_usd": 0.0,
+      "side": "NO",
+      "ts": "2026-11-09T20:01:19.050785+00:00"
+    },
+    {
+      "action": "open",
+      "attribution": {
+        "event_model": 1.0
+      },
+      "cycle_id": "fund-20261109T2001",
+      "evidence": [
+        {
+          "figure": "question: Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
+          "source": "venue"
+        },
+        {
+          "figure": "model probability of NO: 98.0%",
+          "source": "the on-device model forecast 2026-11-09 17:27 UTC"
+        },
+        {
+          "figure": "price to buy NO: 89\u00a2",
+          "source": "Kalshi order book"
+        },
+        {
+          "figure": "expected profit per dollar after costs: 8.1%",
+          "source": "orchestrator"
+        },
+        {
+          "figure": "size: 3.8% of the fund",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
+      "note": "Buy NO Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?. question: Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029? (venue); model probability of NO: 98.0% (the on-device model forecast 2026-11-09 17:27 UTC); price to buy NO: 89\u00a2 (Kalshi order book); expected profit per dollar after costs: 8.1% (orchestrator); size: 3.8% of the fund (orchestrator). Reason: edge 8.1% per dollar after costs.",
+      "note_source": "facts",
+      "notional_usd": 380.3310234210526,
+      "pair_key": null,
+      "price": 0.89,
+      "purpose": "view",
+      "quantity": 427.3382285629804,
+      "realized_pnl_usd": 0.0,
+      "side": "NO",
+      "ts": "2026-11-09T20:01:19.050785+00:00"
+    },
     {
       "action": "transfer",
       "attribution": {
