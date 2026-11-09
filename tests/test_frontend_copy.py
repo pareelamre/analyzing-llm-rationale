@@ -828,6 +828,8 @@ function escHtml(s) {
                 for section in ("Holdings", "Who made the money", "Trades and their reasons", "Passed on this cycle"):
                     self.assertIn(section, renderer)
                 self.assertIn("escHtml(t.note || '')", renderer)
+                # The side and the market name read as separate items.
+                self.assertIn("${escHtml(t.side || '')} · ${escHtml(_fundName(t))}", renderer)
                 self.assertIn("Paper trading only.", renderer)
 
     def test_track_record_is_off_the_site(self):
