@@ -10,7 +10,12 @@ on:
   workflow_run:
     workflows: ["Track record MTM tick"]
     types: [completed]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      validate:
+        description: "Score the checker on the 2026-11-08 known cases instead of checking new forecasts"
+        type: boolean
+        default: false
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
@@ -61,7 +66,12 @@ jobs:
 
       - name: Find forecasts not yet checked
         id: pending
-        run: python scripts/fund_rationale_check.py --store data/track_record_store.duckdb --list-only | tee -a "$GITHUB_OUTPUT"
+        run: |
+          if [ "${{ github.event.inputs.validate }}" = "true" ]; then
+            echo "pending=validate" | tee -a "$GITHUB_OUTPUT"
+          else
+            python scripts/fund_rationale_check.py --store data/track_record_store.duckdb --list-only | tee -a "$GITHUB_OUTPUT"
+          fi
 
       - name: Cache the checker weights
         if: steps.pending.outputs.pending != '0'
@@ -77,12 +87,16 @@ jobs:
           pip install --quiet transformers==5.10.2 peft==0.19.1 accelerate==1.13.0 safetensors huggingface_hub \
             "open-jev @ git+https://github.com/Zefan-Cai/Open-Jev@${OPEN_JEV_COMMIT}"
 
+      - name: Score the checker on known cases
+        if: steps.pending.outputs.pending == 'validate'
+        run: python scripts/fund_rationale_check.py --validate tests/fixtures/rationale_check_cases.json
+
       - name: Check forecasts against their rationales
-        if: steps.pending.outputs.pending != '0'
+        if: steps.pending.outputs.pending != '0' && steps.pending.outputs.pending != 'validate'
         run: python scripts/fund_rationale_check.py --store data/track_record_store.duckdb
 
       - name: Commit the checks
-        if: steps.pending.outputs.pending != '0'
+        if: steps.pending.outputs.pending != '0' && steps.pending.outputs.pending != 'validate'
         env:
           GIT_REBASE_KEEP_THEIRS: "static/fund_rationale_checks.json"
           MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
