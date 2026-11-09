@@ -807,6 +807,14 @@ function escHtml(s) {
                 self.assertIn("loadEdgeBoard();", catch_block)
                 self.assertIn(">Retry<", catch_block)
 
+    def test_the_landing_page_has_one_button_into_the_desk(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                landing = index.split('<section id="landingPage"', 1)[1].split('<div id="appShell"', 1)[0]
+                self.assertEqual(landing.count('onclick="launchApp()"'), 1)
+                self.assertIn(">Open the forecast desk</button>", landing)
+                self.assertNotIn(">Open desk</button>", landing)
+
     def test_the_agentic_tab_shows_the_fund_once_it_has_published(self):
         for name, index in self._both().items():
             with self.subTest(file=name):
