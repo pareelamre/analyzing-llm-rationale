@@ -81,7 +81,7 @@ def load_prices(start: date, end: date) -> dict[str, list[tuple[date, float]]]:
 
 def load_headlines(news_dir: Path) -> dict[str, list[tuple[datetime, str]]]:
     out = {}
-    for path in sorted(news_dir.glob("*.jsonl")):
+    for path in sorted(news_dir.glob("[!_]*.jsonl")):
         rows = [json.loads(line) for line in path.open(encoding="utf-8") if line.strip()]
         out[path.stem] = sorted((datetime.fromisoformat(r["seen"]), r["title"]) for r in rows)
     return out
@@ -191,11 +191,14 @@ def hf_scorer(model_id: str) -> Scorer:
 def run(news_dir: Path, out_base: Path, scorers: dict[str, Scorer],
         prices: Optional[dict] = None) -> dict:
     headlines = load_headlines(news_dir)
+    coverage_path = news_dir / "_coverage.json"
+    coverage = json.loads(coverage_path.read_text()) if coverage_path.is_file() else None
     first = min((items[0][0] for items in headlines.values() if items), default=datetime.now(timezone.utc))
     prices = prices if prices is not None else load_prices(first.date(), datetime.now(timezone.utc).date())
     report = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
               "rule": "docs/fund.md, News sentiment evaluation (pre-registered 2026-11-09)",
               "headlines": {g: len(v) for g, v in headlines.items()},
+              "collection": coverage,
               "price_days": {k: len(v) for k, v in prices.items()},
               "source": "Data from the GDELT Project (gdeltproject.org); prices from Upstox, FRED and MCX via Upstox",
               "models": {}}
