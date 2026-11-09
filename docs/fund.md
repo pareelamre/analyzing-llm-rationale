@@ -173,6 +173,23 @@ unchanged.**
   check, which we do not get around; gold is judged on the forward record
   with MCX prices instead.
 
+### Result (2026-11-09): NO-GO for both models
+
+Run as pre-registered (`reports/fund_finbert_eval.json`). About 186k headlines
+were built; 43k fell inside an instrument's window and were scored. The test
+half had 1,513 instrument-days (S&P 500 1,109, WTI 396, Nifty 4 each), well
+above the 150 required.
+
+| | FinBERT | DistilRoBERTa |
+|---|---|---|
+| Rank correlation with next-day return | 0.005 (CI −0.056 to 0.068) | −0.008 (CI −0.070 to 0.054) |
+| Rule's mean net return per trade | −0.05% (CI −0.32% to 0.22%) | −0.07% (CI −0.28% to 0.16%) |
+| Beats always-long | yes | no |
+
+Headline sentiment did not predict the next day's move, so neither model
+trades in the fund. Re-running on the same corpus would change nothing; a new
+test needs new data, such as sentiment recorded forward in shadow mode.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
@@ -181,7 +198,7 @@ unchanged.**
    commodity pairs by volume, plus their Kalshi hedge legs. Grounded notes,
    attribution, and the Fund view on the Agentic tab. Twice a day, after the
    agent cycle.
-2. FinBERT news sentiment.
+2. FinBERT news sentiment: tested 2026-11-09, NO-GO (see Result above).
 3. Weather models for weather markets.
 4. A classifier trained on Foresea's graded forecasts: which gaps pay.
 5. Skill-based weights once each analyst has a record.
