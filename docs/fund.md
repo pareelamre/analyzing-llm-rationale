@@ -145,6 +145,34 @@ trade? Fixed before the data is seen:
   **NO-GO**: the model stays a shadow analyst, recording daily, and the test
   is re-run each month on the growing forward record.
 
+### Amendment 1 (2026-11-09, before any data from the new source was read)
+
+GDELT's rate limit let a 150-minute collection gather about 9 days of
+headlines (909 in all), far short of the sample the rule needs, so the
+headline source changes. **The signal, window, 5-headline minimum, split,
+threshold, costs, metrics, 97.5% intervals and the four GO conditions are
+unchanged.**
+
+- **Headlines:** the `idleengine/financial-news-multisource` corpus, used
+  under its non-commercial research terms (accepted by the owner), subsets
+  `sp500_daily_headlines`, `cnbc_headlines`, `finsen_us_2007_2023`,
+  `yahoo_finance_felixdrinkall`, `bloomberg_reuters` and
+  `us_financial_news_2018_jeet` (FNSPID, 11 GB, and Reddit are left out).
+  Only each item's first line (its headline) is scored.
+- **Groups:** a headline joins a group when it matches that group's terms
+  (US equities: S&P, Wall Street, Dow, Nasdaq, U.S. stocks; crude: crude,
+  oil price(s), Brent, OPEC, WTI; Indian equities: Nifty, Sensex, Indian
+  shares/stocks); every `sp500_daily_headlines` item is US equities.
+- **Timing:** minute-level timestamps are used as given; a day-level item
+  (stamped midnight UTC) is treated as seen at the end of its UTC day, so it
+  can never inform that day's close.
+- **Instruments and period:** S&P 500 (FRED, November 2016 on), WTI (FRED),
+  Nifty 50 and Nifty Bank (Upstox, 2008 on), each over the dates where its
+  headlines and prices overlap. **Gold is dropped from this test:** FRED no
+  longer serves the LBMA fix and the alternative tried sits behind a bot
+  check, which we do not get around; gold is judged on the forward record
+  with MCX prices instead.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
