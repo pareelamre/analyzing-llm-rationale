@@ -52,6 +52,10 @@ class EventSignalTests(unittest.TestCase):
         self.assertEqual(orch.event_signals([_row("x", 0.6, 0.55, 0.57, at="2026-11-01T00:00:00+00:00")], NOW)[0], [])
         self.assertEqual(orch.event_signals([_row("x", 0.58, 0.55, 0.57)], NOW)[0], [])
 
+    def test_a_tiny_gap_on_a_cheap_contract_is_not_a_signal(self):
+        # 8% against a 6c ask is a 31% edge per dollar but only 2 points: noise for an unproven model.
+        self.assertEqual(orch.event_signals([_row("delcy", 0.08, 0.05, 0.06)], NOW)[0], [])
+
     def test_a_forecast_far_from_the_market_is_skipped_as_a_likely_model_error(self):
         # The inverted forecast of 2026-11-08: 98% against a 6c market.
         signals, skipped = orch.event_signals([_row("hamas", 0.98, 0.05, 0.06)], NOW)
@@ -93,11 +97,40 @@ class PlanTests(unittest.TestCase):
                  "mark": 0.94, "attribution": {"transfer": 1.0}},
                 {"instrument_id": "kalshi:fed", "label": "Fed", "side": "YES", "kind": "binary", "quantity": 10,
                  "mark": 0.90, "attribution": {"transfer": 1.0}}]
-        forecasts = {"polymarket:iran": {"model_probability": 0.10, "forecasted_at": "2026-11-09T17:00:00+00:00"}}
+        forecasts = {"polymarket:iran": {"model_probability": 0.25, "forecasted_at": "2026-11-09T17:00:00+00:00"}}
         out = orch.plan(_snapshot(positions=held), [], {}, {}, forecasts=forecasts)
         sells = [(o.instrument["id"], o.purpose) for o in out["orders"]]
-        # Iran NO is worth 90% to the model against a 94c bid: sell. The Fed side has no fresh forecast: keep.
+        # Iran NO is worth 75% to the model against a 94c bid: sell. The Fed side has no fresh forecast: keep.
         self.assertEqual(sells, [("polymarket:iran", "exit")])
+
+    def _held_no(self, mark=0.94):
+        return [{"instrument_id": "polymarket:delcy", "label": "Delcy", "side": "NO", "kind": "binary",
+                 "quantity": 1214.78, "mark": mark, "attribution": {"agent_transfer": 1.0}}]
+
+    def test_a_one_or_two_point_disagreement_does_not_sell(self):
+        # 2026-11-09: the model put Delcy NO at 92% against a 94c bid, and Mojtaba NO at 6%
+        # against 6.9c. Without a margin the fund would have sold 17% of itself on that.
+        forecasts = {"polymarket:delcy": {"model_probability": 0.08, "market_bid": 0.05, "market_ask": 0.06,
+                                          "forecasted_at": "2026-11-09T17:00:00+00:00"}}
+        self.assertEqual(orch.plan(_snapshot(positions=self._held_no()), [], {}, {}, forecasts=forecasts)["orders"], [])
+        mojtaba = [{**self._held_no(0.069)[0], "instrument_id": "polymarket:mojtaba"}]
+        forecasts = {"polymarket:mojtaba": {"model_probability": 0.94, "market_bid": 0.92, "market_ask": 0.93,
+                                            "forecasted_at": "2026-11-09T17:00:00+00:00"}}
+        self.assertEqual(orch.plan(_snapshot(positions=mojtaba), [], {}, {}, forecasts=forecasts)["orders"], [])
+
+    def test_a_likely_model_error_never_triggers_an_exit(self):
+        # NO is worth 30% to the model against a 94c bid, but the forecast is 64 points from the market.
+        forecasts = {"polymarket:delcy": {"model_probability": 0.70, "market_bid": 0.05, "market_ask": 0.07,
+                                          "forecasted_at": "2026-11-09T17:00:00+00:00"}}
+        self.assertEqual(orch.plan(_snapshot(positions=self._held_no()), [], {}, {}, forecasts=forecasts)["orders"], [])
+
+    def test_the_other_side_of_a_held_market_is_never_bought(self):
+        row = {**_row("delcy", 0.30, 0.10, 0.12)}
+        signals, _ = orch.event_signals([row], NOW)
+        self.assertEqual([s.side for s in signals], ["YES"])
+        out = orch.plan(_snapshot(positions=self._held_no(0.88)), signals, {}, {})
+        self.assertEqual(out["orders"], [])
+        self.assertEqual(out["passed"][0]["reason"], "the fund holds NO on this market")
 
     def test_a_pair_back_in_its_band_closes_both_legs(self):
         held = [{"instrument_id": "mcx:COPPER", "side": "LONG", "kind": "linear", "quantity": 1, "mark": 900.0,
