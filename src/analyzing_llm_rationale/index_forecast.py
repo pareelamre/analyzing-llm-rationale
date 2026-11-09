@@ -56,6 +56,8 @@ HISTORY_START = date(2008, 1, 1)
 CHUNK_DAYS = 3600
 HORIZONS = (1, 5, 21)
 QUANTILES = (0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
+#: The tails' own levels, for pricing options on the range (fund_options); not drawn on the page.
+TAIL_QUANTILES = (0.01, 0.99)
 _NORMAL_Z = (-1.6448536, -1.2815516, -0.6744898, 0.0, 0.6744898, 1.2815516, 1.6448536)
 FAST_ALPHA = 0.06  # RiskMetrics lambda 0.94
 SLOW_ALPHA = 0.01
@@ -301,6 +303,7 @@ def build_forecast(name: str, fits: dict[int, dict[str, Any]], holidays, shapes:
             "target_date": sessions[h - 1].isoformat(),
             "sigma": round(sigma, 6),
             "quantiles": [round(close * math.exp(sigma * _z_quantile(z, p)), 2) for p in QUANTILES],
+            "tail_quantiles": {str(p): round(close * math.exp(sigma * _z_quantile(z, p)), 2) for p in TAIL_QUANTILES},
             "baseline_quantiles": [round(close * math.exp(fit["baseline_sigma"] * q), 2) for q in _NORMAL_Z],
             "p_up": round(1 - _z_cdf(z, 0.0), 4),
             "levels": [

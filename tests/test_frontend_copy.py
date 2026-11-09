@@ -830,7 +830,7 @@ function escHtml(s) {
                     self.assertIn(section, renderer)
                 self.assertIn("escHtml(t.note || '')", renderer)
                 # The side and the market name read as separate items.
-                self.assertIn("${escHtml(t.side || '')} · ${escHtml(_fundName(t))}", renderer)
+                self.assertIn("${escHtml(FUND_SIDE_LABELS[t.side] || t.side || '')} · ${escHtml(_fundName(t))}", renderer)
                 self.assertIn("Paper trading only.", renderer)
                 self.assertIn("checking, not blocking", renderer)
 

@@ -132,6 +132,12 @@ def upstox_futures(exchange: str, *, http_get: HttpGet = requests.get) -> list[d
     return sorted(rows, key=lambda r: r.get("expiry") or 0)
 
 
+def upstox_options(exchange: str, *, http_get: HttpGet = requests.get) -> list[dict]:
+    """Every listed call and put on an Upstox exchange file (fund_options picks from them)."""
+    raw = _get_json(UPSTOX_INSTRUMENTS_URL.format(exchange=exchange), http_get=http_get, accept="application/gzip").content
+    return [r for r in json.loads(gzip.decompress(raw)) if r.get("instrument_type") in ("CE", "PE") and r.get("instrument_key")]
+
+
 def kalshi_margin_markets(*, http_get: HttpGet = requests.get) -> list[dict]:
     """Kalshi's perpetuals and futures, with their book and 24-hour notional (public route)."""
     body = _get_json(KALSHI_MARGIN_MARKETS_URL, http_get=http_get).json()

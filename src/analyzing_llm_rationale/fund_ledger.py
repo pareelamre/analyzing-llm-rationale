@@ -1,6 +1,6 @@
 """The Foresea Fund's paper ledger: one USD account holding every kind of position.
 
-Two kinds of position, valued differently (docs/fund.md):
+Three kinds of position, valued differently (docs/fund.md):
 
 - binary: a Yes/No event contract (Kalshi, Polymarket). It costs price x quantity and is worth
   the side's bid x quantity, as the agent accounts have always been marked.
@@ -8,6 +8,10 @@ Two kinds of position, valued differently (docs/fund.md):
   aside its full notional in USD as collateral, so the fund never borrows; it is worth that
   collateral plus its profit, sign x (mark - entry) x quantity x multiplier, in USD at the
   current USD/INR for rupee contracts.
+- option: a defined-risk option structure (fund_options), held as one position whose side says
+  what it is for: BULL, BEAR, MOVE (a straddle) or RANGE (an iron condor). It costs its price x
+  quantity, the most it can lose, and is worth its bid x quantity, in USD at the current rate.
+  Its legs are kept in fund_instruments so it can be marked and settled later.
 
 Every fill records why it happened: the analysts behind it and their weights (attribution),
 its purpose (a view or a hedge), the trade note and whether that note is the model's own words
@@ -26,6 +30,9 @@ from typing import Any, Mapping, Optional, Sequence
 MIN_QUANTITY = 1e-9
 LINEAR_SIDES = ("LONG", "SHORT")
 BINARY_SIDES = ("YES", "NO")
+OPTION_SIDES = ("BULL", "BEAR", "MOVE", "RANGE")
+#: Which way a position leans on its underlying; straddles and condors lean neither way.
+DIRECTION = {"SHORT": -1.0, "BEAR": -1.0, "MOVE": 0.0, "RANGE": 0.0}
 
 
 class LedgerError(ValueError):
@@ -103,6 +110,12 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             edge REAL,
             PRIMARY KEY (fund_id, analyst, day, instrument_id)
         );
+        CREATE TABLE IF NOT EXISTS fund_instruments (
+            fund_id TEXT NOT NULL,
+            instrument_id TEXT NOT NULL,
+            spec_json TEXT NOT NULL,
+            PRIMARY KEY (fund_id, instrument_id)
+        );
         CREATE TABLE IF NOT EXISTS fund_nav (
             ts TEXT NOT NULL,
             fund_id TEXT NOT NULL,
@@ -124,6 +137,8 @@ def _kind(side: str) -> str:
         return "linear"
     if side in BINARY_SIDES:
         return "binary"
+    if side in OPTION_SIDES:
+        return "option"
     raise LedgerError(f"unknown side {side!r}")
 
 
@@ -180,8 +195,8 @@ def buy(conn: sqlite3.Connection, fund_id: str, instrument: Mapping[str, Any], s
         evidence: Sequence[Mapping[str, Any]] = (), action: str = "open", now: Optional[str] = None) -> str:
     """Open or add to ``side`` of ``instrument`` (a fund_universe.describe() dict or alike).
 
-    Binary sides cost price x quantity; linear sides set aside their notional as collateral.
-    Fails, changing nothing, if cash would go negative.
+    Binary and option sides cost price x quantity; linear sides set aside their notional as
+    collateral. Fails, changing nothing, if cash would go negative.
     """
     side = side.upper()
     kind = _kind(side)
@@ -199,6 +214,11 @@ def buy(conn: sqlite3.Connection, fund_id: str, instrument: Mapping[str, Any], s
     attribution = dict(attribution or {})
     held = conn.execute("SELECT * FROM fund_positions WHERE fund_id = ? AND instrument_id = ? AND side = ?",
                         (fund_id, instrument["id"], side)).fetchone()
+    if kind == "option":
+        if not instrument.get("legs"):
+            raise LedgerError(f"{instrument['id']}: an option structure needs its legs")
+        conn.execute("INSERT OR REPLACE INTO fund_instruments (fund_id, instrument_id, spec_json) VALUES (?, ?, ?)",
+                     (fund_id, instrument["id"], json.dumps(dict(instrument), sort_keys=True)))
     if held is None:
         conn.execute(
             "INSERT INTO fund_positions (fund_id, instrument_id, side, kind, venue, asset_class, underlying, key, label,"
@@ -228,6 +248,9 @@ def position_pnl_usd(position: Mapping[str, Any], mark: float, fx: float, quanti
     qty = position["quantity"] if quantity is None else quantity
     if position["kind"] == "binary":
         return qty * mark - position["collateral_usd"] * qty / position["quantity"]
+    if position["kind"] == "option":
+        worth = _usd(qty * mark * position["multiplier"], position["currency"], fx)
+        return worth - position["collateral_usd"] * qty / position["quantity"]
     sign = 1.0 if position["side"] == "LONG" else -1.0
     gain = sign * (mark - position["entry_price"]) * qty * position["multiplier"]
     return _usd(gain, position["currency"], fx)
@@ -265,6 +288,13 @@ def sell(conn: sqlite3.Connection, fund_id: str, instrument_id: str, side: str, 
                    cycle_id=cycle_id, note=note, note_source=note_source, evidence=evidence, now=ts)
 
 
+def instrument_spec(conn: sqlite3.Connection, fund_id: str, instrument_id: str) -> Optional[dict[str, Any]]:
+    """The instrument an option position was opened with: its legs, expiry and index."""
+    row = conn.execute("SELECT spec_json FROM fund_instruments WHERE fund_id = ? AND instrument_id = ?",
+                       (fund_id, instrument_id)).fetchone()
+    return json.loads(row[0]) if row else None
+
+
 def positions(conn: sqlite3.Connection, fund_id: str) -> list[dict[str, Any]]:
     return [dict(r) for r in conn.execute(
         "SELECT * FROM fund_positions WHERE fund_id = ? AND quantity > ? ORDER BY asset_class, instrument_id",
@@ -278,6 +308,8 @@ def mark_for(position: Mapping[str, Any], quote: Optional[Mapping[str, Any]]) ->
         return None
     if position["kind"] == "binary":
         return quote.get("no_bid" if position["side"] == "NO" else "yes_bid", quote.get("bid"))
+    if position["kind"] == "option":
+        return quote.get("bid")
     near = quote.get("bid") if position["side"] == "LONG" else quote.get("ask")
     return near if near is not None else (quote.get("last") if quote.get("last") is not None else quote.get("mid"))
 
@@ -297,7 +329,7 @@ def nav(conn: sqlite3.Connection, fund_id: str, quotes: Mapping[str, Mapping[str
         worth = pos["collateral_usd"] + pnl
         value += worth
         by_class[pos["asset_class"]] = by_class.get(pos["asset_class"], 0.0) + worth
-        sign = -1.0 if pos["side"] == "SHORT" else 1.0
+        sign = DIRECTION.get(pos["side"], 1.0)
         exposure[pos["underlying"]] = exposure.get(pos["underlying"], 0.0) + sign * pos["collateral_usd"]
         for analyst, weight in json.loads(pos["attribution_json"]).items():
             by_analyst[analyst] = by_analyst.get(analyst, 0.0) + weight * pnl

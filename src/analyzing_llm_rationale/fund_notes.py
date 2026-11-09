@@ -24,9 +24,10 @@ PROMPT = (
 
 def headline(order: Mapping[str, Any]) -> str:
     verb = {"exit": "Sell", "hedge": "Hedge with"}.get(order["purpose"], "Buy")
-    side = order["side"]
     label = order["instrument"].get("label") or order["instrument"]["id"]
-    return f"{verb} {side} {label}"
+    if order["side"] in ("BULL", "BEAR", "MOVE", "RANGE"):  # an option structure's label says what it is
+        return f"{verb} {label}"
+    return f"{verb} {order['side']} {label}"
 
 
 def fact_sheet(order: Mapping[str, Any]) -> str:
