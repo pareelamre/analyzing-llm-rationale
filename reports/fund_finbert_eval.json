@@ -1,0 +1,183 @@
+{
+  "generated_at": "2026-11-09T13:13:52+00:00",
+  "rule": "docs/fund.md, News sentiment evaluation (pre-registered 2026-11-09)",
+  "headlines": {
+    "crude": 30403,
+    "india_equity": 8244,
+    "us_equity": 147745
+  },
+  "collection": {
+    "source": "huggingface.co/datasets/idleengine/financial-news-multisource",
+    "subsets": {
+      "sp500_daily_headlines": {
+        "rows": 18153,
+        "matched": 18153,
+        "first": "2008-01-03T00:00:00+00:00",
+        "last": "2024-03-05T00:00:00+00:00"
+      },
+      "cnbc_headlines": {
+        "rows": 553,
+        "matched": 22,
+        "first": "2008-09-29T19:18:34+00:00",
+        "last": "2023-12-01T06:56:29+00:00"
+      },
+      "finsen_us_2007_2023": {
+        "rows": 15523,
+        "matched": 3222,
+        "first": "2007-08-17T00:00:00+00:00",
+        "last": "2023-07-14T00:00:00+00:00"
+      },
+      "yahoo_finance_felixdrinkall": {
+        "rows": 70286,
+        "matched": 1637,
+        "first": "2018-12-19T00:11:13+00:00",
+        "last": "2023-12-30T13:47:00+00:00"
+      },
+      "bloomberg_reuters": {
+        "rows": 8203282,
+        "matched": 155438,
+        "first": "2006-12-01T15:33:44+00:00",
+        "last": "2016-08-17T00:00:00+00:00"
+      },
+      "us_financial_news_2018_jeet": {
+        "rows": 305947,
+        "matched": 6444,
+        "first": "2017-12-16T00:00:00+00:00",
+        "last": "2018-06-01T00:00:00+00:00"
+      }
+    },
+    "groups": {
+      "us_equity": {
+        "headlines": 147745,
+        "first": "2007-01-02T00:00:00+00:00",
+        "last": "2024-03-05T00:00:00+00:00"
+      },
+      "crude": {
+        "headlines": 30403,
+        "first": "2006-12-01T15:33:44+00:00",
+        "last": "2024-01-05T00:00:00+00:00"
+      },
+      "india_equity": {
+        "headlines": 8244,
+        "first": "2007-05-16T00:00:00+00:00",
+        "last": "2024-02-24T00:00:00+00:00"
+      }
+    }
+  },
+  "price_days": {
+    "Nifty 50": 4650,
+    "Nifty Bank": 4637,
+    "S&P 500": 2513,
+    "WTI crude": 4941
+  },
+  "price_range": {
+    "Nifty 50": [
+      "2008-01-01",
+      "2026-11-09"
+    ],
+    "Nifty Bank": [
+      "2008-01-01",
+      "2026-11-09"
+    ],
+    "S&P 500": [
+      "2016-11-07",
+      "2026-11-05"
+    ],
+    "WTI crude": [
+      "2006-12-01",
+      "2026-11-03"
+    ]
+  },
+  "source": "Headlines: idleengine/financial-news-multisource (non-commercial research use); prices: Upstox (Nifty) and FRED (S&P 500, WTI)",
+  "models": {
+    "finbert": {
+      "model": "ProsusAI/finbert",
+      "decision": "NO-GO",
+      "checks": {
+        "enough_test_days": true,
+        "correlation_above_zero": false,
+        "rule_net_above_zero": false,
+        "rule_beats_always_long": true
+      },
+      "calibration_days": 1404,
+      "test_days": 1404,
+      "test_instrument_days": 1513,
+      "threshold": 0.3151,
+      "spearman": 0.005,
+      "spearman_ci": [
+        -0.0562,
+        0.0679
+      ],
+      "trades": 363,
+      "rule_net_mean": -0.0005,
+      "rule_net_ci": [
+        -0.00321,
+        0.00221
+      ],
+      "always_long_net_mean": -0.001,
+      "by_instrument": {
+        "Nifty 50": {
+          "days": 4,
+          "spearman": 0.4
+        },
+        "Nifty Bank": {
+          "days": 4,
+          "spearman": 0.4
+        },
+        "S&P 500": {
+          "days": 1109,
+          "spearman": -0.0048
+        },
+        "WTI crude": {
+          "days": 396,
+          "spearman": -0.0216
+        }
+      }
+    },
+    "distilroberta": {
+      "model": "mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis",
+      "decision": "NO-GO",
+      "checks": {
+        "enough_test_days": true,
+        "correlation_above_zero": false,
+        "rule_net_above_zero": false,
+        "rule_beats_always_long": false
+      },
+      "calibration_days": 1404,
+      "test_days": 1404,
+      "test_instrument_days": 1513,
+      "threshold": 0.3488,
+      "spearman": -0.0077,
+      "spearman_ci": [
+        -0.0695,
+        0.0544
+      ],
+      "trades": 450,
+      "rule_net_mean": -0.00066,
+      "rule_net_ci": [
+        -0.00283,
+        0.00156
+      ],
+      "always_long_net_mean": -0.00062,
+      "by_instrument": {
+        "Nifty 50": {
+          "days": 4,
+          "spearman": 0.4
+        },
+        "Nifty Bank": {
+          "days": 4,
+          "spearman": 0.4
+        },
+        "S&P 500": {
+          "days": 1109,
+          "spearman": 0.0019
+        },
+        "WTI crude": {
+          "days": 396,
+          "spearman": -0.0817
+        }
+      }
+    }
+  },
+  "scored_headlines": 43484
+}
