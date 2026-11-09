@@ -20,6 +20,13 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+#: Edge-board statuses (track_record_live) under which a gap is more likely a model error
+#: or a market artifact than an edge. The board sets them; grading such a row A told
+#: readers the opposite of what the board had found.
+REVIEW_STATUSES = frozenset({"extreme_forecast", "stale_forecast", "context_incomplete", "thin_market", "wide_spread"})
+#: A row under review scores just below tradable, so filters on the score agree with the grade.
+REVIEW_SCORE_CAP = 0.59
+
 
 def _first_present(mapping: Dict[str, Any], *keys: str) -> Any:
     """First key that is present and not None -- `or` would skip a real 0.
@@ -106,13 +113,15 @@ def audit_edge_opportunity(opp: Dict[str, Any]) -> Dict[str, Any]:
 
     edge = abs(model_p_val - mkt_p_val)
 
-    # Edge sanity: Extreme edge (> 50%) without multiple sources is penalized
+    # Edge sanity: an extreme edge (> 50%) is suspect. The evidence count says how much
+    # the model read, not that it backs a gap this size, so it softens the penalty only.
     if edge > 0.50:
         if evidence_items < 2:
             score -= 0.25
             flags.append("extreme_edge_sparse_evidence")
         else:
-            flags.append("high_discrepancy_well_evidenced")
+            score -= 0.15
+            flags.append("extreme_edge_unverified")
     elif edge >= 0.08:
         flags.append("actionable_edge_threshold_met")
     else:
@@ -200,6 +209,13 @@ def audit_edge_opportunity(opp: Dict[str, Any]) -> Dict[str, Any]:
     # Normalize score between 0.0 and 1.0
     final_score = max(0.0, min(1.0, round(score, 2)))
 
+    # 6. The board's own discrepancy review outranks the heuristics above.
+    status = str(opp.get("discrepancy_status") or "")
+    under_review = status in REVIEW_STATUSES
+    if under_review:
+        final_score = min(final_score, REVIEW_SCORE_CAP)
+        flags.append(f"board_review_{status}")
+
     # Compute Grade
     if final_score >= 0.80:
         grade = "A"
@@ -213,6 +229,9 @@ def audit_edge_opportunity(opp: Dict[str, Any]) -> Dict[str, Any]:
         grade = "C"
         is_credible = False
         summary = "Caution: Higher uncertainty or limited evidence/liquidity; recommend manual verification."
+    if under_review:
+        reasons = ", ".join(str(r).replace("_", " ") for r in (opp.get("review_reasons") or [])) or status.replace("_", " ")
+        summary = f"Needs review before trading: the board flags this gap ({reasons}); treat it as a likely model error or market artifact until checked."
 
     return {
         "credibility_score": final_score,

@@ -93,5 +93,49 @@ class EdgeCredibilityTests(unittest.TestCase):
         self.assertLess(res["credibility_score"], 0.70)
 
 
+def _board_row(**overrides):
+    # The artwork row the live board graded A on 2026-11-09: model 5%, market 93%.
+    row = {
+        "question": "Will an artwork sell for $150 million by December 31?",
+        "model_probability": 0.05, "market_probability": 0.93, "market_bid": 0.90, "market_ask": 0.95,
+        "market_volume": 69.3, "market_liquidity": 1889.7, "evidence_count": 5,
+        "resolution_criteria": "Resolves YES if any single lot sells at a major auction house for at least $150M.",
+        "resolve_time": "2099-01-01T04:59:00Z", "horizon": "30d+",
+        "discrepancy_status": "extreme_forecast", "review_reasons": ["extreme_model_probability"],
+        "needs_discrepancy_review": True,
+    }
+    row.update(overrides)
+    return row
+
+
+class BoardReviewTests(unittest.TestCase):
+    def test_a_row_the_board_flags_for_review_is_never_graded_credible(self):
+        res = audit_edge_opportunity(_board_row())
+        self.assertEqual(res["credibility_grade"], "C")
+        self.assertFalse(res["is_credible"])
+        self.assertLess(res["credibility_score"], 0.60)
+        self.assertIn("board_review_extreme_forecast", res["credibility_flags"])
+        self.assertIn("extreme model probability", res["audit_summary"])
+        self.assertNotIn("high_discrepancy_well_evidenced", res["credibility_flags"])
+
+    def test_every_review_status_caps_the_grade(self):
+        for status in ("extreme_forecast", "stale_forecast", "context_incomplete", "thin_market", "wide_spread"):
+            res = audit_edge_opportunity(_board_row(model_probability=0.60, market_probability=0.40,
+                                                    discrepancy_status=status, review_reasons=[]))
+            self.assertEqual(res["credibility_grade"], "C", status)
+
+    def test_a_genuine_candidate_keeps_its_grade(self):
+        res = audit_edge_opportunity(_board_row(model_probability=0.60, market_probability=0.40, market_volume=8000,
+                                                discrepancy_status="genuine_candidate", review_reasons=[]))
+        self.assertEqual(res["credibility_grade"], "A")
+
+    def test_an_extreme_gap_costs_score_even_with_evidence(self):
+        row = _board_row(discrepancy_status=None, market_volume=None, resolution_criteria="", question="Will X happen?")
+        res = audit_edge_opportunity(row)
+        calm = audit_edge_opportunity({**row, "model_probability": 0.80})
+        self.assertIn("extreme_edge_unverified", res["credibility_flags"])
+        self.assertAlmostEqual(calm["credibility_score"] - res["credibility_score"], 0.15)
+
+
 if __name__ == "__main__":
     unittest.main()
