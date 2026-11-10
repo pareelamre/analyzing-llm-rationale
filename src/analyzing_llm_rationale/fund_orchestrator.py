@@ -87,6 +87,7 @@ class Signal:
     facts: list[dict] = field(default_factory=list)
     pair_key: Optional[str] = None
     kelly: Optional[float] = None  # binary only: Kelly fraction of the fund
+    reason: str = ""  # a rule that trades whatever the edge says why in its own words
 
 
 @dataclass
@@ -370,7 +371,7 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
         qty = target * rate(s.instrument) / (price * float(s.instrument.get("multiplier") or 1.0))
         orders.append(Order("buy", s.instrument, s.side, qty, price, "view", _attribution([s]),
                             s.facts + [_fact("size", f"{target / nav * 100:.1f}% of the fund", "orchestrator")],
-                            pair_key=s.pair_key, reason=f"edge {_pct(s.edge)} per dollar after costs"))
+                            pair_key=s.pair_key, reason=s.reason or f"edge {_pct(s.edge)} per dollar after costs"))
         budget -= target
         by_class[cls] = by_class.get(cls, 0.0) + target
         if s.side in OPTION_SIDES:

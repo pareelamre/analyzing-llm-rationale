@@ -164,6 +164,16 @@ class FundCycleTests(unittest.TestCase):
                 path.write_text(json.dumps({"test_a_live_rule": {"verdict": "GO"}}))
                 self.assertEqual(cycle.options_mode()[0], "GO")
 
+    def test_the_put_sleeve_trades_only_while_its_out_of_sample_check_says_go(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "report.json"
+            with mock.patch.object(cycle, "PUT_SLEEVE_REPORT_PATH", path):
+                self.assertEqual(cycle.put_sleeve_mode(), "OFF")
+                path.write_text(json.dumps({"put_spread": {"verdict": "NO-GO"}}))
+                self.assertEqual(cycle.put_sleeve_mode(), "OFF")
+                path.write_text(json.dumps({"put_spread": {"verdict": "GO"}}))
+                self.assertEqual(cycle.put_sleeve_mode(), "GO")
+
 
 if __name__ == "__main__":
     unittest.main()

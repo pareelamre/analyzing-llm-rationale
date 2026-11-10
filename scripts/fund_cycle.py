@@ -57,6 +57,9 @@ PAIRS_PATH = ROOT / "static" / "commodity_pairs_live.json"
 INDEX_FORECAST_PATH = ROOT / "static" / "index_forecast_live.json"
 WEATHER_REPORT_PATH = ROOT / "reports" / "fund_weather_eval.json"
 OPTIONS_REPORT_PATH = ROOT / "reports" / "fund_nifty_premium_eval.json"
+PUT_SLEEVE_REPORT_PATH = ROOT / "reports" / "fund_ndx_put_eval.json"
+#: The put premium sleeve's analyst (docs/fund.md, "Put premium sleeve").
+PUT_SLEEVE = "put_premium"
 BLEND_PATH = ROOT / "configs" / "fund_blend.json"
 CHECKS_PATH = ROOT / "static" / "fund_rationale_checks.json"
 #: Rationale checks older than this no longer describe a live forecast.
@@ -260,16 +263,26 @@ def options_mode() -> tuple[str, dict]:
     return ("GO" if test.get("verdict") == "GO" else "SHADOW"), test
 
 
-def options_cycle(index_forecast: dict, now: datetime, quote_fn, price_source: str, held: dict) -> dict:
-    """The options analyst's signals, values and quotes, or why it had none."""
+def put_sleeve_mode() -> str:
+    """The put premium sleeve trades only while its out-of-sample check says GO (docs/fund.md)."""
+    return "GO" if (_load_json(PUT_SLEEVE_REPORT_PATH).get("put_spread") or {}).get("verdict") == "GO" else "OFF"
+
+
+def options_cycle(index_forecast: dict, now: datetime, quote_fn, price_source: str, held: dict, *,
+                  sleeve: bool = False) -> dict:
+    """The options analyst's signals, values and quotes, and the put premium sleeve's spread when
+    ``sleeve`` asks for one, or why there were none."""
+    empty = {"signals": [], "skipped": [], "values": {}, "quotes": {}, "sleeve": None}
     if not index_forecast.get("indices"):
-        return {"signals": [], "skipped": [], "values": {}, "quotes": {}}
+        return empty
     try:
         rows = fu.upstox_options("NSE")
     except (fu.FeedError, requests.RequestException, ValueError) as exc:
-        return {"signals": [], "values": {}, "quotes": {},
-                "skipped": [{"instrument": "nse_fo", "label": "Index options", "reason": f"no option list: {exc}"}]}
-    return fo.option_signals(index_forecast, rows, now, quote_fn=quote_fn, price_source=price_source, held=held)
+        return {**empty, "skipped": [{"instrument": "nse_fo", "label": "Index options", "reason": f"no option list: {exc}"}]}
+    out = fo.option_signals(index_forecast, rows, now, quote_fn=quote_fn, price_source=price_source, held=held)
+    out["sleeve"] = fo.put_spread_signal(index_forecast, rows, now, quote_fn=quote_fn,
+                                         price_source=price_source) if sleeve else None
+    return out
 
 
 def _sessions_since(stamp: str, today: date) -> int:
@@ -317,15 +330,26 @@ def run(now: Optional[datetime] = None) -> dict:
 
     can_trade, why = trading_window(conn, now)
     executed, passed = [], []
-    options = {"signals": [], "skipped": [], "values": {}, "quotes": {}}
+    options = {"signals": [], "skipped": [], "values": {}, "quotes": {}, "sleeve": None}
     weather = {"signals": [], "priced": [], "skipped": []}
     mode, weather_report = weather_mode()
     option_mode, option_test = options_mode()
+    sleeve_mode = put_sleeve_mode()
+    # The sleeve holds one spread at a time, to expiry: its spreads never take the options
+    # analyst's early exits, which the tested rule did not have.
+    sleeve_ids = {p["instrument_id"] for p in snapshot["positions"] if PUT_SLEEVE in (p.get("attribution") or {})}
     if can_trade:
-        options = options_cycle(_load_json(INDEX_FORECAST_PATH), now, quote_fn, price_source, option_specs)
+        options = options_cycle(_load_json(INDEX_FORECAST_PATH), now, quote_fn, price_source, option_specs,
+                                sleeve=sleeve_mode == "GO" and not sleeve_ids)
         if option_mode == "GO":
             signals += options["signals"]
         quotes.update(options["quotes"])
+        if options.get("sleeve"):
+            if options["sleeve"]["signal"]:
+                signals.append(options["sleeve"]["signal"])
+                quotes.update(options["sleeve"]["quotes"])
+            else:
+                options["skipped"].append(options["sleeve"]["skipped"])
         weather = fw.weather_signals(now)
         if mode == "GO":
             signals += weather["signals"]
@@ -335,7 +359,8 @@ def run(now: Optional[datetime] = None) -> dict:
                 held_pairs[pos["pair_key"]] = {"sessions": _sessions_since(pos["opened_at"], today)}
         pair_rows = {p.get("key"): p for p in tracker.get("pairs") or []}
         result = orch.plan(snapshot, signals, quotes, hedges, forecasts=forecasts, held_pairs=held_pairs,
-                           pair_rows=pair_rows, option_values=options["values"], rates=rates)
+                           pair_rows=pair_rows, rates=rates,
+                           option_values={k: v for k, v in options["values"].items() if k not in sleeve_ids})
         passed = result["passed"]
         writer = note_writer()
         cycle_id = f"fund-{now:%Y%m%dT%H%M}"
@@ -405,7 +430,8 @@ def run(now: Optional[datetime] = None) -> dict:
     payload["shadow"] = shadow
     payload["settled"] = settled_events
     payload["weather"] = {"mode": mode, "cities": len(fw.CITIES), "verdict_window": weather_report.get("window")}
-    payload["options"] = {"mode": option_mode, "prices": price_source, "settled": settled,
+    payload["options"] = {"mode": option_mode, "put_sleeve": {"mode": sleeve_mode, "holding": sorted(sleeve_ids)},
+                          "prices": price_source, "settled": settled,
                           "indices": [name for name, _key in fo.INDEX_OPTIONS.values()],
                           "risk_per_structure": orch.OPTION_RISK, "class_cap": orch.OPTION_CLASS_CAP}
     PAYLOAD_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
@@ -461,7 +487,7 @@ def build_payload(conn: sqlite3.Connection, snapshot: dict, universe: dict, *, n
         t["evidence"] = json.loads(t.pop("evidence_json") or "[]")
     curve = [{"ts": r[0], "nav_usd": r[1]} for r in conn.execute(
         "SELECT ts, nav_usd FROM fund_nav WHERE fund_id = ? ORDER BY ts", (FUND_ID,))]
-    analysts = sorted({s.analyst for s in signals} | {"event_model", "pairs_model", "options_model", "weather_model"})
+    analysts = sorted({s.analyst for s in signals} | {"event_model", "pairs_model", "options_model", "weather_model", PUT_SLEEVE})
     return {
         "generated_at": now.isoformat(), "fund_id": FUND_ID, "paper": True,
         "nav_usd": snapshot["nav_usd"], "cash_usd": snapshot["cash_usd"], "starting_value": snapshot["starting_value"],

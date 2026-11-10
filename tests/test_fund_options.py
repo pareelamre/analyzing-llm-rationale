@@ -277,5 +277,52 @@ class PlanTests(unittest.TestCase):
         self.assertAlmostEqual(order.notional / 88.0, orch.PAIR_RISK * 10_000)
 
 
+class PutSleeveTests(unittest.TestCase):
+    """The put premium sleeve: Nifty's expiry nearest 21 sessions, the put spread every time."""
+
+    def _rows(self):
+        far = int(datetime(2026, 12, 8, 15, 30, tzinfo=fo.IST).timestamp() * 1000)  # 20 sessions out
+        return _rows() + [{**r, "expiry": far, "instrument_key": r["instrument_key"] + "D"} for r in _rows()]
+
+    def _market(self, sigma, sessions=20.0):
+        base = _market(sigma, sessions)
+
+        def quote_fn(keys):
+            plain = base([k[:-1] if k.endswith("D") else k for k in keys])
+            return {k: plain[k[:-1] if k.endswith("D") else k] for k in keys
+                    if (k[:-1] if k.endswith("D") else k) in plain}
+        return quote_fn
+
+    def test_the_sleeve_sells_the_put_spread_even_when_the_market_is_fair(self):
+        out = fo.put_spread_signal(_forecast(), self._rows(), NOW, quote_fn=self._market(0.01),
+                                   price_source="live order book (Upstox)")
+        s = out["signal"]
+        self.assertEqual((s.analyst, s.side, s.instrument["structure"]), ("put_premium", "BULL", "put_spread"))
+        self.assertEqual(s.instrument["expiry"], "2026-12-08")  # not the 17 Nov weekly, 5 sessions out
+        self.assertEqual(s.reason, fo.SLEEVE_RULE)
+        self.assertLess(s.price, s.instrument["const"])  # it collects a credit
+        self.assertTrue(all(leg["type"] == "PE" for leg in s.instrument["legs"]))
+
+    def test_no_expiry_in_the_band_or_a_thin_leg_means_no_trade_and_says_why(self):
+        none = fo.put_spread_signal(_forecast(), _rows(), NOW, quote_fn=_market(0.01), price_source="x")
+        self.assertIsNone(none["signal"])
+        self.assertIn("15 to 30 sessions", none["skipped"]["reason"])
+        base = self._market(0.01)
+
+        def thin(keys):
+            return {k: {**q, "bid": 0.0} if "|PE" in k else q for k, q in base(keys).items()}
+        out = fo.put_spread_signal(_forecast(), self._rows(), NOW, quote_fn=thin, price_source="x")
+        self.assertIsNone(out["signal"])
+        self.assertIn("too thin", out["skipped"]["reason"])
+
+    def test_an_order_from_a_rule_carries_the_rule_as_its_reason(self):
+        out = fo.put_spread_signal(_forecast(), self._rows(), NOW, quote_fn=self._market(0.01), price_source="x")
+        [order] = orch.plan({"nav_usd": 10_000.0, "cash_usd": 6_000.0, "positions": [], "by_asset_class": {},
+                             "net_exposure_by_underlying": {}}, [out["signal"]], {}, {}, rates={"INR": 88.0})["orders"]
+        self.assertEqual(order.reason, fo.SLEEVE_RULE)
+        self.assertEqual(order.attribution, {"put_premium": 1.0})
+        self.assertAlmostEqual(order.notional / 88.0, orch.OPTION_RISK * 10_000)
+
+
 if __name__ == "__main__":
     unittest.main()
