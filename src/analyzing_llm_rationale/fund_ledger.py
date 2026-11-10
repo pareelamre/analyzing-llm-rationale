@@ -116,6 +116,23 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             spec_json TEXT NOT NULL,
             PRIMARY KEY (fund_id, instrument_id)
         );
+        CREATE TABLE IF NOT EXISTS shadow_fills (
+            fund_id TEXT NOT NULL,
+            analyst TEXT NOT NULL,
+            key TEXT NOT NULL,
+            instrument_id TEXT,
+            label TEXT,
+            side TEXT,
+            ts TEXT NOT NULL,
+            shares REAL NOT NULL,
+            cost_usd REAL NOT NULL,
+            fee_usd REAL NOT NULL,
+            detail_json TEXT NOT NULL DEFAULT '{}',
+            event_id TEXT,
+            outcome INTEGER,
+            settled_at TEXT,
+            PRIMARY KEY (fund_id, analyst, key)
+        );
         CREATE TABLE IF NOT EXISTS fund_nav (
             ts TEXT NOT NULL,
             fund_id TEXT NOT NULL,

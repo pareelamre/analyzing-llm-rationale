@@ -231,6 +231,54 @@ share of the fund's decisions, only from that record.
   number pointing the other way is flagged. It is a guard against the
   2026-11-08 inversions, not a forecaster, and it blocks nothing in shadow.
 
+## Live Polymarket decided-ranges test (pre-registered 2026-11-10, before any live record)
+
+**Why.** Price history could not show whether a range the airport readings had
+already decided could still be bought: most of its prices predated the deciding
+reading (Polymarket weather evaluation, below). This test records in real time
+what Polymarket's order book actually offered.
+
+**When.** At every fund run (the board publish job, about every 30 minutes) from
+2026-11-10. It records and does not trade.
+
+**Markets.** Open Polymarket "Highest temperature in ..." events that settle on
+the METAR rule and end within 3 days.
+
+**Readings.** aviationweather.gov METARs for each station over the last 30 hours,
+read as the market's own rules read them:
+
+- routine reports only (a SPECI does not count);
+- the temperature from the T-group in tenths when it is present, otherwise the
+  whole degrees in the report's body.
+
+The running high is the largest reading since local midnight at the station,
+rounded as the market rounds.
+
+**Decided.** As in that evaluation's Test 2. A range is decided No once the
+rounded high reaches its top whole degree plus one. An "or higher" range is
+decided Yes once the high reaches its bottom plus one.
+
+**Fill.**
+
+- Walk the asks of the decided side's token from the best price up.
+- Take only levels at or below 99 cents where a dollar pays more than the price
+  plus Polymarket's weather taker fee (0.05 x price x (1 - price)).
+- Spend up to $100 per range.
+- Each range fills once, at the first run that finds it decided with something
+  to buy. Decided ranges with nothing to buy are counted.
+
+**Grading.** At settlement (Gamma's outcome prices): net return per dollar =
+(payout - cost - fee) / (cost + fee).
+
+**Verdict.** Due once 100 fills have settled over at least 7 settlement days.
+
+- **GO:** the mean net return per dollar has a 95% interval, from 2,000 bootstrap
+  draws over settlement days, entirely above zero. The fund then buys decided
+  ranges at the asks within its limits.
+- **NO-GO:** anything else. The rule is dropped.
+
+Dollars that could be filled per day are reported alongside.
+
 ## News sentiment evaluation (pre-registered 2026-11-09, before any result)
 
 Question: does headline sentiment predict the next day's move well enough to
