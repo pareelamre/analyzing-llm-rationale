@@ -170,6 +170,31 @@ price undercharges puts and overcharges calls.
 
 Either needs at least 60 trades and a 95% interval entirely above zero.
 
+#### Result (2026-11-10): NO-GO for both tests
+
+Covers 2010-05 to 2026-10, with one decision every 21 sessions.
+
+| | Trades | Mean net return per rupee at risk (95% CI) | Wins | Fund, 10% at risk per decision |
+|---|---|---|---|---|
+| A: live rule | 145 | +4.0% (-5.7% to +13.6%) | 62% | +2.7% a year, worst fall -48% |
+| B: condor every time | 194 | +3.4% (-4.7% to +11.2%) | 61% | +2.1% a year, worst fall -56% |
+
+Neither interval clears zero, so the options analyst moves to shadow mode. It
+records what it would trade, and the cycle reads its verdict from
+`reports/fund_nifty_premium_eval.json`.
+
+The two halves of the condor tell different stories. This is description only,
+and not a verdict:
+
+- **Put credit spreads:** +6.7% per rupee at risk (95% CI +1.0% to +11.7%),
+  82% wins, positive in 14 of 17 years. At 10% of the fund at risk per decision,
+  +7.4% a year with a worst fall of -23%.
+- **Call credit spreads:** -7.7% (-14.5% to -1.7%).
+
+Flat-VIX pricing undercharges puts and overcharges calls, so the true put result
+is probably better and the call result worse. Selling puts also collects
+Nifty's long rise. A put-only sleeve needs its own test on data it has not seen.
+
 ## Models
 
 Open-weight models come first; the owner's own fine-tunes follow.

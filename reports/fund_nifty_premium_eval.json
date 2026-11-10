@@ -1,0 +1,203 @@
+{
+  "generated_at": "2026-11-10T02:03:14.219234+00:00",
+  "rule": "docs/fund.md, Nifty option premium backtest (pre-registered 2026-11-10)",
+  "data": {
+    "nifty": [
+      "2008-01-01",
+      "2026-11-09"
+    ],
+    "vix": [
+      "2009-03-02",
+      "2026-11-09"
+    ],
+    "pricing": "Black-76 at India VIX, flat across strikes; half-spread max(0.5 pt, 1%) per leg; 2% charges"
+  },
+  "test_a_live_rule": {
+    "verdict": "NO-GO",
+    "trades": 145,
+    "first": "2010-05-11",
+    "last": "2026-10-06",
+    "mean_return": 0.04026,
+    "mean_return_ci": [
+      -0.05743,
+      0.13644
+    ],
+    "stdev": 0.5974,
+    "win_share": 0.6207,
+    "worst": -1.02,
+    "best": 0.6721,
+    "largest_fall_in_cumulative_return": -5.3883,
+    "kinds": {
+      "condor": 145
+    },
+    "years_positive": "10/17",
+    "by_year": {
+      "2010": 0.2285,
+      "2011": -0.0132,
+      "2012": -0.285,
+      "2013": 0.0123,
+      "2014": -0.0733,
+      "2015": 0.0522,
+      "2016": -0.2019,
+      "2017": -0.0893,
+      "2018": -0.0135,
+      "2019": 0.0362,
+      "2020": 0.0235,
+      "2021": 0.3669,
+      "2022": 0.0555,
+      "2023": 0.1092,
+      "2024": 0.2887,
+      "2025": 0.3119,
+      "2026": -0.5044
+    },
+    "fund_at_2pct_risk": {
+      "annual_return": 0.0088,
+      "largest_fall": -0.1062
+    },
+    "fund_at_10pct_risk": {
+      "annual_return": 0.0267,
+      "largest_fall": -0.4844
+    }
+  },
+  "test_b_systematic_condor": {
+    "verdict": "NO-GO",
+    "trades": 194,
+    "first": "2010-05-11",
+    "last": "2026-10-06",
+    "mean_return": 0.03424,
+    "mean_return_ci": [
+      -0.04694,
+      0.11171
+    ],
+    "stdev": 0.5708,
+    "win_share": 0.6082,
+    "worst": -1.02,
+    "best": 0.6721,
+    "largest_fall_in_cumulative_return": -6.7261,
+    "kinds": {
+      "condor": 194
+    },
+    "years_positive": "9/17",
+    "by_year": {
+      "2010": 0.2007,
+      "2011": 0.0329,
+      "2012": 0.1242,
+      "2013": -0.0184,
+      "2014": -0.1152,
+      "2015": -0.0301,
+      "2016": -0.0819,
+      "2017": -0.0571,
+      "2018": -0.0135,
+      "2019": 0.0713,
+      "2020": -0.1151,
+      "2021": 0.2281,
+      "2022": 0.072,
+      "2023": 0.0799,
+      "2024": 0.2228,
+      "2025": 0.297,
+      "2026": -0.3757
+    },
+    "fund_at_2pct_risk": {
+      "annual_return": 0.0075,
+      "largest_fall": -0.1307
+    },
+    "fund_at_10pct_risk": {
+      "annual_return": 0.0213,
+      "largest_fall": -0.5572
+    }
+  },
+  "condor_sides (description only)": {
+    "put_spread": {
+      "trades": 194,
+      "first": "2010-05-11",
+      "last": "2026-10-06",
+      "mean_return": 0.06717,
+      "mean_return_ci": [
+        0.01009,
+        0.11724
+      ],
+      "stdev": 0.3739,
+      "win_share": 0.8196,
+      "worst": -1.02,
+      "best": 0.3493,
+      "largest_fall_in_cumulative_return": -2.3053,
+      "kinds": {
+        "put_spread": 194
+      },
+      "years_positive": "14/17",
+      "by_year": {
+        "2010": 0.1587,
+        "2011": -0.1419,
+        "2012": 0.1009,
+        "2013": 0.0091,
+        "2014": 0.0818,
+        "2015": -0.0473,
+        "2016": 0.0487,
+        "2017": 0.19,
+        "2018": 0.004,
+        "2019": 0.085,
+        "2020": 0.1048,
+        "2021": 0.154,
+        "2022": 0.0799,
+        "2023": 0.1862,
+        "2024": 0.1076,
+        "2025": 0.1698,
+        "2026": -0.1847
+      },
+      "fund_at_2pct_risk": {
+        "annual_return": 0.0159,
+        "largest_fall": -0.046
+      },
+      "fund_at_10pct_risk": {
+        "annual_return": 0.0742,
+        "largest_fall": -0.2261
+      }
+    },
+    "call_spread": {
+      "trades": 194,
+      "first": "2010-05-11",
+      "last": "2026-10-06",
+      "mean_return": -0.07656,
+      "mean_return_ci": [
+        -0.14463,
+        -0.01735
+      ],
+      "stdev": 0.4861,
+      "win_share": 0.6959,
+      "worst": -1.02,
+      "best": 0.2579,
+      "largest_fall_in_cumulative_return": -17.5951,
+      "kinds": {
+        "call_spread": 194
+      },
+      "years_positive": "6/17",
+      "by_year": {
+        "2010": 0.0072,
+        "2011": 0.1322,
+        "2012": -0.0616,
+        "2013": -0.0861,
+        "2014": -0.2169,
+        "2015": 0.0073,
+        "2016": -0.1552,
+        "2017": -0.3131,
+        "2018": -0.0303,
+        "2019": -0.0636,
+        "2020": -0.2938,
+        "2021": 0.0134,
+        "2022": -0.0456,
+        "2023": -0.1776,
+        "2024": 0.0671,
+        "2025": 0.076,
+        "2026": -0.1586
+      },
+      "fund_at_2pct_risk": {
+        "annual_return": -0.0188,
+        "largest_fall": -0.3021
+      },
+      "fund_at_10pct_risk": {
+        "annual_return": -0.1017,
+        "largest_fall": -0.8598
+      }
+    }
+  }
+}

@@ -8060,6 +8060,11 @@ function renderFundBoard(d) {
       const result = t.trades ? ` Its test on settled markets (${escHtml(t.window?.first || '')} to ${escHtml(t.window?.last || '')}) made ${t.trades} trades averaging ${(Number(t.mean_return) * 100).toFixed(1)}% per dollar after fees${ci}, so it records until a re-test.` : '';
       return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading; ${s.days_recorded || 0} day(s) of predictions on Kalshi's daily high temperatures.${result} ${would ? `Would trade: ${would}.` : 'Would trade nothing today.'}</li>`;
     }
+    if (s.kind === 'options') {
+      const ci = t.mean_return_ci ? ` (95% range ${(t.mean_return_ci[0] * 100).toFixed(1)}% to ${(t.mean_return_ci[1] * 100).toFixed(1)}%)` : '';
+      const tested = t.trades ? ` Its backtest on Nifty (${escHtml(t.first || '')} to ${escHtml(t.last || '')}) made ${t.trades} trades averaging ${(Number(t.mean_return) * 100).toFixed(1)}% per rupee at risk${ci}, short of the bar.` : '';
+      return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading.${tested} ${would ? `Would trade: ${would}.` : (s.checked ? 'Would trade nothing this cycle.' : 'Checks index options during trading hours.')}</li>`;
+    }
     if (s.kind === 'checker') {
       const flags = (s.flags || []).map(f => `${escHtml(f.label || '')} (forecast ${Math.round(Number(f.forecast) * 100)}%, its rationale reads ${Math.round(Number(f.rationale_yes) * 100)}% yes)`).join('; ');
       return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: checking, not blocking; ${s.markets || 0} recent forecasts read against their own rationales. ${flags ? `Number points away from its reasoning: ${flags}.` : 'No forecast contradicts its own reasoning.'}</li>`;
