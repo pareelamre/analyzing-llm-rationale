@@ -132,6 +132,59 @@ Open-weight models come first; the owner's own fine-tunes follow.
   Indian-index version of CrudeBERT exists), trained on Kaggle or Colab once the
   Wunderfund competition is over. Ask the owner before using Kaggle hours.
 
+## Commodity correlation scan (pre-registered 2026-11-10, before any result)
+
+**Question.** Do commodity prices, or the commodity pairs' spreads, say anything
+about what Indian index futures or the pairs themselves do next, enough to trade
+after costs? The pairs tracker's own backtest says its mean-reversion rule
+mostly broke even, so this looks for any lead the fund could act on.
+
+**Data.** Daily, free, 2010-01 to the last close:
+
+- FRED: Brent, WTI and Henry Hub spot, the broad dollar index, the US 10-year
+  yield, VIX, the Nasdaq-100 and the rupee.
+- Upstox's open candles: Nifty 50 and Nifty Bank (open and close) and India VIX.
+
+**Predictors.** Twelve, fixed here, each known before the next NSE session
+opens (the latest US date before it, and the previous NSE session):
+
+1-3. The one-day log returns of Brent, WTI and Henry Hub.
+4-5. The Brent-WTI and WTI-gas spread z-scores, by the tracker's rule (250-day
+     hedge ratio, 60-day z).
+6. Brent's 5-day return.
+7. The Nasdaq-100's one-day return.
+8. VIX's one-day change.
+9. The dollar index's one-day return.
+10. The US 10-year yield's one-day change.
+11. The rupee's one-day change.
+12. India VIX's one-day change.
+
+**Targets.**
+
+- Nifty 50 and Nifty Bank from open to close on the next NSE session. That much
+  is tradable: buy or sell the future at the open, close it at the close.
+- For the two energy spreads, each spread's change over the next 5 sessions,
+  tested against its own z-score.
+
+That makes 26 tests.
+
+**Method.**
+
+- **Discovery, 2010 to 2018:** a test is a candidate when its correlation has
+  |t| of at least 3.0.
+- **Holdout, 2019 to the end:** a candidate is confirmed when its correlation
+  has the same sign and t of at least 2.0.
+- **Trading:** each confirmed test becomes a rule over the holdout. Trade the
+  target in the direction the discovery correlation points, on every session
+  where the predictor is at least one discovery standard deviation from its
+  discovery mean. Costs are 0.05% per round trip for index futures and 0.2% for
+  a spread (two legs).
+
+**Verdict.** GO for a rule whose mean holdout net return per trade has a 95%
+interval (2,000 bootstrap draws) entirely above zero. A GO is the case for a new
+analyst, which the owner decides. Anything else is NO-GO. Nothing here changes
+once a result is seen.
+
 ## Shadow mode
 
 A new analyst does not trade on arrival. It records its probability for each
