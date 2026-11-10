@@ -388,6 +388,23 @@ Kalshi's history carries no order sizes, so a GO says nothing about how much
 can be bought. Live fills would be limited to the size the order book shows at
 the price.
 
+### Result (2026-11-10): NO-GO
+
+By 20:00 UTC on the 46 settled days, the airport readings had decided 1,818
+ranges across the 24 cities:
+
+- 1,808 were already priced at a full dollar for the side that had won, which
+  leaves nothing to gain.
+- 8 had no quote.
+- 2 were cheaper. One won, buying a decided Yes at 91 cents. The other lost: on
+  2026-10-24 Denver's airport read 60 degrees F, The Weather Company settled at
+  57, and the market had priced exactly that.
+
+The settlement contradicted the airport call once in 1,818 times. The market is
+faster than a twice-a-day cycle on outcomes that are already known, and a
+2-trade sample fails the 100-trade minimum anyway. The rule is dropped. The
+report is `reports/fund_weather_lock_eval.json`.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
@@ -400,7 +417,9 @@ the price.
 2a. Index options from the index model's ranges (see Options above), live
    2026-11-10. Commodity options follow a commodity range model.
 3. Weather models for weather markets: tested 2026-11-10, SHADOW (see Weather
-   evaluation above). Next: Polymarket's daily temperature markets (about 80
-   cities, settled on airport METAR readings), as a dated amendment.
+   evaluation above). Buying ranges the airport readings had already decided:
+   NO-GO, because the market prices them at a full dollar (see Decided-ranges
+   evaluation). Next: Polymarket's daily temperature markets (about 80 cities,
+   settled on airport METAR readings), as a dated amendment.
 4. A classifier trained on Foresea's graded forecasts: which gaps pay.
 5. Skill-based weights once each analyst has a record.
