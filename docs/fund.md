@@ -256,6 +256,31 @@ case for a put-spread-only Nifty sleeve in the options analyst. The owner
 decides; until then the analyst stays in shadow mode. The report is
 `reports/fund_ndx_put_eval.json`.
 
+##### Put premium sleeve (owner approved 2026-11-10)
+
+The owner approved a paper sleeve that sells Nifty put credit spreads, the rule
+the two backtests support. It runs as its own analyst, `put_premium`, beside the
+options analyst, which stays in shadow mode.
+
+- **When:** in the fund's trading windows, whenever the fund holds no put-premium
+  spread.
+- **What:** one Nifty put credit spread on the listed expiry closest to 21
+  sessions away, from 15 to 30 sessions out. Strikes come from
+  `fund_options.candidate_structures`, as tested: short near the index model's
+  25% level, long near its 10% level, on the model's distribution moved onto the
+  market forward.
+- **Gate:** none on the model's edge, as tested. The trade is skipped only when a
+  leg is too thin to trade.
+- **Size:** 2% of the fund at risk at the starting trust, inside the 10% options
+  cap.
+- **Exit:** at expiry, at the index's close. There are no early exits, because
+  the tested rule held to the end.
+- **Prices:** the options analyst's own (live book with an Upstox token,
+  otherwise last trades with 2% taken off each leg). That is harsher than the
+  backtests' 1%.
+- **Off switch:** the sleeve trades only while `reports/fund_ndx_put_eval.json`
+  says GO.
+
 ## Models
 
 Open-weight models come first; the owner's own fine-tunes follow.
