@@ -195,6 +195,43 @@ Flat-VIX pricing undercharges puts and overcharges calls, so the true put result
 is probably better and the call result worse. Selling puts also collects
 Nifty's long rise. A put-only sleeve needs its own test on data it has not seen.
 
+#### Out-of-sample check: put credit spreads on the Nasdaq-100 (pre-registered 2026-11-10, before any result)
+
+**Why.** Selling Nifty put spreads made money in the backtest above (+6.7% per
+rupee at risk, 95% CI +1.0% to +11.7%). That came from a breakdown of a test that
+failed, and it was seen before it was chosen. So it must hold somewhere it has
+not been seen before the fund trades it.
+
+**Data.** FRED's Nasdaq-100 index (`NASDAQ100`) and its volatility index
+(`VXNCLS`, from 2001-02), daily closes to the last close. They are independent of
+Nifty and India VIX.
+
+**Rule.** The Nifty backtest's put side, unchanged except for scale.
+
+- Every 21 sessions, refit the index model (`index_forecast.fit_horizon`, 21
+  sessions) on the Nasdaq-100 with VXN in India VIX's place, on data up to that
+  day.
+- Take the put credit spread from `fund_options.candidate_structures`: short
+  near the model's 25% level, long near its 10% level.
+- Price it with Black-76 at that day's VXN, flat across strikes, with the
+  forward equal to the index.
+- Strikes sit on a grid of 0.2% of the index, rounded to 1, 2.5 or 5 times a
+  power of ten. That matches Nifty's 50 points at 25,000.
+- Each leg pays a half-spread of the larger of 0.002% of the index and 1% of its
+  price.
+- Charges are 2% of the money at risk.
+- Hold to the close 21 sessions later.
+
+**Verdict.** GO if the put spread's mean net return per dollar at risk has a 95%
+interval (2,000 bootstrap draws over decisions) entirely above zero, over at
+least 60 trades.
+
+- **GO** is the case for a put-spread-only Nifty sleeve in the options analyst,
+  which the owner decides.
+- **NO-GO** leaves the Nifty put result unconfirmed, and nothing trades.
+
+The condor and the call spread are reported alongside, for description only.
+
 ## Models
 
 Open-weight models come first; the owner's own fine-tunes follow.
