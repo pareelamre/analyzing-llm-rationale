@@ -123,6 +123,36 @@ class FundCycleTests(unittest.TestCase):
         # Settling is not a trading cycle, so it never holds back the next one.
         self.assertEqual(cycle._last_cycle(fund), datetime.fromisoformat("2026-11-10T08:00:00+00:00"))
 
+    def test_settled_kalshi_positions_pay_a_dollar_to_the_winning_side(self):
+        fund = sqlite3.connect(":memory:")
+        fund_ledger.ensure_schema(fund)
+        fund_ledger.open_fund(fund, cycle.FUND_ID, 1_000.0)
+        for ticker, side in (("KXHIGHNY-26NOV10-T61", "NO"), ("KXHIGHNY-26NOV10-B61.5", "YES"),
+                             ("KXHIGHNY-26NOV11-T61", "NO")):
+            fund_ledger.buy(fund, cycle.FUND_ID, {"id": f"kalshi:{ticker}", "venue": "kalshi", "label": ticker},
+                            side, 100, 0.40)
+        results = {"KXHIGHNY-26NOV10-T61": "no", "KXHIGHNY-26NOV10-B61.5": "no", "KXHIGHNY-26NOV11-T61": None}
+        now = datetime(2026, 11, 11, 8, 0, tzinfo=timezone.utc)
+        with mock.patch.object(cycle.market_data, "fetch_kalshi_result", side_effect=results.get):
+            done = cycle.settle_events(fund, now, now.isoformat())
+        self.assertEqual({d["instrument"]: d["value"] for d in done},
+                         {"kalshi:KXHIGHNY-26NOV10-T61": 1.0, "kalshi:KXHIGHNY-26NOV10-B61.5": 0.0})
+        self.assertEqual([p["instrument_id"] for p in fund_ledger.positions(fund, cycle.FUND_ID)],
+                         ["kalshi:KXHIGHNY-26NOV11-T61"])  # not settled yet
+        realized = fund.execute("SELECT realized_pnl FROM fund_account").fetchone()[0]
+        self.assertAlmostEqual(realized, 100 * (1 - 0.40) - 100 * 0.40)
+        self.assertIsNone(cycle._last_cycle(fund))  # settling is not a trading cycle
+
+    def test_the_weather_analyst_trades_only_on_a_go_verdict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "report.json"
+            with mock.patch.object(cycle, "WEATHER_REPORT_PATH", path):
+                self.assertEqual(cycle.weather_mode()[0], "SHADOW")  # no report yet
+                path.write_text(json.dumps({"verdict": "SHADOW"}))
+                self.assertEqual(cycle.weather_mode()[0], "SHADOW")
+                path.write_text(json.dumps({"verdict": "GO"}))
+                self.assertEqual(cycle.weather_mode()[0], "GO")
+
 
 if __name__ == "__main__":
     unittest.main()

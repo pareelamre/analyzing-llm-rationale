@@ -695,6 +695,14 @@ def _kalshi_market_detail(ticker: str) -> Dict[str, Any]:
         return _get_json(f"{KALSHI_API_URL.rsplit('/markets', 1)[0]}/historical/markets/{ticker}")
 
 
+def fetch_kalshi_result(ticker: str) -> Optional[str]:
+    """"yes" or "no" once a Kalshi market has settled, else None."""
+    market = (_kalshi_market_detail(ticker.strip().upper()) or {}).get("market") or {}
+    result = str(market.get("result") or "").strip().lower()
+    settled = str(market.get("status") or "").strip().lower() in ("settled", "finalized")
+    return result if settled and result in ("yes", "no") else None
+
+
 def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     """Fetch a Kalshi market by ticker via the public trade API v2."""
     if not ticker:

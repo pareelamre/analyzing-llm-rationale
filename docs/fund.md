@@ -307,6 +307,32 @@ decision point and by city, but the verdict is on everything pooled.
 No setting above may be changed after the results are seen. A variant can only
 be tested as a dated amendment written before it is run.
 
+### Result (2026-11-10): SHADOW
+
+Run on every settled day from 2026-09-24 to 2026-11-08: 24 cities, 13,104
+brackets priced, 10,894 with both quotes. The first run lost Oklahoma City to a
+Kalshi rate limit (HTTP 429). Requests now retry, and the run was repeated on
+the full 24 cities, with nothing else changed.
+
+| | Trades | Mean return per dollar, after Kalshi's fee (95% CI) | Brier skill against the market (95% CI) |
+|---|---|---|---|
+| Pooled | 4,960 | -25.2% (-32.5% to -17.5%) | -22.1% (-25.7% to -18.7%) |
+| A: 08:00 UTC, that day's markets | 2,324 | -23.8% (-32.4% to -14.8%) | -24.1% |
+| B: 20:00 UTC, the next day's markets | 2,636 | -26.4% (-34.0% to -18.2%) | -20.3% |
+
+The model's own chances were roughly right: brackets it gave 15-30% happened
+20% of the time, and those it gave 30-50% happened 40% of the time. The market
+was sharper. Its favourite bracket for a day was priced at a median of 53 cents
+(half the days between 45 and 61). The model's favourite got a median of 40%,
+because it works from runs a day or more old. When the two disagreed, the market
+was usually right. Only New
+York City came out ahead (+3.3% on 183 trades), well within chance.
+
+So the weather analyst records in shadow mode. Live, it uses the newest model
+runs, which the test could not use without looking ahead, so its shadow record
+will show whether fresher forecasts close the gap. The test is re-run unchanged
+once 60 more days have settled. The report is `reports/fund_weather_eval.json`.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
@@ -318,6 +344,8 @@ be tested as a dated amendment written before it is run.
 2. FinBERT news sentiment: tested 2026-11-09, NO-GO (see Result above).
 2a. Index options from the index model's ranges (see Options above), live
    2026-11-10. Commodity options follow a commodity range model.
-3. Weather models for weather markets.
+3. Weather models for weather markets: tested 2026-11-10, SHADOW (see Weather
+   evaluation above). Next: Polymarket's daily temperature markets (about 80
+   cities, settled on airport METAR readings), as a dated amendment.
 4. A classifier trained on Foresea's graded forecasts: which gaps pay.
 5. Skill-based weights once each analyst has a record.
