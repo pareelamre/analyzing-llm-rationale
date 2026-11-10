@@ -333,6 +333,78 @@ runs, which the test could not use without looking ahead, so its shadow record
 will show whether fresher forecasts close the gap. The test is re-run unchanged
 once 60 more days have settled. The report is `reports/fund_weather_eval.json`.
 
+## Decided-ranges evaluation (pre-registered 2026-11-10, before any result)
+
+**Question.** A day's high can only rise. Once the airport thermometer has
+passed a range, that range has lost, and an "or above" range below the reading
+has won. Does buying the side that has already won, at the fund's afternoon
+cycle, make money after Kalshi's fee? The risk is that settlement uses The
+Weather Company's reading, not the airport's.
+
+**Markets and prices.** The same 24 cities and days as the weather evaluation
+(settled 2026-09-03 to 2026-11-09). Kalshi's hourly event candlesticks: the last
+candle that closed at or before the decision, no more than 3 hours earlier, and
+its yes bid and yes ask closes.
+
+**Readings.** Every routine and special METAR at the settlement station, from the
+Iowa Environmental Mesonet archive (`tmpf`, degrees F). The running high is the
+largest reading since local midnight, up to the decision.
+
+**Decision.** 20:00 UTC on day D, the fund's 01:30 IST cycle, on that day's
+markets. Every hour from 18:00 to 23:00 UTC is also reported, for description
+only.
+
+**Decided ranges.** A range pays Yes on a settled high in [low, high) on half
+degrees, as in the weather evaluation. To cover the gap between airport readings
+and the settlement value, a range counts as decided only with a 1 degree F
+margin:
+
+- **Decided No:** the running high is at least the range's top plus 1 degree.
+  This covers "or below" ranges and in-between ranges.
+- **Decided Yes:** for an "or above" range, the running high is at least its
+  bottom plus 1 degree.
+
+**Trade.** Buy the decided side: No at 1 minus the yes bid, Yes at the yes ask.
+Only at a price of 99 cents or less, and only when a dollar pays more than the
+price plus Kalshi's fee (0.07 x price x (1 - price)). Each trade risks one dollar
+and is held to settlement.
+
+**Metrics.**
+
+- Trades, wins and losses.
+- The mean net return per dollar, with a 95% interval from 2,000 bootstrap
+  draws over settlement dates.
+- The worst day.
+- How often the settlement contradicted a decided call.
+
+**Verdict.**
+
+- **GO:** at least 100 trades, and the mean net return's 95% interval is
+  entirely above zero.
+- **NO-GO:** anything else. This rule is mechanical, so a NO-GO drops it rather
+  than shadowing it.
+
+Kalshi's history carries no order sizes, so a GO says nothing about how much
+can be bought. Live fills would be limited to the size the order book shows at
+the price.
+
+### Result (2026-11-10): NO-GO
+
+By 20:00 UTC on the 46 settled days, the airport readings had decided 1,818
+ranges across the 24 cities:
+
+- 1,808 were already priced at a full dollar for the side that had won, which
+  leaves nothing to gain.
+- 8 had no quote.
+- 2 were cheaper. One won, buying a decided Yes at 91 cents. The other lost: on
+  2026-10-24 Denver's airport read 60 degrees F, The Weather Company settled at
+  57, and the market had priced exactly that.
+
+The settlement contradicted the airport call once in 1,818 times. The market is
+faster than a twice-a-day cycle on outcomes that are already known, and a
+2-trade sample fails the 100-trade minimum anyway. The rule is dropped. The
+report is `reports/fund_weather_lock_eval.json`.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
@@ -345,7 +417,9 @@ once 60 more days have settled. The report is `reports/fund_weather_eval.json`.
 2a. Index options from the index model's ranges (see Options above), live
    2026-11-10. Commodity options follow a commodity range model.
 3. Weather models for weather markets: tested 2026-11-10, SHADOW (see Weather
-   evaluation above). Next: Polymarket's daily temperature markets (about 80
-   cities, settled on airport METAR readings), as a dated amendment.
+   evaluation above). Buying ranges the airport readings had already decided:
+   NO-GO, because the market prices them at a full dollar (see Decided-ranges
+   evaluation). Next: Polymarket's daily temperature markets (about 80 cities,
+   settled on airport METAR readings), as a dated amendment.
 4. A classifier trained on Foresea's graded forecasts: which gaps pay.
 5. Skill-based weights once each analyst has a record.
