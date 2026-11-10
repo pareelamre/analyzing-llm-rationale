@@ -8,12 +8,12 @@
   "attribution": {
     "realized": {},
     "unrealized": {
-      "agent_transfer": 41.6439,
+      "agent_transfer": 17.3482,
       "event_model": 4.4896
     }
   },
   "by_asset_class": {
-    "event": 4016.0632
+    "event": 3991.7675
   },
   "cash_usd": 6030.0703,
   "curve": [
@@ -108,6 +108,10 @@
     {
       "nav_usd": 10046.1335,
       "ts": "2026-11-10T06:01:23.565262+00:00"
+    },
+    {
+      "nav_usd": 10021.8378,
+      "ts": "2026-11-10T08:01:19.428539+00:00"
     }
   ],
   "cycle": {
@@ -135,13 +139,43 @@
         "instrument": "kalshi:KXMARRIAGESTYLESKRAVITZ-HSZK-27JUL01",
         "label": "Will Harry Styles and Zoe Kravitz be married Before Jul 1, 2027?",
         "reason": "forecast 15.0% is 36 points from the market; treated as a likely model error until the model has a record"
+      },
+      {
+        "instrument": "nse_fo:NIFTYNXT50",
+        "label": "Nifty Next 50 options",
+        "reason": "no quote for the 2026-11-23 options near the money"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTSFO",
+        "label": "San Francisco high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHDEN",
+        "label": "Denver high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTBOS",
+        "label": "Boston high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTDC",
+        "label": "Washington DC high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTTTN",
+        "label": "Trenton high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
       }
     ],
-    "traded": false,
-    "window": "11:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-10T06:01:23.565262+00:00",
+  "generated_at": "2026-11-10T08:01:19.428539+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -149,7 +183,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10046.1335,
+  "nav_usd": 10021.8378,
   "net_exposure_by_underlying": {
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
     "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 354.33,
@@ -356,15 +390,15 @@
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
       "kind": "binary",
       "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "mark": 0.95,
+      "mark": 0.9299999999999999,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 12.1479,
+      "pnl_usd": -12.1478,
       "quantity": 1214.783211,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 1154.0441,
+      "value_usd": 1129.7484,
       "venue": "polymarket"
     },
     {
@@ -390,7 +424,7 @@
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": 0.461,
+  "return_pct": 0.218,
   "settled": [],
   "shadow": {
     "blend_model": {
@@ -399,9 +433,9 @@
       "mode": "shadow",
       "predictions": [
         {
-          "blend": 0.9162,
+          "blend": 0.922,
           "label": "Will an artwork sell for $150 million by December 31?",
-          "market": 0.93,
+          "market": 0.935,
           "model": 0.05
         },
         {
@@ -411,15 +445,15 @@
           "model": 0.08
         },
         {
-          "blend": 0.5097,
+          "blend": 0.5047,
           "label": "Will A New Season of Prison Break be released Worldwide before Jan 1, 2028?",
-          "market": 0.515,
+          "market": 0.51,
           "model": 0.15
         },
         {
-          "blend": 0.4998,
+          "blend": 0.4949,
           "label": "Will Harry Styles and Zoe Kravitz be married Before Jul 1, 2027?",
-          "market": 0.505,
+          "market": 0.5,
           "model": 0.15
         },
         {
@@ -441,15 +475,21 @@
           "model": 0.08
         },
         {
-          "blend": 0.0428,
-          "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-          "market": 0.045,
-          "model": 0.08
-        },
-        {
           "blend": 0.0895,
           "label": "Will the U.S. invade Iran before 2027?",
           "market": 0.095,
+          "model": 0.08
+        },
+        {
+          "blend": 0.0256,
+          "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
+          "market": 0.029,
+          "model": 0.04
+        },
+        {
+          "blend": 0.0662,
+          "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
+          "market": 0.07,
           "model": 0.08
         },
         {
@@ -459,15 +499,9 @@
           "model": 0.02
         },
         {
-          "blend": 0.0308,
-          "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-          "market": 0.035,
-          "model": 0.04
-        },
-        {
-          "blend": 0.014,
+          "blend": 0.0131,
           "label": "Will China invade Taiwan by end of 2026?",
-          "market": 0.017,
+          "market": 0.016,
           "model": 0.02
         },
         {
@@ -504,13 +538,13 @@
       "would_trade": []
     },
     "decided_ranges": {
-      "decided_seen": 117,
+      "decided_seen": 139,
       "dollars_filled": 0,
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 33,
-        "events": 128,
+        "decided_new": 22,
+        "events": 135,
         "filled_now": 0,
         "graded": 0
       },
@@ -526,7 +560,7 @@
       "verdict": "pending"
     },
     "options_model": {
-      "checked": false,
+      "checked": true,
       "kind": "options",
       "mode": "shadow",
       "test": {
@@ -541,7 +575,14 @@
         "verdict": "NO-GO",
         "win_share": 0.6207
       },
-      "would_trade": []
+      "would_trade": [
+        {
+          "edge": 0.0543,
+          "label": "Nifty Bank straddle at 59,700, 23 Nov 2026",
+          "price": 1597.58,
+          "side": "MOVE"
+        }
+      ]
     },
     "rationale_check": {
       "checker": "Open-Jev 2B (Qwen3.5-2B base)",
@@ -566,11 +607,11 @@
       "verdict": "pending"
     },
     "weather_model": {
-      "days_recorded": 0,
+      "days_recorded": 1,
       "kind": "weather",
-      "markets": 0,
+      "markets": 114,
       "mode": "shadow",
-      "predictions_recorded": 0,
+      "predictions_recorded": 114,
       "test": {
         "brier_skill": -0.22138,
         "mean_return": -0.25176,
@@ -586,7 +627,236 @@
           "settled_through": "2026-11-09"
         }
       },
-      "would_trade": []
+      "would_trade": [
+        {
+          "edge": 0.7021,
+          "label": "New York City high on 10 Nov: 60\u00b0 or below",
+          "price": 0.23,
+          "side": "YES"
+        },
+        {
+          "edge": 0.7976,
+          "label": "New York City high on 10 Nov: 61\u00b0 to 62\u00b0",
+          "price": 0.29000000000000004,
+          "side": "NO"
+        },
+        {
+          "edge": 1.4382,
+          "label": "New York City high on 10 Nov: 63\u00b0 to 64\u00b0",
+          "price": 0.05,
+          "side": "YES"
+        },
+        {
+          "edge": 0.8193,
+          "label": "Los Angeles high on 10 Nov: 82\u00b0 to 83\u00b0",
+          "price": 0.15,
+          "side": "YES"
+        },
+        {
+          "edge": 0.2547,
+          "label": "Los Angeles high on 10 Nov: 84\u00b0 to 85\u00b0",
+          "price": 0.54,
+          "side": "NO"
+        },
+        {
+          "edge": 0.1751,
+          "label": "Los Angeles high on 10 Nov: 86\u00b0 to 87\u00b0",
+          "price": 0.69,
+          "side": "NO"
+        },
+        {
+          "edge": 0.7171,
+          "label": "Miami high on 10 Nov: 86\u00b0 to 87\u00b0",
+          "price": 0.29,
+          "side": "YES"
+        },
+        {
+          "edge": 0.0791,
+          "label": "Chicago high on 10 Nov: 64\u00b0 to 65\u00b0",
+          "price": 0.5800000000000001,
+          "side": "NO"
+        },
+        {
+          "edge": 0.3626,
+          "label": "Austin high on 10 Nov: 70\u00b0 to 71\u00b0",
+          "price": 0.24,
+          "side": "YES"
+        },
+        {
+          "edge": 2.5868,
+          "label": "Austin high on 10 Nov: 72\u00b0 to 73\u00b0",
+          "price": 0.07,
+          "side": "YES"
+        },
+        {
+          "edge": 2.0142,
+          "label": "Austin high on 10 Nov: 74\u00b0 to 75\u00b0",
+          "price": 0.03,
+          "side": "YES"
+        },
+        {
+          "edge": 2.5159,
+          "label": "Philadelphia high on 10 Nov: 62\u00b0 to 63\u00b0",
+          "price": 0.04,
+          "side": "YES"
+        },
+        {
+          "edge": 0.5419,
+          "label": "Philadelphia high on 10 Nov: 64\u00b0 to 65\u00b0",
+          "price": 0.33,
+          "side": "YES"
+        },
+        {
+          "edge": 1.5984,
+          "label": "Phoenix high on 10 Nov: 85\u00b0 to 86\u00b0",
+          "price": 0.12,
+          "side": "YES"
+        },
+        {
+          "edge": 1.6733,
+          "label": "Atlanta high on 10 Nov: 69\u00b0 to 70\u00b0",
+          "price": 0.03,
+          "side": "YES"
+        },
+        {
+          "edge": 1.4857,
+          "label": "Atlanta high on 10 Nov: 71\u00b0 to 72\u00b0",
+          "price": 0.14,
+          "side": "YES"
+        },
+        {
+          "edge": 0.5369,
+          "label": "Atlanta high on 10 Nov: 73\u00b0 to 74\u00b0",
+          "price": 0.37,
+          "side": "NO"
+        },
+        {
+          "edge": 0.1134,
+          "label": "Atlanta high on 10 Nov: 75\u00b0 to 76\u00b0",
+          "price": 0.77,
+          "side": "NO"
+        },
+        {
+          "edge": 0.4439,
+          "label": "Dallas high on 10 Nov: 75\u00b0 or below",
+          "price": 0.30000000000000004,
+          "side": "NO"
+        },
+        {
+          "edge": 0.5063,
+          "label": "Dallas high on 10 Nov: 76\u00b0 to 77\u00b0",
+          "price": 0.24,
+          "side": "YES"
+        },
+        {
+          "edge": 3.0241,
+          "label": "Minneapolis high on 10 Nov: 57\u00b0 to 58\u00b0",
+          "price": 0.06,
+          "side": "YES"
+        },
+        {
+          "edge": 0.3291,
+          "label": "Seattle high on 10 Nov: 56\u00b0 to 57\u00b0",
+          "price": 0.52,
+          "side": "NO"
+        },
+        {
+          "edge": 5.3232,
+          "label": "Seattle high on 10 Nov: 60\u00b0 to 61\u00b0",
+          "price": 0.03,
+          "side": "YES"
+        },
+        {
+          "edge": 0.254,
+          "label": "Houston high on 10 Nov: 73\u00b0 to 74\u00b0",
+          "price": 0.34,
+          "side": "YES"
+        },
+        {
+          "edge": 0.992,
+          "label": "Houston high on 10 Nov: 75\u00b0 to 76\u00b0",
+          "price": 0.12,
+          "side": "YES"
+        },
+        {
+          "edge": 0.1314,
+          "label": "Oklahoma City high on 10 Nov: 72\u00b0 to 73\u00b0",
+          "price": 0.5900000000000001,
+          "side": "NO"
+        },
+        {
+          "edge": 0.358,
+          "label": "Oklahoma City high on 10 Nov: 74\u00b0 to 75\u00b0",
+          "price": 0.55,
+          "side": "NO"
+        },
+        {
+          "edge": 0.2926,
+          "label": "Las Vegas high on 10 Nov: 74\u00b0 to 75\u00b0",
+          "price": 0.48,
+          "side": "NO"
+        },
+        {
+          "edge": 0.2929,
+          "label": "San Antonio high on 10 Nov: 67\u00b0 or below",
+          "price": 0.27,
+          "side": "NO"
+        },
+        {
+          "edge": 0.1909,
+          "label": "San Antonio high on 10 Nov: 68\u00b0 to 69\u00b0",
+          "price": 0.25,
+          "side": "YES"
+        },
+        {
+          "edge": 0.8935,
+          "label": "New Orleans high on 10 Nov: 74\u00b0 to 75\u00b0",
+          "price": 0.19,
+          "side": "YES"
+        },
+        {
+          "edge": 0.083,
+          "label": "New Orleans high on 10 Nov: 78\u00b0 to 79\u00b0",
+          "price": 0.87,
+          "side": "NO"
+        },
+        {
+          "edge": 0.1918,
+          "label": "San Diego high on 10 Nov: 82\u00b0 to 83\u00b0",
+          "price": 0.52,
+          "side": "NO"
+        },
+        {
+          "edge": 1.0538,
+          "label": "San Diego high on 10 Nov: 84\u00b0 to 85\u00b0",
+          "price": 0.12,
+          "side": "YES"
+        },
+        {
+          "edge": 5.7333,
+          "label": "Louisville high on 10 Nov: 68\u00b0 to 69\u00b0",
+          "price": 0.03,
+          "side": "YES"
+        },
+        {
+          "edge": 0.181,
+          "label": "Louisville high on 10 Nov: 70\u00b0 to 71\u00b0",
+          "price": 0.35,
+          "side": "YES"
+        },
+        {
+          "edge": 3.7342,
+          "label": "Newark high on 10 Nov: 61\u00b0 to 62\u00b0",
+          "price": 0.04,
+          "side": "YES"
+        },
+        {
+          "edge": 0.2429,
+          "label": "Newark high on 10 Nov: 63\u00b0 to 64\u00b0",
+          "price": 0.41000000000000003,
+          "side": "NO"
+        }
+      ]
     }
   },
   "starting_value": 10000.0,
