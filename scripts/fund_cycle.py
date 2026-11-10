@@ -42,6 +42,7 @@ from analyzing_llm_rationale import fund_ledger as ledger  # noqa: E402
 from analyzing_llm_rationale import fund_notes, market_data  # noqa: E402
 from analyzing_llm_rationale import fund_options as fo  # noqa: E402
 from analyzing_llm_rationale import fund_orchestrator as orch  # noqa: E402
+from analyzing_llm_rationale import fund_pm_live as fpl  # noqa: E402
 from analyzing_llm_rationale import fund_universe as fu  # noqa: E402
 from analyzing_llm_rationale import fund_weather as fw  # noqa: E402
 
@@ -350,6 +351,12 @@ def run(now: Optional[datetime] = None) -> dict:
         snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
     shadow = record_shadow(conn, board, now, stamp)
+    # The live Polymarket decided-ranges test records what the order book offered at every run
+    # (docs/fund.md); it never trades, and a failed pass leaves the rest of the cycle alone.
+    try:
+        shadow[fpl.ANALYST] = fpl.run(conn, FUND_ID, now)
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        print(f"  live decided-ranges pass failed: {exc}", file=sys.stderr)
     if mode != "GO" and weather["priced"]:
         ledger.record_predictions(conn, FUND_ID, "weather_model", "shadow", weather["priced"], weather["signals"],
                                   now=stamp)
