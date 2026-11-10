@@ -7978,6 +7978,7 @@ const FUND_ANALYST_LABELS = {
   options_model: 'Options model (index ranges)',
   weather_model: 'Weather model (8 forecasts)',
   decided_ranges: 'Decided weather ranges (live order books)',
+  vix_fade: 'US VIX fade (Bank Nifty, open to close)',
 };
 const FUND_CLASS_LABELS = { event: 'Prediction markets', index: 'Indices', commodity: 'Commodities', option: 'Index options' };
 const FUND_SIDE_LABELS = { MOVE: 'Big move', RANGE: 'Stays in range', BULL: 'Not much lower', BEAR: 'Not much higher' };
@@ -8057,6 +8058,10 @@ function renderFundBoard(d) {
     const tested = t.test_markets
       ? ` Tested on ${t.test_markets} markets resolved after ${escHtml(t.cutoff || '')}: Brier ${t.blend_brier} against the market's ${t.market_brier}.`
       : '';
+    if (s.kind === 'vixfade') {
+      const shorts = s.shorts ? ` ${s.shorts} short trade(s) so far, averaging ${(Number(s.short_mean_return) * 100).toFixed(2)}% after costs.` : ' No signal yet.';
+      return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading; ${s.sessions || 0} session(s) checked since ${escHtml(s.since || '')}.${shorts} Verdict due after 50 short trades.</li>`;
+    }
     if (s.kind === 'live') {
       const ret = s.settled ? ` ${s.settled} settled, ${s.losses || 0} lost, averaging ${(Number(s.mean_return) * 100).toFixed(1)}% per dollar after fees.` : '';
       const fills = s.fills ? ` ${s.fills} could be bought (mean price ${Math.round(Number(s.mean_price) * 1000) / 10} cents, $${Number(s.dollars_filled).toLocaleString()} in all).` : ' None could be bought yet.';

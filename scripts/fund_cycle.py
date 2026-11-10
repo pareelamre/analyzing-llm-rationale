@@ -44,6 +44,7 @@ from analyzing_llm_rationale import fund_options as fo  # noqa: E402
 from analyzing_llm_rationale import fund_orchestrator as orch  # noqa: E402
 from analyzing_llm_rationale import fund_pm_live as fpl  # noqa: E402
 from analyzing_llm_rationale import fund_universe as fu  # noqa: E402
+from analyzing_llm_rationale import fund_vix_fade as fvf  # noqa: E402
 from analyzing_llm_rationale import fund_weather as fw  # noqa: E402
 
 FUND_ID = "foresea-fund"
@@ -375,6 +376,11 @@ def run(now: Optional[datetime] = None) -> dict:
         shadow[fpl.ANALYST] = fpl.run(conn, FUND_ID, now)
     except (requests.RequestException, ValueError, KeyError) as exc:
         print(f"  live decided-ranges pass failed: {exc}", file=sys.stderr)
+    # The US VIX fade is graded forward on finished sessions once FRED posts the VIX close (docs/fund.md).
+    try:
+        shadow[fvf.ANALYST] = fvf.run(conn, FUND_ID, now)
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        print(f"  VIX fade pass failed: {exc}", file=sys.stderr)
     if mode != "GO" and weather["priced"]:
         ledger.record_predictions(conn, FUND_ID, "weather_model", "shadow", weather["priced"], weather["signals"],
                                   now=stamp)

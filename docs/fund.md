@@ -294,6 +294,31 @@ Whether to give this its own analyst is the owner's call. A shadow record of the
 sell side, graded forward, would show whether the effect survives outside 2020.
 The report is `reports/fund_correlation_scan.json`.
 
+### US VIX fade: forward shadow test (pre-registered 2026-11-10, before any forward session)
+
+**Rule, fixed from the scan.** The discovery mean of US VIX's one-day change is
++0.006 points, with a standard deviation of 1.651.
+
+- **Short:** before each NSE session, take the latest US VIX one-day change dated
+  before it. At -1.645 points or below, the record shorts Bank Nifty at the open
+  and closes at the close.
+- **Long:** at +1.657 or above, it records a long, so the scan's two-sided rule
+  keeps a record too.
+- Each trade pays 0.05%.
+
+**Data.** FRED's VIXCLS and Upstox's open Bank Nifty daily candles, for sessions
+from 2026-11-10 onward.
+
+FRED posts each VIX close about a day late. The record is therefore written once
+the data is in, a day or two after each session. It uses only values dated
+before the session, so it is still a test on days the scan never saw. Live
+trading would need a source that has VIX's close the same night. Cboe's site
+and Stooq both refuse automated clients, and the fund does not get around that.
+
+**Verdict.** Due once 50 short trades are recorded. GO if the short side's mean
+net return has a 95% interval (2,000 bootstrap draws) entirely above zero.
+Otherwise NO-GO. A GO is the case for a live analyst, which the owner decides.
+
 ## Shadow mode
 
 A new analyst does not trade on arrival. It records its probability for each
