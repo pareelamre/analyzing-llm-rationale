@@ -37,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import fund_weather as fw  # noqa: E402
+from analyzing_llm_rationale.fund_pm_live import bounds_of, decided, settle_value  # noqa: E402,F401
 
 GAMMA = "https://gamma-api.polymarket.com/events"
 PRICES = "https://clob.polymarket.com/prices-history"
@@ -54,34 +55,6 @@ LOOKBACK_H = 36
 MAX_LEAD = 3
 MIN_TRADES, BOOTSTRAP = 100, 2000
 IEM_GAP_S = 5
-
-_RANGE = (
-    (re.compile(r"^(-?\d+)\s*°([CF]) or below$"), lambda a, b: (-math.inf, a + 0.5)),
-    (re.compile(r"^(-?\d+)\s*°([CF]) or higher$"), lambda a, b: (a - 0.5, math.inf)),
-    (re.compile(r"^(-?\d+)\s*[-–]\s*(-?\d+)\s*°([CF])$"), lambda a, b: (a - 0.5, b + 0.5)),
-    (re.compile(r"^(-?\d+)\s*°([CF])$"), lambda a, b: (a - 0.5, a + 0.5)),
-)
-
-
-def bounds_of(title: str) -> Optional[tuple[str, tuple[float, float]]]:
-    """("C" or "F", half-degree bounds) of a range title such as "29°C" or "60-61°F"."""
-    title = (title or "").strip()
-    for pattern, make in _RANGE:
-        m = pattern.match(title)
-        if m:
-            nums = [int(g) for g in m.groups() if g not in ("C", "F")]
-            return m.groups()[-1], make(nums[0], nums[-1])
-    return None
-
-
-def round_half_up(x: float) -> int:
-    return math.floor(x + 0.5)
-
-
-def settle_value(celsius: float, unit: str) -> int:
-    """The market's whole-degree value for a reading (Fahrenheit converts first)."""
-    return round_half_up(celsius * 9 / 5 + 32 if unit == "F" else celsius)
-
 
 def _cached(path: Path, fetch: Callable[[], Any], *, text: bool = False) -> Any:
     if path.is_file():
@@ -314,17 +287,6 @@ def evaluate(events: list[dict], stations: dict[str, dict], half_spread: float) 
                                 "won": won, "return": ((1.0 if won else 0.0) - price - fw.polymarket_fee(price)) / price,
                                 "priced_before_decision": bool(point and first and point["t"] < first.timestamp())})
     return brackets, trades1, trades2
-
-
-def decided(bounds: tuple[float, float], high: int) -> Optional[str]:
-    """As pre-registered: No once the rounded high reaches the range's top whole degree plus
-    one; Yes for an "or higher" range once it reaches the range's bottom whole degree plus one."""
-    lo, hi = bounds
-    if math.isfinite(hi) and high >= (hi - 0.5) + 1:
-        return "NO"
-    if not math.isfinite(hi) and math.isfinite(lo) and high >= (lo + 0.5) + 1:
-        return "YES"
-    return None
 
 
 def decided_at(readings: list[tuple[datetime, float]], bounds: tuple[float, float], unit: str,
