@@ -209,6 +209,91 @@ Open-weight models come first; the owner's own fine-tunes follow.
   Indian-index version of CrudeBERT exists), trained on Kaggle or Colab once the
   Wunderfund competition is over. Ask the owner before using Kaggle hours.
 
+## Commodity correlation scan (pre-registered 2026-11-10, before any result)
+
+**Question.** Do commodity prices, or the commodity pairs' spreads, say anything
+about what Indian index futures or the pairs themselves do next, enough to trade
+after costs? The pairs tracker's own backtest says its mean-reversion rule
+mostly broke even, so this looks for any lead the fund could act on.
+
+**Data.** Daily, free, 2010-01 to the last close:
+
+- FRED: Brent, WTI and Henry Hub spot, the broad dollar index, the US 10-year
+  yield, VIX, the Nasdaq-100 and the rupee.
+- Upstox's open candles: Nifty 50 and Nifty Bank (open and close) and India VIX.
+
+**Predictors.** Twelve, fixed here, each known before the next NSE session
+opens (the latest US date before it, and the previous NSE session):
+
+1-3. The one-day log returns of Brent, WTI and Henry Hub.
+4-5. The Brent-WTI and WTI-gas spread z-scores, by the tracker's rule (250-day
+     hedge ratio, 60-day z).
+6. Brent's 5-day return.
+7. The Nasdaq-100's one-day return.
+8. VIX's one-day change.
+9. The dollar index's one-day return.
+10. The US 10-year yield's one-day change.
+11. The rupee's one-day change.
+12. India VIX's one-day change.
+
+**Targets.**
+
+- Nifty 50 and Nifty Bank from open to close on the next NSE session. That much
+  is tradable: buy or sell the future at the open, close it at the close.
+- For the two energy spreads, each spread's change over the next 5 sessions,
+  tested against its own z-score.
+
+That makes 26 tests.
+
+**Method.**
+
+- **Discovery, 2010 to 2018:** a test is a candidate when its correlation has
+  |t| of at least 3.0.
+- **Holdout, 2019 to the end:** a candidate is confirmed when its correlation
+  has the same sign and t of at least 2.0.
+- **Trading:** each confirmed test becomes a rule over the holdout. Trade the
+  target in the direction the discovery correlation points, on every session
+  where the predictor is at least one discovery standard deviation from its
+  discovery mean. Costs are 0.05% per round trip for index futures and 0.2% for
+  a spread (two legs).
+
+**Verdict.** GO for a rule whose mean holdout net return per trade has a 95%
+interval (2,000 bootstrap draws) entirely above zero. A GO is the case for a new
+analyst, which the owner decides. Anything else is NO-GO. Nothing here changes
+once a result is seen.
+
+### Result (2026-11-10): commodities NO-GO; one GO from US VIX, and it is fragile
+
+Discovery ran from 2010 to 2018 and the holdout from 2019 to 2026-11-09. Of the
+26 tests, 4 were discovery candidates and 1 was confirmed.
+
+- **Commodities and the pairs did not help.** Brent's and WTI's one-day returns
+  looked like they led Bank Nifty from open to close in discovery (t -3.4 and
+  -3.2), but nothing was left in the holdout (t -0.8 and 0.0). No commodity or
+  spread predictor held up for either index.
+- **The pairs against their own next 5 sessions** were not discovery candidates,
+  so they were not traded. The Brent-WTI spread did mean-revert strongly in the
+  holdout (t -9.2, inflated by overlapping 5-day windows), but in discovery it
+  showed nothing (t +0.2). That is a change of regime, not a rule.
+- **Confirmed: a change in US VIX predicts Bank Nifty from open to close the next
+  session** (discovery t 3.0, holdout t 5.2). The rule made 393 holdout trades
+  averaging +0.17% each after 0.05% costs (95% CI +0.02% to +0.33%), with 56%
+  wins. That is GO.
+
+The GO is fragile. These checks were run after the result, for description:
+
+- 2020 alone averaged +0.54% a trade. Without 2020 the mean is +0.07% (95% CI
+  -0.05% to +0.19%).
+- It was positive in 6 of the 8 holdout years.
+- All of the effect is on one side. Buying Bank Nifty at the open after a large
+  rise in VIX earned +0.01%. Selling it at the open after a large fall in VIX
+  earned +0.34% (+0.12% to +0.57%): when US fear eases sharply, India opens high
+  and Bank Nifty gives some of that back by the close.
+
+Whether to give this its own analyst is the owner's call. A shadow record of the
+sell side, graded forward, would show whether the effect survives outside 2020.
+The report is `reports/fund_correlation_scan.json`.
+
 ## Shadow mode
 
 A new analyst does not trade on arrival. It records its probability for each
