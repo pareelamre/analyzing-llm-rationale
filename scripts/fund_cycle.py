@@ -55,6 +55,7 @@ BOARD_PATH = ROOT / "static" / "mark_to_market_live.json"
 PAIRS_PATH = ROOT / "static" / "commodity_pairs_live.json"
 INDEX_FORECAST_PATH = ROOT / "static" / "index_forecast_live.json"
 WEATHER_REPORT_PATH = ROOT / "reports" / "fund_weather_eval.json"
+OPTIONS_REPORT_PATH = ROOT / "reports" / "fund_nifty_premium_eval.json"
 BLEND_PATH = ROOT / "configs" / "fund_blend.json"
 CHECKS_PATH = ROOT / "static" / "fund_rationale_checks.json"
 #: Rationale checks older than this no longer describe a live forecast.
@@ -251,6 +252,13 @@ def weather_mode() -> tuple[str, dict]:
     return ("GO" if report.get("verdict") == "GO" else "SHADOW"), report
 
 
+def options_mode() -> tuple[str, dict]:
+    """The options analyst trades only while its backtest's live-rule test says GO (docs/fund.md)."""
+    report = _load_json(OPTIONS_REPORT_PATH)
+    test = report.get("test_a_live_rule") or {}
+    return ("GO" if test.get("verdict") == "GO" else "SHADOW"), test
+
+
 def options_cycle(index_forecast: dict, now: datetime, quote_fn, price_source: str, held: dict) -> dict:
     """The options analyst's signals, values and quotes, or why it had none."""
     if not index_forecast.get("indices"):
@@ -311,9 +319,11 @@ def run(now: Optional[datetime] = None) -> dict:
     options = {"signals": [], "skipped": [], "values": {}, "quotes": {}}
     weather = {"signals": [], "priced": [], "skipped": []}
     mode, weather_report = weather_mode()
+    option_mode, option_test = options_mode()
     if can_trade:
         options = options_cycle(_load_json(INDEX_FORECAST_PATH), now, quote_fn, price_source, option_specs)
-        signals += options["signals"]
+        if option_mode == "GO":
+            signals += options["signals"]
         quotes.update(options["quotes"])
         weather = fw.weather_signals(now)
         if mode == "GO":
@@ -351,6 +361,14 @@ def run(now: Optional[datetime] = None) -> dict:
         snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
     shadow = record_shadow(conn, board, now, stamp)
+    if option_mode != "GO":
+        shadow["options_model"] = {
+            "mode": "shadow", "kind": "options", "checked": can_trade,
+            "test": {k: option_test.get(k) for k in ("verdict", "trades", "first", "last", "mean_return",
+                                                     "mean_return_ci", "win_share")},
+            "would_trade": [{"label": s.instrument.get("label"), "side": s.side, "price": round(s.price, 2),
+                             "edge": round(s.edge, 4)} for s in options["signals"]],
+        }
     # The live Polymarket decided-ranges test records what the order book offered at every run
     # (docs/fund.md); it never trades, and a failed pass leaves the rest of the cycle alone.
     try:
@@ -381,7 +399,7 @@ def run(now: Optional[datetime] = None) -> dict:
     payload["shadow"] = shadow
     payload["settled"] = settled_events
     payload["weather"] = {"mode": mode, "cities": len(fw.CITIES), "verdict_window": weather_report.get("window")}
-    payload["options"] = {"prices": price_source, "settled": settled,
+    payload["options"] = {"mode": option_mode, "prices": price_source, "settled": settled,
                           "indices": [name for name, _key in fo.INDEX_OPTIONS.values()],
                           "risk_per_structure": orch.OPTION_RISK, "class_cap": orch.OPTION_CLASS_CAP}
     PAYLOAD_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
