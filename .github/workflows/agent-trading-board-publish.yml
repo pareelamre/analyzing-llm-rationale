@@ -127,6 +127,9 @@ jobs:
           FUND_MIN_HOURS_BETWEEN_CYCLES: "10"
           FUND_LLM_URL: ${{ vars.SELF_HOSTED_LLM_URL }}
           SELF_HOSTED_LLM_API_KEY: ${{ secrets.SELF_HOSTED_LLM_API_KEY }}
+          # Optional, read-only Upstox Analytics Token: live option order books. Without it the
+          # options analyst prices from Upstox's open last trades (fund_options).
+          UPSTOX_ANALYTICS_TOKEN: ${{ secrets.UPSTOX_ANALYTICS_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p tmp/fund

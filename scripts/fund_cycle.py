@@ -10,10 +10,13 @@ its cash, and each open position at the agent's own entry price, so the fund sta
 same $10,000 the agent did and the agent's track continues inside the fund.
 
 Inputs: the Edge board (static/mark_to_market_live.json), the pairs tracker
-(static/commodity_pairs_live.json), the fund universe (static/fund_universe.json, rebuilt when
-older than FUND_UNIVERSE_MAX_AGE_DAYS), live quotes, and USD/INR. Trade notes are worded by the
-on-device model (FUND_LLM_URL + SELF_HOSTED_LLM_API_KEY) when it is reachable; otherwise each
-note is the plain fact sheet.
+(static/commodity_pairs_live.json), the index model (static/index_forecast_live.json, for the
+options analyst), the fund universe (static/fund_universe.json, rebuilt when older than
+FUND_UNIVERSE_MAX_AGE_DAYS), live quotes, and USD/INR. Option prices come from the live order
+book when UPSTOX_ANALYTICS_TOKEN is set and from Upstox's open last trades otherwise
+(fund_options). Option structures past expiry are settled at the index's close every run. Trade
+notes are worded by the on-device model (FUND_LLM_URL + SELF_HOSTED_LLM_API_KEY) when it is
+reachable; otherwise each note is the plain fact sheet.
 """
 from __future__ import annotations
 
@@ -33,6 +36,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import fund_ledger as ledger  # noqa: E402
 from analyzing_llm_rationale import fund_notes, market_data  # noqa: E402
+from analyzing_llm_rationale import fund_options as fo  # noqa: E402
 from analyzing_llm_rationale import fund_orchestrator as orch  # noqa: E402
 from analyzing_llm_rationale import fund_universe as fu  # noqa: E402
 
@@ -43,6 +47,7 @@ PAYLOAD_PATH = ROOT / "static" / "fund_live.json"
 UNIVERSE_PATH = ROOT / "static" / "fund_universe.json"
 BOARD_PATH = ROOT / "static" / "mark_to_market_live.json"
 PAIRS_PATH = ROOT / "static" / "commodity_pairs_live.json"
+INDEX_FORECAST_PATH = ROOT / "static" / "index_forecast_live.json"
 BLEND_PATH = ROOT / "configs" / "fund_blend.json"
 CHECKS_PATH = ROOT / "static" / "fund_rationale_checks.json"
 #: Rationale checks older than this no longer describe a live forecast.
@@ -185,6 +190,41 @@ def trading_window(conn: sqlite3.Connection, now: datetime) -> tuple[bool, str]:
     return True, "in window"
 
 
+def settle_expired(conn: sqlite3.Connection, specs: dict[str, dict], now: datetime, stamp: str,
+                   rates: dict[str, float]) -> list[dict]:
+    """Book every option structure past expiry at its value at the index's close that day."""
+    settled = []
+    held = {p["instrument_id"]: p for p in ledger.positions(conn, FUND_ID)}
+    for iid, spec in list(specs.items()):
+        pos = held.get(iid)
+        if pos is None or not fo.expired(spec, now):
+            continue
+        level = fo.settlement_level(spec)
+        if level is None:
+            continue
+        value = fo.structure_of(spec).payoff(level)
+        note = (f"Expired: {spec.get('label') or iid}. {spec.get('index')} closed at {level:,.2f} on "
+                f"{spec['expiry']}, so the structure paid ₹{value:,.2f} per unit.")
+        ledger.sell(conn, FUND_ID, iid, pos["side"], pos["quantity"], value, fx=rates.get(pos["currency"], 1.0),
+                    purpose="expiry", action="expire", cycle_id=f"expiry-{spec['expiry']}", now=stamp, note=note,
+                    note_source="facts", evidence=[{"source": "Upstox daily close", "figure": f"{spec.get('index')}: {level:,.2f}"}])
+        settled.append({"instrument": iid, "label": spec.get("label"), "level": level, "value": value})
+        del specs[iid]
+    return settled
+
+
+def options_cycle(index_forecast: dict, now: datetime, quote_fn, price_source: str, held: dict) -> dict:
+    """The options analyst's signals, values and quotes, or why it had none."""
+    if not index_forecast.get("indices"):
+        return {"signals": [], "skipped": [], "values": {}, "quotes": {}}
+    try:
+        rows = fu.upstox_options("NSE")
+    except (fu.FeedError, requests.RequestException, ValueError) as exc:
+        return {"signals": [], "values": {}, "quotes": {},
+                "skipped": [{"instrument": "nse_fo", "label": "Index options", "reason": f"no option list: {exc}"}]}
+    return fo.option_signals(index_forecast, rows, now, quote_fn=quote_fn, price_source=price_source, held=held)
+
+
 def _sessions_since(stamp: str, today: date) -> int:
     start = datetime.fromisoformat(stamp).date()
     return sum(1 for d in range((today - start).days) if (start + timedelta(days=d + 1)).weekday() < 5)
@@ -207,6 +247,11 @@ def run(now: Optional[datetime] = None) -> dict:
 
     fx = usd_inr()
     rates = {"USD": 1.0, "INR": fx}
+    option_specs = {p["instrument_id"]: ledger.instrument_spec(conn, FUND_ID, p["instrument_id"]) or {}
+                    for p in ledger.positions(conn, FUND_ID) if p["kind"] == "option"}
+    settled = settle_expired(conn, option_specs, now, stamp, rates)
+    conn.commit()
+    quote_fn, price_source = fo.quote_source(os.environ.get("UPSTOX_ANALYTICS_TOKEN", "").strip() or None, now=now)
     universe = load_universe(today, fx)
     board = (_load_json(BOARD_PATH).get("edge_board") or [])
     tracker = _load_json(PAIRS_PATH)
@@ -219,18 +264,23 @@ def run(now: Optional[datetime] = None) -> dict:
     hedges = {p["b"]["underlying"]: p["b"] for p in universe.get("pairs", []) if p["b"]["venue"] == "kalshi_perp"}
     wanted = held_ids | {s.instrument["id"] for s in signals} | {h["id"] for h in hedges.values()}
     quotes = fetch_quotes(wanted, universe, today)
+    quotes.update(fo.structure_quotes({k: v for k, v in option_specs.items() if v.get("legs")}, quote_fn))
     snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
     can_trade, why = trading_window(conn, now)
     executed, passed = [], []
+    options = {"signals": [], "skipped": [], "values": {}, "quotes": {}}
     if can_trade:
+        options = options_cycle(_load_json(INDEX_FORECAST_PATH), now, quote_fn, price_source, option_specs)
+        signals += options["signals"]
+        quotes.update(options["quotes"])
         held_pairs = {}
         for pos in snapshot["positions"]:
             if pos.get("pair_key"):
                 held_pairs[pos["pair_key"]] = {"sessions": _sessions_since(pos["opened_at"], today)}
         pair_rows = {p.get("key"): p for p in tracker.get("pairs") or []}
         result = orch.plan(snapshot, signals, quotes, hedges, forecasts=forecasts, held_pairs=held_pairs,
-                           pair_rows=pair_rows)
+                           pair_rows=pair_rows, option_values=options["values"], rates=rates)
         passed = result["passed"]
         writer = note_writer()
         cycle_id = f"fund-{now:%Y%m%dT%H%M}"
@@ -259,8 +309,12 @@ def run(now: Optional[datetime] = None) -> dict:
     ledger.record_nav(conn, snapshot, now=stamp)
     conn.commit()
     payload = build_payload(conn, snapshot, universe, now=now, window=why, traded=can_trade, executed=executed,
-                            passed=passed, skipped=skipped_events + skipped_pairs, signals=signals, seeded=seeded)
+                            passed=passed, skipped=skipped_events + skipped_pairs + options["skipped"],
+                            signals=signals, seeded=seeded)
     payload["shadow"] = shadow
+    payload["options"] = {"prices": price_source, "settled": settled,
+                          "indices": [name for name, _key in fo.INDEX_OPTIONS.values()],
+                          "risk_per_structure": orch.OPTION_RISK, "class_cap": orch.OPTION_CLASS_CAP}
     PAYLOAD_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
     conn.close()
     return payload
@@ -314,7 +368,7 @@ def build_payload(conn: sqlite3.Connection, snapshot: dict, universe: dict, *, n
         t["evidence"] = json.loads(t.pop("evidence_json") or "[]")
     curve = [{"ts": r[0], "nav_usd": r[1]} for r in conn.execute(
         "SELECT ts, nav_usd FROM fund_nav WHERE fund_id = ? ORDER BY ts", (FUND_ID,))]
-    analysts = sorted({s.analyst for s in signals} | {"event_model", "pairs_model"})
+    analysts = sorted({s.analyst for s in signals} | {"event_model", "pairs_model", "options_model"})
     return {
         "generated_at": now.isoformat(), "fund_id": FUND_ID, "paper": True,
         "nav_usd": snapshot["nav_usd"], "cash_usd": snapshot["cash_usd"], "starting_value": snapshot["starting_value"],

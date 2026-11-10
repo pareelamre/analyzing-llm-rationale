@@ -59,6 +59,7 @@ analysts ──► signals ──► orchestrator ──► paper ledger ──�
 | Kalshi, Polymarket events | existing venue clients | |
 | Kalshi perps and futures | `GET /trade-api/v2/margin/markets` (public) | a missing ask comes back as 9223372036854775807 |
 | NSE/BSE indices, MCX | Upstox open candles (`index_forecast`, `commodity_pairs`) | |
+| NSE index options | Upstox order book with `UPSTOX_ANALYTICS_TOKEN`, else open last trades (`fund_options`) | last trades are widened 2% each side and need 100 lots traded |
 | USD/INR, gold, platinum | fawazahmed0 currency API | |
 | Brent, WTI, Henry Hub | FRED | a few days behind |
 
@@ -75,6 +76,47 @@ Ranked by average daily notional over two weeks; re-ranked each month.
   perp, Zinc/Lead (MCX), Silver MCX/Kalshi perp, Gold/Silver (Kalshi perps).
 - MCX legs use the smallest liquid lot (Gold Petal, Silver Micro, Crude Mini,
   Natural Gas Mini, Zinc Mini, Aluminium Mini) so a $10,000 fund holds real lots.
+
+## Options (added 2026-11-10, owner's request)
+
+The fund trades all four instrument types on indices and commodities: futures
+(NSE, BSE, MCX), Kalshi perps, and now options. Futures and perps were already
+in the universe; they trade when the pairs model fires and as hedges. Nothing
+yet gives a direction for an index future, because the index model has no skill
+on direction.
+
+The index model does forecast ranges well (2016-2026 walk-forward: its 50%, 80%
+and 90% ranges held 49-51%, 78-80% and 88-90% of closes), and a range is exactly
+what an option prices. So the **options analyst** (`fund_options`) values NSE
+index options (Nifty 50, Nifty Bank, Nifty Financial Services, Nifty Midcap
+Select, Nifty Next 50) with the model's own distribution:
+
+- **Distribution:** the model's quantiles for 1, 5 and 21 sessions (and its 1%
+  and 99% ones), interpolated to the time left by the square root of time, never
+  given fatter tails than its own, then moved so its mean is the market's forward
+  from put-call parity. No drift is traded.
+- **Structures, defined risk only:** a straddle (MOVE) when the model expects a
+  wider range than the options price in; an iron condor (RANGE), put credit
+  spread (BULL) or call credit spread (BEAR) when it expects a narrower one.
+  Short strikes sit near the model's quartiles and wings near its 10% and 90%
+  levels. Each structure is one position that costs at most what it can lose;
+  the fund never writes an uncovered option.
+- **Entry:** the nearest expiry 2 to 25 sessions away; the best structure per
+  index if the model values it at least 5% above its cost after 2% for charges;
+  every leg liquid. An index whose model straddle is more than 50% from the
+  market's is skipped as a likely model or data error.
+- **Size:** at most 2% of the fund at risk per structure at the starting trust,
+  10% across all options, one structure per index and expiry.
+- **Exit:** at expiry, at the index's close; earlier when the model values a
+  structure 5% or more below its bid after costs, the same bar as entries.
+- **Commodity options** (MCX gold, silver, crude, natural gas, copper, zinc) wait
+  for a commodity range model with its own backtest: the MCX price history the
+  fund has is six months long, too short to forecast a range from.
+
+The first live check, against the 2026-11-09 close: Nifty options priced about
+12% above the model's range (the usual premium for selling options); the best
+structure, an iron condor, was 2.6% above its cost after charges, under the 5%
+bar, so nothing traded.
 
 ## Models
 
@@ -199,6 +241,8 @@ test needs new data, such as sentiment recorded forward in shadow mode.
    attribution, and the Fund view on the Agentic tab. Twice a day, after the
    agent cycle.
 2. FinBERT news sentiment: tested 2026-11-09, NO-GO (see Result above).
+2a. Index options from the index model's ranges (see Options above), live
+   2026-11-10. Commodity options follow a commodity range model.
 3. Weather models for weather markets.
 4. A classifier trained on Foresea's graded forecasts: which gaps pay.
 5. Skill-based weights once each analyst has a record.

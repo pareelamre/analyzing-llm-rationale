@@ -7975,8 +7975,10 @@ const FUND_ANALYST_LABELS = {
   agent_transfer: 'Carried over from the agent',
   blend_model: 'Blend analyst (market and model)',
   rationale_check: 'Rationale checker (Open-Jev 2B)',
+  options_model: 'Options model (index ranges)',
 };
-const FUND_CLASS_LABELS = { event: 'Prediction markets', index: 'Indices', commodity: 'Commodities' };
+const FUND_CLASS_LABELS = { event: 'Prediction markets', index: 'Indices', commodity: 'Commodities', option: 'Index options' };
+const FUND_SIDE_LABELS = { MOVE: 'Big move', RANGE: 'Stays in range', BULL: 'Not much lower', BEAR: 'Not much higher' };
 function _fundAnalystLabel(key) { return FUND_ANALYST_LABELS[key] || String(key || '').replace(/_/g, ' '); }
 function _fundMoney(value) {
   const n = Number(value);
@@ -8013,7 +8015,7 @@ function renderFundBoard(d) {
     return `<tr>
       <td>${escHtml(FUND_CLASS_LABELS[p.asset_class] || p.asset_class || '')}</td>
       <td style="max-width:300px">${escHtml(_fundName(p))}</td>
-      <td>${escHtml(p.side || '')}</td>
+      <td>${escHtml(FUND_SIDE_LABELS[p.side] || p.side || '')}</td>
       <td>${Number(p.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
       <td>${_fundMoney(p.value_usd)}</td>
       <td>${_fundPnl(p.pnl_usd)}</td>
@@ -8037,7 +8039,7 @@ function renderFundBoard(d) {
       : 'Plain fact sheet';
     return `<article class="agentic-activity">
       <div class="agentic-activity-meta">
-        <span><b>${escHtml(t.action || '')}</b> · ${escHtml(t.purpose || '')} · ${escHtml(t.side || '')} · ${escHtml(_fundName(t))}</span>
+        <span><b>${escHtml(t.action || '')}</b> · ${escHtml(t.purpose || '')} · ${escHtml(FUND_SIDE_LABELS[t.side] || t.side || '')} · ${escHtml(_fundName(t))}</span>
         <span>${escHtml(when)}</span>
       </div>
       <div class="agentic-activity-body">
@@ -8104,7 +8106,7 @@ function renderFundBoard(d) {
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Passed on this cycle</h4>
         <p class="agentic-panel-copy">Signals the orchestrator did not trade, and why.</p></div></div>
       ${passedItems ? `<ul class="text-sm" style="margin:0 0 0 18px;display:grid;gap:6px">${passedItems}</ul>` : '<p class="text-sm text-gray-500">Nothing passed on this cycle.</p>'}
-      <p class="text-xs" style="color:var(--text-dim);margin-top:12px">Limits: ${Math.round((limits.position || 0) * 100)}% of the fund per position, ${Math.round((limits.asset_class || 0) * 100)}% per asset class, ${Math.round((limits.underlying || 0) * 100)}% net per underlying, ${Math.round((limits.cash_floor || 0) * 100)}% kept in cash. Universe (${escHtml(universe.as_of || '')}): ${escHtml((universe.indices || []).join(', '))}; pairs: ${escHtml((universe.pairs || []).join(', '))}. Paper trading only.</p>
+      <p class="text-xs" style="color:var(--text-dim);margin-top:12px">Limits: ${Math.round((limits.position || 0) * 100)}% of the fund per position, ${Math.round((limits.asset_class || 0) * 100)}% per asset class, ${Math.round((limits.underlying || 0) * 100)}% net per underlying, ${Math.round((limits.cash_floor || 0) * 100)}% kept in cash.${d.options ? ` Options: at most ${Math.round((d.options.risk_per_structure || 0) * 1000) / 10}% of the fund at risk per structure and ${Math.round((d.options.class_cap || 0) * 100)}% in all, priced from the ${escHtml(d.options.prices || '')}.` : ''} Universe (${escHtml(universe.as_of || '')}): ${escHtml((universe.indices || []).join(', '))}; pairs: ${escHtml((universe.pairs || []).join(', '))}. Paper trading only.</p>
     </section>`;
   const chartEl = document.getElementById('fundChart');
   if (chartEl) _attachEquityHover(chartEl);

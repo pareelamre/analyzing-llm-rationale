@@ -95,6 +95,34 @@ class FundCycleTests(unittest.TestCase):
             self.assertFalse(ok)
             self.assertIn("under 10 hours ago", why)
 
+    def test_an_expired_structure_is_settled_at_the_index_close_without_blocking_trading(self):
+        from analyzing_llm_rationale import fund_options as fo
+
+        condor = fo.Structure("condor", "RANGE", [
+            fo.Leg("p1", "PE", 24_300, -1), fo.Leg("p0", "PE", 24_000, 1),
+            fo.Leg("c1", "CE", 25_700, -1), fo.Leg("c0", "CE", 26_000, 1)], const=300.0)
+        spec = fo.instrument("NIFTY", condor, datetime(2026, 11, 17).date())
+        fund = sqlite3.connect(":memory:")
+        fund_ledger.ensure_schema(fund)
+        fund_ledger.open_fund(fund, cycle.FUND_ID, 10_000.0)
+        fund_ledger.buy(fund, cycle.FUND_ID, spec, "RANGE", 100, 160.0, fx=88.0, cycle_id="fund-20261110T0800",
+                        now="2026-11-10T08:00:00+00:00")
+        specs = {spec["id"]: fund_ledger.instrument_spec(fund, cycle.FUND_ID, spec["id"])}
+        before = datetime(2026, 11, 17, 9, 0, tzinfo=timezone.utc)  # 14:30 IST on expiry day: not yet
+        with mock.patch.object(fo, "settlement_level", return_value=24_150.0) as level:
+            self.assertEqual(cycle.settle_expired(fund, dict(specs), before, before.isoformat(), {"INR": 88.0}), [])
+            level.assert_not_called()
+            after = datetime(2026, 11, 17, 10, 30, tzinfo=timezone.utc)  # 16:00 IST
+            [done] = cycle.settle_expired(fund, specs, after, after.isoformat(), {"INR": 88.0})
+        self.assertEqual(done["value"], 150.0)  # half the put spread lost
+        self.assertEqual(fund_ledger.positions(fund, cycle.FUND_ID), [])
+        trade = fund.execute("SELECT action, price, realized_pnl_usd, cycle_id FROM fund_trades"
+                             " ORDER BY ts DESC LIMIT 1").fetchone()
+        self.assertEqual((trade[0], trade[1], trade[3]), ("expire", 150.0, "expiry-2026-11-17"))
+        self.assertAlmostEqual(trade[2], (150.0 - 160.0) * 100 / 88.0)
+        # Settling is not a trading cycle, so it never holds back the next one.
+        self.assertEqual(cycle._last_cycle(fund), datetime.fromisoformat("2026-11-10T08:00:00+00:00"))
+
 
 if __name__ == "__main__":
     unittest.main()

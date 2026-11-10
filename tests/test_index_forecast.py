@@ -67,6 +67,8 @@ class FitTests(unittest.TestCase):
         self.assertEqual([hz["h"] for hz in forecast["horizons"]], [1, 5, 21])
         for hz in forecast["horizons"]:
             self.assertEqual(hz["quantiles"], sorted(hz["quantiles"]))
+            self.assertLess(hz["tail_quantiles"]["0.01"], hz["quantiles"][0])
+            self.assertGreater(hz["tail_quantiles"]["0.99"], hz["quantiles"][-1])
             chances = [lvl["p_above"] for lvl in hz["levels"]]
             self.assertEqual(chances, sorted(chances, reverse=True))
             self.assertTrue(0.3 < hz["p_up"] < 0.7)

@@ -7,10 +7,12 @@ Models advise; this code decides. Each cycle it:
    facts behind it);
 2. exits positions whose reason is gone: a binary side only when a fresh forecast values it
    below its bid by the same margin an entry needs (so an unproven model cannot churn the book
-   on a one-point disagreement), a pair back inside its exit band or past its holding limit;
+   on a one-point disagreement), a pair back inside its exit band or past its holding limit, an
+   option structure when the index model values it below its bid by that same margin;
 3. sizes new positions small: a fraction of Kelly scaled by trust for event contracts, a fixed
-   risk budget scaled by trust for pairs, under hard limits (10% of the fund per position, 40%
-   per asset class, 15% net per underlying, 20% kept in cash);
+   risk budget scaled by trust for pairs and for option structures (whose budget is the most
+   they can lose), under hard limits (10% of the fund per position, 40% per asset class and 10%
+   for options, 15% net per underlying, 20% kept in cash);
 4. offsets any underlying beyond its limit with the cheapest liquid leg on another venue (a
    Kalshi perp for MCX metals and crude, say) rather than letting concentration build;
 5. writes every order's attribution and its fact sheet, so the trade note can only say what
@@ -20,8 +22,9 @@ Analysts in this first version (and why some are absent):
 - event_model: the on-device model's nightly forecasts on the Edge board.
 - pairs_model: the commodity-pairs tracker, only for pairs whose 16-year backtest made money
   after costs. A stretched pair with a losing backtest is skipped with that reason recorded.
-- The index model forecasts ranges, not direction (its median sits within 0.1% of the close),
-  so it sizes risk but opens no index trades until a directional analyst joins (step 2).
+- options_model (fund_options): the index model forecasts ranges, not direction, so it trades
+  them where a range is the whole bet: defined-risk option structures on the NSE indices it
+  covers. It opens no index futures until a directional analyst joins.
 
 Shadow analysts are scored, not traded: blend_model (scripts/train_fund_blend.py) re-weighs a
 model forecast against the market price as Foresea's own graded record says it should, and its
@@ -62,6 +65,15 @@ MIN_LEAD_DAYS = 1.0
 #: edge per dollar: on a 6c contract a 2-point gap reads as a 30% edge, yet it is noise for a
 #: model with no graded record. Exits need the same gap as entries.
 MIN_GAP = 0.05
+#: Option structures (fund_options): the most one may lose, as a share of the fund at trust
+#: 0.25 (it scales with trust like the pairs budget), and the most all of them together may.
+OPTION_RISK = 0.02
+OPTION_CLASS_CAP = 0.10
+#: Brokerage, exchange charges and taxes on every leg, per rupee at risk.
+OPTION_COST = 0.02
+OPTION_SIDES = ("BULL", "BEAR", "MOVE", "RANGE")
+#: Which way a side leans on its underlying (fund_ledger.DIRECTION); unlisted sides lean long.
+DIRECTION = {"SHORT": -1.0, "BEAR": -1.0, "MOVE": 0.0, "RANGE": 0.0}
 
 
 @dataclass
@@ -92,6 +104,7 @@ class Order:
 
     @property
     def notional(self) -> float:
+        """In the instrument's own currency (rupees for NSE, BSE and MCX contracts)."""
         return self.quantity * self.price * float(self.instrument.get("multiplier") or 1.0)
 
 
@@ -234,9 +247,16 @@ def _attribution(signals: Sequence[Signal]) -> dict[str, float]:
     return {k: round(v / total, 4) for k, v in weights.items()}
 
 
+def _option_book(instrument_id: str) -> str:
+    """One structure per index and expiry: "nse_fo:NIFTY:condor:2026-11-17:..." -> "nse_fo:NIFTY:2026-11-17"."""
+    venue, symbol, _kind, expiry = (instrument_id.split(":") + ["", "", "", ""])[:4]
+    return f"{venue}:{symbol}:{expiry}"
+
+
 def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping[str, Mapping[str, Any]],
          hedges: Mapping[str, dict], *, forecasts: Mapping[str, Mapping[str, Any]] = (),
          held_pairs: Mapping[str, Mapping[str, Any]] = (), pair_rows: Mapping[str, Mapping[str, Any]] = (),
+         option_values: Mapping[str, float] = (), rates: Mapping[str, float] = (),
          exit_z: float = 0.5, max_hold: int = 20) -> dict[str, Any]:
     """Orders for one cycle from the fund's nav() ``snapshot``, ``signals`` and ``quotes``.
 
@@ -244,7 +264,9 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
     instrument id to its latest fresh forecast row (model_probability, forecasted_at): a held
     side is sold only when such a forecast values it below its bid, so positions the model has
     not looked at again are kept. ``held_pairs`` maps a held pair to the sessions it has been
-    held, and ``pair_rows`` gives each pair's latest tracker row.
+    held, and ``pair_rows`` gives each pair's latest tracker row. ``option_values`` is the index
+    model's value of each held option structure, per unit; ``rates`` gives units of each
+    currency per USD, so a rupee contract is sized in rupees.
     """
     nav = float(snapshot["nav_usd"])
     cash = float(snapshot["cash_usd"])
@@ -254,6 +276,11 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
     by_class = dict(snapshot.get("by_asset_class") or {})
     exposure = dict(snapshot.get("net_exposure_by_underlying") or {})
     forecasts = dict(forecasts)
+    option_values = dict(option_values)
+    rates = dict(rates)
+
+    def rate(instrument: Mapping[str, Any]) -> float:
+        return float(rates.get(instrument.get("currency", "USD"), 1.0))
 
     # 1. Exits, held to the same bar as entries: a held event side is sold only when a fresh
     #    forecast values it below its bid by MIN_GAP points and MIN_EDGE per dollar after costs,
@@ -291,6 +318,19 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
                                         pos["mark"], "exit", pos.get("attribution") or {},
                                         [_fact("pair", key, "fund ledger"), _fact("reason", why, "pairs tracker")],
                                         pair_key=key, reason=why))
+    for (iid, side), pos in held.items():
+        if pos["kind"] != "option" or iid not in option_values or not pos.get("mark"):
+            continue
+        bid, worth = float(pos["mark"]), float(option_values[iid])
+        if (bid - worth) / bid - OPTION_COST < MIN_EDGE:
+            continue
+        orders.append(Order("sell", {"id": iid, "label": pos.get("label")}, side, pos["quantity"], bid, "exit",
+                            pos.get("attribution") or {},
+                            [_fact("position", pos.get("label") or iid, "fund ledger"),
+                             _fact("model value at expiry", f"{worth:,.2f} per unit", "index model"),
+                             _fact("bid now", f"{bid:,.2f} per unit", "order book")],
+                            reason="the index model now values this structure well below what it sells for"))
+    books = {_option_book(iid) for (iid, _side), pos in held.items() if pos["kind"] == "option"}
 
     # 2. Entries, best edge x trust first, inside every limit.
     budget = max(0.0, cash - CASH_FLOOR * nav)
@@ -308,6 +348,13 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
         if s.instrument.get("asset_class") == "event":
             price = s.price
             target = min(POSITION_CAP, KELLY_FRACTION * s.trust * float(s.kelly or 0.0)) * nav
+        elif s.side in OPTION_SIDES:
+            if _option_book(iid) in books:
+                passed.append({"instrument": iid, "label": s.instrument.get("label"),
+                               "reason": "the fund already holds a structure on this index and expiry"})
+                continue
+            price = s.price
+            target = min(POSITION_CAP, OPTION_RISK * s.trust * 4) * nav  # trust 0.25 -> 2% at risk
         else:
             price = quote.get("ask") if s.side == "LONG" else quote.get("bid")
             if price is None:
@@ -315,17 +362,20 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
                 continue
             target = min(POSITION_CAP, PAIR_RISK * s.trust * 4) * nav  # trust 0.25 -> 5% per leg
         cls = s.instrument.get("asset_class", "")
-        target = min(target, CLASS_CAP * nav - by_class.get(cls, 0.0), budget)
+        cap = OPTION_CLASS_CAP if cls == "option" else CLASS_CAP
+        target = min(target, cap * nav - by_class.get(cls, 0.0), budget)
         if target < MIN_ORDER_USD:
             passed.append({"instrument": iid, "reason": "no room under the fund's limits"})
             continue
-        qty = target / (price * float(s.instrument.get("multiplier") or 1.0))
+        qty = target * rate(s.instrument) / (price * float(s.instrument.get("multiplier") or 1.0))
         orders.append(Order("buy", s.instrument, s.side, qty, price, "view", _attribution([s]),
                             s.facts + [_fact("size", f"{target / nav * 100:.1f}% of the fund", "orchestrator")],
                             pair_key=s.pair_key, reason=f"edge {_pct(s.edge)} per dollar after costs"))
         budget -= target
         by_class[cls] = by_class.get(cls, 0.0) + target
-        sign = -1.0 if s.side == "SHORT" else 1.0
+        if s.side in OPTION_SIDES:
+            books.add(_option_book(iid))
+        sign = DIRECTION.get(s.side, 1.0)
         exposure[s.instrument.get("underlying", iid)] = exposure.get(s.instrument.get("underlying", iid), 0.0) + sign * target
 
     # 3. Hedges: offset any non-event underlying beyond its limit on another venue.
@@ -340,7 +390,7 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
         if price is None or excess > budget:
             passed.append({"instrument": hedge["id"], "reason": f"could not hedge {underlying}"})
             continue
-        orders.append(Order("buy", hedge, side, excess / (price * float(hedge.get("multiplier") or 1.0)), price,
+        orders.append(Order("buy", hedge, side, excess * rate(hedge) / (price * float(hedge.get("multiplier") or 1.0)), price,
                             "hedge", {"risk_overlay": 1.0},
                             [_fact("underlying", underlying, "fund ledger"),
                              _fact("net exposure", f"${abs(net):,.0f}", "fund ledger"),
