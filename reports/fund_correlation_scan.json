@@ -1,0 +1,446 @@
+{
+  "generated_at": "2026-11-10T03:01:44.489445+00:00",
+  "rule": "docs/fund.md, Commodity correlation scan (pre-registered 2026-11-10)",
+  "discovery": [
+    "2010-01-01",
+    "2018-12-31"
+  ],
+  "holdout": [
+    "2019-01-01",
+    "2026-11-09"
+  ],
+  "tests": 26,
+  "candidates": 4,
+  "confirmed": 1,
+  "go": [
+    "vix_change -> bank_open_to_close"
+  ],
+  "results": [
+    {
+      "predictor": "brent_1d",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2222,
+        "r": -0.0497,
+        "t": -2.3439
+      },
+      "holdout": {
+        "n": 1938,
+        "r": -0.0196,
+        "t": -0.8626
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "wti_1d",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2211,
+        "r": -0.0279,
+        "t": -1.3131
+      },
+      "holdout": {
+        "n": 1938,
+        "r": 0.018,
+        "t": 0.7917
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "gas_1d",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": -0.0205,
+        "t": -0.9651
+      },
+      "holdout": {
+        "n": 1938,
+        "r": -0.005,
+        "t": -0.2181
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "brent_wti_z",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2208,
+        "r": -0.0432,
+        "t": -2.0295
+      },
+      "holdout": {
+        "n": 1937,
+        "r": 0.021,
+        "t": 0.9245
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "wti_gas_z",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2210,
+        "r": -0.0373,
+        "t": -1.7561
+      },
+      "holdout": {
+        "n": 1938,
+        "r": -0.0036,
+        "t": -0.1575
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "brent_5d",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2222,
+        "r": 0.0017,
+        "t": 0.0818
+      },
+      "holdout": {
+        "n": 1938,
+        "r": 0.0167,
+        "t": 0.7345
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "nasdaq_1d",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": 0.0058,
+        "t": 0.2742
+      },
+      "holdout": {
+        "n": 1939,
+        "r": -0.0453,
+        "t": -1.996
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "vix_change",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": 0.0176,
+        "t": 0.83
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.1095,
+        "t": 4.8498
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "dollar_1d",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2221,
+        "r": -0.0274,
+        "t": -1.2934
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.0286,
+        "t": 1.2602
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "us10y_change",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": -0.0724,
+        "t": -3.4219
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.0248,
+        "t": 1.0934
+      },
+      "candidate": true,
+      "confirmed": false
+    },
+    {
+      "predictor": "rupee_1d",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": -0.0023,
+        "t": -0.1101
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.0287,
+        "t": 1.2616
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "indiavix_change",
+      "target": "nifty_open_to_close",
+      "discovery": {
+        "n": 2213,
+        "r": -0.0037,
+        "t": -0.1754
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.0822,
+        "t": 3.6294
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "brent_1d",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2222,
+        "r": -0.0726,
+        "t": -3.4319
+      },
+      "holdout": {
+        "n": 1938,
+        "r": -0.0172,
+        "t": -0.7568
+      },
+      "candidate": true,
+      "confirmed": false
+    },
+    {
+      "predictor": "wti_1d",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2211,
+        "r": -0.0683,
+        "t": -3.2181
+      },
+      "holdout": {
+        "n": 1938,
+        "r": 0.0005,
+        "t": 0.0235
+      },
+      "candidate": true,
+      "confirmed": false
+    },
+    {
+      "predictor": "gas_1d",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": -0.0118,
+        "t": -0.5582
+      },
+      "holdout": {
+        "n": 1938,
+        "r": 0.0062,
+        "t": 0.2737
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "brent_wti_z",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2208,
+        "r": -0.0287,
+        "t": -1.3493
+      },
+      "holdout": {
+        "n": 1937,
+        "r": 0.0227,
+        "t": 0.9997
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "wti_gas_z",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2210,
+        "r": -0.0446,
+        "t": -2.0967
+      },
+      "holdout": {
+        "n": 1938,
+        "r": 0.0009,
+        "t": 0.0402
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "brent_5d",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2222,
+        "r": -0.0184,
+        "t": -0.8669
+      },
+      "holdout": {
+        "n": 1938,
+        "r": 0.0214,
+        "t": 0.943
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "nasdaq_1d",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": -0.0423,
+        "t": -1.9953
+      },
+      "holdout": {
+        "n": 1939,
+        "r": -0.0661,
+        "t": -2.9135
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "vix_change",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": 0.0636,
+        "t": 3.0043
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.117,
+        "t": 5.1831
+      },
+      "candidate": true,
+      "confirmed": true,
+      "rule": {
+        "trades": 393,
+        "mean_net_return": 0.00172,
+        "mean_net_return_ci": [
+          0.000179,
+          0.003298
+        ],
+        "win_share": 0.5649,
+        "verdict": "GO"
+      }
+    },
+    {
+      "predictor": "dollar_1d",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2221,
+        "r": 0.0092,
+        "t": 0.432
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.0279,
+        "t": 1.2291
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "us10y_change",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": -0.0615,
+        "t": -2.9045
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.0401,
+        "t": 1.7662
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "rupee_1d",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2223,
+        "r": -0.0024,
+        "t": -0.1129
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.0141,
+        "t": 0.6189
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "indiavix_change",
+      "target": "bank_open_to_close",
+      "discovery": {
+        "n": 2213,
+        "r": -0.0063,
+        "t": -0.2939
+      },
+      "holdout": {
+        "n": 1939,
+        "r": 0.0654,
+        "t": 2.884
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "brent_wti_z",
+      "target": "brent_wti_next5",
+      "discovery": {
+        "n": 2197,
+        "r": 0.0034,
+        "t": 0.1589
+      },
+      "holdout": {
+        "n": 1925,
+        "r": -0.2054,
+        "t": -9.2021
+      },
+      "candidate": false,
+      "confirmed": false
+    },
+    {
+      "predictor": "wti_gas_z",
+      "target": "wti_gas_next5",
+      "discovery": {
+        "n": 2203,
+        "r": 0.0618,
+        "t": 2.9027
+      },
+      "holdout": {
+        "n": 1951,
+        "r": -0.0997,
+        "t": -4.4244
+      },
+      "candidate": false,
+      "confirmed": false
+    }
+  ]
+}

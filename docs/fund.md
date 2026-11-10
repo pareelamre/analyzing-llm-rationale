@@ -185,6 +185,38 @@ interval (2,000 bootstrap draws) entirely above zero. A GO is the case for a new
 analyst, which the owner decides. Anything else is NO-GO. Nothing here changes
 once a result is seen.
 
+### Result (2026-11-10): commodities NO-GO; one GO from US VIX, and it is fragile
+
+Discovery ran from 2010 to 2018 and the holdout from 2019 to 2026-11-09. Of the
+26 tests, 4 were discovery candidates and 1 was confirmed.
+
+- **Commodities and the pairs did not help.** Brent's and WTI's one-day returns
+  looked like they led Bank Nifty from open to close in discovery (t -3.4 and
+  -3.2), but nothing was left in the holdout (t -0.8 and 0.0). No commodity or
+  spread predictor held up for either index.
+- **The pairs against their own next 5 sessions** were not discovery candidates,
+  so they were not traded. The Brent-WTI spread did mean-revert strongly in the
+  holdout (t -9.2, inflated by overlapping 5-day windows), but in discovery it
+  showed nothing (t +0.2). That is a change of regime, not a rule.
+- **Confirmed: a change in US VIX predicts Bank Nifty from open to close the next
+  session** (discovery t 3.0, holdout t 5.2). The rule made 393 holdout trades
+  averaging +0.17% each after 0.05% costs (95% CI +0.02% to +0.33%), with 56%
+  wins. That is GO.
+
+The GO is fragile. These checks were run after the result, for description:
+
+- 2020 alone averaged +0.54% a trade. Without 2020 the mean is +0.07% (95% CI
+  -0.05% to +0.19%).
+- It was positive in 6 of the 8 holdout years.
+- All of the effect is on one side. Buying Bank Nifty at the open after a large
+  rise in VIX earned +0.01%. Selling it at the open after a large fall in VIX
+  earned +0.34% (+0.12% to +0.57%): when US fear eases sharply, India opens high
+  and Bank Nifty gives some of that back by the close.
+
+Whether to give this its own analyst is the owner's call. A shadow record of the
+sell side, graded forward, would show whether the effect survives outside 2020.
+The report is `reports/fund_correlation_scan.json`.
+
 ## Shadow mode
 
 A new analyst does not trade on arrival. It records its probability for each
