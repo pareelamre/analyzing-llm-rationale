@@ -88,6 +88,8 @@ BIAS_DAYS, MIN_BIAS_DAYS = 30, 7
 SPREAD_DAYS, MIN_SPREAD_DAYS = 45, 21
 MIN_SIGMA = 1.0
 KALSHI_FEE_RATE = 0.07
+#: Polymarket's taker fee rate for weather markets (docs.polymarket.com/trading/fees); makers pay none.
+POLYMARKET_WEATHER_FEE_RATE = 0.05
 #: A day's market is priced from forecasts only before its morning: later, what the
 #: thermometer has already read matters more than any model.
 LAST_ENTRY_LOCAL = time(9, 0)
@@ -249,12 +251,13 @@ class Calibration:
     d: float
     days: int
     known_through: date
+    min_sigma: float = MIN_SIGMA
 
     def sigma(self, spread: float) -> float:
-        return max(MIN_SIGMA, math.sqrt(max(self.c + self.d * spread * spread, 0.0)))
+        return max(self.min_sigma, math.sqrt(max(self.c + self.d * spread * spread, 0.0)))
 
 
-def fit(rows: Sequence[Row], known_through: date) -> Optional[Calibration]:
+def fit(rows: Sequence[Row], known_through: date, min_sigma: float = MIN_SIGMA) -> Optional[Calibration]:
     """Each city's bias over its last BIAS_DAYS known days, and the spread fit over every city's
     last SPREAD_DAYS; None with fewer than MIN_SPREAD_DAYS days of history."""
     known = [r for r in rows if r.day <= known_through]
@@ -273,7 +276,7 @@ def fit(rows: Sequence[Row], known_through: date) -> Optional[Calibration]:
     c = my - d * mx
     if d < 0 or c < 0:  # a fit that shrinks with disagreement is noise: fall back to one spread
         c, d = my, 0.0
-    return Calibration(bias, c, d, len({r.day for r in window}), known_through)
+    return Calibration(bias, c, d, len({r.day for r in window}), known_through, min_sigma)
 
 
 def chance(centre: float, sigma: float, bounds: tuple[float, float]) -> float:
@@ -289,8 +292,14 @@ def kalshi_fee(price: float) -> float:
     return KALSHI_FEE_RATE * price * (1.0 - price)
 
 
-def rule(p_yes: float, bid: Optional[float], ask: Optional[float]) -> Optional[tuple[str, float, float]]:
-    """The fund's event rule with Kalshi's fee: (side, price, edge per dollar) or None."""
+def polymarket_fee(price: float) -> float:
+    """Polymarket's weather taker fee per share."""
+    return POLYMARKET_WEATHER_FEE_RATE * price * (1.0 - price)
+
+
+def rule(p_yes: float, bid: Optional[float], ask: Optional[float],
+         fee: Callable[[float], float] = kalshi_fee) -> Optional[tuple[str, float, float]]:
+    """The fund's event rule with the venue's fee: (side, price, edge per dollar) or None."""
     if bid is None or ask is None or not 0 <= bid <= ask <= 1:
         return None
     if abs(p_yes - (bid + ask) / 2) > orch.MAX_DISAGREEMENT:
@@ -299,7 +308,7 @@ def rule(p_yes: float, bid: Optional[float], ask: Optional[float]) -> Optional[t
     for side, prob, price in (("YES", p_yes, ask), ("NO", 1.0 - p_yes, 1.0 - bid)):
         if not orch.PRICE_BAND[0] <= price <= orch.PRICE_BAND[1] or prob - price < orch.MIN_GAP:
             continue
-        edge = (prob - price - kalshi_fee(price)) / price
+        edge = (prob - price - fee(price)) / price
         if edge >= orch.MIN_EDGE and (best is None or edge > best[2]):
             best = (side, price, edge)
     return best

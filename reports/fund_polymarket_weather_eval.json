@@ -1,0 +1,92 @@
+{
+  "generated_at": "2026-11-10T02:13:21.502466+00:00",
+  "rule": "docs/fund.md, Polymarket weather evaluation (pre-registered 2026-11-10)",
+  "sample": {
+    "events_on_rule": 816,
+    "sampled": 816,
+    "stations": 48,
+    "settlement_rebuilt_matches_winner": "779/816"
+  },
+  "test1_forecast": {
+    "verdict": "SHADOW",
+    "brackets": 26380,
+    "brier_skill": -0.1714,
+    "brier_skill_ci": [
+      -0.19454,
+      -0.14736
+    ],
+    "trades": 6331,
+    "days": 17,
+    "losses": 3828,
+    "mean_return": -0.13993,
+    "mean_return_ci": [
+      -0.21631,
+      -0.04607
+    ],
+    "mean_price": 0.4091
+  },
+  "test2_decided": {
+    "verdict": "GO",
+    "trades": 165,
+    "days": 17,
+    "losses": 0,
+    "mean_return": 0.55568,
+    "mean_return_ci": [
+      0.43718,
+      0.65863
+    ],
+    "mean_price": 0.7614,
+    "priced_before_the_deciding_reading": 130,
+    "note": "Not acted on: most prices predate the reading that decided the range (docs/fund.md)."
+  },
+  "sensitivity (description only)": {
+    "half_spread_0.005": {
+      "test1": {
+        "trades": 6399,
+        "days": 17,
+        "losses": 3760,
+        "mean_return": -0.11018,
+        "mean_return_ci": [
+          -0.18099,
+          -0.03147
+        ],
+        "mean_price": 0.4205
+      },
+      "test2": {
+        "trades": 173,
+        "days": 17,
+        "losses": 0,
+        "mean_return": 0.54715,
+        "mean_return_ci": [
+          0.42313,
+          0.6589
+        ],
+        "mean_price": 0.7671
+      }
+    },
+    "half_spread_0.02": {
+      "test1": {
+        "trades": 5799,
+        "days": 17,
+        "losses": 3529,
+        "mean_return": -0.19345,
+        "mean_return_ci": [
+          -0.26741,
+          -0.10437
+        ],
+        "mean_price": 0.4148
+      },
+      "test2": {
+        "trades": 149,
+        "days": 17,
+        "losses": 0,
+        "mean_return": 0.57846,
+        "mean_return_ci": [
+          0.45935,
+          0.68492
+        ],
+        "mean_price": 0.7472
+      }
+    }
+  }
+}
