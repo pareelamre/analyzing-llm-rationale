@@ -57,7 +57,9 @@ RSS_FEEDS = [
 #: Specialist feeds read only when a question touches their beat: each one covers an
 #: Edge-board miss the general feeds and search channels did not. Add an entry per new
 #: miss, with the miss in "found". A feed must answer an honest client; People, E! and
-#: ESPN refuse one and are left out rather than worked around.
+#: ESPN refuse one and are left out rather than worked around. A feed carries only its
+#: newest items, so a beat whose questions name no person or thing to search for also
+#: gets "search": a recent Google News search in the beat's own words.
 BEAT_FEEDS = (
     {
         "beat": "art market",
@@ -65,6 +67,10 @@ BEAT_FEEDS = (
                   "sotheby's", "christie", "christie's", "phillips", "sculpture", "artist"),
         "feeds": ("https://news.artnet.com/feed", "https://www.artnews.com/feed/",
                   "https://www.theartnewspaper.com/rss.xml"),
+        # The question's words ("artwork sell 150 million") found a music-rights deal; the
+        # sale previews ("a $180 million van Gogh: what to watch at New York's November
+        # auctions") had already scrolled off the feeds (2026-11-11).
+        "search": "Sotheby's Christie's top lot estimate",
         "found": "2026-11-09, 'Will an artwork sell for $150 million by December 31?': model 5% vs market 93%; "
                  "the evidence missed Sotheby's guaranteed ~$180M Van Gogh offered on Nov 18",
     },
@@ -598,6 +604,10 @@ class NewsPipeline:
         if "google-news" in self._fetch_sources:
             articles.extend(self._fetch_google_news(f"{_recent_search_query(query)} {GOOGLE_NEWS_RECENT}",
                                                     limit=per_source_limit))
+            for beat in _beats_for(query):
+                if beat.get("search"):
+                    articles.extend(self._fetch_google_news(f"{beat['search']} {GOOGLE_NEWS_RECENT}",
+                                                            limit=per_source_limit))
             articles.extend(self._fetch_google_news(query, limit=per_source_limit))
 
         if "bing-news" in self._fetch_sources:

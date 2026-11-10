@@ -28,6 +28,7 @@ class BeatRegistryTests(unittest.TestCase):
     def test_every_beat_names_its_miss_and_uses_https_feeds(self):
         for beat in np_mod.BEAT_FEEDS:
             self.assertTrue(beat["hints"], beat["beat"])
+            self.assertTrue(beat.get("search", "x").strip(), beat["beat"])  # optional, never blank
             self.assertTrue(beat["found"].startswith("20"), beat["beat"])
             for url in beat["feeds"]:
                 self.assertTrue(url.startswith("https://"), url)
@@ -112,8 +113,19 @@ class FetchTests(unittest.TestCase):
 
         pipeline._fetch_google_news = fake_google
         found = pipeline.fetch(ARTWORK, top_k=5)
-        self.assertEqual(queries, ["artwork sell 150 million when:30d", ARTWORK])
-        self.assertEqual([a["title"] for a in found], ["Sotheby's sale 1", "Sotheby's sale 2"])
+        # The recent pass, then the art beat's own search, then the plain question.
+        self.assertEqual(queries, ["artwork sell 150 million when:30d",
+                                   "Sotheby's Christie's top lot estimate when:30d", ARTWORK])
+        self.assertEqual([a["title"] for a in found], ["Sotheby's sale 1", "Sotheby's sale 2", "Sotheby's sale 3"])
+
+    def test_only_a_beat_with_a_search_adds_one_and_unrelated_questions_add_none(self):
+        pipeline = _bare(("google-news",))
+        queries = []
+        pipeline._fetch_google_news = lambda query, limit: queries.append(query) or []
+        pipeline.fetch("Will the Fed cut rates in December?")
+        pipeline.fetch(STAFFORD)  # the nfl beat has feeds but no search: its names already find the news
+        self.assertFalse(any("top lot estimate" in q for q in queries))
+        self.assertEqual(len(queries), 4)
 
     def test_beats_are_fetched_only_when_enabled_and_on_topic(self):
         beat_item = {"title": "Van Gogh leads Sotheby's sale", "url": "https://news.artnet.com/vg",
