@@ -232,6 +232,30 @@ least 60 trades.
 
 The condor and the call spread are reported alongside, for description only.
 
+##### Result (2026-11-10): GO
+
+Covers 2003-03 to 2026-10.
+
+| | Trades | Mean net return per $ at risk (95% CI) | Wins | Years positive | Fund, 10% at risk per decision |
+|---|---|---|---|---|---|
+| Put credit spread | 283 | +10.3% (+5.8% to +14.6%) | 84% | 20 of 24 | +12.0% a year, worst fall -24% |
+| Condor (description) | 283 | +7.5% (+1.0% to +13.8%) | 59% | | |
+| Call credit spread (description) | 283 | -9.6% (-15.8% to -3.4%) | 69% | | |
+
+The losing years were 2004 (-17%), 2011, 2015 and 2022 (all within -4%). 2008
+(+3%) and 2020 (+12%) made money, because spreads sold when volatility was high
+collected rich premiums. As on Nifty, the call side lost, so the edge is in
+selling downside insurance.
+
+Flat-volatility pricing leaves out the skew that makes real index puts dearer.
+A put spread is worth more under that skew, so real sales would collect more
+than this test credits. The bias runs against the result.
+
+The put side is now confirmed on a market it was not chosen on. That is the
+case for a put-spread-only Nifty sleeve in the options analyst. The owner
+decides; until then the analyst stays in shadow mode. The report is
+`reports/fund_ndx_put_eval.json`.
+
 ## Models
 
 Open-weight models come first; the owner's own fine-tunes follow.
