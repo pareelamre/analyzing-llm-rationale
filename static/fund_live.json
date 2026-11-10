@@ -3,17 +3,18 @@
     "event_model",
     "options_model",
     "pairs_model",
+    "put_premium",
     "weather_model"
   ],
   "attribution": {
     "realized": {},
     "unrealized": {
-      "agent_transfer": 46.0176,
+      "agent_transfer": 11.6244,
       "event_model": 8.9791
     }
   },
   "by_asset_class": {
-    "event": 4024.9264
+    "event": 3990.5332
   },
   "cash_usd": 6030.0703,
   "curve": [
@@ -124,6 +125,10 @@
     {
       "nav_usd": 10054.9968,
       "ts": "2026-11-10T12:01:09.560480+00:00"
+    },
+    {
+      "nav_usd": 10020.6035,
+      "ts": "2026-11-10T14:01:23.994772+00:00"
     }
   ],
   "cycle": {
@@ -154,10 +159,10 @@
       }
     ],
     "traded": false,
-    "window": "17:31 IST is outside the trading hours"
+    "window": "19:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-10T12:01:09.560480+00:00",
+  "generated_at": "2026-11-10T14:01:23.994772+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -165,7 +170,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10054.9968,
+  "nav_usd": 10020.6035,
   "net_exposure_by_underlying": {
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
     "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 354.33,
@@ -189,6 +194,10 @@
     ],
     "mode": "SHADOW",
     "prices": "last trades (Upstox open data), 2% taken off each side",
+    "put_sleeve": {
+      "holding": [],
+      "mode": "GO"
+    },
     "risk_per_structure": 0.02,
     "settled": []
   },
@@ -393,20 +402,20 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06299999999999994,
+      "mark": 0.05900000000000005,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 42.9916,
+      "pnl_usd": 8.5984,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 541.6936,
+      "value_usd": 507.3004,
       "venue": "polymarket"
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": 0.55,
+  "return_pct": 0.206,
   "settled": [],
   "shadow": {
     "blend_model": {
@@ -439,9 +448,9 @@
           "model": 0.15
         },
         {
-          "blend": 0.1736,
+          "blend": 0.1643,
           "label": "US announces end of Iranian blockade by November 30, 2026?",
-          "market": 0.185,
+          "market": 0.175,
           "model": 0.08
         },
         {
@@ -487,9 +496,9 @@
           "model": 0.94
         },
         {
-          "blend": 0.0131,
+          "blend": 0.014,
           "label": "Will China invade Taiwan by end of 2026?",
-          "market": 0.016,
+          "market": 0.017,
           "model": 0.02
         }
       ],
@@ -525,7 +534,7 @@
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 4,
+        "decided_new": 0,
         "events": 96,
         "filled_now": 0,
         "graded": 0
