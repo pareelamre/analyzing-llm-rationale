@@ -405,6 +405,67 @@ faster than a twice-a-day cycle on outcomes that are already known, and a
 2-trade sample fails the 100-trade minimum anyway. The rule is dropped. The
 report is `reports/fund_weather_lock_eval.json`.
 
+## Polymarket weather evaluation (pre-registered 2026-11-10, before any Polymarket price was read)
+
+**Why.** Kalshi's weather markets priced forecasts and already-decided ranges
+better than the fund could (both results above). Polymarket's daily
+highest-temperature markets cover about 57 cities. Most are outside the US, and
+most have far less money behind them. They also settle on the airport's own
+routine METAR readings. This tests the same two rules there.
+
+**Markets.** Every settled Polymarket "Highest temperature in ..." event whose
+rules settle on the hourly temperature remark of routine METAR observations, in
+whole degrees after the stated rounding (nearest degree, halves up; Fahrenheit
+markets convert from Celsius first). From all such events ending
+2026-04-01 to 2026-11-08, a random sample of 2,000 events is drawn with seed
+20261110 before any price is read. Ranges: "N°C", "N°C or below", "N°C or
+higher", "N-N°F", "N°F or below" and "N°F or higher", read as half-degree bounds
+in the market's unit. The outcome is each market's settled price, 1 or 0.
+
+**Prices.** Polymarket's hourly price history (CLOB `prices-history`): the last
+point at or before the decision, no more than 3 hours earlier. The history
+gives one price, not a bid and ask, so a buy costs that price plus 1 cent, and a
+No costs 1 minus the price plus 1 cent. The fee is Polymarket's weather taker
+fee, 0.05 x price x (1 - price) per share. Half-spreads of 0.5 and 2 cents are
+also reported, for description only.
+
+**Stations and readings.** The ICAO code in each event's rules, with its
+coordinates from OurAirports, and every routine METAR from the Iowa Environmental
+Mesonet archive. The settlement value is rebuilt from those readings with the
+market's own rounding.
+
+**Decisions.** At the fund's two cycles, 08:00 and 20:00 UTC, while the event is
+open.
+
+**Test 1: forecast model.**
+
+- The weather evaluation's model unchanged (bias over 30 days, spread fit over
+  45, at least 21 days of history, Normal), in the market's unit. The minimum
+  sigma is 0.5 degrees C or 1 degree F.
+- The bias and spread come from the rebuilt settlement values, known through the
+  day before the decision.
+- Only decisions before 09:00 local time on the day, within 36 hours of it.
+- Forecasts use Open-Meteo's `previous_dayK` runs, with K the smallest number of
+  days that keeps every run at least 6 hours older than the decision, across the
+  whole local day.
+- Rule: the fund's event rule with the 1-cent half-spread and Polymarket's fee.
+- GO if the mean net return per dollar has a 95% interval (bootstrap over
+  settlement dates) entirely above zero. Otherwise SHADOW.
+
+**Test 2: decided ranges.**
+
+- At either cycle while the local day is under way: the running high is the
+  largest routine reading since local midnight, rounded as the market rounds.
+- Decided No when that rounded high is at least the range's top plus one whole
+  degree. Decided Yes for an "or higher" range when it is at least the range's
+  bottom plus one whole degree.
+- Buy the decided side at the price plus 1 cent, if that is 99 cents or less and
+  a dollar pays more than the price plus the fee.
+- GO with at least 100 trades and a 95% interval of the mean net return entirely
+  above zero. Otherwise NO-GO.
+
+Nothing above may change once a Polymarket price has been read.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
