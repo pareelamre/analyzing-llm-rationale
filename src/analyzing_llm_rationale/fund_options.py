@@ -326,13 +326,13 @@ def quote_source(token: Optional[str], *, now: datetime, http_get: HttpGet = req
     return book, "live order book (Upstox)"
 
 
-def _tradeable(q: Optional[Mapping[str, Any]], lot_size: float) -> bool:
+def _tradeable(q: Optional[Mapping[str, Any]], lot_size: float, min_lots: float = MIN_CLOSE_VOLUME_LOTS) -> bool:
     if not q or q.get("bid") is None or q.get("ask") is None or q["ask"] <= 0:
         return False
     if q.get("source") == "book":
         mid = (q["bid"] + q["ask"]) / 2
         return q["bid"] > 0 and (q["ask"] - q["bid"]) <= MAX_LIVE_SPREAD * mid
-    return float(q.get("volume") or 0.0) >= MIN_CLOSE_VOLUME_LOTS * lot_size
+    return float(q.get("volume") or 0.0) >= min_lots * lot_size
 
 
 # Structures and the analyst ------------------------------------------------------------------
@@ -549,6 +549,80 @@ def option_signals(forecast: Mapping[str, Any], rows: Sequence[Mapping[str, Any]
                                   f"put-call parity at {_num(parity_strike)}"),
                        orch._fact("expected profit per rupee at risk after costs", orch._pct(edge), "orchestrator")]))
     return {"signals": signals, "skipped": skipped, "values": values, "quotes": quotes}
+
+
+#: The put premium sleeve (docs/fund.md, "Put premium sleeve"): Nifty only, the listed expiry
+#: nearest SLEEVE_SESSIONS[0] sessions out within the band, the put credit spread every time.
+SLEEVE_SYMBOL = "NIFTY"
+SLEEVE_SESSIONS = (21.0, 15.0, 30.0)
+#: A last trade counts as the sleeve's price after this many lots in the session: its spread is
+#: under one lot, and a strike four weeks out trades far less than the analyst's near-the-money
+#: options (on 2026-11-10 the 8 Dec wing traded 78 lots).
+SLEEVE_MIN_LOTS = 20
+SLEEVE_RULE = ("sell one Nifty put credit spread at a time, held to expiry; tested on Nifty 2010-2026 and, "
+               "out of sample, the Nasdaq-100 2003-2026")
+
+
+def put_spread_signal(forecast: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], now: datetime, *,
+                      quote_fn: QuoteFn, price_source: str, trust: float = orch.DEFAULT_TRUST,
+                      analyst: str = "put_premium") -> dict[str, Any]:
+    """The sleeve's Nifty put credit spread ({"signal", "quotes"}), or why there is none ({"skipped"})."""
+    name, spot_key = INDEX_OPTIONS[SLEEVE_SYMBOL]
+
+    def skip(why: str) -> dict[str, Any]:
+        return {"signal": None, "quotes": {}, "skipped": {"instrument": f"nse_fo:{SLEEVE_SYMBOL}",
+                                                          "label": "Nifty put premium", "reason": why}}
+
+    fc = {f["name"]: f for f in forecast.get("indices") or []}.get(name)
+    if not fc or not fc.get("horizons"):
+        return skip("no index model forecast for Nifty 50")
+    as_of, today = date.fromisoformat(fc["as_of"]), now.astimezone(IST).date()
+    if (today - as_of).days > FORECAST_MAX_AGE_DAYS:
+        return skip(f"the index model's latest forecast is from the {as_of} close")
+    holidays = [date.fromisoformat(d) for d in forecast.get("holidays") or []]
+    levels_p = [float(x) for x in (forecast.get("model") or {}).get("quantiles") or (0.05, 0.10, 0.25, 0.5, 0.75, 0.90, 0.95)]
+    spot_q = quote_fn([spot_key]).get(spot_key) or {}
+    spot = spot_q.get("last")
+    if not spot:
+        return skip("no Nifty 50 price")
+    priced_at = datetime.fromisoformat(spot_q["at"]) if spot_q.get("at") else now
+    chains = option_contracts(rows, SLEEVE_SYMBOL, today)
+    target, low, high = SLEEVE_SESSIONS
+    band = [(abs(tau - target), e, tau) for e in chains
+            if low <= (tau := sessions_left(priced_at, e, holidays)) <= high]
+    if not band:
+        return skip(f"no Nifty expiry {low:.0f} to {high:.0f} sessions away")
+    _gap, expiry, tau = min(band)
+    levels, returns = return_quantiles(fc["horizons"], float(fc["close"]), tau, levels_p)
+    wanted = _wanted(chains[expiry], spot, Distribution(levels, returns, spot, spot))
+    raw = quote_fn([c["instrument_key"] for c in wanted])
+    fwd = _forward(wanted, raw, spot)
+    if fwd is None:
+        return skip(f"no quote for the {expiry} options near the money")
+    forward, parity_strike = fwd
+    dist = Distribution(levels, returns, spot, forward)
+    s = next((c for c in candidate_structures(wanted, forward, dist) if c.kind == "put_spread"), None)
+    if s is None:
+        return skip("no put spread on the listed strikes")
+    if not all(_tradeable(raw.get(leg.key), leg.lot_size, SLEEVE_MIN_LOTS) for leg in s.legs):
+        return skip("a leg of the put spread is too thin to trade")
+    q = s.quote(raw)
+    if q is None or not 0 < q["ask"] < s.const:
+        return skip("the put spread offers no credit")
+    worth = dist.expect(s.payoff)
+    edge = (worth - q["ask"]) / q["ask"] - orch.OPTION_COST
+    inst = instrument(SLEEVE_SYMBOL, s, expiry)
+    source = f"index model, {as_of} close"
+    return {"skipped": None, "quotes": {inst["id"]: q}, "signal": orch.Signal(
+        analyst=analyst, instrument=inst, side=s.side, price=q["ask"], edge=edge, trust=trust, reason=SLEEVE_RULE,
+        facts=[orch._fact("rule", SLEEVE_RULE, "docs/fund.md, Put premium sleeve"),
+               orch._fact("index", f"{name} at {_num(spot)}", f"Upstox, {spot_q.get('source', 'quote')}"),
+               orch._fact("expiry", f"{expiry.day} {expiry:%b %Y}, {tau:.1f} sessions left", "NSE"),
+               orch._fact("structure", _legs_text(s), "put premium sleeve"),
+               orch._fact("credit", f"{_rupees(s.const - q['ask'])} per unit", price_source),
+               orch._fact("the most it can lose", f"{_rupees(q['ask'])} per unit", price_source),
+               orch._fact("model value at expiry", f"{_rupees(worth)} per unit", source),
+               orch._fact("market forward", f"{_num(round(forward, 1))}", f"put-call parity at {_num(parity_strike)}")])}
 
 
 def settlement_level(spec: Mapping[str, Any], *, http_get: HttpGet = requests.get) -> Optional[float]:

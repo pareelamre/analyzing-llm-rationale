@@ -270,7 +270,10 @@ options analyst, which stays in shadow mode.
   25% level, long near its 10% level, on the model's distribution moved onto the
   market forward.
 - **Gate:** none on the model's edge, as tested. The trade is skipped only when a
-  leg is too thin to trade.
+  leg is too thin to trade. Priced from last trades, each leg must have traded
+  at least 20 lots in its latest session. The options analyst asks for 100, but
+  the sleeve's spread is under one lot, and on 2026-11-10 the four-week wing
+  traded 78.
 - **Size:** 2% of the fund at risk at the starting trust, inside the 10% options
   cap.
 - **Exit:** at expiry, at the index's close. There are no early exits, because
