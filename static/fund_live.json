@@ -2,17 +2,18 @@
   "analysts": [
     "event_model",
     "options_model",
-    "pairs_model"
+    "pairs_model",
+    "weather_model"
   ],
   "attribution": {
     "realized": {},
     "unrealized": {
-      "agent_transfer": 22.1366,
-      "event_model": 8.9791
+      "agent_transfer": 30.7349,
+      "event_model": 13.4687
     }
   },
   "by_asset_class": {
-    "event": 4001.0454
+    "event": 4014.1333
   },
   "cash_usd": 6030.0703,
   "curve": [
@@ -87,6 +88,14 @@
     {
       "nav_usd": 10031.1157,
       "ts": "2026-11-10T00:34:16.574242+00:00"
+    },
+    {
+      "nav_usd": 10044.2036,
+      "ts": "2026-11-10T02:01:13.237527+00:00"
+    },
+    {
+      "nav_usd": 10044.2036,
+      "ts": "2026-11-10T02:19:23.141031+00:00"
     }
   ],
   "cycle": {
@@ -117,10 +126,10 @@
       }
     ],
     "traded": false,
-    "window": "06:04 IST is outside the trading hours"
+    "window": "07:49 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-10T00:34:16.574242+00:00",
+  "generated_at": "2026-11-10T02:19:23.141031+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -128,7 +137,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10031.1157,
+  "nav_usd": 10044.2036,
   "net_exposure_by_underlying": {
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
     "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 354.33,
@@ -313,15 +322,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.83,
+      "mark": 0.84,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 8.9791,
+      "pnl_usd": 13.4687,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 372.6347,
+      "value_usd": 377.1243,
       "venue": "polymarket"
     },
     {
@@ -355,20 +364,21 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.061000000000000054,
+      "mark": 0.062000000000000055,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 25.795,
+      "pnl_usd": 34.3933,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 524.497,
+      "value_usd": 533.0953,
       "venue": "polymarket"
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": 0.311,
+  "return_pct": 0.442,
+  "settled": [],
   "shadow": {
     "blend_model": {
       "days_recorded": 2,
@@ -418,9 +428,9 @@
           "model": 0.08
         },
         {
-          "blend": 0.0521,
+          "blend": 0.0568,
           "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-          "market": 0.055,
+          "market": 0.06,
           "model": 0.08
         },
         {
@@ -430,16 +440,16 @@
           "model": 0.08
         },
         {
-          "blend": 0.9552,
-          "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-          "market": 0.932,
-          "model": 0.94
-        },
-        {
           "blend": 0.0229,
           "label": "Will the Iranian regime fall before 2027?",
           "market": 0.028,
           "model": 0.02
+        },
+        {
+          "blend": 0.9558,
+          "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
+          "market": 0.933,
+          "model": 0.94
         },
         {
           "blend": 0.014,
@@ -487,6 +497,29 @@
       "kind": "checker",
       "markets": 20,
       "mode": "shadow"
+    },
+    "weather_model": {
+      "days_recorded": 0,
+      "kind": "weather",
+      "markets": 0,
+      "mode": "shadow",
+      "predictions_recorded": 0,
+      "test": {
+        "brier_skill": -0.22138,
+        "mean_return": -0.25176,
+        "mean_return_ci": [
+          -0.32523,
+          -0.17528
+        ],
+        "trades": 4960,
+        "verdict": "SHADOW",
+        "window": {
+          "first": "2026-09-24",
+          "last": "2026-11-08",
+          "settled_through": "2026-11-09"
+        }
+      },
+      "would_trade": []
     }
   },
   "starting_value": 10000.0,
@@ -760,5 +793,14 @@
       "Crude: MCX / Kalshi WTI future",
       "Zinc / Lead (MCX)"
     ]
+  },
+  "weather": {
+    "cities": 24,
+    "mode": "SHADOW",
+    "verdict_window": {
+      "first": "2026-09-24",
+      "last": "2026-11-08",
+      "settled_through": "2026-11-09"
+    }
   }
 }
