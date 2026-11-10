@@ -14,7 +14,11 @@ Inputs: the Edge board (static/mark_to_market_live.json), the pairs tracker
 options analyst), the fund universe (static/fund_universe.json, rebuilt when older than
 FUND_UNIVERSE_MAX_AGE_DAYS), live quotes, and USD/INR. Option prices come from the live order
 book when UPSTOX_ANALYTICS_TOKEN is set and from Upstox's open last trades otherwise
-(fund_options). Option structures past expiry are settled at the index's close every run. Trade
+(fund_options). The weather analyst (fund_weather) prices Kalshi's daily high-temperature
+markets; it trades only if its pre-registered test (reports/fund_weather_eval.json) said GO,
+and otherwise records its predictions in shadow mode. Option structures past expiry are settled
+at the index's close, and Kalshi positions at their market's result, every run. Kalshi buys pay
+Kalshi's taker fee. Trade
 notes are worded by the on-device model (FUND_LLM_URL + SELF_HOSTED_LLM_API_KEY) when it is
 reachable; otherwise each note is the plain fact sheet.
 """
@@ -39,6 +43,7 @@ from analyzing_llm_rationale import fund_notes, market_data  # noqa: E402
 from analyzing_llm_rationale import fund_options as fo  # noqa: E402
 from analyzing_llm_rationale import fund_orchestrator as orch  # noqa: E402
 from analyzing_llm_rationale import fund_universe as fu  # noqa: E402
+from analyzing_llm_rationale import fund_weather as fw  # noqa: E402
 
 FUND_ID = "foresea-fund"
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -48,6 +53,7 @@ UNIVERSE_PATH = ROOT / "static" / "fund_universe.json"
 BOARD_PATH = ROOT / "static" / "mark_to_market_live.json"
 PAIRS_PATH = ROOT / "static" / "commodity_pairs_live.json"
 INDEX_FORECAST_PATH = ROOT / "static" / "index_forecast_live.json"
+WEATHER_REPORT_PATH = ROOT / "reports" / "fund_weather_eval.json"
 BLEND_PATH = ROOT / "configs" / "fund_blend.json"
 CHECKS_PATH = ROOT / "static" / "fund_rationale_checks.json"
 #: Rationale checks older than this no longer describe a live forecast.
@@ -213,6 +219,37 @@ def settle_expired(conn: sqlite3.Connection, specs: dict[str, dict], now: dateti
     return settled
 
 
+def settle_events(conn: sqlite3.Connection, now: datetime, stamp: str) -> list[dict]:
+    """Book every Kalshi position whose market has settled: a dollar a contract for the side
+    that won, nothing for the other."""
+    settled = []
+    for pos in ledger.positions(conn, FUND_ID):
+        venue, _, ticker = pos["instrument_id"].partition(":")
+        if pos["kind"] != "binary" or venue != "kalshi":
+            continue
+        try:
+            result = market_data.fetch_kalshi_result(ticker)
+        except (market_data.MarketDataError, requests.RequestException, ValueError):
+            continue
+        if result is None:
+            continue
+        value = 1.0 if pos["side"].lower() == result else 0.0
+        ledger.sell(conn, FUND_ID, pos["instrument_id"], pos["side"], pos["quantity"], value, purpose="settlement",
+                    action="settle", cycle_id=f"settle-{now:%Y%m%d}", now=stamp, note_source="facts",
+                    note=f"Settled: {pos.get('label') or ticker} resolved {result.capitalize()}, so {pos['side']} "
+                         f"paid ${value:.2f} a contract.",
+                    evidence=[{"source": "Kalshi", "figure": f"result: {result}"}])
+        settled.append({"instrument": pos["instrument_id"], "label": pos.get("label"), "result": result,
+                        "side": pos["side"], "value": value})
+    return settled
+
+
+def weather_mode() -> tuple[str, dict]:
+    """GO only when the pre-registered test said so; SHADOW otherwise (docs/fund.md)."""
+    report = _load_json(WEATHER_REPORT_PATH)
+    return ("GO" if report.get("verdict") == "GO" else "SHADOW"), report
+
+
 def options_cycle(index_forecast: dict, now: datetime, quote_fn, price_source: str, held: dict) -> dict:
     """The options analyst's signals, values and quotes, or why it had none."""
     if not index_forecast.get("indices"):
@@ -250,6 +287,7 @@ def run(now: Optional[datetime] = None) -> dict:
     option_specs = {p["instrument_id"]: ledger.instrument_spec(conn, FUND_ID, p["instrument_id"]) or {}
                     for p in ledger.positions(conn, FUND_ID) if p["kind"] == "option"}
     settled = settle_expired(conn, option_specs, now, stamp, rates)
+    settled_events = settle_events(conn, now, stamp)
     conn.commit()
     quote_fn, price_source = fo.quote_source(os.environ.get("UPSTOX_ANALYTICS_TOKEN", "").strip() or None, now=now)
     universe = load_universe(today, fx)
@@ -270,10 +308,15 @@ def run(now: Optional[datetime] = None) -> dict:
     can_trade, why = trading_window(conn, now)
     executed, passed = [], []
     options = {"signals": [], "skipped": [], "values": {}, "quotes": {}}
+    weather = {"signals": [], "priced": [], "skipped": []}
+    mode, weather_report = weather_mode()
     if can_trade:
         options = options_cycle(_load_json(INDEX_FORECAST_PATH), now, quote_fn, price_source, option_specs)
         signals += options["signals"]
         quotes.update(options["quotes"])
+        weather = fw.weather_signals(now)
+        if mode == "GO":
+            signals += weather["signals"]
         held_pairs = {}
         for pos in snapshot["positions"]:
             if pos.get("pair_key"):
@@ -290,9 +333,10 @@ def run(now: Optional[datetime] = None) -> dict:
             rate = rates.get(order.instrument.get("currency", "USD"), 1.0)
             try:
                 if order.action == "buy":
+                    fee = fw.kalshi_fee(order.price) * order.quantity if order.instrument.get("venue") == "kalshi" else 0.0
                     ledger.buy(conn, FUND_ID, order.instrument, order.side, order.quantity, order.price, fx=rate,
-                               attribution=order.attribution, purpose=order.purpose, pair_key=order.pair_key,
-                               cycle_id=cycle_id, now=stamp, **note)
+                               fee_usd=fee, attribution=order.attribution, purpose=order.purpose,
+                               pair_key=order.pair_key, cycle_id=cycle_id, now=stamp, **note)
                 else:
                     held = next(p for p in snapshot["positions"]
                                 if p["instrument_id"] == order.instrument["id"] and p["side"] == order.side)
@@ -306,12 +350,30 @@ def run(now: Optional[datetime] = None) -> dict:
         snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
     shadow = record_shadow(conn, board, now, stamp)
+    if mode != "GO" and weather["priced"]:
+        ledger.record_predictions(conn, FUND_ID, "weather_model", "shadow", weather["priced"], weather["signals"],
+                                  now=stamp)
+    days = conn.execute("SELECT COUNT(DISTINCT day), COUNT(*) FROM analyst_predictions WHERE fund_id = ?"
+                        " AND analyst = 'weather_model'", (FUND_ID,)).fetchone()
+    if mode != "GO":
+        pooled = weather_report.get("pooled") or {}
+        shadow["weather_model"] = {
+            "mode": "shadow", "kind": "weather", "markets": len(weather["priced"]), "days_recorded": days[0],
+            "predictions_recorded": days[1],
+            "test": {"verdict": weather_report.get("verdict"), "trades": pooled.get("trades"),
+                     "mean_return": pooled.get("mean_return"), "mean_return_ci": pooled.get("mean_return_ci"),
+                     "brier_skill": pooled.get("brier_skill"), "window": weather_report.get("window")},
+            "would_trade": [{"label": s.instrument.get("label"), "side": s.side, "price": s.price,
+                             "edge": round(s.edge, 4)} for s in weather["signals"]],
+        }
     ledger.record_nav(conn, snapshot, now=stamp)
     conn.commit()
     payload = build_payload(conn, snapshot, universe, now=now, window=why, traded=can_trade, executed=executed,
-                            passed=passed, skipped=skipped_events + skipped_pairs + options["skipped"],
+                            passed=passed, skipped=skipped_events + skipped_pairs + options["skipped"] + weather["skipped"],
                             signals=signals, seeded=seeded)
     payload["shadow"] = shadow
+    payload["settled"] = settled_events
+    payload["weather"] = {"mode": mode, "cities": len(fw.CITIES), "verdict_window": weather_report.get("window")}
     payload["options"] = {"prices": price_source, "settled": settled,
                           "indices": [name for name, _key in fo.INDEX_OPTIONS.values()],
                           "risk_per_structure": orch.OPTION_RISK, "class_cap": orch.OPTION_CLASS_CAP}
@@ -368,7 +430,7 @@ def build_payload(conn: sqlite3.Connection, snapshot: dict, universe: dict, *, n
         t["evidence"] = json.loads(t.pop("evidence_json") or "[]")
     curve = [{"ts": r[0], "nav_usd": r[1]} for r in conn.execute(
         "SELECT ts, nav_usd FROM fund_nav WHERE fund_id = ? ORDER BY ts", (FUND_ID,))]
-    analysts = sorted({s.analyst for s in signals} | {"event_model", "pairs_model", "options_model"})
+    analysts = sorted({s.analyst for s in signals} | {"event_model", "pairs_model", "options_model", "weather_model"})
     return {
         "generated_at": now.isoformat(), "fund_id": FUND_ID, "paper": True,
         "nav_usd": snapshot["nav_usd"], "cash_usd": snapshot["cash_usd"], "starting_value": snapshot["starting_value"],

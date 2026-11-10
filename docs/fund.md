@@ -232,6 +232,107 @@ Headline sentiment did not predict the next day's move, so neither model
 trades in the fund. Re-running on the same corpus would change nothing; a new
 test needs new data, such as sentiment recorded forward in shadow mode.
 
+## Weather evaluation (pre-registered 2026-11-10, before any result)
+
+**Question.** Does a calibrated forecast from eight weather models price Kalshi's
+daily high-temperature markets better than the market does, by enough to pay
+Kalshi's fees? If it does, the weather analyst trades; if not, it records its
+predictions in shadow mode until a second test.
+
+**Markets.** Every settled daily `KXHIGH*` series that settles on The Weather
+Company (24 US cities, from New York and Los Angeles to Trenton). Kalshi moved
+these contracts to The Weather Company on 2026-09-02, so the test uses events
+from 2026-09-03 to the last settled day. The outcome is each market's result;
+the observed high is its event's `expiration_value`.
+
+**Prices.** Kalshi's hourly event candlesticks. At each decision time, the last
+hourly candle that closed at or before it (no more than 3 hours earlier),
+using its yes bid and yes ask closes.
+
+**Forecasts.** Open-Meteo's Previous Runs API: hourly 2 m temperature at the
+station's NWS coordinates from GFS, ECMWF IFS, ECMWF AIFS, ICON, GEM, JMA, UKMO
+and Meteo-France, in degrees Fahrenheit. Each model's high is its largest hourly
+value over the local calendar day.
+
+**Decision points** (the fund's two cycles), with forecasts no newer than a
+real cycle would have had:
+
+- **A:** 08:00 UTC on day D, that day's markets, `previous_day1` forecasts.
+- **B:** 20:00 UTC on day D-1, the next day's markets, `previous_day2` forecasts.
+
+**Model (fixed here, not tuned on the results).**
+
+- Centre: the mean of the eight models' highs plus the city's bias. The bias is
+  the mean of (observed minus model mean) over the city's last 30 settled days
+  known at the decision (days up to D-1 for A, D-2 for B). It is zero with fewer
+  than 7 such days.
+- Spread: sigma squared = c + d x s squared, where s is the spread between the
+  models. c and d come from least squares of squared de-biased errors on s
+  squared, over every city's last 45 known days. Sigma is at least 1 degree F.
+- The high is Normal(centre, sigma). A bracket's chance uses whole degrees: "61
+  to 62" is 60.5 up to 62.5, "less than 61" is below 60.5, "greater than 68" is
+  68.5 and above.
+- Decisions count from the first day with at least 21 days of prior
+  observations across cities for the spread fit.
+
+**Trading rule.** The fund's event rule unchanged, except that the fee is
+Kalshi's own (0.07 x price x (1 - price) per contract) instead of the flat 2%:
+
+- buy Yes at the ask, or No at 1 minus the bid;
+- only when the model's chance beats the price by at least 5 points, and by at
+  least 5% per dollar after the fee;
+- only at prices from 3 to 97 cents;
+- only when the forecast is within 30 points of the mid.
+
+Each trade risks one dollar and is held to settlement.
+
+**Metrics.**
+
+1. Brier skill against the market's mid, on every bracket with both quotes:
+   1 - Brier(model) / Brier(market).
+2. The rule's mean net return per dollar.
+
+Confidence intervals: 95%, from 2,000 bootstrap draws that resample settlement
+dates, so all of a day's brackets move together. Results are reported by
+decision point and by city, but the verdict is on everything pooled.
+
+**Verdict.**
+
+- **GO:** the rule's mean net return per dollar has a 95% interval entirely
+  above zero. The weather analyst then trades at the starting trust (0.25),
+  under the fund's limits.
+- **SHADOW:** anything else. The analyst records its predictions every cycle,
+  and the test is re-run unchanged once 60 more days have settled.
+
+No setting above may be changed after the results are seen. A variant can only
+be tested as a dated amendment written before it is run.
+
+### Result (2026-11-10): SHADOW
+
+Run on every settled day from 2026-09-24 to 2026-11-08: 24 cities, 13,104
+brackets priced, 10,894 with both quotes. The first run lost Oklahoma City to a
+Kalshi rate limit (HTTP 429). Requests now retry, and the run was repeated on
+the full 24 cities, with nothing else changed.
+
+| | Trades | Mean return per dollar, after Kalshi's fee (95% CI) | Brier skill against the market (95% CI) |
+|---|---|---|---|
+| Pooled | 4,960 | -25.2% (-32.5% to -17.5%) | -22.1% (-25.7% to -18.7%) |
+| A: 08:00 UTC, that day's markets | 2,324 | -23.8% (-32.4% to -14.8%) | -24.1% |
+| B: 20:00 UTC, the next day's markets | 2,636 | -26.4% (-34.0% to -18.2%) | -20.3% |
+
+The model's own chances were roughly right: brackets it gave 15-30% happened
+20% of the time, and those it gave 30-50% happened 40% of the time. The market
+was sharper. Its favourite bracket for a day was priced at a median of 53 cents
+(half the days between 45 and 61). The model's favourite got a median of 40%,
+because it works from runs a day or more old. When the two disagreed, the market
+was usually right. Only New
+York City came out ahead (+3.3% on 183 trades), well within chance.
+
+So the weather analyst records in shadow mode. Live, it uses the newest model
+runs, which the test could not use without looking ahead, so its shadow record
+will show whether fresher forecasts close the gap. The test is re-run unchanged
+once 60 more days have settled. The report is `reports/fund_weather_eval.json`.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
@@ -243,6 +344,8 @@ test needs new data, such as sentiment recorded forward in shadow mode.
 2. FinBERT news sentiment: tested 2026-11-09, NO-GO (see Result above).
 2a. Index options from the index model's ranges (see Options above), live
    2026-11-10. Commodity options follow a commodity range model.
-3. Weather models for weather markets.
+3. Weather models for weather markets: tested 2026-11-10, SHADOW (see Weather
+   evaluation above). Next: Polymarket's daily temperature markets (about 80
+   cities, settled on airport METAR readings), as a dated amendment.
 4. A classifier trained on Foresea's graded forecasts: which gaps pay.
 5. Skill-based weights once each analyst has a record.

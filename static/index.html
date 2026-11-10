@@ -7976,6 +7976,7 @@ const FUND_ANALYST_LABELS = {
   blend_model: 'Blend analyst (market and model)',
   rationale_check: 'Rationale checker (Open-Jev 2B)',
   options_model: 'Options model (index ranges)',
+  weather_model: 'Weather model (8 forecasts)',
 };
 const FUND_CLASS_LABELS = { event: 'Prediction markets', index: 'Indices', commodity: 'Commodities', option: 'Index options' };
 const FUND_SIDE_LABELS = { MOVE: 'Big move', RANGE: 'Stays in range', BULL: 'Not much lower', BEAR: 'Not much higher' };
@@ -8055,6 +8056,11 @@ function renderFundBoard(d) {
     const tested = t.test_markets
       ? ` Tested on ${t.test_markets} markets resolved after ${escHtml(t.cutoff || '')}: Brier ${t.blend_brier} against the market's ${t.market_brier}.`
       : '';
+    if (s.kind === 'weather') {
+      const ci = t.mean_return_ci ? ` (95% range ${(t.mean_return_ci[0] * 100).toFixed(1)}% to ${(t.mean_return_ci[1] * 100).toFixed(1)}%)` : '';
+      const result = t.trades ? ` Its test on settled markets (${escHtml(t.window?.first || '')} to ${escHtml(t.window?.last || '')}) made ${t.trades} trades averaging ${(Number(t.mean_return) * 100).toFixed(1)}% per dollar after fees${ci}, so it records until a re-test.` : '';
+      return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading; ${s.days_recorded || 0} day(s) of predictions on Kalshi's daily high temperatures.${result} ${would ? `Would trade: ${would}.` : 'Would trade nothing today.'}</li>`;
+    }
     if (s.kind === 'checker') {
       const flags = (s.flags || []).map(f => `${escHtml(f.label || '')} (forecast ${Math.round(Number(f.forecast) * 100)}%, its rationale reads ${Math.round(Number(f.rationale_yes) * 100)}% yes)`).join('; ');
       return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: checking, not blocking; ${s.markets || 0} recent forecasts read against their own rationales. ${flags ? `Number points away from its reasoning: ${flags}.` : 'No forecast contradicts its own reasoning.'}</li>`;

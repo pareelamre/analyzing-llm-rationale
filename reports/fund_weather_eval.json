@@ -1,0 +1,552 @@
+{
+  "generated_at": "2026-11-10T00:54:37.511677+00:00",
+  "verdict": "SHADOW",
+  "rule": "docs/fund.md, Weather evaluation (pre-registered 2026-11-10)",
+  "window": {
+    "first": "2026-09-24",
+    "last": "2026-11-08",
+    "settled_through": "2026-11-09"
+  },
+  "sources": {
+    "markets": "Kalshi public API (events, hourly event candlesticks)",
+    "forecasts": "Open-Meteo Previous Runs API: gfs_seamless, ecmwf_ifs025, ecmwf_aifs025_single, icon_seamless, gem_seamless, jma_seamless, ukmo_seamless, meteofrance_seamless",
+    "settlement": "The Weather Company, via each event's expiration value"
+  },
+  "pooled": {
+    "brackets": 13104,
+    "two_sided": 10894,
+    "brier_skill": -0.22138,
+    "brier_skill_ci": [
+      -0.257,
+      -0.1866
+    ],
+    "trades": 4960,
+    "days_traded": 46,
+    "mean_return": -0.25176,
+    "mean_return_ci": [
+      -0.32523,
+      -0.17528
+    ],
+    "win_rate": 0.3173
+  },
+  "by_decision": {
+    "A": {
+      "brackets": 6624,
+      "two_sided": 5185,
+      "brier_skill": -0.24096,
+      "brier_skill_ci": [
+        -0.28782,
+        -0.19827
+      ],
+      "trades": 2324,
+      "days_traded": 46,
+      "mean_return": -0.23808,
+      "mean_return_ci": [
+        -0.32371,
+        -0.14813
+      ],
+      "win_rate": 0.3214
+    },
+    "B": {
+      "brackets": 6480,
+      "two_sided": 5709,
+      "brier_skill": -0.2034,
+      "brier_skill_ci": [
+        -0.245,
+        -0.16534
+      ],
+      "trades": 2636,
+      "days_traded": 45,
+      "mean_return": -0.26382,
+      "mean_return_ci": [
+        -0.34012,
+        -0.1818
+      ],
+      "win_rate": 0.3137
+    }
+  },
+  "by_city": {
+    "KXHIGHNY": {
+      "city": "New York City",
+      "brackets": 546,
+      "two_sided": 404,
+      "brier_skill": -0.21602,
+      "brier_skill_ci": [
+        -0.41416,
+        -0.06132
+      ],
+      "trades": 183,
+      "days_traded": 45,
+      "mean_return": 0.03273,
+      "mean_return_ci": [
+        -0.26246,
+        0.39076
+      ],
+      "win_rate": 0.4809
+    },
+    "KXHIGHLAX": {
+      "city": "Los Angeles",
+      "brackets": 546,
+      "two_sided": 447,
+      "brier_skill": -0.38179,
+      "brier_skill_ci": [
+        -0.62082,
+        -0.20126
+      ],
+      "trades": 228,
+      "days_traded": 45,
+      "mean_return": -0.39146,
+      "mean_return_ci": [
+        -0.60306,
+        -0.10055
+      ],
+      "win_rate": 0.3333
+    },
+    "KXHIGHMIA": {
+      "city": "Miami",
+      "brackets": 546,
+      "two_sided": 451,
+      "brier_skill": -0.20941,
+      "brier_skill_ci": [
+        -0.39751,
+        -0.07681
+      ],
+      "trades": 199,
+      "days_traded": 46,
+      "mean_return": -0.07833,
+      "mean_return_ci": [
+        -0.55213,
+        0.4785
+      ],
+      "win_rate": 0.2764
+    },
+    "KXHIGHCHI": {
+      "city": "Chicago",
+      "brackets": 546,
+      "two_sided": 466,
+      "brier_skill": -0.20068,
+      "brier_skill_ci": [
+        -0.38072,
+        -0.0605
+      ],
+      "trades": 210,
+      "days_traded": 45,
+      "mean_return": -0.24267,
+      "mean_return_ci": [
+        -0.48135,
+        0.04197
+      ],
+      "win_rate": 0.3333
+    },
+    "KXHIGHAUS": {
+      "city": "Austin",
+      "brackets": 546,
+      "two_sided": 459,
+      "brier_skill": -0.34678,
+      "brier_skill_ci": [
+        -0.56195,
+        -0.18361
+      ],
+      "trades": 236,
+      "days_traded": 46,
+      "mean_return": -0.35299,
+      "mean_return_ci": [
+        -0.62218,
+        0.0324
+      ],
+      "win_rate": 0.2669
+    },
+    "KXHIGHPHIL": {
+      "city": "Philadelphia",
+      "brackets": 546,
+      "two_sided": 446,
+      "brier_skill": -0.1944,
+      "brier_skill_ci": [
+        -0.37056,
+        -0.04665
+      ],
+      "trades": 231,
+      "days_traded": 46,
+      "mean_return": -0.04388,
+      "mean_return_ci": [
+        -0.46167,
+        0.45718
+      ],
+      "win_rate": 0.3333
+    },
+    "KXHIGHTSFO": {
+      "city": "San Francisco",
+      "brackets": 546,
+      "two_sided": 513,
+      "brier_skill": -0.16768,
+      "brier_skill_ci": [
+        -0.31865,
+        -0.03155
+      ],
+      "trades": 264,
+      "days_traded": 46,
+      "mean_return": -0.16333,
+      "mean_return_ci": [
+        -0.41618,
+        0.13695
+      ],
+      "win_rate": 0.3561
+    },
+    "KXHIGHDEN": {
+      "city": "Denver",
+      "brackets": 546,
+      "two_sided": 514,
+      "brier_skill": -0.12804,
+      "brier_skill_ci": [
+        -0.27394,
+        -0.00744
+      ],
+      "trades": 242,
+      "days_traded": 46,
+      "mean_return": -0.04744,
+      "mean_return_ci": [
+        -0.38351,
+        0.33714
+      ],
+      "win_rate": 0.3967
+    },
+    "KXHIGHTPHX": {
+      "city": "Phoenix",
+      "brackets": 546,
+      "two_sided": 455,
+      "brier_skill": -0.12826,
+      "brier_skill_ci": [
+        -0.30594,
+        0.01065
+      ],
+      "trades": 235,
+      "days_traded": 46,
+      "mean_return": -0.04149,
+      "mean_return_ci": [
+        -0.42744,
+        0.40597
+      ],
+      "win_rate": 0.3532
+    },
+    "KXHIGHTATL": {
+      "city": "Atlanta",
+      "brackets": 546,
+      "two_sided": 417,
+      "brier_skill": -0.22633,
+      "brier_skill_ci": [
+        -0.46177,
+        -0.04567
+      ],
+      "trades": 204,
+      "days_traded": 46,
+      "mean_return": -0.29993,
+      "mean_return_ci": [
+        -0.50777,
+        -0.07856
+      ],
+      "win_rate": 0.3578
+    },
+    "KXHIGHTDAL": {
+      "city": "Dallas",
+      "brackets": 546,
+      "two_sided": 450,
+      "brier_skill": -0.19679,
+      "brier_skill_ci": [
+        -0.35687,
+        -0.0776
+      ],
+      "trades": 220,
+      "days_traded": 45,
+      "mean_return": -0.19965,
+      "mean_return_ci": [
+        -0.49327,
+        0.18759
+      ],
+      "win_rate": 0.3273
+    },
+    "KXHIGHTMIN": {
+      "city": "Minneapolis",
+      "brackets": 546,
+      "two_sided": 479,
+      "brier_skill": -0.32295,
+      "brier_skill_ci": [
+        -0.52512,
+        -0.16299
+      ],
+      "trades": 219,
+      "days_traded": 46,
+      "mean_return": -0.37842,
+      "mean_return_ci": [
+        -0.60011,
+        -0.07222
+      ],
+      "win_rate": 0.3105
+    },
+    "KXHIGHTSEA": {
+      "city": "Seattle",
+      "brackets": 546,
+      "two_sided": 489,
+      "brier_skill": -0.10205,
+      "brier_skill_ci": [
+        -0.22662,
+        0.00145
+      ],
+      "trades": 192,
+      "days_traded": 45,
+      "mean_return": -0.17577,
+      "mean_return_ci": [
+        -0.49337,
+        0.25199
+      ],
+      "win_rate": 0.3333
+    },
+    "KXHIGHTHOU": {
+      "city": "Houston",
+      "brackets": 546,
+      "two_sided": 452,
+      "brier_skill": -0.22311,
+      "brier_skill_ci": [
+        -0.34334,
+        -0.12418
+      ],
+      "trades": 225,
+      "days_traded": 46,
+      "mean_return": -0.4359,
+      "mean_return_ci": [
+        -0.67636,
+        -0.05375
+      ],
+      "win_rate": 0.2711
+    },
+    "KXHIGHTBOS": {
+      "city": "Boston",
+      "brackets": 546,
+      "two_sided": 471,
+      "brier_skill": -0.2767,
+      "brier_skill_ci": [
+        -0.4616,
+        -0.12384
+      ],
+      "trades": 209,
+      "days_traded": 46,
+      "mean_return": -0.257,
+      "mean_return_ci": [
+        -0.55384,
+        0.14604
+      ],
+      "win_rate": 0.2919
+    },
+    "KXHIGHTDC": {
+      "city": "Washington DC",
+      "brackets": 546,
+      "two_sided": 460,
+      "brier_skill": -0.36258,
+      "brier_skill_ci": [
+        -0.58758,
+        -0.17404
+      ],
+      "trades": 196,
+      "days_traded": 46,
+      "mean_return": -0.26265,
+      "mean_return_ci": [
+        -0.50644,
+        0.01492
+      ],
+      "win_rate": 0.3673
+    },
+    "KXHIGHTOKC": {
+      "city": "Oklahoma City",
+      "brackets": 546,
+      "two_sided": 470,
+      "brier_skill": -0.42584,
+      "brier_skill_ci": [
+        -0.64257,
+        -0.26231
+      ],
+      "trades": 211,
+      "days_traded": 45,
+      "mean_return": -0.57799,
+      "mean_return_ci": [
+        -0.7453,
+        -0.36259
+      ],
+      "win_rate": 0.2322
+    },
+    "KXHIGHTLV": {
+      "city": "Las Vegas",
+      "brackets": 546,
+      "two_sided": 420,
+      "brier_skill": -0.24956,
+      "brier_skill_ci": [
+        -0.47809,
+        -0.07483
+      ],
+      "trades": 208,
+      "days_traded": 45,
+      "mean_return": -0.50099,
+      "mean_return_ci": [
+        -0.68715,
+        -0.27387
+      ],
+      "win_rate": 0.2308
+    },
+    "KXHIGHTSATX": {
+      "city": "San Antonio",
+      "brackets": 546,
+      "two_sided": 446,
+      "brier_skill": -0.24982,
+      "brier_skill_ci": [
+        -0.4545,
+        -0.09048
+      ],
+      "trades": 201,
+      "days_traded": 44,
+      "mean_return": -0.26535,
+      "mean_return_ci": [
+        -0.54857,
+        0.08526
+      ],
+      "win_rate": 0.2935
+    },
+    "KXHIGHTNOLA": {
+      "city": "New Orleans",
+      "brackets": 546,
+      "two_sided": 433,
+      "brier_skill": -0.18721,
+      "brier_skill_ci": [
+        -0.34476,
+        -0.06893
+      ],
+      "trades": 197,
+      "days_traded": 45,
+      "mean_return": -0.32467,
+      "mean_return_ci": [
+        -0.6164,
+        0.02595
+      ],
+      "win_rate": 0.264
+    },
+    "KXHIGHTSAN": {
+      "city": "San Diego",
+      "brackets": 546,
+      "two_sided": 462,
+      "brier_skill": -0.23271,
+      "brier_skill_ci": [
+        -0.39799,
+        -0.0969
+      ],
+      "trades": 172,
+      "days_traded": 45,
+      "mean_return": -0.33537,
+      "mean_return_ci": [
+        -0.7012,
+        0.20585
+      ],
+      "win_rate": 0.2674
+    },
+    "KXHIGHTSDF": {
+      "city": "Louisville",
+      "brackets": 546,
+      "two_sided": 434,
+      "brier_skill": -0.09843,
+      "brier_skill_ci": [
+        -0.24463,
+        0.0109
+      ],
+      "trades": 156,
+      "days_traded": 45,
+      "mean_return": -0.3418,
+      "mean_return_ci": [
+        -0.59358,
+        -0.06187
+      ],
+      "win_rate": 0.2885
+    },
+    "KXHIGHTEWR": {
+      "city": "Newark",
+      "brackets": 546,
+      "two_sided": 425,
+      "brier_skill": -0.16076,
+      "brier_skill_ci": [
+        -0.31841,
+        -0.02401
+      ],
+      "trades": 162,
+      "days_traded": 42,
+      "mean_return": -0.20681,
+      "mean_return_ci": [
+        -0.5231,
+        0.22064
+      ],
+      "win_rate": 0.3272
+    },
+    "KXHIGHTTTN": {
+      "city": "Trenton",
+      "brackets": 546,
+      "two_sided": 431,
+      "brier_skill": -0.11295,
+      "brier_skill_ci": [
+        -0.2743,
+        0.02023
+      ],
+      "trades": 160,
+      "days_traded": 43,
+      "mean_return": -0.17603,
+      "mean_return_ci": [
+        -0.51987,
+        0.33508
+      ],
+      "win_rate": 0.3063
+    }
+  },
+  "reliability": [
+    {
+      "model": "0.00-0.05",
+      "n": 4582,
+      "mean_forecast": 0.0138,
+      "observed": 0.0155
+    },
+    {
+      "model": "0.05-0.15",
+      "n": 2452,
+      "mean_forecast": 0.095,
+      "observed": 0.0967
+    },
+    {
+      "model": "0.15-0.30",
+      "n": 2895,
+      "mean_forecast": 0.2249,
+      "observed": 0.1997
+    },
+    {
+      "model": "0.30-0.50",
+      "n": 3062,
+      "mean_forecast": 0.3806,
+      "observed": 0.4027
+    },
+    {
+      "model": "0.50-0.70",
+      "n": 83,
+      "mean_forecast": 0.5672,
+      "observed": 0.506
+    },
+    {
+      "model": "0.70-0.85",
+      "n": 20,
+      "mean_forecast": 0.7573,
+      "observed": 0.75
+    },
+    {
+      "model": "0.85-0.95",
+      "n": 9,
+      "mean_forecast": 0.9032,
+      "observed": 0.7778
+    },
+    {
+      "model": "0.95-1.00",
+      "n": 1,
+      "mean_forecast": 0.9949,
+      "observed": 1.0
+    }
+  ]
+}
