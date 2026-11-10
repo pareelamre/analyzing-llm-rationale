@@ -13,7 +13,7 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.5292,
+      "return_pct": 0.4338,
       "settled_count": 0,
       "sharpe": 0.3333
     }
@@ -71,9 +71,9 @@
           "ts": "2026-11-08T12:34:07.374527+00:00"
         },
         {
-          "account_value": 10052.916577,
+          "account_value": 10043.382701,
           "event_type": "mark_to_market",
-          "ts": "2026-11-09T22:01:17.039868+00:00"
+          "ts": "2026-11-10T00:01:21.249339+00:00"
         }
       ]
     }
@@ -91,7 +91,7 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-11-09T22:01:17.042911+00:00",
+  "generated_at": "2026-11-10T00:01:21.251929+00:00",
   "latest_theses": {
     "qwen3.5-9b-selfhosted": {
       "agent_id": "qwen3.5-9b-selfhosted",
@@ -103,7 +103,7 @@
   },
   "leaderboard": [
     {
-      "account_value": 10052.916577,
+      "account_value": 10043.382701,
       "agent_id": "qwen3.5-9b-selfhosted",
       "cash": 6774.0569,
       "fees_paid": 0.0,
@@ -131,13 +131,13 @@
         {
           "avg_entry_price": 0.93,
           "cost_basis": 354.33,
-          "current_price": 0.96,
+          "current_price": 0.95,
           "ident": "KXMEDIARELEASESPIDERMAN-DEC26",
           "indicative_price": null,
           "platform": "kalshi",
           "quantity": 381.0,
           "side": "NO",
-          "unrealized_pnl": 11.43,
+          "unrealized_pnl": 7.62,
           "valuation_status": "bid_liquidation"
         },
         {
@@ -179,13 +179,13 @@
         {
           "avg_entry_price": 0.91,
           "cost_basis": 261.5735,
-          "current_price": 0.89,
+          "current_price": 0.9,
           "ident": "strait-of-hormuz-traffic-returns-to-normal-by-december-31",
           "indicative_price": null,
           "platform": "polymarket",
           "quantity": 287.443442,
           "side": "NO",
-          "unrealized_pnl": -5.748837,
+          "unrealized_pnl": -2.874402,
           "valuation_status": "bid_liquidation"
         },
         {
@@ -203,25 +203,25 @@
         {
           "avg_entry_price": 0.058,
           "cost_basis": 498.702,
-          "current_price": 0.063,
+          "current_price": 0.062,
           "ident": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
           "indicative_price": null,
           "platform": "polymarket",
           "quantity": 8598.311043,
           "side": "NO",
-          "unrealized_pnl": 42.991596,
+          "unrealized_pnl": 34.393285,
           "valuation_status": "bid_liquidation"
         }
       ],
       "realized_count": 0,
       "realized_pnl": 0.0,
-      "return_pct": 0.5292,
+      "return_pct": 0.4338,
       "rule_exit_count": 0,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "total_pnl": 52.916577,
+      "total_pnl": 43.382701,
       "trade_count": 8,
-      "unrealized_pnl": 52.916577,
+      "unrealized_pnl": 43.382701,
       "updated_at": "2026-11-08T12:34:07.373918+00:00",
       "win_rate": null,
       "won_count": 0
@@ -230,9 +230,9 @@
   "mode": "shadow",
   "model_health": {
     "qwen3.5-9b-selfhosted": {
-      "cycle_age_seconds": 93277,
+      "cycle_age_seconds": 100481,
       "delayed_after_seconds": 50400,
-      "detail": "The most recent confirmed cycle is later than the expected cadence.",
+      "detail": "The most recent confirmed cycle is beyond the stale window.",
       "expected_cycle_seconds": 43200,
       "last_account_updated_at": "2026-11-08T12:34:07.373918+00:00",
       "last_action_at": "2026-11-08T12:34:07.374527+00:00",
@@ -252,7 +252,7 @@
       "last_weather_candidates_offered": 1,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 93600,
-      "status": "delayed",
+      "status": "stale",
       "store_present": true
     }
   },
@@ -261,14 +261,19 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "operational_health": {
-    "attention_required": [],
-    "detail": "All latest model attempts completed without failure.",
+    "attention_required": [
+      {
+        "agent_id": "qwen3.5-9b-selfhosted",
+        "status": "stale"
+      }
+    ],
+    "detail": "1 model ledger(s) need maintenance attention.",
     "last_attempt_failures": [],
     "models_total": 1,
     "models_verified": 0,
     "models_with_confirmed_cycle": 0,
     "provider_paused": [],
-    "status": "healthy"
+    "status": "attention"
   },
   "recent_activity": [
     {
