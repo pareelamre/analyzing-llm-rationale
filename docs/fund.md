@@ -466,6 +466,35 @@ open.
 
 Nothing above may change once a Polymarket price has been read.
 
+### Result (2026-11-10): Test 1 SHADOW; Test 2 GO on paper but invalid
+
+Only 816 settled events used the METAR rule, all from the last 17 days (earlier
+events settled on another source), so the whole set was used instead of 2,000.
+48 stations. The settlement rebuilt from the archive's readings matched the
+winning range for 779 of the 816 events.
+
+- **Test 1 (forecast model): SHADOW.** 26,380 ranges were priced, giving 6,331
+  trades. The mean net return per dollar was -14.0% (95% CI -21.6% to -4.6%), and
+  Brier skill against the market -17.1%. As on Kalshi, the market beat the
+  models.
+- **Test 2 (decided ranges): GO under the written rule.** There were 165 trades
+  and none lost. The mean net return was +55.6% (95% CI +43.7% to +65.9%), at a
+  mean price of 76 cents.
+
+**Test 2's verdict is not acted on, because the test was flawed.** A check made
+after the run found that 130 of the 165 trades used a price point set before the
+airport reading that decided the range. Price history is hourly and may be up to
+3 hours old at a decision, so those prices were no longer on offer once the
+outcome was known. The other 35 trades used later points, but the history holds
+one quoted price, not the ask. On a thin book that number can stay unchanged
+long after the book has moved.
+
+Price history cannot settle the question. A live test can: at each cycle, take
+the decided ranges from the latest METARs, the best ask and its size from
+Polymarket's public order book, and record what could really have been bought,
+graded at settlement. That test needs its own dated pre-registration before it
+runs. The report is `reports/fund_polymarket_weather_eval.json`.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
