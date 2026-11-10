@@ -118,6 +118,83 @@ The first live check, against the 2026-11-09 close: Nifty options priced about
 structure, an iron condor, was 2.6% above its cost after charges, under the 5%
 bar, so nothing traded.
 
+### Nifty option premium backtest (pre-registered 2026-11-10, before any result)
+
+**Question.** Nifty options usually cost more than the moves that follow. On
+2026-11-09 they were about 12% above the index model's range. Has selling
+defined-risk structures made money after costs since India VIX began?
+
+**Data.** Nifty 50 and India VIX daily closes from Upstox's open candles,
+2009-03 to the last close. Option prices from that era cannot be had for free,
+so each option is priced with Black-76 at that day's India VIX (VIX measures
+30-day implied volatility from Nifty's own options). The price is taken flat
+across strikes and the forward equals the index.
+
+- Strikes sit on a 50-point grid.
+- Each leg costs its price plus a half-spread of the larger of 0.5 points and 1%
+  of its price, and sells for its price less the same.
+- Charges are the options analyst's 2% of the money at risk.
+
+The index model has no direction skill, so neither side gets a drift.
+
+**Decisions.** Every 21 sessions from the first session with enough history,
+with one structure held to the close 21 sessions later. Holds never overlap.
+The index model (`index_forecast.fit_horizon`, 21 sessions) is refit on the
+data up to each decision, and its quantiles (1% to 99%) feed
+`fund_options.Distribution`. Strikes come from `fund_options.candidate_structures`,
+as they do live.
+
+- **Test A, the live rule:** the options analyst's own rule. Take the best
+  structure if the model values it at least 5% above its cost after the 2%
+  charges, and skip it when the model's straddle is more than 50% from the
+  market's.
+- **Test B, the systematic sale:** sell the iron condor every time, whatever the
+  model says.
+
+**Metrics.** For each test:
+
+- the mean net return per rupee at risk, with a 95% interval from 2,000 bootstrap
+  draws over decisions;
+- the share of winning trades and the worst trade;
+- the largest fall in cumulative return;
+- the annual return to the fund if 2% or 10% of it is at risk per decision.
+
+Put-side and call-side spreads are reported separately, because the flat-VIX
+price undercharges puts and overcharges calls.
+
+**Verdicts.**
+
+- **Test A:** GO keeps the options analyst trading. NO-GO moves it to shadow mode.
+- **Test B:** GO is the case for adding a systematic premium sleeve, which the
+  owner decides.
+
+Either needs at least 60 trades and a 95% interval entirely above zero.
+
+#### Result (2026-11-10): NO-GO for both tests
+
+Covers 2010-05 to 2026-10, with one decision every 21 sessions.
+
+| | Trades | Mean net return per rupee at risk (95% CI) | Wins | Fund, 10% at risk per decision |
+|---|---|---|---|---|
+| A: live rule | 145 | +4.0% (-5.7% to +13.6%) | 62% | +2.7% a year, worst fall -48% |
+| B: condor every time | 194 | +3.4% (-4.7% to +11.2%) | 61% | +2.1% a year, worst fall -56% |
+
+Neither interval clears zero, so the options analyst moves to shadow mode. It
+records what it would trade, and the cycle reads its verdict from
+`reports/fund_nifty_premium_eval.json`.
+
+The two halves of the condor tell different stories. This is description only,
+and not a verdict:
+
+- **Put credit spreads:** +6.7% per rupee at risk (95% CI +1.0% to +11.7%),
+  82% wins, positive in 14 of 17 years. At 10% of the fund at risk per decision,
+  +7.4% a year with a worst fall of -23%.
+- **Call credit spreads:** -7.7% (-14.5% to -1.7%).
+
+Flat-VIX pricing undercharges puts and overcharges calls, so the true put result
+is probably better and the call result worse. Selling puts also collects
+Nifty's long rise. A put-only sleeve needs its own test on data it has not seen.
+
 ## Models
 
 Open-weight models come first; the owner's own fine-tunes follow.

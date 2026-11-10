@@ -153,6 +153,17 @@ class FundCycleTests(unittest.TestCase):
                 path.write_text(json.dumps({"verdict": "GO"}))
                 self.assertEqual(cycle.weather_mode()[0], "GO")
 
+    def test_the_options_analyst_trades_only_while_its_backtest_says_go(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "report.json"
+            with mock.patch.object(cycle, "OPTIONS_REPORT_PATH", path):
+                self.assertEqual(cycle.options_mode()[0], "SHADOW")
+                path.write_text(json.dumps({"test_a_live_rule": {"verdict": "NO-GO", "trades": 145}}))
+                mode, test = cycle.options_mode()
+                self.assertEqual((mode, test["trades"]), ("SHADOW", 145))
+                path.write_text(json.dumps({"test_a_live_rule": {"verdict": "GO"}}))
+                self.assertEqual(cycle.options_mode()[0], "GO")
+
 
 if __name__ == "__main__":
     unittest.main()
