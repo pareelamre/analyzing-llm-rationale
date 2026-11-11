@@ -852,7 +852,10 @@ function escHtml(s) {
         for name, index in self._both().items():
             with self.subTest(file=name):
                 self.assertIn("_ebAnchor = d.anchor || null;", index)
-                self.assertIn('<span class="eb-live-foresea">${pct(view.p)}%</span>${rawSub}', index)
+                # One number per row (owner, 2026-11-11): the raw model is in the tooltip only.
+                self.assertIn('<td class="eb-live-model"${oddsTitle}><span class="eb-live-foresea">${pct(view.p)}%</span></td>', index)
+                self.assertNotIn("model ${pct(view.raw)}%</div>", index)
+                self.assertIn("if (_ebAnchor && (status === 'genuine_candidate' || status === 'extreme_forecast')) return '';", index)
                 self.assertIn("Foresea odds are the market price adjusted by the on-device model (Qwen3.5-9B)", index)
                 self.assertIn("const odds = e.foresea_probability ?? e.model_probability;", index)
                 self.assertIn("const odds = q.foresea ?? q.model;", index)
