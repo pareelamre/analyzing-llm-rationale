@@ -10,12 +10,12 @@
     "realized": {},
     "unrealized": {
       "agent_transfer": -6.4037,
-      "event_model": 13.4687,
+      "event_model": 17.9583,
       "put_premium": -3.0544
     }
   },
   "by_asset_class": {
-    "event": 3976.9947,
+    "event": 3981.4843,
     "option": 197.3298
   },
   "cash_usd": 5829.6861,
@@ -155,6 +155,10 @@
     {
       "nav_usd": 10004.0106,
       "ts": "2026-11-10T23:36:46.334121+00:00"
+    },
+    {
+      "nav_usd": 10008.5002,
+      "ts": "2026-11-11T00:01:32.762419+00:00"
     }
   ],
   "cycle": {
@@ -162,12 +166,18 @@
     "passed": [],
     "seeded": null,
     "signals": 1,
-    "skipped": [],
+    "skipped": [
+      {
+        "pair": "copper-gold",
+        "reason": "stretched at z=-2.26 but its backtest averaged -0.6% per signal",
+        "z": -2.258
+      }
+    ],
     "traded": false,
-    "window": "05:06 IST is outside the trading hours"
+    "window": "05:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-10T23:36:46.334121+00:00",
+  "generated_at": "2026-11-11T00:01:32.762419+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -175,7 +185,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10004.0106,
+  "nav_usd": 10008.5002,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -368,15 +378,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.84,
+      "mark": 0.85,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 13.4687,
+      "pnl_usd": 17.9583,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 377.1243,
+      "value_usd": 381.6139,
       "venue": "polymarket"
     },
     {
@@ -444,11 +454,11 @@
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": 0.04,
+  "return_pct": 0.085,
   "settled": [],
   "shadow": {
     "blend_model": {
-      "days_recorded": 2,
+      "days_recorded": 3,
       "markets": 13,
       "mode": "shadow",
       "predictions": [
@@ -531,7 +541,7 @@
           "model": 0.94
         }
       ],
-      "predictions_recorded": 26,
+      "predictions_recorded": 39,
       "test": {
         "blend_brier": 0.1179,
         "blend_minus_market": -0.0011,
@@ -563,7 +573,7 @@
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 20,
+        "decided_new": 0,
         "events": 96,
         "filled_now": 0,
         "graded": 0
@@ -599,7 +609,7 @@
     },
     "rationale_check": {
       "checker": "Open-Jev 2B (Qwen3.5-2B base)",
-      "days_recorded": 2,
+      "days_recorded": 3,
       "flags": [],
       "kind": "checker",
       "markets": 14,
