@@ -9005,6 +9005,8 @@ function _attachCrypto5mHover(container) {
 
 function _discrepancyBadge(e) {
   const status = e.discrepancy_status;
+  // These two describe the raw model's own number; with anchored odds on the board it is not shown.
+  if (_ebAnchor && (status === 'genuine_candidate' || status === 'extreme_forecast')) return '';
   if (status === 'wide_spread') {
     return ' <span class="eb-badge" style="background:rgba(239,68,68,0.12);color:#dc2626;border:1px solid rgba(239,68,68,0.3);font-size:10px;padding:1px 5px;margin-left:4px" title="Wide bid-ask spread (>=20¢): market order execution may not realize this theoretical edge">WIDE SPREAD</span>';
   }
@@ -9314,14 +9316,15 @@ function _renderBoardPage(board, page) {
     const execSub = (Math.abs(view.executable_edge - view.edge) >= 0.03)
       ? `<div style="font-size:10px;color:var(--text-dim)" title="Executable edge against book: ${pct(view.executable_edge)}%">book: ${_sg(view.executable_edge)}</div>`
       : '';
-    const rawSub = view.raw != null
-      ? `<div style="font-size:10px;color:var(--text-dim)" title="The on-device model's own forecast, before it is weighed by Foresea's record">model ${pct(view.raw)}%</div>`
+    // One number per row: the raw model is in the tooltip, not beside the odds (owner, 2026-11-11).
+    const oddsTitle = view.raw != null
+      ? ` title="${escAttr(`The on-device model alone says ${pct(view.raw)}%. Foresea odds weigh that against the market price, by how past forecasts turned out.`)}"`
       : '';
 
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
       `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}${_credibilityBadge(e)}${_discrepancyBadge(e)}</td>` +
-      `<td>${_renderVenueWithFee(e.platform, e.category || e.domain, e.question)}</td><td class="eb-live-model"><span class="eb-live-foresea">${pct(view.p)}%</span>${rawSub}</td>` +
+      `<td>${_renderVenueWithFee(e.platform, e.category || e.domain, e.question)}</td><td class="eb-live-model"${oddsTitle}><span class="eb-live-foresea">${pct(view.p)}%</span></td>` +
       `<td class="eb-live-market">${pct(e.market_probability)}%${crowdSub}</td>` +
       `<td class="eb-live-edge"><b style="color:${view.edge >= 0 ? '#0a7' : '#c33'}">${_sg(view.edge)}</b>${execSub}</td>` +
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
@@ -9381,7 +9384,7 @@ function renderEdgeBoard(d) {
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced</h3>
-    <p class="tr-method">Live Foresea-vs-market gaps, ranked. ${d.anchor ? `Foresea odds are the market price adjusted by the on-device model (Qwen3.5-9B), weighted by how its past forecasts turned out; the model's own forecast is shown under them, refreshed nightly.` : 'Foresea odds come from the on-device model (Qwen3.5-9B), refreshed nightly.'} ${gen ? 'Updated ' + gen + '.' : ''}</p>
+    <p class="tr-method">Live Foresea-vs-market gaps, ranked. ${d.anchor ? `Foresea odds are the market price adjusted by the on-device model (Qwen3.5-9B), weighted by how its past forecasts turned out, refreshed nightly.` : 'Foresea odds come from the on-device model (Qwen3.5-9B), refreshed nightly.'} ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${viewTabs}
     <div style="margin-top:18px">${activePageHtml}</div>
   </div>`;
