@@ -11,12 +11,12 @@
     "unrealized": {
       "agent_transfer": -32.1986,
       "event_model": 22.4479,
-      "put_premium": 8.6609
+      "put_premium": 5.0994
     }
   },
   "by_asset_class": {
     "event": 3960.1789,
-    "option": 209.0452
+    "option": 205.4837
   },
   "cash_usd": 5829.6861,
   "curve": [
@@ -179,6 +179,10 @@
     {
       "nav_usd": 9998.9102,
       "ts": "2026-11-11T08:01:24.298720+00:00"
+    },
+    {
+      "nav_usd": 9995.3487,
+      "ts": "2026-11-11T10:00:49.644561+00:00"
     }
   ],
   "cycle": {
@@ -191,53 +195,13 @@
         "pair": "copper-gold",
         "reason": "stretched at z=-2.26 but its backtest averaged -0.6% per signal",
         "z": -2.258
-      },
-      {
-        "instrument": "nse_fo:NIFTYNXT50",
-        "label": "Nifty Next 50 options",
-        "reason": "no quote for the 2026-11-23 options near the money"
-      },
-      {
-        "instrument": "kalshi:KXHIGHPHIL",
-        "label": "Philadelphia high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTSFO",
-        "label": "San Francisco high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTMIN",
-        "label": "Minneapolis high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTSEA",
-        "label": "Seattle high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTLV",
-        "label": "Las Vegas high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTSATX",
-        "label": "San Antonio high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTTTN",
-        "label": "Trenton high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
       }
     ],
-    "traded": true,
-    "window": "in window"
+    "traded": false,
+    "window": "15:30 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-11T08:01:24.298720+00:00",
+  "generated_at": "2026-11-11T10:00:49.644561+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -245,7 +209,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9998.9102,
+  "nav_usd": 9995.3487,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -501,20 +465,20 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 683.985,
+      "mark": 672.332,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 8.6609,
+      "pnl_usd": 5.0994,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 209.0452,
+      "value_usd": 205.4837,
       "venue": "nse_fo"
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": -0.011,
+  "return_pct": -0.047,
   "settled": [],
   "shadow": {
     "blend_model": {
@@ -523,9 +487,9 @@
       "mode": "shadow",
       "predictions": [
         {
-          "blend": 0.9337,
+          "blend": 0.9279,
           "label": "Will an artwork sell for $150 million by December 31?",
-          "market": 0.945,
+          "market": 0.94,
           "model": 0.05
         },
         {
@@ -547,16 +511,16 @@
           "model": 0.15
         },
         {
+          "blend": 0.1362,
+          "label": "US announces end of Iranian blockade by November 30, 2026?",
+          "market": 0.145,
+          "model": 0.08
+        },
+        {
           "blend": 0.0857,
           "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
           "market": 0.098,
           "model": 0.04
-        },
-        {
-          "blend": 0.1269,
-          "label": "US announces end of Iranian blockade by November 30, 2026?",
-          "market": 0.135,
-          "model": 0.08
         },
         {
           "blend": 0.0428,
@@ -565,9 +529,9 @@
           "model": 0.08
         },
         {
-          "blend": 0.0247,
+          "blend": 0.0221,
           "label": "Will the Iranian regime fall before 2027?",
-          "market": 0.028,
+          "market": 0.025,
           "model": 0.04
         },
         {
@@ -628,13 +592,13 @@
       "would_trade": []
     },
     "decided_ranges": {
-      "decided_seen": 319,
+      "decided_seen": 334,
       "dollars_filled": 0,
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 26,
-        "events": 135,
+        "decided_new": 15,
+        "events": 139,
         "filled_now": 0,
         "graded": 0
       },
@@ -650,7 +614,7 @@
       "verdict": "pending"
     },
     "options_model": {
-      "checked": true,
+      "checked": false,
       "kind": "options",
       "mode": "shadow",
       "test": {
@@ -692,7 +656,7 @@
     "weather_model": {
       "days_recorded": 2,
       "kind": "weather",
-      "markets": 102,
+      "markets": 0,
       "mode": "shadow",
       "predictions_recorded": 336,
       "test": {
@@ -710,212 +674,7 @@
           "settled_through": "2026-11-09"
         }
       },
-      "would_trade": [
-        {
-          "edge": 0.9729,
-          "label": "New York City high on 11 Nov: 59\u00b0 to 60\u00b0",
-          "price": 0.1,
-          "side": "YES"
-        },
-        {
-          "edge": 0.1777,
-          "label": "New York City high on 11 Nov: 61\u00b0 to 62\u00b0",
-          "price": 0.39,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0954,
-          "label": "New York City high on 11 Nov: 63\u00b0 to 64\u00b0",
-          "price": 0.6799999999999999,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0702,
-          "label": "Los Angeles high on 11 Nov: 82\u00b0 or below",
-          "price": 0.51,
-          "side": "YES"
-        },
-        {
-          "edge": 0.2207,
-          "label": "Los Angeles high on 11 Nov: 83\u00b0 to 84\u00b0",
-          "price": 0.5800000000000001,
-          "side": "NO"
-        },
-        {
-          "edge": 1.0511,
-          "label": "Los Angeles high on 11 Nov: 85\u00b0 to 86\u00b0",
-          "price": 0.06,
-          "side": "YES"
-        },
-        {
-          "edge": 0.5518,
-          "label": "Miami high on 11 Nov: 85\u00b0 to 86\u00b0",
-          "price": 0.30000000000000004,
-          "side": "NO"
-        },
-        {
-          "edge": 0.525,
-          "label": "Miami high on 11 Nov: 87\u00b0 to 88\u00b0",
-          "price": 0.22,
-          "side": "YES"
-        },
-        {
-          "edge": 4.1597,
-          "label": "Austin high on 11 Nov: 74\u00b0 or below",
-          "price": 0.03,
-          "side": "YES"
-        },
-        {
-          "edge": 0.3886,
-          "label": "Austin high on 11 Nov: 77\u00b0 to 78\u00b0",
-          "price": 0.45999999999999996,
-          "side": "NO"
-        },
-        {
-          "edge": 0.8198,
-          "label": "Austin high on 11 Nov: 79\u00b0 to 80\u00b0",
-          "price": 0.07,
-          "side": "YES"
-        },
-        {
-          "edge": 1.5767,
-          "label": "Denver high on 11 Nov: 63\u00b0 to 64\u00b0",
-          "price": 0.16,
-          "side": "YES"
-        },
-        {
-          "edge": 3.6836,
-          "label": "Phoenix high on 11 Nov: 81\u00b0 to 82\u00b0",
-          "price": 0.03,
-          "side": "YES"
-        },
-        {
-          "edge": 0.7173,
-          "label": "Phoenix high on 11 Nov: 83\u00b0 to 84\u00b0",
-          "price": 0.35,
-          "side": "NO"
-        },
-        {
-          "edge": 0.5607,
-          "label": "Atlanta high on 11 Nov: 69\u00b0 to 70\u00b0",
-          "price": 0.13,
-          "side": "YES"
-        },
-        {
-          "edge": 0.3008,
-          "label": "Atlanta high on 11 Nov: 71\u00b0 to 72\u00b0",
-          "price": 0.42000000000000004,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0868,
-          "label": "Dallas high on 11 Nov: 82\u00b0 to 83\u00b0",
-          "price": 0.84,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0675,
-          "label": "Houston high on 11 Nov: 75\u00b0 or below",
-          "price": 0.89,
-          "side": "YES"
-        },
-        {
-          "edge": 3.5619,
-          "label": "Boston high on 11 Nov: 54\u00b0 to 55\u00b0",
-          "price": 0.06,
-          "side": "YES"
-        },
-        {
-          "edge": 0.5094,
-          "label": "Boston high on 11 Nov: 56\u00b0 to 57\u00b0",
-          "price": 0.38,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0826,
-          "label": "Boston high on 11 Nov: 58\u00b0 to 59\u00b0",
-          "price": 0.72,
-          "side": "NO"
-        },
-        {
-          "edge": 0.3976,
-          "label": "Washington DC high on 11 Nov: 67\u00b0 to 68\u00b0",
-          "price": 0.48,
-          "side": "NO"
-        },
-        {
-          "edge": 4.6692,
-          "label": "Washington DC high on 11 Nov: 71\u00b0 to 72\u00b0",
-          "price": 0.03,
-          "side": "YES"
-        },
-        {
-          "edge": 3.1708,
-          "label": "Oklahoma City high on 11 Nov: 68\u00b0 to 69\u00b0",
-          "price": 0.04,
-          "side": "YES"
-        },
-        {
-          "edge": 0.0836,
-          "label": "Oklahoma City high on 11 Nov: 74\u00b0 to 75\u00b0",
-          "price": 0.8200000000000001,
-          "side": "NO"
-        },
-        {
-          "edge": 0.3262,
-          "label": "New Orleans high on 11 Nov: 74\u00b0 or below",
-          "price": 0.65,
-          "side": "YES"
-        },
-        {
-          "edge": 0.0601,
-          "label": "New Orleans high on 11 Nov: 75\u00b0 to 76\u00b0",
-          "price": 0.8200000000000001,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0579,
-          "label": "New Orleans high on 11 Nov: 77\u00b0 to 78\u00b0",
-          "price": 0.94,
-          "side": "NO"
-        },
-        {
-          "edge": 0.4549,
-          "label": "San Diego high on 11 Nov: 81\u00b0 to 82\u00b0",
-          "price": 0.43000000000000005,
-          "side": "NO"
-        },
-        {
-          "edge": 0.3056,
-          "label": "San Diego high on 11 Nov: 83\u00b0 to 84\u00b0",
-          "price": 0.16,
-          "side": "YES"
-        },
-        {
-          "edge": 0.3715,
-          "label": "Louisville high on 11 Nov: 71\u00b0 to 72\u00b0",
-          "price": 0.43999999999999995,
-          "side": "NO"
-        },
-        {
-          "edge": 2.2844,
-          "label": "Louisville high on 11 Nov: 73\u00b0 or above",
-          "price": 0.04,
-          "side": "YES"
-        },
-        {
-          "edge": 0.9913,
-          "label": "Newark high on 11 Nov: 62\u00b0 to 63\u00b0",
-          "price": 0.11,
-          "side": "YES"
-        },
-        {
-          "edge": 0.6663,
-          "label": "Newark high on 11 Nov: 64\u00b0 to 65\u00b0",
-          "price": 0.31999999999999995,
-          "side": "NO"
-        }
-      ]
+      "would_trade": []
     }
   },
   "starting_value": 10000.0,
