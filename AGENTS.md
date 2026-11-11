@@ -5,6 +5,10 @@
 Multiple agents work in this repo. Record decisions here so the next agent
 does not redo or undo them. Newest entries first.
 
+### 2026-11-11 — LaunchBuff landing badge (Codex)
+
+Added the owner's supplied LaunchBuff badge aligned to the bottom right of the landing page, after the workflow cards, in `frontend/index.html`; rebuilt `static/index.html`. The owner prefers a discreet 128 × 40 px size. Keep the supplied listing URL and dark artwork, responsive sizing, and `noopener noreferrer` on the new-tab link.
+
 ### 2026-11-09 ? Landing page fixes: mobile 4-column layout, dynamic timestamps, card 3 simplification (Codex)
 
 Reconciled Claude's top-bar desk button deduplication (PR #755) and resolved landing page issues across `frontend/index.html` and `static/index.html`:
