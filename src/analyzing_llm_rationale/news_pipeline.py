@@ -6,11 +6,14 @@ import os
 import re
 import threading
 import time
+from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Sequence
 from urllib.parse import urlencode, urlparse, urlunparse
 from xml.etree import ElementTree
 
 import numpy as np
+
+from analyzing_llm_rationale.evidence_time import age_days, article_date, recency_weight
 
 logger = logging.getLogger("foresea.news")
 
@@ -264,6 +267,11 @@ QUERY_STOPWORDS = {
     "occur",
     "resolves",
 }
+
+
+#: How strongly an article's place in the relevance order counts against its recency weight
+#: (NewsPipeline.rank): the score is recency_weight / (RECENCY_RANK_K + place).
+RECENCY_RANK_K = 5
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -1421,13 +1429,14 @@ class NewsPipeline:
         except Exception:
             return text[:500]
 
-    def rank(self, question: str, articles: List[dict]) -> List[dict]:
+    def rank(self, question: str, articles: List[dict], now: Optional[datetime] = None) -> List[dict]:
         """Rank articles by relevance using **hybrid retrieval** (dense cosine +
         BM25, fused with Reciprocal Rank Fusion) and, when a cross-encoder
         ``rerank_fn`` is configured, a **reranking** precision stage over the top
-        candidates. ``article['relevance']`` holds the semantic (cosine) score,
-        which drives the downstream relevance floor; ordering uses the hybrid /
-        reranked score."""
+        candidates, then weigh that order by **recency** (evidence_time: the last
+        30 days count in full). ``article['relevance']`` holds the semantic
+        (cosine) score, which drives the downstream relevance floor; ordering uses
+        the hybrid / reranked score times the recency weight."""
         if not articles:
             return []
 
@@ -1488,7 +1497,23 @@ class NewsPipeline:
                 head = [i for _, i in sorted(zip(rr, head), key=lambda x: x[0], reverse=True)]
                 order = head + order[rerank_top_k:]
 
+        # Recency: each article's place in the relevance order scores 1 / (RECENCY_RANK_K + place),
+        # times its recency weight. A month-old article keeps its place; a 60-day-old one at the
+        # top ties with a recent one five places down. The relevance floor still applies when
+        # sources are selected, so recency never lets an off-topic article in.
+        now = now or datetime.now(timezone.utc)
+        dated = [article_date(a, now) for a in articles]
+        published = [when for when, _ in dated]
+        weights = [recency_weight(when, now) for when in published]
+        place = {i: k for k, i in enumerate(order)}
+        order = sorted(range(n), key=lambda i: weights[i] / (RECENCY_RANK_K + place[i]), reverse=True)
+
         for i, article in enumerate(articles):
+            age = age_days(published[i], now)
+            article["age_days"] = round(age, 1) if age is not None else None
+            article["recency_weight"] = round(weights[i], 3)
+            if dated[i][1] in ("link", "title"):
+                article["dated_by"] = dated[i][1]
             credibility = _source_credibility(article)
             article["source_credibility"] = round(credibility, 2)
             article["semantic_relevance"] = round(dense_rel[i], 4)

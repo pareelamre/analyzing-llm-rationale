@@ -18,6 +18,12 @@ if os.name == "nt":
 else:
     import fcntl
 
+from analyzing_llm_rationale.evidence_time import (
+    RECENT_WINDOW_DAYS,
+    inferred_date,
+    parse_publish_date,
+    timeline_band,
+)
 from analyzing_llm_rationale.providers import (
     ChatProvider,
     ContextLimitError,
@@ -215,7 +221,7 @@ def cutoff_provenance(record: Dict[str, object], cutoff_ts: Optional[datetime]) 
     kept = sum(
         1
         for a in articles
-        if (pd := parse_iso_datetime(a.get("publish_date"))) is not None and pd <= cutoff_ts
+        if (pd := parse_publish_date(a.get("publish_date"))) is not None and pd <= cutoff_ts
     )
     return {
         "cutoff_ts": cutoff_ts.isoformat().replace("+00:00", "Z"),
@@ -234,7 +240,7 @@ def extract_summary_items(
         if not isinstance(article, dict):
             continue
         if cutoff_ts is not None:
-            published = parse_iso_datetime(article.get("publish_date"))
+            published = parse_publish_date(article.get("publish_date"))
             # Strict cutoff: drop undated articles and anything published after tau.
             if published is None or published > cutoff_ts:
                 continue
@@ -247,9 +253,18 @@ def extract_summary_items(
         else:
             for field in ARTICLE_FIELDS:
                 item[field] = article.get(field)
+        if cutoff_ts is None and parse_publish_date(article.get("publish_date")) is None:
+            # Web results often carry no date; one in the link or title still places them on the
+            # timeline (an undated "U.S. Ends Naval Blockade of Iran" was from June).
+            found, where = inferred_date(article)
+            if found is not None:
+                item["publish_date"] = found.date().isoformat()
+                item["dated_by"] = where
         summary_items.append(item)
-    # Newest first so the model reads the most recent evidence first.
-    summary_items.sort(key=lambda a: a.get("publish_date") or "", reverse=True)
+    # Newest first so the model reads the most recent evidence first; undated last. By parsed
+    # date: RSS dates ("Tue, 10 Nov 2026 ...") sorted as text put the weekday first.
+    epoch = datetime.min.replace(tzinfo=timezone.utc)
+    summary_items.sort(key=lambda a: parse_publish_date(a.get("publish_date")) or epoch, reverse=True)
     return summary_items
 
 
@@ -477,10 +492,11 @@ def build_user_prompt(
         parts.append(prompt_suffix)
         return "\n".join(parts).strip()
 
-    if article_detail == "summary":
-        parts.append("Evidence (newest first):")
-    else:
-        parts.append("Evidence (newest first, full fields):")
+    # A timeline: newest first, in bands, because the last 30 days carry the most signal.
+    fields = "" if article_detail == "summary" else ", full fields"
+    parts.append(
+        f"Evidence timeline (newest first{fields}; the last {RECENT_WINDOW_DAYS} days carry the most signal):"
+    )
 
     # Parse current_time once for article-age computation.
     _now_dt = parse_iso_datetime(str(current_time)) if current_time else None
@@ -490,22 +506,28 @@ def build_user_prompt(
     premarket_indices: List[int] = []
     market_start_dt = parse_iso_datetime(str(publish_time or created_time or ""))
     if summary_items:
+        band = None
         for index, item in enumerate(summary_items, start=1):
             pub = item.get("publish_date") or ""
-            date_label = f" [{pub}]" if pub else ""
+            pub_dt = parse_publish_date(pub)
+            dated_by = f", dated by its {item['dated_by']}" if item.get("dated_by") else ""
+            date_label = f" [{pub_dt.date().isoformat()}{dated_by}]" if pub_dt else (f" [{pub}]" if pub else "")
+            if _now_dt is not None:
+                item_band = timeline_band(pub_dt, _now_dt)
+                if item_band != band:
+                    band = item_band
+                    parts.append(f"-- {band} --")
 
-            # Annotate articles older than 21 days so the model notices the gap.
+            # Annotate articles older than the recent window so the model notices the gap.
             age_note = ""
-            if _now_dt and pub:
-                pub_dt = parse_iso_datetime(pub)
-                if pub_dt is not None:
-                    age_days = (_now_dt - pub_dt).days
-                    if age_days >= 21:
-                        age_note = f" [⚠ {age_days}d old]"
-                        stale_indices.append(index)
-                    if market_start_dt is not None and pub_dt < market_start_dt:
-                        age_note += " [PRE-MARKET: background only, not a qualifying event]"
-                        premarket_indices.append(index)
+            if _now_dt and pub_dt is not None:
+                age_days = (_now_dt - pub_dt).days
+                if age_days > RECENT_WINDOW_DAYS:
+                    age_note = f" [⚠ {age_days}d old]"
+                    stale_indices.append(index)
+                if market_start_dt is not None and pub_dt < market_start_dt:
+                    age_note += " [PRE-MARKET: background only, not a qualifying event]"
+                    premarket_indices.append(index)
 
             source = str(item.get("source") or "").strip()
             title = str(item.get("title") or "").strip()
@@ -521,7 +543,8 @@ def build_user_prompt(
         if stale_indices:
             idx_str = ", ".join(f"#{i}" for i in stale_indices)
             parts.append(
-                f"\n[TEMPORAL SANITY CHECK] Evidence item(s) {idx_str} are 21+ days old. "
+                f"\n[TEMPORAL SANITY CHECK] Evidence item(s) {idx_str} are more than {RECENT_WINDOW_DAYS} days old. "
+                f"Give the last {RECENT_WINDOW_DAYS} days the most weight; treat older items as background. "
                 "Events described in older articles may have already concluded, reversed, or been superseded. "
                 "Do NOT assume a past closure, shutdown, or event mentioned in a stale article is still ongoing. "
                 "Explicitly ask: is the condition described still true TODAY, or did it end after the article was written?"
