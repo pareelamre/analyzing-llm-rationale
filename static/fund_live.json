@@ -9,13 +9,13 @@
   "attribution": {
     "realized": {},
     "unrealized": {
-      "agent_transfer": -44.1985,
-      "event_model": 26.9374,
+      "agent_transfer": -37.9704,
+      "event_model": 31.427,
       "put_premium": 6.2
     }
   },
   "by_asset_class": {
-    "event": 3952.6687,
+    "event": 3963.3863,
     "option": 206.5842
   },
   "cash_usd": 5829.6861,
@@ -199,14 +199,28 @@
     {
       "nav_usd": 9988.939,
       "ts": "2026-11-11T16:00:58.121952+00:00"
+    },
+    {
+      "nav_usd": 9999.6566,
+      "ts": "2026-11-11T18:00:55.583018+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 1,
+    "signals": 0,
     "skipped": [
+      {
+        "instrument": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+        "label": "Will A New Season of Prison Break be released Worldwide before Jan 1, 2028?",
+        "reason": "forecast 15.0% is 54 points from the market; treated as a likely model error until the model has a record"
+      },
+      {
+        "instrument": "polymarket:uwcl-juv-oly-2026-11-11-juv",
+        "label": "Will Juventus FC win on 2026-11-11?",
+        "reason": "closes within a day"
+      },
       {
         "pair": "copper-gold",
         "reason": "stretched at z=-2.26 but its backtest averaged -0.6% per signal",
@@ -214,10 +228,10 @@
       }
     ],
     "traded": false,
-    "window": "21:30 IST is outside the trading hours"
+    "window": "23:30 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-11T16:00:58.121952+00:00",
+  "generated_at": "2026-11-11T18:00:55.583018+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -225,7 +239,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9988.939,
+  "nav_usd": 9999.6566,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -271,15 +285,15 @@
       "instrument_id": "kalshi:KXAIMILLENNIUM-28-26DEC01",
       "kind": "binary",
       "label": "Will any AI lab solve a Millennium Prize Problem before Dec 1, 2026?",
-      "mark": 0.9,
+      "mark": 0.91,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -24.9124,
+      "pnl_usd": -18.6843,
       "quantity": 622.81,
       "side": "NO",
       "underlying": "kalshi:KXAIMILLENNIUM-28-26DEC01",
-      "value_usd": 560.529,
+      "value_usd": 566.7571,
       "venue": "kalshi"
     },
     {
@@ -418,15 +432,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.87,
+      "mark": 0.88,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 26.9374,
+      "pnl_usd": 31.427,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 390.593,
+      "value_usd": 395.0826,
       "venue": "polymarket"
     },
     {
@@ -494,36 +508,18 @@
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": -0.111,
+  "return_pct": -0.003,
   "settled": [],
   "shadow": {
     "blend_model": {
       "days_recorded": 3,
-      "markets": 13,
+      "markets": 8,
       "mode": "shadow",
       "predictions": [
-        {
-          "blend": 0.9337,
-          "label": "Will an artwork sell for $150 million by December 31?",
-          "market": 0.945,
-          "model": 0.05
-        },
         {
           "blend": 0.678,
           "label": "Will A New Season of Prison Break be released Worldwide before Jan 1, 2028?",
           "market": 0.685,
-          "model": 0.15
-        },
-        {
-          "blend": 0.4801,
-          "label": "Will Matthew Stafford announce his retirement before the 2027-28 NFL season?",
-          "market": 0.505,
-          "model": 0.08
-        },
-        {
-          "blend": 0.4998,
-          "label": "Will Harry Styles and Zoe Kravitz be married Before Jul 1, 2027?",
-          "market": 0.505,
           "model": 0.15
         },
         {
@@ -533,45 +529,33 @@
           "model": 0.04
         },
         {
-          "blend": 0.1175,
+          "blend": 0.1082,
           "label": "US announces end of Iranian blockade by November 30, 2026?",
-          "market": 0.125,
+          "market": 0.115,
           "model": 0.08
         },
         {
-          "blend": 0.0428,
-          "label": "Will Hamas agree to disarm by December 31?",
-          "market": 0.045,
-          "model": 0.08
-        },
-        {
-          "blend": 0.0221,
-          "label": "Will the Iranian regime fall before 2027?",
-          "market": 0.025,
+          "blend": 0.0569,
+          "label": "Will the U.S. invade Iran before 2027?",
+          "market": 0.065,
           "model": 0.04
         },
         {
-          "blend": 0.0615,
-          "label": "Will the U.S. invade Iran before 2027?",
-          "market": 0.065,
-          "model": 0.08
+          "blend": 0.065,
+          "label": "Will Juventus FC win on 2026-11-11?",
+          "market": 0.071,
+          "model": 0.06
         },
         {
-          "blend": 0.0662,
-          "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-          "market": 0.07,
-          "model": 0.08
-        },
-        {
-          "blend": 0.0107,
-          "label": "Will China invade Taiwan by end of 2026?",
-          "market": 0.013,
+          "blend": 0.0204,
+          "label": "Will the Iranian regime fall before 2027?",
+          "market": 0.025,
           "model": 0.02
         },
         {
-          "blend": 0.0299,
-          "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-          "market": 0.034,
+          "blend": 0.0395,
+          "label": "Will Hamas agree to disarm by December 31?",
+          "market": 0.045,
           "model": 0.04
         },
         {
@@ -581,7 +565,7 @@
           "model": 0.94
         }
       ],
-      "predictions_recorded": 39,
+      "predictions_recorded": 40,
       "test": {
         "blend_brier": 0.1179,
         "blend_minus_market": -0.0011,
@@ -608,12 +592,12 @@
       "would_trade": []
     },
     "decided_ranges": {
-      "decided_seen": 353,
+      "decided_seen": 365,
       "dollars_filled": 0,
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 3,
+        "decided_new": 12,
         "events": 96,
         "filled_now": 0,
         "graded": 0
@@ -652,7 +636,7 @@
       "days_recorded": 3,
       "flags": [],
       "kind": "checker",
-      "markets": 14,
+      "markets": 7,
       "mode": "shadow"
     },
     "vix_fade": {
