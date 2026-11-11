@@ -2291,6 +2291,51 @@ class ServerTests(unittest.TestCase):
         self.assertIn("no-cache", response.headers["cache-control"])
         self.assertEqual(payload["markets"][0]["question"], "Will example happen?")
 
+    def test_edge_board_rows_carry_foresea_odds_anchored_to_the_market(self):
+        live = {
+            "generated_at": "2026-11-11T00:00:00+00:00",
+            "edge_board": [
+                {"question": "Will an artwork sell for $150M?", "model_probability": 0.05,
+                 "market_probability": 0.935, "edge": -0.885},
+                {"question": "Unpriced?", "model_probability": 0.4},
+            ],
+        }
+        with (
+            mock.patch.object(server_module, "_read_live_track_record", return_value=live),
+            mock.patch.object(server_module, "_read_mark_to_market_record", return_value=None),
+        ):
+            payload = self.client.get("/edge-board").json()
+        priced, unpriced = payload["edge_board"]
+        self.assertEqual(priced["model_probability"], 0.05)  # the raw model is kept as its view
+        self.assertGreater(priced["foresea_probability"], 0.85)
+        self.assertAlmostEqual(priced["foresea_edge"], round(priced["foresea_probability"] - 0.935, 3))
+        self.assertNotIn("foresea_probability", unpriced)
+        self.assertNotIn("foresea_probability", live["edge_board"][0])  # the cached record is not touched
+        self.assertEqual(len(payload["anchor"]["coef"]), 3)
+        self.assertGreater(payload["anchor"]["markets"], 0)
+
+    def test_radar_and_watchlist_show_foresea_odds(self):
+        self.assertIsNone(server_module._foresea_odds(None, 0.5))
+        live = {"edge_board": [{"platform": "Kalshi", "ident": "KXART", "question": "Will an artwork sell for $150M?",
+                                "market_url": "https://kalshi.com/markets/kxart", "market_probability": 0.935,
+                                "model_probability": 0.05, "edge": -0.885, "abs_edge": 0.885}]}
+        with (
+            mock.patch.object(server_module, "_read_edge_board_record", return_value=live),
+            mock.patch.object(server_module, "_spawn_background", side_effect=lambda aw: aw.close()),
+            mock.patch.object(server_module, "_cache_get", return_value=None),
+        ):
+            market = self.client.get("/radar?limit=1&include_track_record=false").json()["markets"][0]
+        self.assertEqual(market["model_probability"], 0.05)
+        self.assertEqual(market["foresea_probability"], server_module._foresea_odds(0.05, 0.935))
+        self.assertIn("Foresea is 1 pts below the market", market["reason"])
+
+    def test_without_a_blend_the_raw_model_stays_the_odds(self):
+        with mock.patch.dict(server_module._ANCHOR_PARAMS, {"params": None}):
+            self.assertIsNone(server_module._foresea_odds(0.05, 0.935))
+            self.assertIsNone(server_module._anchor_summary())
+            row = {"model_probability": 0.05, "market_probability": 0.935}
+            self.assertIs(server_module._with_foresea_odds(row), row)
+
     def test_edge_board_endpoint_includes_freshness_and_no_cache(self):
         live = {
             "generated_at": "2026-06-28T23:51:20+00:00",

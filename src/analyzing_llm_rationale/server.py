@@ -1904,6 +1904,60 @@ def _compact_pnl_strategy(strategy: Any) -> Any:
     return compact
 
 
+#: Foresea's headline odds: the market price adjusted by the model's forecast, weighted by how
+#: Foresea's graded forecasts resolved (the fund's blend analyst, scripts/train_fund_blend.py).
+#: On that record the raw model is worse than the market, so the raw number is shown as the
+#: model's view and the blend as Foresea's odds.
+_ANCHOR_PATH = _REPO_ROOT / "configs" / "fund_blend.json"
+_ANCHOR_PARAMS: Dict[str, Any] = {}
+
+
+def _anchor_params() -> Optional[Dict[str, Any]]:
+    if "params" not in _ANCHOR_PARAMS:
+        try:
+            params = json.loads(_ANCHOR_PATH.read_text())
+            params = {**params, "intercept": float(params["intercept"]),
+                      "coef": [float(c) for c in params["coef"]]}
+            if len(params["coef"]) != 3:
+                raise ValueError("the blend takes three weights")
+        except Exception:
+            logger.warning("Foresea odds: no usable blend at %s; showing the raw model", _ANCHOR_PATH, exc_info=True)
+            params = None
+        _ANCHOR_PARAMS["params"] = params
+    return _ANCHOR_PARAMS["params"]
+
+
+def _foresea_odds(model_p: Any, market_p: Any) -> Optional[float]:
+    params = _anchor_params()
+    if params is None or model_p is None or market_p is None:
+        return None
+    from analyzing_llm_rationale.fund_orchestrator import blend_probability
+    try:
+        return round(blend_probability(float(model_p), float(market_p), params), 3)
+    except (TypeError, ValueError):
+        return None
+
+
+def _with_foresea_odds(row: Dict[str, Any]) -> Dict[str, Any]:
+    p = _foresea_odds(row.get("model_probability"), row.get("market_probability"))
+    if p is None:
+        return row
+    return {**row, "foresea_probability": p, "foresea_edge": round(p - float(row["market_probability"]), 3)}
+
+
+def _anchor_summary() -> Optional[Dict[str, Any]]:
+    """The blend's weights, so the page can re-anchor as live prices move, and its record."""
+    params = _anchor_params()
+    if params is None:
+        return None
+    trained = params.get("trained_on") or {}
+    test = params.get("time_split_test") or {}
+    return {"intercept": params["intercept"], "coef": params["coef"],
+            "markets": trained.get("markets"), "resolved_through": trained.get("resolved_through"),
+            "blend_minus_market": test.get("blend_minus_market"),
+            "model_minus_market": test.get("model_minus_market")}
+
+
 def _compact_paper_pnl(pnl: Any) -> Any:
     if not isinstance(pnl, dict):
         return pnl
@@ -4130,7 +4184,8 @@ async def edge_board(request: Request):
         "freshness": freshness,
         "model": live.get("model"),
         "edge_model": live.get("edge_model") or live.get("model"),
-        "edge_board": audited_board,
+        "edge_board": [_with_foresea_odds(row) for row in audited_board],
+        "anchor": _anchor_summary(),
         "by_edge": live.get("by_edge", []),
         "by_horizon": live.get("by_horizon", []),
         "lead_lag": live.get("lead_lag"),
@@ -6485,6 +6540,7 @@ class RadarMarket(BaseModel):
     categories: List[str] = Field(default_factory=list)
     market_probability: Optional[float] = None
     model_probability: Optional[float] = None
+    foresea_probability: Optional[float] = None
     edge: Optional[float] = None
     abs_edge: Optional[float] = None
     side: Optional[str] = None
@@ -8833,8 +8889,9 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
         seen.add(ident)
         edge = row.get("edge")
         abs_edge = row.get("abs_edge")
+        foresea = _foresea_odds(row.get("model_probability"), row.get("market_probability"))
         try:
-            edge_pp = round(float(edge) * 100)
+            edge_pp = round((foresea - float(row["market_probability"]) if foresea is not None else float(edge)) * 100)
             reason = f"Foresea is {abs(edge_pp)} pts {'above' if edge_pp > 0 else 'below'} the market."
         except Exception:
             reason = "Live market with a model-vs-market gap."
@@ -8868,6 +8925,7 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
             categories=row.get("categories") or [],
             market_probability=row.get("market_probability"),
             model_probability=row.get("model_probability"),
+            foresea_probability=foresea,
             edge=edge,
             abs_edge=abs_edge,
             side=row.get("side"),
@@ -14334,6 +14392,9 @@ async def favorite_prices(request: Request) -> Dict[str, Any]:
             model = fav.get("model_probability")
         if model is not None:
             v["model"] = model
+            foresea = _foresea_odds(model, v["probability"])
+            if foresea is not None:
+                v["foresea"] = foresea
     # `prices` kept for backwards-compat; `quotes` carries price + 24h change + model.
     prices = {k: v["probability"] for k, v in quotes.items()}
     return {"prices": prices, "quotes": quotes,

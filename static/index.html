@@ -6031,22 +6031,20 @@ async function refreshEdgePrices() {
       const q = quotes[ident];
       if (!q) return;
       const marketP = q.probability;
-      const modelP = parseFloat(row.dataset.modelP || '0');
-      const edge = modelP - marketP;
-      const side = edge > 0.001 ? 'YES' : edge < -0.001 ? 'NO' : null;
-      const entry = edge > 0 ? marketP : (1 - marketP);
-      const payoutOdds = (entry > 0 && entry < 1) ? Math.round((1 - entry) / entry * 10) / 10 : null;
+      // Foresea's odds move with the price they are anchored to.
+      const view = _foreseaView({
+        model_probability: parseFloat(row.dataset.modelP || '0'),
+        market_probability: marketP,
+        market_bid: q.yes_bid,
+        market_ask: q.yes_ask,
+      });
+      const edge = view.edge;
       row.querySelector('.eb-live-market').textContent = Math.round(marketP * 100) + '%';
+      const foreseaCell = row.querySelector('.eb-live-foresea');
+      if (foreseaCell) foreseaCell.textContent = pct(view.p) + '%';
       row.querySelector('.eb-live-edge').innerHTML = `<b style="color:${edge >= 0 ? '#0a7' : '#c33'}">${edge >= 0 ? '+' : ''}${edge.toFixed(3)}</b>`;
       const tradeCell = row.querySelector('.eb-live-trade');
-      if (tradeCell) {
-        tradeCell.innerHTML = _formatEdgeSignal({
-          side,
-          entry_price: entry,
-          payout_odds: payoutOdds,
-          edge,
-        });
-      }
+      if (tradeCell) tradeCell.innerHTML = _formatEdgeSignal(view);
     });
     const ts = document.getElementById('edgeLiveTs');
     if (ts) ts.textContent = '· prices live ' + new Date().toLocaleTimeString();
@@ -6064,6 +6062,41 @@ function _formatEdgeSignal(e) {
     return `<span style="color:var(--text-dim)">No trade · ${side}${entryText}</span>`;
   }
   return `Watch ${side}${entryText}${oddsText}`;
+}
+
+// Foresea's odds: the market price adjusted by the model's forecast, weighted by how Foresea's
+// graded forecasts resolved (the blend in configs/fund_blend.json, sent by /edge-board as
+// `anchor`). On that record the raw model is worse than the market, so it is shown under the
+// odds as the model's view. Without the weights the raw model is the odds, as before.
+let _ebAnchor = null;
+
+function _anchoredP(modelP, marketP) {
+  const a = _ebAnchor;
+  if (!a || !Array.isArray(a.coef) || a.coef.length !== 3 || modelP == null || marketP == null) return null;
+  const logit = x => { const c = Math.min(Math.max(Number(x), 0.01), 0.99); return Math.log(c / (1 - c)); };
+  const lm = logit(marketP), lp = logit(modelP);
+  const z = Number(a.intercept) + a.coef[0] * lm + a.coef[1] * lp + a.coef[2] * (lp - lm);
+  return Number.isFinite(z) ? 1 / (1 + Math.exp(-z)) : null;
+}
+
+// A board row as Foresea's odds see it: the odds, the raw model (when they differ), and the
+// edge, side and entry those odds imply.
+function _foreseaView(e) {
+  const market = Number(e.market_probability);
+  const raw = e.model_probability == null ? null : Number(e.model_probability);
+  const anchored = _anchoredP(raw, e.market_probability);
+  const p = anchored ?? raw;
+  const edge = (p == null || !Number.isFinite(market)) ? 0 : p - market;
+  const side = edge > 0.001 ? 'YES' : edge < -0.001 ? 'NO' : null;
+  const entry = side === 'YES' ? market : side === 'NO' ? 1 - market : null;
+  const bid = Number(e.market_bid), ask = Number(e.market_ask);
+  const book = (side === 'YES' && ask > 0 && ask < 1) ? p - ask
+    : (side === 'NO' && bid > 0 && bid < 1) ? p - bid : edge;
+  return {
+    p, raw: anchored == null ? null : raw, edge, side, entry_price: entry,
+    payout_odds: (entry > 0 && entry < 1) ? Math.round((1 - entry) / entry * 10) / 10 : null,
+    executable_edge: book,
+  };
 }
 
 const _MTM_MODEL_COLORS = {
@@ -8272,7 +8305,8 @@ function _renderLandingMarketTable(items) {
   let html = '<div class="market-head">Question</div><div class="market-head">Crowd</div><div class="market-head">Foresea</div><div class="market-head">Signal</div>';
   for (const e of items) {
     const mkt = Math.round((e.market_probability || 0) * 100);
-    const mdl = e.model_probability == null ? null : Math.round(e.model_probability * 100);
+    const odds = e.foresea_probability ?? e.model_probability;
+    const mdl = odds == null ? null : Math.round(odds * 100);
     const diff = mdl == null ? null : mdl - mkt;
     const dir = diff == null ? 'watch' : diff > 0 ? 'buy' : diff < 0 ? 'sell' : 'watch';
     const label = mdl == null ? 'Analyze'
@@ -8971,7 +9005,7 @@ function _discrepancyBadge(e) {
     return ' <span class="eb-badge" style="background:rgba(239,68,68,0.12);color:#dc2626;border:1px solid rgba(239,68,68,0.3);font-size:10px;padding:1px 5px;margin-left:4px" title="Wide bid-ask spread (>=20¢): market order execution may not realize this theoretical edge">WIDE SPREAD</span>';
   }
   if (status === 'genuine_candidate') {
-    return ' <span class="eb-badge eb-sig" style="background:rgba(16,185,129,0.15);color:#059669;border:1px solid rgba(16,185,129,0.4);font-size:10px;padding:1px 5px;margin-left:4px" title="Verified genuine edge candidate: context complete, liquid venue, active crowd price">GENUINE EDGE</span>';
+    return ' <span class="eb-badge eb-sig" style="background:rgba(16,185,129,0.15);color:#059669;border:1px solid rgba(16,185,129,0.4);font-size:10px;padding:1px 5px;margin-left:4px" title="The on-device model disagrees with the market by 8+ points with full context in a liquid market. Foresea odds weigh that gap by the record.">MODEL GAP</span>';
   }
   if (status === 'stale_forecast') {
     return ' <span class="eb-badge" style="background:rgba(245,158,11,0.12);color:#d97706;border:1px solid rgba(245,158,11,0.3);font-size:10px;padding:1px 5px;margin-left:4px" title="Crowd price moved >=10% since forecast snapshot">STALE</span>';
@@ -9126,8 +9160,8 @@ function _filterAndSortBoard(board) {
   } else if (_ebSortBy === 'lead') {
     filtered.sort((a, b) => (a.lead_days ?? 999) - (b.lead_days ?? 999));
   } else {
-    // default abs_edge
-    filtered.sort((a, b) => (b.abs_edge ?? 0) - (a.abs_edge ?? 0));
+    // default: the size of Foresea's edge
+    filtered.sort((a, b) => Math.abs(_foreseaView(b).edge) - Math.abs(_foreseaView(a).edge));
   }
   return filtered;
 }
@@ -9262,7 +9296,8 @@ function _renderBoardPage(board, page) {
       ? `<a href="${escAttr(resolvedExtUrl)}" target="_blank" rel="noopener" class="eb-ext-link" title="Open on ${escAttr(String(e.platform||'market'))}">${uiIcon('external')}</a>`
       : '';
     const qIdent = escAttr(e.ident || resolvedExtUrl || e.market_url || '');
-    const trade = _formatEdgeSignal(e);
+    const view = _foreseaView(e);
+    const trade = _formatEdgeSignal(view);
     const favKey = (e.platform && e.ident) ? `${String(e.platform).toLowerCase()}:${e.ident}` : '';
     const star = favKey
       ? `<button type="button" class="fav-star ${_isFav(favKey) ? 'on' : ''}" title="Watch this market"
@@ -9272,16 +9307,19 @@ function _renderBoardPage(board, page) {
     const crowdSub = (e.market_bid != null && e.market_ask != null)
       ? `<div style="font-size:10px;color:var(--text-dim)" title="Best bid: ${Math.round(e.market_bid*100)}¢ · Best ask: ${Math.round(e.market_ask*100)}¢">${Math.round(e.market_bid*100)}¢ / ${Math.round(e.market_ask*100)}¢</div>`
       : '';
-    const execSub = (e.executable_edge != null && Math.abs(e.executable_edge - e.edge) >= 0.03)
-      ? `<div style="font-size:10px;color:var(--text-dim)" title="Executable edge against book: ${pct(e.executable_edge)}%">book: ${_sg(e.executable_edge)}</div>`
+    const execSub = (Math.abs(view.executable_edge - view.edge) >= 0.03)
+      ? `<div style="font-size:10px;color:var(--text-dim)" title="Executable edge against book: ${pct(view.executable_edge)}%">book: ${_sg(view.executable_edge)}</div>`
+      : '';
+    const rawSub = view.raw != null
+      ? `<div style="font-size:10px;color:var(--text-dim)" title="The on-device model's own forecast, before it is weighed by Foresea's record">model ${pct(view.raw)}%</div>`
       : '';
 
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
       `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}${_credibilityBadge(e)}${_discrepancyBadge(e)}</td>` +
-      `<td>${_renderVenueWithFee(e.platform, e.category || e.domain, e.question)}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
+      `<td>${_renderVenueWithFee(e.platform, e.category || e.domain, e.question)}</td><td class="eb-live-model"><span class="eb-live-foresea">${pct(view.p)}%</span>${rawSub}</td>` +
       `<td class="eb-live-market">${pct(e.market_probability)}%${crowdSub}</td>` +
-      `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b>${execSub}</td>` +
+      `<td class="eb-live-edge"><b style="color:${view.edge >= 0 ? '#0a7' : '#c33'}">${_sg(view.edge)}</b>${execSub}</td>` +
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
       `<td style="white-space:nowrap">${lead}</td></tr>`;
   }).join('');
@@ -9315,6 +9353,7 @@ function renderEdgeBoard(d) {
   const board = d.edge_board || [];
   _ebLastData = d;
   _ebBoardData = board;
+  _ebAnchor = d.anchor || null;
   _ebPage = 0;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   const stats = `
@@ -9338,7 +9377,7 @@ function renderEdgeBoard(d) {
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced</h3>
-    <p class="tr-method">Live Foresea-vs-market gaps, ranked. Foresea odds come from the on-device model (Qwen3.5-9B), refreshed nightly. ${gen ? 'Updated ' + gen + '.' : ''}</p>
+    <p class="tr-method">Live Foresea-vs-market gaps, ranked. ${d.anchor ? `Foresea odds are the market price adjusted by the on-device model (Qwen3.5-9B), weighted by how its past forecasts turned out; the model's own forecast is shown under them, refreshed nightly.` : 'Foresea odds come from the on-device model (Qwen3.5-9B), refreshed nightly.'} ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${viewTabs}
     <div style="margin-top:18px">${activePageHtml}</div>
   </div>`;
@@ -11386,9 +11425,10 @@ function _applyQuote(container, key, q, fav, flash) {
     if (priceEl) priceEl.innerHTML = _yesNoHtml(q.probability);
     if (chgEl) chgEl.innerHTML = _chgHtml(_wlChange(q, fav));
     const modelEl = row.querySelector('[data-model]');
-    if (modelEl && q.model != null) modelEl.textContent = _modelTxt(q.model);
+    const odds = q.foresea ?? q.model;  // Foresea's anchored odds; the raw model on an older server
+    if (modelEl && odds != null) modelEl.textContent = _modelTxt(odds);
     const edgeEl = row.querySelector('[data-edge]');
-    if (edgeEl) edgeEl.innerHTML = (q.model != null) ? _edgeHtml(q.model, q.probability) : '—';
+    if (edgeEl) edgeEl.innerHTML = (odds != null) ? _edgeHtml(odds, q.probability) : '—';
     if (flash && _wlPrev[key] != null && row.classList) {
       const d = q.probability - _wlPrev[key];
       if (Math.abs(d) > 0.0001) {
@@ -12347,15 +12387,18 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const r = await _liveJsonFetch('/edge-board');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
-      const board = d.edge_board || [];
+      _ebAnchor = d.anchor || null;
+      const board = (d.edge_board || []).slice()
+        .sort((a, b) => Math.abs(_foreseaView(b).edge) - Math.abs(_foreseaView(a).edge));
       if (!board.length) { typing.remove(); _appendInline('<p>No live edge board entries found.</p>'); return true; }
       const rows = board.slice(0, 15).map(e => {
-        const edgePct = Math.round((e.abs_edge || 0) * 100);
+        const view = _foreseaView(e);
+        const edgePct = Math.round(Math.abs(view.edge) * 100);
         const mktPct  = Math.round((e.market_probability || 0) * 100);
-        const modPct  = Math.round((e.model_probability  || 0) * 100);
+        const modPct  = Math.round((view.p || 0) * 100);
         return `<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:6px 10px 6px 0"><a href="${escAttr(_normalizeMarketUrl(e.market_url, e.platform) || _agenticMarketUrl(e.platform, e.ident) || '#')}" target="_blank" style="color:var(--accent);text-decoration:none">${escHtml((e.question||'').slice(0,60))}${(e.question||'').length>60?'…':''}</a><br><span style="font-size:11px;color:var(--text-mute)">${escHtml(e.platform||'')} · ${escHtml(e.horizon||'')}</span></td>
-          <td style="padding:6px 4px;text-align:center"><span class="${e.side==='YES'?'yes-badge':'no-badge'}" style="font-size:12px;padding:2px 8px">${escHtml(e.side||'?')}</span></td>
+          <td style="padding:6px 4px;text-align:center"><span class="${view.side==='YES'?'yes-badge':'no-badge'}" style="font-size:12px;padding:2px 8px">${escHtml(view.side||'?')}</span></td>
           <td style="padding:6px 4px;text-align:right;font-size:13px">${mktPct}% ${uiIcon('arrow-right')} ${modPct}%</td>
           <td style="padding:6px 0 6px 8px;text-align:right;font-size:13px;color:var(--accent);font-weight:600">${edgePct}pp</td>
         </tr>`;
