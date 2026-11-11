@@ -846,6 +846,18 @@ function escHtml(s) {
                 self.assertIn("'/track': 'edge-landing'", index)
                 self.assertIn("Foresea odds come from the on-device model (Qwen3.5-9B), refreshed nightly.", index)
 
+    def test_foresea_odds_are_anchored_to_the_market(self):
+        # 2026-11-11: the raw on-device model is worse than the market on Foresea's record, so the
+        # board, landing table, /edge and watchlist headline the blend and show the model under it.
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertIn("_ebAnchor = d.anchor || null;", index)
+                self.assertIn('<span class="eb-live-foresea">${pct(view.p)}%</span>${rawSub}', index)
+                self.assertIn("Foresea odds are the market price adjusted by the on-device model (Qwen3.5-9B)", index)
+                self.assertIn("const odds = e.foresea_probability ?? e.model_probability;", index)
+                self.assertIn("const odds = q.foresea ?? q.model;", index)
+                self.assertIn("filtered.sort((a, b) => Math.abs(_foreseaView(b).edge) - Math.abs(_foreseaView(a).edge));", index)
+
     def test_agentic_section_error_state_offers_retry(self):
         for name, index in self._both().items():
             with self.subTest(file=name):
