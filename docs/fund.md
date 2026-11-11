@@ -408,6 +408,56 @@ and Stooq both refuse automated clients, and the fund does not get around that.
 net return has a 95% interval (2,000 bootstrap draws) entirely above zero.
 Otherwise NO-GO. A GO is the case for a live analyst, which the owner decides.
 
+## NVIDIA Kumo Forecast test (pre-registered 2026-11-11, before any result)
+
+**Why.** The owner asked whether NVIDIA's open time-series model, Kumo Forecast
+(`nvidia/Kumo-Forecast`, Apache 2.0, a MOMENT-1-large encoder with a trained
+forecasting head), can help the fund. It forecasts numbers, not event questions,
+so the two places it could matter are the index model behind the options sleeve
+and the commodity pairs. NVIDIA publishes no head-to-head results, so it is
+tested here before anything uses it.
+
+**Data.**
+- Indices: daily closes of the Nasdaq-100 (FRED `NASDAQ100`, from 1986) and
+  Nifty 50 (Upstox open candles, from 2008), the same cached files as the options
+  backtests.
+- Pair: Brent and WTI daily spot prices (FRED `DCOILBRENTEU`, `DCOILWTICO`),
+  days that have both, from 1987. Brent/WTI is the fund's pair with the longest
+  history; the MCX pairs have about 400 sessions, too few for Kumo's 512-session
+  context.
+
+**Rule.** Zero-shot, as released: no fine-tuning, the default plain (direct)
+mode, a 512-session context and the package's own preprocessing.
+- Indices: every 21 sessions, from the first day with 512 earlier sessions,
+  Kumo reads the last 512 log closes and forecasts 21 sessions ahead. Its
+  forecast of the 21-session log return is its 21st value minus the last log
+  close. The baseline is no change (a random walk), the hardest common benchmark
+  for index prices.
+- Pair: the series is log Brent minus log WTI. Every 20 sessions (the pair
+  rule's longest hold), Kumo forecasts it 20 sessions ahead in the same way.
+  There are two baselines:
+  - no change;
+  - mean reversion, the pair rule's bet: an ordinary least-squares fit, on the
+    trailing 250 sessions, of the 20-session change on the gap to the 60-session
+    mean, applied at the decision day.
+- Decisions do not overlap, and each uses only data up to its day.
+
+**Verdict.** The score is the mean of |Kumo's error| minus |baseline's error|,
+with a 95% interval from 2,000 bootstrap draws over decisions (seed 20261110).
+- Test A, indices: GO if the interval over both indices' decisions together is
+  entirely below zero, and each index's mean is below zero.
+- Test B, pair: GO if the interval is entirely below zero against both
+  baselines.
+- GO makes Kumo a candidate shadow input: the centre of the options sleeve's
+  distribution (A) or a pair signal (B). The owner decides whether it goes
+  further.
+- NO-GO means the fund does not use it.
+
+**Description only (never flips a verdict):**
+- direction hit rates;
+- a drift baseline;
+- Kumo's DARR mode (retrieval over each day's own history, package defaults).
+
 ## Shadow mode
 
 A new analyst does not trade on arrival. It records its probability for each
