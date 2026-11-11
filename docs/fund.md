@@ -408,6 +408,101 @@ and Stooq both refuse automated clients, and the fund does not get around that.
 net return has a 95% interval (2,000 bootstrap draws) entirely above zero.
 Otherwise NO-GO. A GO is the case for a live analyst, which the owner decides.
 
+## NVIDIA Kumo Forecast test (pre-registered 2026-11-11, before any result)
+
+**Why.** The owner asked whether NVIDIA's open time-series model, Kumo Forecast
+(`nvidia/Kumo-Forecast`, Apache 2.0, a MOMENT-1-large encoder with a trained
+forecasting head), can help the fund. It forecasts numbers, not event questions,
+so the two places it could matter are the index model behind the options sleeve
+and the commodity pairs. NVIDIA publishes no head-to-head results, so it is
+tested here before anything uses it.
+
+**Data.**
+- Indices: daily closes of the Nasdaq-100 (FRED `NASDAQ100`, from 1986) and
+  Nifty 50 (Upstox open candles, from 2008), the same cached files as the options
+  backtests.
+- Pair: Brent and WTI daily spot prices (FRED `DCOILBRENTEU`, `DCOILWTICO`),
+  days that have both, from 1987. Brent/WTI is the fund's pair with the longest
+  history; the MCX pairs have about 400 sessions, too few for Kumo's 512-session
+  context.
+
+**Rule.** Zero-shot, as released: no fine-tuning, the default plain (direct)
+mode, a 512-session context and the package's own preprocessing.
+- Indices: every 21 sessions, from the first day with 512 earlier sessions,
+  Kumo reads the last 512 log closes and forecasts 21 sessions ahead. Its
+  forecast of the 21-session log return is its 21st value minus the last log
+  close. The baseline is no change (a random walk), the hardest common benchmark
+  for index prices.
+- Pair: the series is log Brent minus log WTI. Every 20 sessions (the pair
+  rule's longest hold), Kumo forecasts it 20 sessions ahead in the same way.
+  There are two baselines:
+  - no change;
+  - mean reversion, the pair rule's bet: an ordinary least-squares fit, on the
+    trailing 250 sessions, of the 20-session change on the gap to the 60-session
+    mean, applied at the decision day.
+- Decisions do not overlap, and each uses only data up to its day.
+
+**Verdict.** The score is the mean of |Kumo's error| minus |baseline's error|,
+with a 95% interval from 2,000 bootstrap draws over decisions (seed 20261110).
+- Test A, indices: GO if the interval over both indices' decisions together is
+  entirely below zero, and each index's mean is below zero.
+- Test B, pair: GO if the interval is entirely below zero against both
+  baselines.
+- GO makes Kumo a candidate shadow input: the centre of the options sleeve's
+  distribution (A) or a pair signal (B). The owner decides whether it goes
+  further.
+- NO-GO means the fund does not use it.
+
+**Description only (never flips a verdict):**
+- direction hit rates;
+- a drift baseline;
+- Kumo's DARR mode (retrieval over each day's own history, package defaults).
+
+### Result (2026-11-11): NO-GO on both tests
+
+The data covers:
+- Nasdaq-100 decisions from 1988-01 to 2026-09;
+- Nifty decisions from 2010-02 to 2026-10;
+- Brent/WTI decisions from 1989-06 to 2026-09.
+
+The model is checkpoint `run8_best_model_cr.pt` (the package default) on Apple
+MPS. Data loading ran in-process (`num_workers=0`). That changes speed, not
+numbers: the default workers re-imported torch on every retrieval call. Report:
+`reports/fund_kumo_eval.json`. Script: `scripts/fund_kumo_eval.py`.
+
+Mean absolute error of the change forecast (21 sessions for the indices, 20 for
+the pair; log units):
+
+| Test | Decisions | Kumo | No change | Kumo minus baseline (95% CI) | Verdict |
+|---|---|---|---|---|---|
+| A: both indices | 662 | 6.33% | 4.66% | +1.67 pts (+1.37 to +1.96) | **NO-GO** |
+| Nasdaq-100 | 465 | 6.95% | 5.07% | +1.88 pts (+1.50 to +2.26) | |
+| Nifty 50 | 197 | 4.86% | 3.70% | +1.16 pts (+0.79 to +1.52) | |
+| B: Brent/WTI vs no change | 395 | 3.09% | 3.31% | -0.21 pts (-0.46 to +0.04) | **NO-GO** |
+| B: Brent/WTI vs mean reversion | 395 | 3.09% | 3.26% | -0.17 pts (-0.38 to +0.04) | |
+
+- **Indices.** Kumo is clearly worse than assuming no change. Its error is 36%
+  larger, and it calls the direction right 44% of the time. The drift baseline
+  calls it right 58% of the time.
+- **Brent/WTI.** Kumo is slightly better than both baselines, but neither
+  interval clears zero, so it is NO-GO by the rule.
+- **The fund does not use Kumo.**
+
+Description only (never flips a verdict):
+- **Brent/WTI direction.** Kumo called it right 63% of the time, and beat no
+  change in four of five decades (not the 2010s).
+- **Baselines.** The mean-reversion baseline did not beat no change either
+  (-0.05 pts, CI -0.28 to +0.17).
+- **DARR mode is broken for these series.** It retrieves continuations of
+  earlier price levels, so on a trending index it forecasts a fall back to old
+  levels (-84% for the Nasdaq-100 in August 2026). Its index error is 95%,
+  against 4.7% for no change. It failed on 12 early decisions that had too
+  little history to retrieve from.
+- **The smoke test passed.** Kumo works where it was trained: on NVIDIA's own
+  sample series (ETTh, hourly), 21 day-long windows had an error of 0.175,
+  against 0.405 for no change. So the result is not a wiring fault. A general
+  time-series model does not forecast market prices.
+
 ## Shadow mode
 
 A new analyst does not trade on arrival. It records its probability for each
