@@ -9,14 +9,14 @@
   "attribution": {
     "realized": {},
     "unrealized": {
-      "agent_transfer": -1.8412,
+      "agent_transfer": 1.9688,
       "event_model": 35.9166,
-      "put_premium": 7.6791
+      "put_premium": 9.2077
     }
   },
   "by_asset_class": {
-    "event": 4004.0051,
-    "option": 208.0634
+    "event": 4007.8151,
+    "option": 209.5919
   },
   "cash_usd": 5829.6861,
   "curve": [
@@ -243,6 +243,10 @@
     {
       "nav_usd": 10041.7545,
       "ts": "2026-11-12T08:57:39.311921+00:00"
+    },
+    {
+      "nav_usd": 10047.0931,
+      "ts": "2026-11-12T10:00:58.182067+00:00"
     }
   ],
   "cycle": {
@@ -255,43 +259,13 @@
         "instrument": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
         "label": "Will A New Season of Prison Break be released Worldwide before Jan 1, 2028?",
         "reason": "forecast 15.0% is 54 points from the market; treated as a likely model error until the model has a record"
-      },
-      {
-        "instrument": "nse_fo:NIFTYNXT50",
-        "label": "Nifty Next 50 options",
-        "reason": "no quote for the 2026-11-23 options near the money"
-      },
-      {
-        "instrument": "kalshi:KXHIGHPHIL",
-        "label": "Philadelphia high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTSFO",
-        "label": "San Francisco high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTBOS",
-        "label": "Boston high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTDC",
-        "label": "Washington DC high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTTTN",
-        "label": "Trenton high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
       }
     ],
-    "traded": true,
-    "window": "in window"
+    "traded": false,
+    "window": "15:30 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-12T08:57:39.311921+00:00",
+  "generated_at": "2026-11-12T10:00:58.182067+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -299,7 +273,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10041.7545,
+  "nav_usd": 10047.0931,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -366,15 +340,15 @@
       "instrument_id": "kalshi:KXMEDIARELEASESPIDERMAN-DEC26",
       "kind": "binary",
       "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-      "mark": 0.92,
+      "mark": 0.93,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -3.81,
+      "pnl_usd": 0.0,
       "quantity": 381.0,
       "side": "NO",
       "underlying": "kalshi:KXMEDIARELEASESPIDERMAN-DEC26",
-      "value_usd": 350.52,
+      "value_usd": 354.33,
       "venue": "kalshi"
     },
     {
@@ -555,20 +529,20 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 681.255,
+      "mark": 686.26,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 7.6791,
+      "pnl_usd": 9.2077,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 208.0634,
+      "value_usd": 209.5919,
       "venue": "nse_fo"
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": 0.418,
+  "return_pct": 0.471,
   "settled": [],
   "shadow": {
     "blend_model": {
@@ -589,15 +563,15 @@
           "model": 0.04
         },
         {
-          "blend": 0.0656,
+          "blend": 0.07,
           "label": "Will the U.S. invade Iran before 2027?",
-          "market": 0.075,
+          "market": 0.08,
           "model": 0.04
         },
         {
-          "blend": 0.0895,
+          "blend": 0.0988,
           "label": "US announces end of Iranian blockade by November 30, 2026?",
-          "market": 0.095,
+          "market": 0.105,
           "model": 0.08
         },
         {
@@ -607,9 +581,9 @@
           "model": 0.02
         },
         {
-          "blend": 0.9585,
+          "blend": 0.9572,
           "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-          "market": 0.937,
+          "market": 0.935,
           "model": 0.94
         },
         {
@@ -646,13 +620,13 @@
       "would_trade": []
     },
     "decided_ranges": {
-      "decided_seen": 537,
+      "decided_seen": 546,
       "dollars_filled": 0,
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 7,
-        "events": 135,
+        "decided_new": 9,
+        "events": 139,
         "filled_now": 0,
         "graded": 0
       },
@@ -668,7 +642,7 @@
       "verdict": "pending"
     },
     "options_model": {
-      "checked": true,
+      "checked": false,
       "kind": "options",
       "mode": "shadow",
       "test": {
@@ -710,7 +684,7 @@
     "weather_model": {
       "days_recorded": 3,
       "kind": "weather",
-      "markets": 114,
+      "markets": 0,
       "mode": "shadow",
       "predictions_recorded": 558,
       "test": {
@@ -728,152 +702,7 @@
           "settled_through": "2026-11-09"
         }
       },
-      "would_trade": [
-        {
-          "edge": 0.884,
-          "label": "New York City high on 12 Nov: 61\u00b0 to 62\u00b0",
-          "price": 0.06,
-          "side": "YES"
-        },
-        {
-          "edge": 1.0471,
-          "label": "Los Angeles high on 12 Nov: 76\u00b0 or below",
-          "price": 0.24,
-          "side": "YES"
-        },
-        {
-          "edge": 0.8296,
-          "label": "Los Angeles high on 12 Nov: 79\u00b0 to 80\u00b0",
-          "price": 0.08,
-          "side": "YES"
-        },
-        {
-          "edge": 0.1169,
-          "label": "Miami high on 12 Nov: 83\u00b0 to 84\u00b0",
-          "price": 0.8,
-          "side": "NO"
-        },
-        {
-          "edge": 1.5086,
-          "label": "Miami high on 12 Nov: 87\u00b0 to 88\u00b0",
-          "price": 0.14,
-          "side": "YES"
-        },
-        {
-          "edge": 0.7121,
-          "label": "Austin high on 12 Nov: 75\u00b0 to 76\u00b0",
-          "price": 0.14,
-          "side": "YES"
-        },
-        {
-          "edge": 0.2945,
-          "label": "Austin high on 12 Nov: 77\u00b0 to 78\u00b0",
-          "price": 0.3,
-          "side": "YES"
-        },
-        {
-          "edge": 0.1715,
-          "label": "Denver high on 12 Nov: 66\u00b0 to 67\u00b0",
-          "price": 0.5,
-          "side": "NO"
-        },
-        {
-          "edge": 0.137,
-          "label": "Denver high on 12 Nov: 68\u00b0 to 69\u00b0",
-          "price": 0.74,
-          "side": "NO"
-        },
-        {
-          "edge": 0.4673,
-          "label": "Phoenix high on 12 Nov: 83\u00b0 to 84\u00b0",
-          "price": 0.1,
-          "side": "YES"
-        },
-        {
-          "edge": 0.3138,
-          "label": "Phoenix high on 12 Nov: 85\u00b0 to 86\u00b0",
-          "price": 0.39,
-          "side": "NO"
-        },
-        {
-          "edge": 0.2697,
-          "label": "Atlanta high on 12 Nov: 66\u00b0 to 67\u00b0",
-          "price": 0.48,
-          "side": "NO"
-        },
-        {
-          "edge": 1.5571,
-          "label": "Dallas high on 12 Nov: 76\u00b0 to 77\u00b0",
-          "price": 0.11,
-          "side": "YES"
-        },
-        {
-          "edge": 0.1442,
-          "label": "Dallas high on 12 Nov: 78\u00b0 to 79\u00b0",
-          "price": 0.45999999999999996,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0663,
-          "label": "Dallas high on 12 Nov: 80\u00b0 to 81\u00b0",
-          "price": 0.75,
-          "side": "NO"
-        },
-        {
-          "edge": 1.5387,
-          "label": "Minneapolis high on 12 Nov: 43\u00b0 to 44\u00b0",
-          "price": 0.1,
-          "side": "YES"
-        },
-        {
-          "edge": 4.5826,
-          "label": "Oklahoma City high on 12 Nov: 66\u00b0 to 67\u00b0",
-          "price": 0.06,
-          "side": "YES"
-        },
-        {
-          "edge": 0.3167,
-          "label": "Las Vegas high on 12 Nov: 72\u00b0 to 73\u00b0",
-          "price": 0.2,
-          "side": "YES"
-        },
-        {
-          "edge": 0.4205,
-          "label": "Las Vegas high on 12 Nov: 74\u00b0 to 75\u00b0",
-          "price": 0.37,
-          "side": "NO"
-        },
-        {
-          "edge": 0.6061,
-          "label": "Las Vegas high on 12 Nov: 76\u00b0 to 77\u00b0",
-          "price": 0.12,
-          "side": "YES"
-        },
-        {
-          "edge": 0.2429,
-          "label": "New Orleans high on 12 Nov: 77\u00b0 to 78\u00b0",
-          "price": 0.39,
-          "side": "NO"
-        },
-        {
-          "edge": 0.5061,
-          "label": "San Diego high on 12 Nov: 77\u00b0 to 78\u00b0",
-          "price": 0.38,
-          "side": "NO"
-        },
-        {
-          "edge": 0.2098,
-          "label": "Louisville high on 12 Nov: 58\u00b0 to 59\u00b0",
-          "price": 0.47,
-          "side": "NO"
-        },
-        {
-          "edge": 4.6869,
-          "label": "Louisville high on 12 Nov: 60\u00b0 or above",
-          "price": 0.04,
-          "side": "YES"
-        }
-      ]
+      "would_trade": []
     }
   },
   "starting_value": 10000.0,
