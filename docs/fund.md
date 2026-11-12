@@ -1127,8 +1127,8 @@ Across the four cities, 5,816 hours had an opening price.
 - **Test 1 (ladder mismatches): NO-GO.** Only 14 hours had one, against the 100
   required: 3 in New York, 2 in Los Angeles, 4 in Chicago and 5 in Miami. Each
   did pay at least $1. The mean locked-in profit was 11 cents a pair, and the
-  mean return +33% (95% CI +15% to +56%). But at fewer than one hour in 400, the
-  whole two months held about $1.50 of locked-in profit per contract size.
+  mean return +33% (95% CI +15% to +56%). But at fewer than one hour in 400,
+  the whole two months held about $1.60 of locked-in profit per contract.
 - **Test 2 (the model at the open): NO-GO.** 1,576 trades lost 58.9% per dollar
   (95% CI -71.8% to -44.6%). They were mostly cheap buys: a mean price of 11
   cents, and 6% won.
