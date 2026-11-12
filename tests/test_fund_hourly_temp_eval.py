@@ -122,5 +122,40 @@ class DecideTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "GO")
         self.assertTrue(trader)
 
+
+class OpeningTests(unittest.TestCase):
+    def test_the_opening_quote_is_the_first_minute_candle(self):
+        opened = _h(5, 14)
+        rows = [{"end_period_ts": int(opened.timestamp()) + 60,
+                 "yes_bid": {"open_dollars": "0.30", "close_dollars": "0.41"},
+                 "yes_ask": {"open_dollars": "0.60", "close_dollars": "0.45"}},
+                {"end_period_ts": int(opened.timestamp()) + 120,
+                 "yes_bid": {"open_dollars": "0.42"}, "yes_ask": {"open_dollars": "0.44"}}]
+        self.assertEqual(ht.opening_quote(rows, opened), (0.3, 0.6))
+        self.assertEqual(ht.opening_quote(rows, opened, "close_dollars"), (0.41, 0.45))
+        self.assertEqual(ht.opening_quote(rows[1:], opened), (None, None))  # no first-minute candle
+
+    def test_a_ladder_mismatch_pays_at_least_a_dollar(self):
+        # "Above 60" asked at 40c while "above 61" is bid at 55c: Yes 60 + No 61 costs 85c.
+        rungs = [(60.99, 0.35, 0.40, True), (61.99, 0.55, 0.60, False), (62.99, 0.20, 0.25, False)]
+        hit = ht.ladder_mismatch(rungs)
+        self.assertEqual((hit["low"], hit["high"]), (60.99, 61.99))
+        self.assertAlmostEqual(hit["cost"], 0.85)
+        self.assertEqual(hit["payoff"], 2.0)  # the reading landed between the two rungs
+        self.assertGreater(hit["sure_profit"], 0)
+        self.assertIsNone(ht.ladder_mismatch([(60.99, 0.55, 0.60, True), (61.99, 0.35, 0.40, False)]))
+        # A one-cent gap does not cover two fees.
+        self.assertIsNone(ht.ladder_mismatch([(60.99, 0.40, 0.49, True), (61.99, 0.50, 0.55, False)]))
+
+    def test_at_the_open_the_model_uses_h_minus_2_and_only_errors_settled_by_then(self):
+        hour = _h(5, 15)
+        runs = {_h(5, 12): {_h(5, 13): 58.0, _h(5, 15): 61.5}}
+        self.assertAlmostEqual(ht.centres({_h(5, 13): 57.0}, runs, [hour], gap=2)[hour], 60.5)
+        self.assertEqual(ht.needed_files([hour], gap=2), [(_h(5, 12), 1), (_h(5, 12), 3)])
+        f = {hour - timedelta(hours=1): 50.0, hour - timedelta(hours=2): 50.0}
+        values = {h: 51.0 for h in f}
+        self.assertEqual(len(ht.recent_errors(hour, NY.tz, values, f, gap=2)), 1)  # H-1 is not settled at the open
+        self.assertEqual(len(ht.recent_errors(hour, NY.tz, values, f)), 2)
+
 if __name__ == "__main__":
     unittest.main()

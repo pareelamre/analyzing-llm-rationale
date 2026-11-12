@@ -1056,6 +1056,98 @@ ended in late September. A model edge that still works would have shown up
 here. Hourly markets are dropped for now. The report is
 `reports/fund_hourly_temp_eval.json`.
 
+### Amendment (2026-11-12): opening prices (pre-registered before any opening price was read)
+
+**Why.** The trader's profit came from a market maker's loose prices at each
+market's opening, not from a forecasting edge. The test above traded 10 minutes
+after the open, by which time any loose prices would be gone. This amendment
+asks whether the opening prices themselves are loose. The same download holds
+one-minute candles from each market's open: 5,836 of 5,875 hours have a candle
+for the first minute. Only their timestamps were looked at before this was
+written.
+
+**Opening price.** For each market, the candle covering the first minute after
+the market opens (it ends 60 seconds after the open). The test uses that
+candle's opening yes bid and yes ask, which is the first book of the minute.
+A market without that candle, or without both values, has no opening price.
+The book at the end of that minute (the candle's closes) is reported for
+description only.
+
+**Test 1: ladder mismatches (no model).** "Above k" can only be worth less as k
+rises. If the opening ask for a lower rung is below the opening bid for a
+higher rung, buying Yes on the lower rung and No on the higher rung costs less
+than $1 and pays at least $1 whatever the reading.
+
+- Each such pair counts when its payout beats its cost plus Kalshi's fee on both
+  legs.
+- For each hour, only the pair with the largest guaranteed profit counts.
+- The verdict counts hours with such a pair, and checks the settled payouts.
+- **GO:** at least 100 hours, out of all the hours priced at the open.
+- **NO-GO:** fewer.
+
+**Test 2: the model at the open.** The same model, with only what is known when
+the market opens (1 hour before H):
+
+- **Latest reading:** the settled value for hour H-2. Kalshi publishes H-1's
+  value 5 minutes after the open.
+- **HRRR:** the same run as the test above (3 hours before H). The change is
+  now its forecast for H minus its forecast for H-2 (lead 3 minus lead 1).
+- **Errors:** from hours settled by the open (H-2 and earlier). Otherwise
+  unchanged: the last 21 days, the same local hour plus or minus 2, at least 40
+  errors, and the same chance formula.
+- Rule, fee, $1 per trade, metrics and bootstrap as in the test above, at the
+  opening prices.
+- **GO:** at least 100 trades, and the mean net return's 95% interval is
+  entirely above zero.
+- **NO-GO:** anything else.
+
+**What follows.** If either test passes, the next step is a live paper listener,
+under its own pre-registration. It would read Kalshi's book a few seconds after
+each hour's opening and count only prices still on offer. Minute candles show
+which prices were on offer, but not whether a slower bot would have got them,
+so a backtest pass alone does not justify trading. If both fail, the
+opening-prices idea is dropped with the rest of the hourly markets.
+
+**Known limits.**
+
+- Opening values for different rungs may come from different seconds of the
+  first minute. A Test 1 mismatch may never have been on offer at the same
+  moment.
+- The model is staler at the open than the market maker is. The market maker
+  sees index minutes up to 5 minutes before the open; the model's reading is
+  from 1 hour before the open.
+
+The report is `reports/fund_hourly_open_eval.json`. No setting above may change
+once an opening price has been read.
+
+#### Result (2026-11-12): NO-GO on both tests
+
+Across the four cities, 5,816 hours had an opening price.
+
+- **Test 1 (ladder mismatches): NO-GO.** Only 14 hours had one, against the 100
+  required: 3 in New York, 2 in Los Angeles, 4 in Chicago and 5 in Miami. Each
+  did pay at least $1. The mean locked-in profit was 11 cents a pair, and the
+  mean return +33% (95% CI +15% to +56%). But at fewer than one hour in 400,
+  the whole two months held about $1.60 of locked-in profit per contract.
+- **Test 2 (the model at the open): NO-GO.** 1,576 trades lost 58.9% per dollar
+  (95% CI -71.8% to -44.6%). They were mostly cheap buys: a mean price of 11
+  cents, and 6% won.
+
+What the opening book looks like (description only):
+
+- **No market had both a bid and an ask at the first instant**, out of 49,972
+  priced. The book opens one side at a time. The most common first values were
+  a 1-cent bid with no ask, or a 99-cent ask with no bid. So "loose opening
+  prices" here are mostly placeholder orders on one side, not a market maker's
+  two-sided mistakes.
+- **By the end of the first minute, 25% of markets had both sides.** The same
+  model there lost 59.8% per dollar (2,961 trades), with Brier skill -53%
+  against the mid, the same as 10 minutes later.
+
+The market maker's opening weakness described in the trader's account is not
+there any more. The opening-prices idea is dropped with the rest of the hourly
+markets, and no live listener will be built.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
