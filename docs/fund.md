@@ -914,6 +914,148 @@ Polymarket's public order book, and record what could really have been bought,
 graded at settlement. That test needs its own dated pre-registration before it
 runs. The report is `reports/fund_polymarket_weather_eval.json`.
 
+## Kalshi hourly temperature test (pre-registered 2026-11-12, before any hourly market's price was read)
+
+**Why.** The owner shared a trader's account of profiting on Kalshi's hourly
+temperature markets from July to September 2026. The trader used a fast US
+model (HRRR) and the latest readings. Our daily-high tests lost because the
+market had fresher information than our models, and fresh information matters
+most in an hour-ahead market. On 2026-09-10 Kalshi replaced its airport-based
+hourly series with ones that settle on its own Kalshi Weather Index. Each now
+trades about 150,000 to 300,000 contracts a day. Before this was written, only
+volumes, rules and settlement values had been looked at, no prices.
+
+**Markets.** Every settled event of `KXTEMPNYCHS` (New York), `KXTEMPLAXHS`
+(Coastal Los Angeles), `KXTEMPCHIHS` (Chicago Metro) and `KXTEMPMIAH` (Miami)
+whose rules settle on Synoptic Data, that is, on the Kalshi Weather Index. The
+settlement hours run from 2026-09-10 15:00 UTC to 2026-11-11 23:00 UTC.
+
+- Each event is one hour H, with about ten "above X.99°" markets. It opens at
+  H minus 1 hour and closes at H.
+- The index is Kalshi's minute-by-minute average of one-minute ASOS readings
+  from each city's airports:
+  - New York: KLGA, KEWR, KTEB, KCDW, KHPN, KFRG, KSMQ, KISP
+  - Los Angeles: KHHR, KLAX, KSMO, KLGB, KSNA
+  - Chicago: KMDW, KORD, KPWK, KDPA, KARR
+  - Miami: KMIA, KOPF, KFLL, KFXE, KPMP
+- Kalshi publishes each minute's value 5 minutes later.
+- The settled value is the event's `expiration_value`. The outcome is each
+  market's result.
+
+**Decision.** At 50 minutes before H, which is 10 minutes after the market
+opens.
+
+**Inputs, as known at the decision.**
+
+- **Latest reading (L):** the same city's settled value for hour H-1. Kalshi
+  publishes it 55 minutes before H.
+- **HRRR:** NOAA's HRRR archive on AWS (`noaa-hrrr-bdp-pds`, hourly runs).
+  The test reads the 2 m temperature field (`TMP:2 m above ground` in the
+  `wrfsfcf` files) at the grid point nearest each member station, and takes
+  the mean over the city's stations. It uses the newest run initialised at
+  least 2 hours before the decision, which is the run 3 hours before H. A
+  missing file means no forecast for that hour.
+- **Change (Δ):** that run's forecast for H minus its forecast for H-1 (lead 3
+  hours minus lead 2 hours).
+
+**Model (fixed here, not tuned on the results).**
+
+- Centre: f = L + Δ.
+- Errors: settled value minus f, for the same city's earlier hours. Only hours
+  from the last 21 days at the same local hour (plus or minus 2 hours) count,
+  and only those settled by the decision (H-1 and earlier). With fewer than 40
+  such errors, the model makes no forecast.
+- The chance that "above k" pays Yes is (the number of errors e with f + e
+  greater than k, plus 0.5) divided by (the number of errors plus 1).
+
+**Prices.** Kalshi's event candlesticks at one-minute periods, from the market's
+open to the decision. The test uses the last candle that closed at or before the
+decision, and its yes bid and yes ask closes. These are the order book's best
+bid and ask, not a last trade price, so the Polymarket test's stale-price
+problem does not arise.
+
+**Trading rule.** The weather evaluation's rule, unchanged:
+
+- buy Yes at the ask, or No at 1 minus the bid;
+- only when the model's chance beats the price by at least 5 points, and by at
+  least 5% per dollar after Kalshi's fee (0.07 x price x (1 - price));
+- only at prices from 3 to 97 cents;
+- only when the model is within 30 points of the mid.
+
+Each trade risks one dollar and is held to settlement.
+
+**Metrics.**
+
+1. Brier skill against the market's mid, on every market with both quotes.
+2. The rule's mean net return per dollar.
+
+Both get 95% intervals from 2,000 bootstrap draws that resample UTC dates (seed
+20261112). These are reported for description only, not judged:
+
+- results by city and by local time of day (0-6, 6-12, 12-18 and 18-24);
+- the same model without HRRR (f = L);
+- the trader's rule: trade whenever the model beats the price by 10 points,
+  with no other filter.
+
+**Verdict.**
+
+- **GO:** at least 100 trades, and the mean net return's 95% interval is
+  entirely above zero. An hourly paper recorder is then built, with live order
+  books and the live index. It must pass its own pre-registered test before the
+  fund trades these markets.
+- **NO-GO:** anything else. Hourly markets are dropped for now.
+
+**Known limits.**
+
+- The candles carry no order sizes, so a GO says nothing about how much could
+  be bought.
+- HRRR files usually arrive about an hour after their run starts, so a live
+  system could often use a run one hour newer. The 2-hour margin keeps the test
+  honest but slightly understates HRRR.
+- L is 5 minutes older than the freshest index minute public at the decision.
+
+No setting above may change once an hourly market's price has been read. A
+variant can only be tested as a dated amendment written before it is run.
+
+### Result (2026-11-12): NO-GO
+
+The run covered settlement hours from 2026-09-18 to 2026-11-11. The first 8 days
+only built up the error history. That gave 5,030 forecast hours across the four
+cities and 50,449 markets priced, 16,690 of them with both quotes at the
+decision. HRRR came from 2,956 NOAA files.
+
+| | Trades | Mean return per dollar, after Kalshi's fee (95% CI) | Brier skill against the market (95% CI) |
+|---|---|---|---|
+| Pooled | 6,065 | -44.5% (-49.9% to -38.9%) | -52.9% (-58.4% to -47.6%) |
+| New York | 1,171 | -35.0% (-45.4% to -23.5%) | -39.1% |
+| Coastal Los Angeles | 1,525 | -39.7% (-52.7% to -24.2%) | -55.9% |
+| Chicago Metro | 1,432 | -50.5% (-58.6% to -41.4%) | -47.0% |
+| Miami | 1,937 | -49.7% (-59.7% to -39.1%) | -66.0% |
+
+What the run shows (description only):
+
+- **The model's own chances were roughly right.** Markets it gave 15-30% came
+  true 22% of the time; markets it gave 50-70% came true 60% of the time.
+- **HRRR helps.** In New York the model's centre was off by 0.53 degrees F on
+  average, against 1.29 for assuming no change. Without HRRR, Brier skill was
+  -82% and the return -58%.
+- **The market is much sharper.** On New York markets with both quotes, the
+  model's Brier score was 0.113 against the market's 0.082. A typical loss: the
+  market priced a rung at 95-98 cents, the model said 85-90%, and the market was
+  right. Traders see every index minute 5 minutes after it happens and can
+  follow the trend within the hour. A model that applies three weeks' typical
+  errors to the last hour's reading cannot keep up.
+- **No time of day made money:** night -39%, morning -54%, afternoon -48%,
+  evening -36%.
+- **The trader's rule also lost.** Buying whenever the model beat the price by
+  10 points lost 34% (95% CI -41.5% to -25.0%) over 6,520 trades.
+
+The trader's July-September profit fits the account given: it came from one
+market maker's loose opening quotes on the old airport series. That inefficiency
+ended in late September. A model edge that still works would have shown up
+here. Hourly markets are dropped for now. The report is
+`reports/fund_hourly_temp_eval.json`.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
