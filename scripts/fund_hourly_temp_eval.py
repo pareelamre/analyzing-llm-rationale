@@ -8,6 +8,11 @@ the city's recent errors at that time of day, applies the fund's event rule at t
 best bid and ask, and writes reports/fund_hourly_temp_eval.json with the verdict. Raw downloads
 are kept under --cache, so a re-run reads them instead of asking the APIs again.
 
+``--open`` runs the opening-prices amendment instead (docs/fund.md, "Amendment (2026-11-12): opening
+prices"): ladder mismatches in each hour's opening book, and the model with only what is known at
+the open (the reading for H-2, HRRR's change from H-2 to H) traded at the opening bid and ask. It
+writes reports/fund_hourly_open_eval.json.
+
 HRRR comes from NOAA's archive on AWS as GRIB2, so the first run needs ``pip install eccodes``
 (not a project dependency; only the download step imports it).
 """
@@ -129,24 +134,24 @@ def city_forecasts(city: City, stations: dict[tuple[datetime, int], dict[str, fl
     return out
 
 
-def hrrr_change(runs: dict[datetime, dict[datetime, float]], hour: datetime) -> Optional[float]:
-    """The run's forecast for the hour minus its forecast for the hour before."""
+def hrrr_change(runs: dict[datetime, dict[datetime, float]], hour: datetime, gap: int = 1) -> Optional[float]:
+    """The run's forecast for the hour minus its forecast for ``gap`` hours before."""
     run = runs.get(run_for(hour)) or {}
-    now, before = run.get(hour), run.get(hour - timedelta(hours=1))
+    now, before = run.get(hour), run.get(hour - timedelta(hours=gap))
     return None if now is None or before is None else now - before
 
 
 def centres(values: dict[datetime, float], runs: dict[datetime, dict[datetime, float]],
-            hours: list[datetime], *, use_hrrr: bool = True) -> dict[datetime, float]:
-    """f = the previous hour's settled value, plus HRRR's change over the hour."""
+            hours: list[datetime], *, use_hrrr: bool = True, gap: int = 1) -> dict[datetime, float]:
+    """f = the settled value ``gap`` hours before, plus HRRR's change since then."""
     out = {}
     for hour in hours:
-        last = values.get(hour - timedelta(hours=1))
+        last = values.get(hour - timedelta(hours=gap))
         if last is None:
             continue
         if not use_hrrr:
             out[hour] = last
-        elif (delta := hrrr_change(runs, hour)) is not None:
+        elif (delta := hrrr_change(runs, hour, gap)) is not None:
             out[hour] = last + delta
     return out
 
@@ -155,15 +160,16 @@ def _local_hour(hour: datetime, tz: str) -> int:
     return hour.astimezone(ZoneInfo(tz)).hour
 
 
-def recent_errors(hour: datetime, tz: str, values: dict[datetime, float], f: dict[datetime, float]) -> list[float]:
-    """Errors of the same city's earlier hours, settled by the decision, at the same local hour +-2."""
+def recent_errors(hour: datetime, tz: str, values: dict[datetime, float], f: dict[datetime, float],
+                  gap: int = 1) -> list[float]:
+    """Errors of the same city's earlier hours, settled by the decision (``gap`` hours back), at the same local hour +-2."""
     target = _local_hour(hour, tz)
     out = []
     for h, centre in f.items():
-        if not hour - WINDOW <= h <= hour - timedelta(hours=1) or h not in values:
+        if not hour - WINDOW <= h <= hour - timedelta(hours=gap) or h not in values:
             continue
-        gap = abs(_local_hour(h, tz) - target)
-        if min(gap, 24 - gap) <= HOUR_BAND:
+        apart = abs(_local_hour(h, tz) - target)
+        if min(apart, 24 - apart) <= HOUR_BAND:
             out.append(values[h] - centre)
     return out
 
@@ -182,6 +188,35 @@ def quote_at(rows: Optional[list], at: datetime) -> tuple[Optional[float], Optio
             fw._price((last.get("yes_ask") or {}).get("close_dollars")))
 
 
+def opening_quote(rows: Optional[list], opened: datetime, field: str = "open_dollars") -> tuple[Optional[float], Optional[float]]:
+    """The book in the first minute after the market opens: its first values, or with ``close_dollars`` its last."""
+    end = int(opened.timestamp()) + 60
+    first = next((r for r in rows or [] if r.get("end_period_ts") == end), None)
+    if first is None:
+        return None, None
+    return fw._price((first.get("yes_bid") or {}).get(field)), fw._price((first.get("yes_ask") or {}).get(field))
+
+
+def ladder_mismatch(rungs: list[tuple[float, Optional[float], Optional[float], bool]]) -> Optional[dict]:
+    """The best pair of rungs k1 < k2 with ask(k1) below bid(k2): Yes on k1 plus No on k2 pays at least $1.
+
+    ``rungs`` holds (strike, bid, ask, settled yes). Counts only when $1 beats the cost plus both fees.
+    """
+    best = None
+    for k1, _, ask1, yes1 in rungs:
+        for k2, bid2, _, yes2 in rungs:
+            if k1 >= k2 or ask1 is None or bid2 is None or not 0 < ask1 < 1 or not 0 < bid2 < 1:
+                continue
+            cost = ask1 + (1.0 - bid2)
+            fees = fw.kalshi_fee(ask1) + fw.kalshi_fee(1.0 - bid2)
+            sure = 1.0 - cost - fees
+            if sure > 0 and (best is None or sure > best["sure_profit"]):
+                payoff = (1.0 if yes1 else 0.0) + (0.0 if yes2 else 1.0)
+                best = {"low": k1, "high": k2, "ask_low": ask1, "bid_high": bid2, "cost": round(cost, 4),
+                        "sure_profit": round(sure, 4), "payoff": payoff, "return": (payoff - cost - fees) / cost}
+    return best
+
+
 def trader_rule(p: float, bid: Optional[float], ask: Optional[float]) -> Optional[tuple[str, float]]:
     """The article's rule: trade whenever the model beats the price by TRADER_GAP."""
     best = None
@@ -198,29 +233,36 @@ def _return(side: str, price: float, yes: bool) -> float:
 
 
 def decide(city: City, events: list[dict], runs: dict[datetime, dict[datetime, float]],
-           candles: dict[str, dict[str, list]], *, use_hrrr: bool = True) -> tuple[list[dict], list[dict], list[dict], dict]:
-    """Every priced market, the rule's trades and the trader rule's trades for one city."""
+           candles: dict[str, dict[str, list]], *, use_hrrr: bool = True, at_open: bool = False,
+           field: str = "open_dollars") -> tuple[list[dict], list[dict], list[dict], dict]:
+    """Every priced market, the rule's trades and the trader rule's trades for one city.
+
+    By default the decision is 50 minutes before the hour on the last hour's reading. With ``at_open``
+    it is at the market's open (1 hour before), on the reading for H-2, at the opening book (``field``).
+    """
+    gap = 2 if at_open else 1
     values = settled_values(events)
     by_hour = {h: ev for ev in events if (h := event_hour(ev))}
-    f = centres(values, runs, sorted(by_hour), use_hrrr=use_hrrr)
+    f = centres(values, runs, sorted(by_hour), use_hrrr=use_hrrr, gap=gap)
     brackets, trades, trader = [], [], []
     coverage = {"events": len(by_hour), "with_centre": 0, "forecast": 0}
     for hour, ev in sorted(by_hour.items()):
         if not FIRST_HOUR <= hour <= LAST_HOUR or hour not in f:
             continue
         coverage["with_centre"] += 1
-        errors = recent_errors(hour, city.tz, values, f)
+        errors = recent_errors(hour, city.tz, values, f, gap)
         if len(errors) < MIN_ERRORS:
             continue
         coverage["forecast"] += 1
-        at = hour - DECISION_LEAD
+        at = hour - (timedelta(hours=1) if at_open else DECISION_LEAD)
         local = _local_hour(hour, city.tz)
         for m in ev.get("markets") or []:
             strike = fw._price(m.get("floor_strike"))
             if m.get("strike_type") != "greater" or strike is None or m.get("result") not in ("yes", "no"):
                 continue
             p = chance_above(f[hour], errors, strike)
-            bid, ask = quote_at(candles.get(ev["event_ticker"], {}).get(m["ticker"]), at)
+            rows = candles.get(ev["event_ticker"], {}).get(m["ticker"])
+            bid, ask = opening_quote(rows, at, field) if at_open else quote_at(rows, at)
             yes = m["result"] == "yes"
             row = {"city": city.series, "day": hour.date().isoformat(), "hour": hour.isoformat(), "local_hour": local,
                    "ticker": m["ticker"], "p": round(p, 4), "bid": bid, "ask": ask, "yes": yes}
@@ -326,6 +368,70 @@ def report(results: dict[str, dict], *, generated: Optional[str] = None) -> dict
     }
 
 
+def ladder_hours(city: City, events: list[dict], candles: dict[str, dict[str, list]]) -> tuple[int, list[dict]]:
+    """Hours priced at the open (two or more rungs with an opening quote), and each hour's best mismatch."""
+    priced, found = 0, []
+    for ev in events:
+        hour = event_hour(ev)
+        if not hour or not FIRST_HOUR <= hour <= LAST_HOUR:
+            continue
+        rungs = []
+        for m in ev.get("markets") or []:
+            strike = fw._price(m.get("floor_strike"))
+            if m.get("strike_type") != "greater" or strike is None or m.get("result") not in ("yes", "no"):
+                continue
+            bid, ask = opening_quote(candles.get(ev["event_ticker"], {}).get(m["ticker"]), hour - timedelta(hours=1))
+            if bid is not None or ask is not None:
+                rungs.append((strike, bid, ask, m["result"] == "yes"))
+        if len(rungs) < 2:
+            continue
+        priced += 1
+        if hit := ladder_mismatch(rungs):
+            found.append({"city": city.series, "day": hour.date().isoformat(), "hour": hour.isoformat(), **hit})
+    return priced, found
+
+
+def open_report(results: dict[str, dict], *, generated: Optional[str] = None) -> dict:
+    """Both opening-price verdicts, with the end-of-minute book and the 10-minute test for description."""
+    found = [h for r in results.values() for h in r["ladder"]]
+    priced = sum(r["priced"] for r in results.values())
+    brackets = [b for r in results.values() for b in r["brackets"]]
+    trades = [t for r in results.values() for t in r["trades"]]
+    model = summary(brackets, trades)
+    ci = model["mean_return_ci"]
+    test1 = "GO" if len(found) >= MIN_TRADES else "NO-GO"
+    test2 = "GO" if model["trades"] >= MIN_TRADES and ci and ci[0] > 0 else "NO-GO"
+    spreads = [b["ask"] - b["bid"] for b in brackets if _two_sided(b)]
+    late = [b for r in results.values() for b in r["minute_close"]["brackets"]]
+    late_trades = [t for r in results.values() for t in r["minute_close"]["trades"]]
+
+    def band(rows: list[dict], lo: int, hi: int) -> list[dict]:
+        return [x for x in rows if lo <= x["local_hour"] < hi]
+    return {
+        "generated_at": generated or datetime.now(timezone.utc).isoformat(),
+        "verdict": {"test1_ladder_mismatches": test1, "test2_model_at_open": test2},
+        "rule": "docs/fund.md, Amendment (2026-11-12): opening prices",
+        "hours": [FIRST_HOUR.isoformat(), LAST_HOUR.isoformat()],
+        "test1_ladder_mismatches": {
+            "hours_priced_at_open": priced, "hours_with_mismatch": len(found),
+            "by_city": {c: len(r["ladder"]) for c, r in results.items()},
+            "payoff_below_1": sum(h["payoff"] < 1 for h in found),
+            "mean_sure_profit": round(fmean(h["sure_profit"] for h in found), 4) if found else None,
+            "mean_return": round(mean_return(found), 5) if found else None,
+            "mean_return_ci": bootstrap(found, mean_return), "examples": found[:10]},
+        "test2_model_at_open": model,
+        "test2_coverage": {c: r["coverage"] for c, r in results.items()},
+        "test2_by_city": {c.series: {"city": c.name, **summary(results[c.series]["brackets"], results[c.series]["trades"])}
+                          for c in CITIES if c.series in results},
+        "test2_by_local_time (description only)": {name: summary(band(brackets, lo, hi), band(trades, lo, hi))
+                                                   for name, lo, hi in BANDS},
+        "test2_end_of_first_minute (description only)": summary(late, late_trades),
+        "opening_spread (description only)": {"two_sided": len(spreads),
+                                              "mean": round(fmean(spreads), 4) if spreads else None},
+        "reliability": reliability(brackets),
+    }
+
+
 def collect(city: City, cache: Path, session: requests.Session) -> dict:
     """One city's settled index events and one-minute candles per event, up to each decision."""
     raw = _cached(cache / city.series / "events.json",
@@ -353,13 +459,13 @@ def _kalshi(session: requests.Session, url: str, params: dict) -> Any:
     return out
 
 
-def needed_files(hours: list[datetime]) -> list[tuple[datetime, int]]:
-    """The (run, lead) files that give each hour, and the hour before it, from the hour's run."""
+def needed_files(hours: list[datetime], gap: int = 1) -> list[tuple[datetime, int]]:
+    """The (run, lead) files that give each hour, and the hour ``gap`` before it, from the hour's run."""
     out = set()
     for hour in hours:
         run = run_for(hour)
         lead = int((hour - run) / timedelta(hours=1))
-        out |= {(run, lead), (run, lead - 1)}
+        out |= {(run, lead), (run, lead - gap)}
     return sorted(out)
 
 
@@ -420,12 +526,16 @@ def station_forecasts(files: list[tuple[datetime, int]], cache: Path, session: r
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--cache", type=Path, default=ROOT / "data" / "hourly_temp_eval")
-    ap.add_argument("--out", type=Path, default=ROOT / "reports" / "fund_hourly_temp_eval.json")
+    ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--open", action="store_true", help="run the opening-prices amendment")
     args = ap.parse_args(argv)
     session = requests.Session()
     data = {city.series: collect(city, args.cache, session) for city in CITIES}
     hours = sorted({h for d in data.values() for ev in d["events"] if (h := event_hour(ev)) and h >= FIRST_HOUR})
-    stations = station_forecasts(needed_files(hours), args.cache, session)
+    stations = station_forecasts(needed_files(hours, gap=2 if args.open else 1), args.cache, session)
+    if args.open:
+        return _main_open(data, stations, args.out or ROOT / "reports" / "fund_hourly_open_eval.json")
+    args.out = args.out or ROOT / "reports" / "fund_hourly_temp_eval.json"
     results = {}
     for city in CITIES:
         d, runs = data[city.series], city_forecasts(city, stations)
@@ -440,6 +550,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     p = out["pooled"]
     print(f"verdict {out['verdict']}: {p['trades']} trades, mean return {p['mean_return']} {p['mean_return_ci']}, "
           f"Brier skill {p['brier_skill']} {p['brier_skill_ci']}")
+    return 0
+
+
+def _main_open(data: dict[str, dict], stations: dict, out_path: Path) -> int:
+    results = {}
+    for city in CITIES:
+        d, runs = data[city.series], city_forecasts(city, stations)
+        priced, ladder = ladder_hours(city, d["events"], d["candles"])
+        brackets, trades, _, coverage = decide(city, d["events"], runs, d["candles"], at_open=True)
+        lb, lt, _, _ = decide(city, d["events"], runs, d["candles"], at_open=True, field="close_dollars")
+        results[city.series] = {"priced": priced, "ladder": ladder, "brackets": brackets, "trades": trades,
+                                "coverage": coverage, "minute_close": {"brackets": lb, "trades": lt}}
+        print(f"{city.name}: {priced} hours priced at the open, {len(ladder)} mismatches, {coverage}, "
+              f"{len(trades)} trades", flush=True)
+    out = open_report(results)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(out, indent=2) + "\n")
+    t1, t2 = out["test1_ladder_mismatches"], out["test2_model_at_open"]
+    print(f"verdict {out['verdict']}: {t1['hours_with_mismatch']} of {t1['hours_priced_at_open']} hours with a mismatch; "
+          f"model {t2['trades']} trades, mean return {t2['mean_return']} {t2['mean_return_ci']}, "
+          f"Brier skill {t2['brier_skill']} {t2['brier_skill_ci']}")
     return 0
 
 
