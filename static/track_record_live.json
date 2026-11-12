@@ -1426,7 +1426,7 @@
     "raw_skill_vs_market": -0.0023
   },
   "edge_model": "council",
-  "generated_at": "2026-11-11T22:06:28.770079+00:00",
+  "generated_at": "2026-11-12T03:06:56.358902+00:00",
   "knowledge_graph": {
     "domain_distribution": {
       "crypto": 10,
@@ -1546,28 +1546,28 @@
   "model": "council",
   "models_comparison": [
     {
-      "accuracy": 0.5,
+      "accuracy": 0.6667,
       "by_horizon": [
         {
-          "accuracy": 0.5,
+          "accuracy": 0.6667,
           "horizon": "<1d",
-          "market_brier": 0.0756,
-          "model_brier": 0.2984,
-          "n": 2,
-          "n_markets": 1,
+          "market_brier": 0.0519,
+          "model_brier": 0.2001,
+          "n": 3,
+          "n_markets": 2,
           "skill_ci_comparisons": 6,
-          "skill_ci_high": null,
-          "skill_ci_low": null,
-          "skill_ci_mean": -0.2228,
+          "skill_ci_high": 0.184,
+          "skill_ci_low": -0.4059,
+          "skill_ci_mean": -0.111,
           "skill_ci_method": "market_means_normal_bonferroni_v1",
           "skill_significant": false,
-          "skill_vs_market": -0.2228
+          "skill_vs_market": -0.1482
         }
       ],
       "model": "qwen3.5-9b-selfhosted",
-      "model_brier": 0.2984,
-      "n_markets_resolved": 1,
-      "n_snapshots_resolved": 2,
+      "model_brier": 0.2001,
+      "n_markets_resolved": 2,
+      "n_snapshots_resolved": 3,
       "paper_pnl": {
         "bets": [
           {
@@ -1594,119 +1594,164 @@
             "stake_edge": 0.25,
             "stake_flat": 1.0,
             "win": false
+          },
+          {
+            "calibrated_model_probability": 0.06,
+            "category": "Sports",
+            "domain": "sports",
+            "edge": 0.0065,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0033,
+            "ident": "uwcl-juv-oly-2026-11-11-juv",
+            "in_validated": false,
+            "market_probability": 0.0665,
+            "market_url": "https://polymarket.com/market/uwcl-juv-oly-2026-11-11-juv",
+            "model": "qwen3.5-9b-selfhosted",
+            "model_probability": 0.06,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.0004,
+            "profit_flat": 0.0679,
+            "question": "Will Juventus FC win on 2026-11-11?",
+            "resolved_ts": "2026-11-12T03:00:17.251579+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-11-11T17:27:54.566573+00:00",
+            "stake_edge": 0.0065,
+            "stake_flat": 1.0,
+            "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi & Polymarket category-based taker fees; 0% maker/geopolitics). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
         "flat": {
-          "compound_bankroll": 0.0,
-          "compound_return": -1.0,
+          "compound_bankroll": 4982.376147,
+          "compound_return": -0.5018,
           "equity_curve": [
-            -1.0362
+            -1.0362,
+            -0.9683
           ],
           "equity_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "fees": 0.0362,
+          "fees": 0.0396,
           "growth_curve": [
-            0.0
+            4818.75,
+            4982.376147
           ],
           "growth_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "n_bets": 1,
-          "pnl": -1.0362,
-          "roi": -1.0362,
-          "total_staked": 1.0,
-          "win_rate": 0.0
+          "n_bets": 2,
+          "pnl": -0.9683,
+          "roi": -0.4842,
+          "total_staked": 2.0,
+          "win_rate": 0.5
         },
         "growth_1pct": {
-          "compound_bankroll": 9896.375,
-          "compound_return": -0.0104,
+          "compound_bankroll": 9903.095854,
+          "compound_return": -0.0097,
           "equity_curve": [
-            -103.625
+            -103.625,
+            -96.9041
           ],
           "equity_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "fees": 3.625,
+          "fees": 3.9541,
           "growth_curve": [
-            9896.375
+            9896.375,
+            9903.095854
           ],
           "growth_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "n_bets": 1,
-          "pnl": -103.625,
-          "roi": -1.0362,
-          "total_staked": 100.0,
-          "win_rate": 0.0
+          "n_bets": 2,
+          "pnl": -96.9041,
+          "roi": -0.487,
+          "total_staked": 198.9638,
+          "win_rate": 0.5
         },
         "growth_2pct": {
-          "compound_bankroll": 9792.75,
-          "compound_return": -0.0207,
+          "compound_bankroll": 9806.050959,
+          "compound_return": -0.0194,
           "equity_curve": [
-            -207.25
+            -207.25,
+            -193.949
           ],
           "equity_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "fees": 7.25,
+          "fees": 7.9012,
           "growth_curve": [
-            9792.75
+            9792.75,
+            9806.050959
           ],
           "growth_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "n_bets": 1,
-          "pnl": -207.25,
-          "roi": -1.0362,
-          "total_staked": 200.0,
-          "win_rate": 0.0
+          "n_bets": 2,
+          "pnl": -193.949,
+          "roi": -0.4899,
+          "total_staked": 395.855,
+          "win_rate": 0.5
         },
         "half_kelly": {
-          "compound_bankroll": 0.0,
-          "compound_return": -1.0,
+          "compound_bankroll": 4897.59735,
+          "compound_return": -0.5102,
           "equity_curve": [
-            -103.625
+            -103.625,
+            -100.3525
           ],
           "equity_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "fees": 3.625,
+          "fees": 3.7852,
           "growth_curve": [
-            0.0
+            4818.75,
+            4897.59735
           ],
           "growth_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "n_bets": 1,
-          "pnl": -103.625,
-          "roi": -1.0362,
-          "total_staked": 100.0,
-          "win_rate": 0.0
+          "n_bets": 2,
+          "pnl": -100.3525,
+          "roi": -0.6772,
+          "total_staked": 148.1875,
+          "win_rate": 0.5
         },
         "min_edge": 0.0,
         "quarter_kelly": {
-          "compound_bankroll": 9204.946121,
-          "compound_return": -0.0795,
+          "compound_bankroll": 9212.583973,
+          "compound_return": -0.0787,
           "equity_curve": [
-            -795.0539
+            -795.0539,
+            -787.416
           ],
           "equity_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "fees": 27.8125,
+          "fees": 28.1865,
           "growth_curve": [
-            9204.946121
+            9204.946121,
+            9212.583973
           ],
           "growth_curve_ts": [
-            "2026-11-08T23:44:14.351432+00:00"
+            "2026-11-08T23:44:14.351432+00:00",
+            "2026-11-12T03:00:17.251579+00:00"
           ],
-          "n_bets": 1,
-          "pnl": -795.0539,
-          "roi": -1.0362,
-          "total_staked": 767.2414,
-          "win_rate": 0.0
+          "n_bets": 2,
+          "pnl": -787.416,
+          "roi": -0.8951,
+          "total_staked": 879.7078,
+          "win_rate": 0.5
         },
         "smart": {
           "compound_bankroll": 10036.556034,
@@ -1731,9 +1776,9 @@
           "win_rate": 1.0
         }
       },
-      "paper_roi": -1.0362,
+      "paper_roi": -0.4842,
       "paper_roi_smart": 0.3656,
-      "skill_vs_market": -0.2228
+      "skill_vs_market": -0.1482
     },
     {
       "accuracy": 0.8487,
