@@ -342,6 +342,8 @@ def collect(city: City, cache: Path, session: requests.Session) -> dict:
             session, f"{fw.KALSHI_API}/series/{city.series}/events/{ticker}/candlesticks",
             {"start_ts": lo, "end_ts": hi, "period_interval": 1}))
         candles[ticker] = dict(zip(body.get("market_tickers") or [], body.get("market_candlesticks") or []))
+        if len(candles) % 500 == 0:
+            print(f"{city.name}: candles for {len(candles)} events", file=sys.stderr, flush=True)
     return {"events": events, "candles": candles}
 
 

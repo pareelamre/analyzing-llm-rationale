@@ -1017,6 +1017,45 @@ Both get 95% intervals from 2,000 bootstrap draws that resample UTC dates (seed
 No setting above may change once an hourly market's price has been read. A
 variant can only be tested as a dated amendment written before it is run.
 
+### Result (2026-11-12): NO-GO
+
+The run covered settlement hours from 2026-09-18 to 2026-11-11. The first 8 days
+only built up the error history. That gave 5,030 forecast hours across the four
+cities and 50,449 markets priced, 16,690 of them with both quotes at the
+decision. HRRR came from 2,956 NOAA files.
+
+| | Trades | Mean return per dollar, after Kalshi's fee (95% CI) | Brier skill against the market (95% CI) |
+|---|---|---|---|
+| Pooled | 6,065 | -44.5% (-49.9% to -38.9%) | -52.9% (-58.4% to -47.6%) |
+| New York | 1,171 | -35.0% (-45.4% to -23.5%) | -39.1% |
+| Coastal Los Angeles | 1,525 | -39.7% (-52.7% to -24.2%) | -55.9% |
+| Chicago Metro | 1,432 | -50.5% (-58.6% to -41.4%) | -47.0% |
+| Miami | 1,937 | -49.7% (-59.7% to -39.1%) | -66.0% |
+
+What the run shows (description only):
+
+- **The model's own chances were roughly right.** Markets it gave 15-30% came
+  true 22% of the time; markets it gave 50-70% came true 60% of the time.
+- **HRRR helps.** In New York the model's centre was off by 0.53 degrees F on
+  average, against 1.29 for assuming no change. Without HRRR, Brier skill was
+  -82% and the return -58%.
+- **The market is much sharper.** On New York markets with both quotes, the
+  model's Brier score was 0.113 against the market's 0.082. A typical loss: the
+  market priced a rung at 95-98 cents, the model said 85-90%, and the market was
+  right. Traders see every index minute 5 minutes after it happens and can
+  follow the trend within the hour. A model that applies three weeks' typical
+  errors to the last hour's reading cannot keep up.
+- **No time of day made money:** night -39%, morning -54%, afternoon -48%,
+  evening -36%.
+- **The trader's rule also lost.** Buying whenever the model beat the price by
+  10 points lost 34% (95% CI -41.5% to -25.0%) over 6,520 trades.
+
+The trader's July-September profit fits the account given: it came from one
+market maker's loose opening quotes on the old airport series. That inefficiency
+ended in late September. A model edge that still works would have shown up
+here. Hourly markets are dropped for now. The report is
+`reports/fund_hourly_temp_eval.json`.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes

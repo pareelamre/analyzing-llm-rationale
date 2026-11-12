@@ -1,0 +1,302 @@
+{
+  "generated_at": "2026-11-12T01:05:23.338475+00:00",
+  "verdict": "NO-GO",
+  "rule": "docs/fund.md, Kalshi hourly temperature test (pre-registered 2026-11-12)",
+  "window": {
+    "first": "2026-09-18",
+    "last": "2026-11-11",
+    "hours": [
+      "2026-09-10T15:00:00+00:00",
+      "2026-11-11T23:00:00+00:00"
+    ]
+  },
+  "sources": {
+    "markets": "Kalshi public API (events, one-minute event candlesticks)",
+    "forecast": "NOAA HRRR on AWS (noaa-hrrr-bdp-pds), 2 m temperature, mean over each city's stations",
+    "settlement": "Kalshi Weather Index, via each event's expiration value"
+  },
+  "coverage": {
+    "KXTEMPNYCHS": {
+      "events": 1448,
+      "with_centre": 1411,
+      "forecast": 1219
+    },
+    "KXTEMPLAXHS": {
+      "events": 1475,
+      "with_centre": 1461,
+      "forecast": 1267
+    },
+    "KXTEMPCHIHS": {
+      "events": 1477,
+      "with_centre": 1464,
+      "forecast": 1272
+    },
+    "KXTEMPMIAH": {
+      "events": 1609,
+      "with_centre": 1464,
+      "forecast": 1272
+    }
+  },
+  "pooled": {
+    "markets": 50449,
+    "two_sided": 16690,
+    "brier_skill": -0.52904,
+    "brier_skill_ci": [
+      -0.58438,
+      -0.4758
+    ],
+    "trades": 6065,
+    "days_traded": 55,
+    "mean_return": -0.44548,
+    "mean_return_ci": [
+      -0.49914,
+      -0.38877
+    ],
+    "win_rate": 0.2615,
+    "mean_price": 0.2998
+  },
+  "by_city": {
+    "KXTEMPNYCHS": {
+      "city": "New York",
+      "markets": 12205,
+      "two_sided": 3532,
+      "brier_skill": -0.39066,
+      "brier_skill_ci": [
+        -0.49561,
+        -0.29933
+      ],
+      "trades": 1171,
+      "days_traded": 55,
+      "mean_return": -0.35036,
+      "mean_return_ci": [
+        -0.45401,
+        -0.23509
+      ],
+      "win_rate": 0.3416,
+      "mean_price": 0.3663
+    },
+    "KXTEMPLAXHS": {
+      "city": "Coastal Los Angeles",
+      "markets": 12741,
+      "two_sided": 4074,
+      "brier_skill": -0.55868,
+      "brier_skill_ci": [
+        -0.65837,
+        -0.46914
+      ],
+      "trades": 1525,
+      "days_traded": 55,
+      "mean_return": -0.39718,
+      "mean_return_ci": [
+        -0.52696,
+        -0.24175
+      ],
+      "win_rate": 0.2689,
+      "mean_price": 0.3024
+    },
+    "KXTEMPCHIHS": {
+      "city": "Chicago Metro",
+      "markets": 12768,
+      "two_sided": 4188,
+      "brier_skill": -0.4704,
+      "brier_skill_ci": [
+        -0.57317,
+        -0.37785
+      ],
+      "trades": 1432,
+      "days_traded": 55,
+      "mean_return": -0.50541,
+      "mean_return_ci": [
+        -0.58587,
+        -0.41352
+      ],
+      "win_rate": 0.2521,
+      "mean_price": 0.3071
+    },
+    "KXTEMPMIAH": {
+      "city": "Miami",
+      "markets": 12735,
+      "two_sided": 4896,
+      "brier_skill": -0.6596,
+      "brier_skill_ci": [
+        -0.77023,
+        -0.56369
+      ],
+      "trades": 1937,
+      "days_traded": 55,
+      "mean_return": -0.49671,
+      "mean_return_ci": [
+        -0.59683,
+        -0.39128
+      ],
+      "win_rate": 0.2142,
+      "mean_price": 0.2523
+    }
+  },
+  "by_local_time (description only)": {
+    "00-06": {
+      "markets": 11940,
+      "two_sided": 3366,
+      "brier_skill": -0.40383,
+      "brier_skill_ci": [
+        -0.48953,
+        -0.31746
+      ],
+      "trades": 1062,
+      "days_traded": 54,
+      "mean_return": -0.39303,
+      "mean_return_ci": [
+        -0.48646,
+        -0.28203
+      ],
+      "win_rate": 0.3013,
+      "mean_price": 0.3442
+    },
+    "06-12": {
+      "markets": 12830,
+      "two_sided": 4011,
+      "brier_skill": -0.52642,
+      "brier_skill_ci": [
+        -0.61973,
+        -0.44288
+      ],
+      "trades": 1350,
+      "days_traded": 55,
+      "mean_return": -0.53569,
+      "mean_return_ci": [
+        -0.61825,
+        -0.43956
+      ],
+      "win_rate": 0.26,
+      "mean_price": 0.3057
+    },
+    "12-18": {
+      "markets": 13046,
+      "two_sided": 5009,
+      "brier_skill": -0.60092,
+      "brier_skill_ci": [
+        -0.69091,
+        -0.50816
+      ],
+      "trades": 2047,
+      "days_traded": 55,
+      "mean_return": -0.48119,
+      "mean_return_ci": [
+        -0.55819,
+        -0.39178
+      ],
+      "win_rate": 0.2369,
+      "mean_price": 0.2703
+    },
+    "18-24": {
+      "markets": 12633,
+      "two_sided": 4304,
+      "brier_skill": -0.55145,
+      "brier_skill_ci": [
+        -0.65558,
+        -0.46355
+      ],
+      "trades": 1606,
+      "days_traded": 55,
+      "mean_return": -0.35881,
+      "mean_return_ci": [
+        -0.4676,
+        -0.24553
+      ],
+      "win_rate": 0.2677,
+      "mean_price": 0.3032
+    }
+  },
+  "without_hrrr (description only)": {
+    "markets": 51769,
+    "two_sided": 17421,
+    "brier_skill": -0.82314,
+    "brier_skill_ci": [
+      -0.90503,
+      -0.74483
+    ],
+    "trades": 7704,
+    "days_traded": 60,
+    "mean_return": -0.57567,
+    "mean_return_ci": [
+      -0.62006,
+      -0.52744
+    ],
+    "win_rate": 0.1789,
+    "mean_price": 0.2257
+  },
+  "trader_rule (description only)": {
+    "gap": 0.1,
+    "markets": 0,
+    "two_sided": 0,
+    "brier_skill": null,
+    "brier_skill_ci": null,
+    "trades": 6520,
+    "days_traded": 55,
+    "mean_return": -0.34029,
+    "mean_return_ci": [
+      -0.41548,
+      -0.24974
+    ],
+    "win_rate": 0.2193,
+    "mean_price": 0.2584
+  },
+  "reliability": [
+    {
+      "model": "0.00-0.05",
+      "n": 15005,
+      "mean_forecast": 0.0112,
+      "observed": 0.0076,
+      "mean_market_mid": 0.0671
+    },
+    {
+      "model": "0.05-0.15",
+      "n": 2926,
+      "mean_forecast": 0.0907,
+      "observed": 0.0834,
+      "mean_market_mid": 0.1466
+    },
+    {
+      "model": "0.15-0.30",
+      "n": 2040,
+      "mean_forecast": 0.219,
+      "observed": 0.2162,
+      "mean_market_mid": 0.2566
+    },
+    {
+      "model": "0.30-0.50",
+      "n": 1962,
+      "mean_forecast": 0.3967,
+      "observed": 0.4032,
+      "mean_market_mid": 0.4127
+    },
+    {
+      "model": "0.50-0.70",
+      "n": 2074,
+      "mean_forecast": 0.5987,
+      "observed": 0.5993,
+      "mean_market_mid": 0.585
+    },
+    {
+      "model": "0.70-0.85",
+      "n": 2167,
+      "mean_forecast": 0.7826,
+      "observed": 0.8048,
+      "mean_market_mid": 0.7543
+    },
+    {
+      "model": "0.85-0.95",
+      "n": 3348,
+      "mean_forecast": 0.9093,
+      "observed": 0.9229,
+      "mean_market_mid": 0.8616
+    },
+    {
+      "model": "0.95-1.00",
+      "n": 20927,
+      "mean_forecast": 0.9896,
+      "observed": 0.9945,
+      "mean_market_mid": 0.9297
+    }
+  ]
+}
