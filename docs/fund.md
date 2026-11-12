@@ -1120,6 +1120,34 @@ opening-prices idea is dropped with the rest of the hourly markets.
 The report is `reports/fund_hourly_open_eval.json`. No setting above may change
 once an opening price has been read.
 
+#### Result (2026-11-12): NO-GO on both tests
+
+Across the four cities, 5,816 hours had an opening price.
+
+- **Test 1 (ladder mismatches): NO-GO.** Only 14 hours had one, against the 100
+  required: 3 in New York, 2 in Los Angeles, 4 in Chicago and 5 in Miami. Each
+  did pay at least $1. The mean locked-in profit was 11 cents a pair, and the
+  mean return +33% (95% CI +15% to +56%). But at fewer than one hour in 400, the
+  whole two months held about $1.50 of locked-in profit per contract size.
+- **Test 2 (the model at the open): NO-GO.** 1,576 trades lost 58.9% per dollar
+  (95% CI -71.8% to -44.6%). They were mostly cheap buys: a mean price of 11
+  cents, and 6% won.
+
+What the opening book looks like (description only):
+
+- **No market had both a bid and an ask at the first instant**, out of 49,972
+  priced. The book opens one side at a time. The most common first values were
+  a 1-cent bid with no ask, or a 99-cent ask with no bid. So "loose opening
+  prices" here are mostly placeholder orders on one side, not a market maker's
+  two-sided mistakes.
+- **By the end of the first minute, 25% of markets had both sides.** The same
+  model there lost 59.8% per dollar (2,961 trades), with Brier skill -53%
+  against the mid, the same as 10 minutes later.
+
+The market maker's opening weakness described in the trader's account is not
+there any more. The opening-prices idea is dropped with the rest of the hourly
+markets, and no live listener will be built.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes

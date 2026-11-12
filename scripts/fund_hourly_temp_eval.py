@@ -307,6 +307,8 @@ def bootstrap(items: list[dict], stat: Callable[[list[dict]], Optional[float]]) 
         v = stat([it for d in rng.choices(days, k=len(days)) for it in by_day[d]])
         if v is not None:
             draws.append(v)
+    if not draws:
+        return None
     draws.sort()
     return [round(draws[int(0.025 * len(draws))], 5), round(draws[int(0.975 * len(draws)) - 1], 5)]
 

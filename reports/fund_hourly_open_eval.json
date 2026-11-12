@@ -1,0 +1,406 @@
+{
+  "generated_at": "2026-11-12T01:31:39.961963+00:00",
+  "verdict": {
+    "test1_ladder_mismatches": "NO-GO",
+    "test2_model_at_open": "NO-GO"
+  },
+  "rule": "docs/fund.md, Amendment (2026-11-12): opening prices",
+  "hours": [
+    "2026-09-10T15:00:00+00:00",
+    "2026-11-11T23:00:00+00:00"
+  ],
+  "test1_ladder_mismatches": {
+    "hours_priced_at_open": 5816,
+    "hours_with_mismatch": 14,
+    "by_city": {
+      "KXTEMPNYCHS": 3,
+      "KXTEMPLAXHS": 2,
+      "KXTEMPCHIHS": 4,
+      "KXTEMPMIAH": 5
+    },
+    "payoff_below_1": 0,
+    "mean_sure_profit": 0.1127,
+    "mean_return": 0.33252,
+    "mean_return_ci": [
+      0.14956,
+      0.56158
+    ],
+    "examples": [
+      {
+        "city": "KXTEMPNYCHS",
+        "day": "2026-10-14",
+        "hour": "2026-10-14T08:00:00+00:00",
+        "low": 58.99,
+        "high": 62.99,
+        "ask_low": 0.74,
+        "bid_high": 0.9,
+        "cost": 0.84,
+        "sure_profit": 0.1402,
+        "payoff": 1.0,
+        "return": 0.16694285714285717
+      },
+      {
+        "city": "KXTEMPNYCHS",
+        "day": "2026-10-08",
+        "hour": "2026-10-08T19:00:00+00:00",
+        "low": 70.99,
+        "high": 71.99,
+        "ask_low": 0.74,
+        "bid_high": 0.9,
+        "cost": 0.84,
+        "sure_profit": 0.1402,
+        "payoff": 1.0,
+        "return": 0.16694285714285717
+      },
+      {
+        "city": "KXTEMPNYCHS",
+        "day": "2026-09-26",
+        "hour": "2026-09-26T06:00:00+00:00",
+        "low": 59.99,
+        "high": 60.99,
+        "ask_low": 0.12,
+        "bid_high": 0.7,
+        "cost": 0.42,
+        "sure_profit": 0.5579,
+        "payoff": 1.0,
+        "return": 1.3283523809523807
+      },
+      {
+        "city": "KXTEMPLAXHS",
+        "day": "2026-10-08",
+        "hour": "2026-10-08T19:00:00+00:00",
+        "low": 76.99,
+        "high": 80.99,
+        "ask_low": 0.74,
+        "bid_high": 0.83,
+        "cost": 0.91,
+        "sure_profit": 0.0667,
+        "payoff": 1.0,
+        "return": 0.0732472527472527
+      },
+      {
+        "city": "KXTEMPLAXHS",
+        "day": "2026-09-25",
+        "hour": "2026-09-25T15:00:00+00:00",
+        "low": 70.99,
+        "high": 71.99,
+        "ask_low": 0.02,
+        "bid_high": 0.06,
+        "cost": 0.96,
+        "sure_profit": 0.0347,
+        "payoff": 1.0,
+        "return": 0.03612500000000003
+      },
+      {
+        "city": "KXTEMPCHIHS",
+        "day": "2026-10-18",
+        "hour": "2026-10-18T13:00:00+00:00",
+        "low": 36.99,
+        "high": 37.99,
+        "ask_low": 0.79,
+        "bid_high": 0.88,
+        "cost": 0.91,
+        "sure_profit": 0.071,
+        "payoff": 1.0,
+        "return": 0.07801648351648349
+      },
+      {
+        "city": "KXTEMPCHIHS",
+        "day": "2026-10-14",
+        "hour": "2026-10-14T08:00:00+00:00",
+        "low": 60.99,
+        "high": 61.99,
+        "ask_low": 0.74,
+        "bid_high": 0.9,
+        "cost": 0.84,
+        "sure_profit": 0.1402,
+        "payoff": 1.0,
+        "return": 0.16694285714285717
+      },
+      {
+        "city": "KXTEMPCHIHS",
+        "day": "2026-09-26",
+        "hour": "2026-09-26T12:00:00+00:00",
+        "low": 44.99,
+        "high": 45.99,
+        "ask_low": 0.97,
+        "bid_high": 0.99,
+        "cost": 0.98,
+        "sure_profit": 0.0173,
+        "payoff": 1.0,
+        "return": 0.01762244897959185
+      },
+      {
+        "city": "KXTEMPCHIHS",
+        "day": "2026-09-24",
+        "hour": "2026-09-24T15:00:00+00:00",
+        "low": 61.99,
+        "high": 62.99,
+        "ask_low": 0.5,
+        "bid_high": 0.61,
+        "cost": 0.89,
+        "sure_profit": 0.0758,
+        "payoff": 2.0,
+        "return": 1.208816853932584
+      },
+      {
+        "city": "KXTEMPMIAH",
+        "day": "2026-10-11",
+        "hour": "2026-10-11T17:00:00+00:00",
+        "low": 90.99,
+        "high": 91.99,
+        "ask_low": 0.06,
+        "bid_high": 0.18,
+        "cost": 0.88,
+        "sure_profit": 0.1057,
+        "payoff": 1.0,
+        "return": 0.12013636363636349
+      }
+    ]
+  },
+  "test2_model_at_open": {
+    "markets": 49972,
+    "two_sided": 0,
+    "brier_skill": null,
+    "brier_skill_ci": null,
+    "trades": 1576,
+    "days_traded": 54,
+    "mean_return": -0.58903,
+    "mean_return_ci": [
+      -0.71789,
+      -0.44632
+    ],
+    "win_rate": 0.0622,
+    "mean_price": 0.1113
+  },
+  "test2_coverage": {
+    "KXTEMPNYCHS": {
+      "events": 1448,
+      "with_centre": 1401,
+      "forecast": 1206
+    },
+    "KXTEMPLAXHS": {
+      "events": 1475,
+      "with_centre": 1451,
+      "forecast": 1255
+    },
+    "KXTEMPCHIHS": {
+      "events": 1477,
+      "with_centre": 1456,
+      "forecast": 1261
+    },
+    "KXTEMPMIAH": {
+      "events": 1609,
+      "with_centre": 1455,
+      "forecast": 1260
+    }
+  },
+  "test2_by_city": {
+    "KXTEMPNYCHS": {
+      "city": "New York",
+      "markets": 12078,
+      "two_sided": 0,
+      "brier_skill": null,
+      "brier_skill_ci": null,
+      "trades": 151,
+      "days_traded": 40,
+      "mean_return": -0.49289,
+      "mean_return_ci": [
+        -0.88265,
+        0.10237
+      ],
+      "win_rate": 0.0795,
+      "mean_price": 0.1573
+    },
+    "KXTEMPLAXHS": {
+      "city": "Coastal Los Angeles",
+      "markets": 12621,
+      "two_sided": 0,
+      "brier_skill": null,
+      "brier_skill_ci": null,
+      "trades": 208,
+      "days_traded": 48,
+      "mean_return": -0.71674,
+      "mean_return_ci": [
+        -0.87424,
+        -0.55292
+      ],
+      "win_rate": 0.0673,
+      "mean_price": 0.1563
+    },
+    "KXTEMPCHIHS": {
+      "city": "Chicago Metro",
+      "markets": 12658,
+      "two_sided": 0,
+      "brier_skill": null,
+      "brier_skill_ci": null,
+      "trades": 195,
+      "days_traded": 45,
+      "mean_return": -0.59611,
+      "mean_return_ci": [
+        -0.79316,
+        -0.37868
+      ],
+      "win_rate": 0.0974,
+      "mean_price": 0.171
+    },
+    "KXTEMPMIAH": {
+      "city": "Miami",
+      "markets": 12615,
+      "two_sided": 0,
+      "brier_skill": null,
+      "brier_skill_ci": null,
+      "trades": 1022,
+      "days_traded": 51,
+      "mean_return": -0.57588,
+      "mean_return_ci": [
+        -0.74959,
+        -0.36596
+      ],
+      "win_rate": 0.0519,
+      "mean_price": 0.0839
+    }
+  },
+  "test2_by_local_time (description only)": {
+    "00-06": {
+      "markets": 11823,
+      "two_sided": 0,
+      "brier_skill": null,
+      "brier_skill_ci": null,
+      "trades": 312,
+      "days_traded": 45,
+      "mean_return": -0.54571,
+      "mean_return_ci": [
+        -0.70447,
+        -0.35175
+      ],
+      "win_rate": 0.0865,
+      "mean_price": 0.1156
+    },
+    "06-12": {
+      "markets": 12490,
+      "two_sided": 0,
+      "brier_skill": null,
+      "brier_skill_ci": null,
+      "trades": 394,
+      "days_traded": 50,
+      "mean_return": -0.7253,
+      "mean_return_ci": [
+        -0.87797,
+        -0.5503
+      ],
+      "win_rate": 0.0584,
+      "mean_price": 0.1222
+    },
+    "12-18": {
+      "markets": 13026,
+      "two_sided": 0,
+      "brier_skill": null,
+      "brier_skill_ci": null,
+      "trades": 511,
+      "days_traded": 52,
+      "mean_return": -0.5637,
+      "mean_return_ci": [
+        -0.82051,
+        -0.24156
+      ],
+      "win_rate": 0.0489,
+      "mean_price": 0.0996
+    },
+    "18-24": {
+      "markets": 12633,
+      "two_sided": 0,
+      "brier_skill": null,
+      "brier_skill_ci": null,
+      "trades": 359,
+      "days_traded": 48,
+      "mean_return": -0.51317,
+      "mean_return_ci": [
+        -0.75924,
+        -0.24081
+      ],
+      "win_rate": 0.0641,
+      "mean_price": 0.1121
+    }
+  },
+  "test2_end_of_first_minute (description only)": {
+    "markets": 49972,
+    "two_sided": 9890,
+    "brier_skill": -0.53157,
+    "brier_skill_ci": [
+      -0.60532,
+      -0.44407
+    ],
+    "trades": 2961,
+    "days_traded": 55,
+    "mean_return": -0.5977,
+    "mean_return_ci": [
+      -0.6498,
+      -0.54392
+    ],
+    "win_rate": 0.2671,
+    "mean_price": 0.3473
+  },
+  "opening_spread (description only)": {
+    "two_sided": 0,
+    "mean": null
+  },
+  "reliability": [
+    {
+      "model": "0.00-0.05",
+      "n": 12156,
+      "mean_forecast": 0.0135,
+      "observed": 0.0118,
+      "mean_market_mid": null
+    },
+    {
+      "model": "0.05-0.15",
+      "n": 3991,
+      "mean_forecast": 0.0926,
+      "observed": 0.0915,
+      "mean_market_mid": null
+    },
+    {
+      "model": "0.15-0.30",
+      "n": 2885,
+      "mean_forecast": 0.2196,
+      "observed": 0.2021,
+      "mean_market_mid": null
+    },
+    {
+      "model": "0.30-0.50",
+      "n": 2775,
+      "mean_forecast": 0.3955,
+      "observed": 0.4148,
+      "mean_market_mid": null
+    },
+    {
+      "model": "0.50-0.70",
+      "n": 2793,
+      "mean_forecast": 0.6016,
+      "observed": 0.6054,
+      "mean_market_mid": null
+    },
+    {
+      "model": "0.70-0.85",
+      "n": 2934,
+      "mean_forecast": 0.7807,
+      "observed": 0.8057,
+      "mean_market_mid": null
+    },
+    {
+      "model": "0.85-0.95",
+      "n": 4312,
+      "mean_forecast": 0.9081,
+      "observed": 0.917,
+      "mean_market_mid": null
+    },
+    {
+      "model": "0.95-1.00",
+      "n": 18126,
+      "mean_forecast": 0.9871,
+      "observed": 0.9898,
+      "mean_market_mid": null
+    }
+  ]
+}
