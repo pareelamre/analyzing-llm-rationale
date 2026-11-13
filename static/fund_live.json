@@ -9,13 +9,13 @@
   "attribution": {
     "realized": {},
     "unrealized": {
-      "agent_transfer": 11.2789,
+      "agent_transfer": 23.4267,
       "event_model": 53.6587,
       "put_premium": 7.1311
     }
   },
   "by_asset_class": {
-    "event": 4034.8673,
+    "event": 4047.0151,
     "option": 207.5153
   },
   "cash_usd": 5829.6861,
@@ -331,6 +331,10 @@
     {
       "nav_usd": 10072.0687,
       "ts": "2026-11-13T18:38:28.347998+00:00"
+    },
+    {
+      "nav_usd": 10084.2165,
+      "ts": "2026-11-13T20:01:23.238490+00:00"
     }
   ],
   "cycle": {
@@ -348,13 +352,73 @@
         "pair": "copper-gold",
         "reason": "stretched at z=-2.03 but its backtest averaged -0.6% per signal",
         "z": -2.031
+      },
+      {
+        "instrument": "nse_fo:NIFTYNXT50",
+        "label": "Nifty Next 50 options",
+        "reason": "no quote for the 2026-11-23 options near the money"
+      },
+      {
+        "instrument": "kalshi:KXHIGHNY",
+        "label": "New York City high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHLAX",
+        "label": "Los Angeles high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHMIA",
+        "label": "Miami high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHCHI",
+        "label": "Chicago high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHAUS",
+        "label": "Austin high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHPHIL",
+        "label": "Philadelphia high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTSFO",
+        "label": "San Francisco high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTHOU",
+        "label": "Houston high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTBOS",
+        "label": "Boston high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTEWR",
+        "label": "Newark high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTTTN",
+        "label": "Trenton high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
       }
     ],
-    "traded": false,
-    "window": "00:08 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-13T18:38:28.347998+00:00",
+  "generated_at": "2026-11-13T20:01:23.238490+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -362,7 +426,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10072.0687,
+  "nav_usd": 10084.2165,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -576,15 +640,15 @@
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
       "kind": "binary",
       "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "mark": 0.9,
+      "mark": 0.91,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -48.5913,
+      "pnl_usd": -36.4435,
       "quantity": 1214.783211,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 1093.3049,
+      "value_usd": 1105.4527,
       "venue": "polymarket"
     },
     {
@@ -631,7 +695,7 @@
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": 0.721,
+  "return_pct": 0.842,
   "settled": [],
   "shadow": {
     "blend_model": {
@@ -658,9 +722,9 @@
           "model": 0.08
         },
         {
-          "blend": 0.0802,
+          "blend": 0.0708,
           "label": "Will the U.S. invade Iran before 2027?",
-          "market": 0.085,
+          "market": 0.075,
           "model": 0.08
         },
         {
@@ -709,7 +773,7 @@
       "would_trade": []
     },
     "decided_ranges": {
-      "decided_seen": 781,
+      "decided_seen": 782,
       "dollars_filled": 0,
       "fills": 0,
       "kind": "live",
@@ -731,7 +795,7 @@
       "verdict": "pending"
     },
     "options_model": {
-      "checked": false,
+      "checked": true,
       "kind": "options",
       "mode": "shadow",
       "test": {
@@ -746,7 +810,14 @@
         "verdict": "NO-GO",
         "win_share": 0.6207
       },
-      "would_trade": []
+      "would_trade": [
+        {
+          "edge": 0.1469,
+          "label": "Nifty Bank straddle at 61,000, 23 Nov 2026",
+          "price": 1238.99,
+          "side": "MOVE"
+        }
+      ]
     },
     "rationale_check": {
       "checker": "Open-Jev 2B (Qwen3.5-2B base)",
@@ -780,9 +851,9 @@
     "weather_model": {
       "days_recorded": 4,
       "kind": "weather",
-      "markets": 0,
+      "markets": 78,
       "mode": "shadow",
-      "predictions_recorded": 786,
+      "predictions_recorded": 864,
       "test": {
         "brier_skill": -0.22138,
         "mean_return": -0.25176,
@@ -798,7 +869,146 @@
           "settled_through": "2026-11-09"
         }
       },
-      "would_trade": []
+      "would_trade": [
+        {
+          "edge": 0.8711,
+          "label": "Denver high on 14 Nov: 52\u00b0 to 53\u00b0",
+          "price": 0.21,
+          "side": "YES"
+        },
+        {
+          "edge": 1.9797,
+          "label": "Denver high on 14 Nov: 54\u00b0 to 55\u00b0",
+          "price": 0.08,
+          "side": "YES"
+        },
+        {
+          "edge": 0.5275,
+          "label": "Phoenix high on 14 Nov: 70\u00b0 or below",
+          "price": 0.28,
+          "side": "YES"
+        },
+        {
+          "edge": 0.153,
+          "label": "Phoenix high on 14 Nov: 71\u00b0 to 72\u00b0",
+          "price": 0.6,
+          "side": "NO"
+        },
+        {
+          "edge": 0.0979,
+          "label": "Phoenix high on 14 Nov: 73\u00b0 to 74\u00b0",
+          "price": 0.73,
+          "side": "NO"
+        },
+        {
+          "edge": 4.8567,
+          "label": "Atlanta high on 14 Nov: 52\u00b0 to 53\u00b0",
+          "price": 0.04,
+          "side": "YES"
+        },
+        {
+          "edge": 0.6715,
+          "label": "Atlanta high on 14 Nov: 54\u00b0 to 55\u00b0",
+          "price": 0.32999999999999996,
+          "side": "NO"
+        },
+        {
+          "edge": 0.2547,
+          "label": "Dallas high on 14 Nov: 62\u00b0 to 63\u00b0",
+          "price": 0.32,
+          "side": "YES"
+        },
+        {
+          "edge": 0.9998,
+          "label": "Dallas high on 14 Nov: 64\u00b0 to 65\u00b0",
+          "price": 0.16,
+          "side": "YES"
+        },
+        {
+          "edge": 1.0405,
+          "label": "Minneapolis high on 14 Nov: 41\u00b0 to 42\u00b0",
+          "price": 0.14,
+          "side": "YES"
+        },
+        {
+          "edge": 2.6214,
+          "label": "Seattle high on 14 Nov: 55\u00b0 to 56\u00b0",
+          "price": 0.08,
+          "side": "YES"
+        },
+        {
+          "edge": 0.3037,
+          "label": "Seattle high on 14 Nov: 59\u00b0 to 60\u00b0",
+          "price": 0.62,
+          "side": "NO"
+        },
+        {
+          "edge": 0.9086,
+          "label": "Washington DC high on 14 Nov: 53\u00b0 to 54\u00b0",
+          "price": 0.15,
+          "side": "YES"
+        },
+        {
+          "edge": 0.304,
+          "label": "Oklahoma City high on 14 Nov: 53\u00b0 or below",
+          "price": 0.6799999999999999,
+          "side": "NO"
+        },
+        {
+          "edge": 0.0727,
+          "label": "Oklahoma City high on 14 Nov: 54\u00b0 to 55\u00b0",
+          "price": 0.62,
+          "side": "NO"
+        },
+        {
+          "edge": 0.5787,
+          "label": "Oklahoma City high on 14 Nov: 56\u00b0 to 57\u00b0",
+          "price": 0.24,
+          "side": "YES"
+        },
+        {
+          "edge": 3.0946,
+          "label": "Oklahoma City high on 14 Nov: 58\u00b0 to 59\u00b0",
+          "price": 0.04,
+          "side": "YES"
+        },
+        {
+          "edge": 0.493,
+          "label": "Las Vegas high on 14 Nov: 69\u00b0 to 70\u00b0",
+          "price": 0.33999999999999997,
+          "side": "NO"
+        },
+        {
+          "edge": 2.0162,
+          "label": "Las Vegas high on 14 Nov: 71\u00b0 to 72\u00b0",
+          "price": 0.07,
+          "side": "YES"
+        },
+        {
+          "edge": 0.06,
+          "label": "San Antonio high on 14 Nov: 69\u00b0 to 70\u00b0",
+          "price": 0.64,
+          "side": "NO"
+        },
+        {
+          "edge": 0.5336,
+          "label": "San Antonio high on 14 Nov: 73\u00b0 to 74\u00b0",
+          "price": 0.11,
+          "side": "YES"
+        },
+        {
+          "edge": 0.8314,
+          "label": "New Orleans high on 14 Nov: 63\u00b0 to 64\u00b0",
+          "price": 0.06,
+          "side": "YES"
+        },
+        {
+          "edge": 0.7323,
+          "label": "San Diego high on 14 Nov: 68\u00b0 to 69\u00b0",
+          "price": 0.11,
+          "side": "YES"
+        }
+      ]
     }
   },
   "starting_value": 10000.0,
