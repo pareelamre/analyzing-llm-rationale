@@ -832,7 +832,27 @@ function escHtml(s) {
                 # The side and the market name read as separate items.
                 self.assertIn("${escHtml(FUND_SIDE_LABELS[t.side] || t.side || '')} · ${escHtml(_fundName(t))}", renderer)
                 self.assertIn("Paper trading only.", renderer)
-                self.assertIn("checking, not blocking", renderer)
+                self.assertIn("Checking, not blocking", renderer)
+
+    def test_the_fund_board_reads_cleanly(self):
+        # Owner, 2026-11-13: the board's attribution and logs looked cluttered.
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                renderer = index.split("function renderFundBoard(d) {", 1)[1].split(
+                    "async function removePersonalLedgerEntry", 1)[0]
+                # Holdings group by asset class; the analyst is a coloured tag, not a "Why 100%" column.
+                self.assertIn('<tr class="fund-group">', renderer)
+                self.assertNotIn("<th>Why</th>", renderer)
+                self.assertIn("share != null && share < 0.995", index)
+                # Transfers made together read as one entry; evidence folds away.
+                self.assertIn("last.transfer && last.ts === t.ts", renderer)
+                self.assertIn("fact${evidence.length === 1 ? '' : 's'} behind it", renderer)
+                # Long "would trade" lists fold away, and identical skip reasons collapse to one line.
+                self.assertIn("Would trade now (", renderer)
+                self.assertIn("groups.get(reason).push(", renderer)
+                self.assertIn("(timed out)", index)
+                # The holdings table keeps its columns on a phone.
+                self.assertNotIn("agentic-table fund-table", renderer)
 
     def test_track_record_is_off_the_site(self):
         # Retired 2026-11-08: the data stays at GET /track-record, the page,
