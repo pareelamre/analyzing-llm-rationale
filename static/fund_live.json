@@ -9,13 +9,13 @@
   "attribution": {
     "realized": {},
     "unrealized": {
-      "agent_transfer": 41.5943,
+      "agent_transfer": 41.4943,
       "event_model": 53.6587,
       "put_premium": 7.1311
     }
   },
   "by_asset_class": {
-    "event": 4065.1827,
+    "event": 4065.0827,
     "option": 207.5153
   },
   "cash_usd": 5829.6861,
@@ -319,6 +319,10 @@
     {
       "nav_usd": 10102.3841,
       "ts": "2026-11-13T14:01:12.510907+00:00"
+    },
+    {
+      "nav_usd": 10102.2841,
+      "ts": "2026-11-13T16:01:16.456909+00:00"
     }
   ],
   "cycle": {
@@ -339,10 +343,10 @@
       }
     ],
     "traded": false,
-    "window": "19:31 IST is outside the trading hours"
+    "window": "21:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-13T14:01:12.510907+00:00",
+  "generated_at": "2026-11-13T16:01:16.456909+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -350,7 +354,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10102.3841,
+  "nav_usd": 10102.2841,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -459,15 +463,15 @@
       "instrument_id": "kalshi:KXTHC3MG-FED-26NOV13",
       "kind": "binary",
       "label": "Will 3 mg THC beverages qualify as hemp under federal law on Nov 13, 2026?",
-      "mark": 0.93,
+      "mark": 0.92,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 0.1,
+      "pnl_usd": 0.0,
       "quantity": 10.0,
       "side": "YES",
       "underlying": "kalshi:KXTHC3MG-FED-26NOV13",
-      "value_usd": 9.3,
+      "value_usd": 9.2,
       "venue": "kalshi"
     },
     {
@@ -619,7 +623,7 @@
     }
   ],
   "realized_pnl_usd": 0.0,
-  "return_pct": 1.024,
+  "return_pct": 1.023,
   "settled": [],
   "shadow": {
     "blend_model": {
@@ -697,12 +701,12 @@
       "would_trade": []
     },
     "decided_ranges": {
-      "decided_seen": 757,
+      "decided_seen": 765,
       "dollars_filled": 0,
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 0,
+        "decided_new": 8,
         "events": 96,
         "filled_now": 0,
         "graded": 0
@@ -745,16 +749,23 @@
       "mode": "shadow"
     },
     "vix_fade": {
-      "added_this_run": 0,
+      "added_this_run": 1,
       "kind": "vixfade",
       "long_mean_return": null,
       "longs": 0,
       "mode": "shadow",
-      "recent": [],
-      "sessions": 1,
-      "short_mean_return": null,
+      "recent": [
+        {
+          "net_return": -0.012218,
+          "session": "2026-11-12",
+          "side": "SHORT",
+          "vix_change": -1.97
+        }
+      ],
+      "sessions": 2,
+      "short_mean_return": -0.012218,
       "short_mean_return_ci": null,
-      "shorts": 0,
+      "shorts": 1,
       "since": "2026-11-10",
       "verdict": "pending"
     },
