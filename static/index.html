@@ -1204,6 +1204,49 @@
     .agentic-position-button:hover { background: #f1f5f9; color: #0f172a; }
     .agentic-position-row > td { background: #fbfdff; }
     .agentic-valuation-note { color: var(--text-dim); display: block; font-size: 9px; font-weight: 500; line-height: 1.3; margin-top: 3px; }
+    /* Foresea Fund board: quiet rows, numbers aligned, details on demand. */
+    .fund-num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    .fund-up { color: #047857; }
+    .fund-down { color: #b91c1c; }
+    .fund-flat { color: var(--text-mute); }
+    .fund-strong { color: var(--ink); font-size: 13px; font-weight: 650; }
+    .fund-pill { background: #f1f5f9; border-radius: 999px; color: #475569; display: inline-block; font-size: 10px; font-weight: 650; line-height: 1; padding: 3px 7px; vertical-align: 1px; white-space: nowrap; }
+    .fund-pill--record { background: #fffbeb; color: #a16207; }
+    .fund-pill--check { background: #eff6ff; color: #1d4ed8; }
+    .fund-name { color: var(--ink); font-size: 12.5px; font-weight: 550; line-height: 1.4; }
+    .fund-sub { align-items: center; color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 11px; gap: 3px 12px; margin-top: 4px; }
+    .fund-who { align-items: flex-start; color: var(--text); display: inline-flex; font-size: 11px; gap: 6px; line-height: 1.4; }
+    .fund-who::before { background: var(--who, #94a3b8); border-radius: 50%; content: ''; flex: none; height: 7px; margin-top: 4px; width: 7px; }
+    .fund-note { color: var(--text-dim); font-size: 11.5px; line-height: 1.5; margin: 4px 0 0; }
+    .fund-table-wrap { border-top: 1px solid var(--border); overflow-x: clip; }
+    .fund-table { margin: 0; min-width: 0; width: 100%; }
+    .fund-table th { background: #fafafa; color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .06em; padding-bottom: 9px; padding-top: 9px; text-transform: uppercase; }
+    .fund-table td { border-bottom-color: #f0f1f3; padding-bottom: 10px; padding-top: 10px; vertical-align: top; }
+    .fund-table th:first-child, .fund-table td:first-child { padding-left: 18px; }
+    .fund-table th:last-child, .fund-table td:last-child { padding-right: 18px; }
+    .fund-table tr.fund-group td { background: #fafafa; border-top: 1px solid var(--border); color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .06em; padding-bottom: 7px; padding-top: 7px; text-transform: uppercase; }
+    .fund-table tr.fund-group td.fund-num { letter-spacing: 0; text-transform: none; }
+    .fund-list { border-top: 1px solid var(--border); }
+    .fund-row { border-bottom: 1px solid #f0f1f3; display: grid; gap: 4px 16px; grid-template-columns: minmax(0, 1fr) auto; padding: 12px 18px; }
+    .fund-row:last-child { border-bottom: 0; }
+    .fund-row-main { min-width: 0; }
+    .fund-row-side { color: var(--text-dim); font-size: 11px; line-height: 1.5; text-align: right; white-space: nowrap; }
+    .fund-bar { background: #f1f5f9; border-radius: 999px; height: 5px; margin-top: 8px; max-width: 420px; overflow: hidden; }
+    .fund-bar > span { border-radius: 999px; display: block; height: 100%; }
+    .fund-details summary { color: #64748b; cursor: pointer; font-size: 11px; font-weight: 600; list-style: none; margin-top: 6px; width: fit-content; }
+    .fund-details summary:hover { color: var(--ink); }
+    .fund-details summary::-webkit-details-marker { display: none; }
+    .fund-details summary::before { content: '\25B8'; display: inline-block; margin-right: 6px; transition: transform var(--dur-fast) var(--ease-fast); }
+    .fund-details[open] summary::before { transform: rotate(90deg); }
+    .fund-facts { border-collapse: collapse; font-size: 11px; margin-top: 6px; width: 100%; }
+    .fund-facts td { border-top: 1px solid #f0f1f3; color: var(--text); padding: 5px 0; vertical-align: top; }
+    .fund-facts td + td { color: var(--text-mute); padding-left: 14px; text-align: right; }
+    .fund-fact-key { color: var(--text-dim); }
+    .fund-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+    .fund-foot { background: #fafafa; border-top: 1px solid var(--border); padding: 12px 18px 14px; }
+    .fund-foot .fund-chips { margin-top: 0; }
+    .fund-empty { color: var(--text-dim); font-size: 12px; margin: 0; padding: 14px 18px; }
+    @media (max-width: 640px) { .fund-row { grid-template-columns: 1fr; } .fund-row-side { align-items: baseline; display: flex; gap: 10px; text-align: left; } .fund-row-side .fund-num { text-align: left; } }
     .agentic-positions-table code { overflow-wrap: anywhere; word-break: break-word; }
     @media (max-width: 720px) {
       .agentic-table-wrap { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
@@ -8019,20 +8062,60 @@ const FUND_ANALYST_LABELS = {
   vix_fade: 'US VIX fade (Bank Nifty, open to close)',
   put_premium: 'Put premium (Nifty put spreads)',
 };
+// One colour per analyst, so a holding's tag matches its line in "Who made the money".
+const FUND_ANALYST_COLORS = {
+  agent_transfer: '#94a3b8', event_model: '#4f46e5', put_premium: '#0f766e', pairs_model: '#d97706',
+  risk_overlay: '#64748b', options_model: '#0891b2', weather_model: '#0284c7', blend_model: '#7c3aed',
+  decided_ranges: '#0369a1', vix_fade: '#be185d', rationale_check: '#475569',
+};
 const FUND_CLASS_LABELS = { event: 'Prediction markets', index: 'Indices', commodity: 'Commodities', option: 'Index options' };
 const FUND_SIDE_LABELS = { MOVE: 'Big move', RANGE: 'Stays in range', BULL: 'Not much lower', BEAR: 'Not much higher' };
+const FUND_ACTION_LABELS = { open: 'Bought', close: 'Sold', reduce: 'Trimmed', hedge: 'Hedged', settle: 'Settled' };
 function _fundAnalystLabel(key) { return FUND_ANALYST_LABELS[key] || String(key || '').replace(/_/g, ' '); }
+function _fundWho(key, share) {
+  const pct = share != null && share < 0.995 ? ` ${Math.round(share * 100)}%` : '';
+  return `<span class="fund-who" style="--who:${FUND_ANALYST_COLORS[key] || '#94a3b8'}">${escHtml(_fundAnalystLabel(key))}${pct}</span>`;
+}
 function _fundMoney(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '-';
   return `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function _fundPnl(value) {
-  const n = Number(value) || 0;
-  return `<span style="color:${n >= 0 ? '#0a7' : '#c33'}">${n >= 0 ? '+' : ''}${_fundMoney(n)}</span>`;
+  const n = Math.round((Number(value) || 0) * 100) / 100;
+  const cls = n > 0 ? 'fund-up' : n < 0 ? 'fund-down' : 'fund-flat';
+  return `<span class="${cls}">${n > 0 ? '+' : ''}${_fundMoney(n)}</span>`;
 }
 function _fundName(item) {
   return item.label || String(item.instrument_id || '').split(':').slice(1).join(':').replace(/-/g, ' ');
+}
+function _fundWhen(ts) {
+  return ts ? new Date(ts).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+}
+function _fundDay(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return String(iso || '');
+  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+function _fundPair(key) { return String(key || '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' / '); }
+function _fundSide(side) { return `<span class="fund-pill">${escHtml(FUND_SIDE_LABELS[side] || side || '')}</span>`; }
+function _fundPct(x, digits = 1) {
+  const n = Number(x) * 100;
+  return `${n > 0 ? '+' : ''}${n.toFixed(digits)}%`;
+}
+function _fundRange(ci) { return ci ? ` (95% range ${_fundPct(ci[0])} to ${_fundPct(ci[1])})` : ''; }
+// A fetch failure reads as plain words, not an exception name.
+function _fundReason(text) {
+  return String(text || '').replace(/:\s*([A-Z][A-Za-z]*(Timeout|Error|Exception))\b/, (_, name, kind) => kind === 'Timeout' ? ' (timed out)' : ' (error)');
+}
+function _fundCap(text) { const s = String(text || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+function _fundFacts(evidence) {
+  return `<table class="fund-facts">${evidence.map(e => {
+    const figure = String(e.figure || '');
+    const at = figure.indexOf(': ');
+    const body = at > 0 ? `<span class="fund-fact-key">${escHtml(figure.slice(0, at))}</span> ${escHtml(figure.slice(at + 2))}` : escHtml(figure);
+    return `<tr><td>${body}</td><td>${escHtml(e.source || '')}</td></tr>`;
+  }).join('')}</table>`;
 }
 
 function renderFundBoard(d) {
@@ -8050,82 +8133,151 @@ function renderFundBoard(d) {
   }
   const chart = _equitySvg([{ points, times, color: '#4f46e5', label: 'Foresea Fund' }], 760, 260, { asPct: false, yPrefix: '$' });
 
-  const positions = (d.positions || []).slice().sort((a, b) => String(a.asset_class).localeCompare(String(b.asset_class)));
-  const positionRows = positions.map(p => {
-    const why = Object.entries(p.attribution || {})
-      .map(([k, w]) => `${escHtml(_fundAnalystLabel(k))} ${Math.round(Number(w) * 100)}%`).join(', ');
-    return `<tr>
-      <td>${escHtml(FUND_CLASS_LABELS[p.asset_class] || p.asset_class || '')}</td>
-      <td style="max-width:300px">${escHtml(_fundName(p))}</td>
-      <td>${escHtml(FUND_SIDE_LABELS[p.side] || p.side || '')}</td>
-      <td>${Number(p.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-      <td>${_fundMoney(p.value_usd)}</td>
-      <td>${_fundPnl(p.pnl_usd)}</td>
-      <td class="text-xs" style="color:var(--text-dim)">${why}</td>
-    </tr>`;
+  // Holdings, grouped by asset class with a subtotal per group.
+  const positions = d.positions || [];
+  const byClass = new Map();
+  positions.forEach(p => {
+    const key = p.asset_class || 'other';
+    if (!byClass.has(key)) byClass.set(key, []);
+    byClass.get(key).push(p);
+  });
+  const positionRows = [...byClass.entries()].map(([cls, items]) => {
+    items.sort((a, b) => Number(b.value_usd || 0) - Number(a.value_usd || 0));
+    const value = items.reduce((s, p) => s + Number(p.value_usd || 0), 0);
+    const pnl = items.reduce((s, p) => s + Number(p.pnl_usd || 0), 0);
+    const head = `<tr class="fund-group"><td>${escHtml(FUND_CLASS_LABELS[cls] || cls)} · ${items.length}</td><td class="fund-num">${_fundMoney(value)}</td><td class="fund-num">${_fundPnl(pnl)}</td></tr>`;
+    return head + items.map(p => {
+      const who = Object.entries(p.attribution || {}).sort((a, b) => b[1] - a[1]).map(([k, w]) => _fundWho(k, Number(w))).join('');
+      const qty = Number(p.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+      const cents = x => `${Math.round(Number(x) * 100)}¢`;
+      const price = p.kind === 'binary' && p.entry_price != null && p.mark != null
+        ? `<span>${qty} at ${cents(p.entry_price)}, now ${cents(p.mark)}</span>` : `<span>${qty} units</span>`;
+      return `<tr>
+        <td><div class="fund-name">${_fundSide(p.side)} ${escHtml(_fundName(p))}</div><div class="fund-sub">${who}${price}</div></td>
+        <td class="fund-num">${_fundMoney(p.value_usd)}</td>
+        <td class="fund-num">${_fundPnl(p.pnl_usd)}</td>
+      </tr>`;
+    }).join('');
   }).join('');
 
-  const analysts = new Set([...Object.keys(d.attribution?.unrealized || {}), ...Object.keys(d.attribution?.realized || {})]);
-  const attributionRows = [...analysts].map(k => {
-    const open = Number(d.attribution?.unrealized?.[k] || 0);
-    const closed = Number(d.attribution?.realized?.[k] || 0);
-    return `<tr><td>${escHtml(_fundAnalystLabel(k))}</td><td>${_fundPnl(closed)}</td><td>${_fundPnl(open)}</td><td>${_fundPnl(open + closed)}</td></tr>`;
+  // Who made the money: one line per analyst, a bar scaled to the largest total.
+  const analysts = [...new Set([...Object.keys(d.attribution?.unrealized || {}), ...Object.keys(d.attribution?.realized || {})])]
+    .map(k => {
+      const open = Number(d.attribution?.unrealized?.[k] || 0);
+      const closed = Number(d.attribution?.realized?.[k] || 0);
+      return { k, open, closed, total: open + closed };
+    }).sort((a, b) => b.total - a.total);
+  const largest = Math.max(1e-9, ...analysts.map(a => Math.abs(a.total)));
+  const attributionRows = analysts.map(a => {
+    const split = a.closed ? `<div>open ${_fundMoney(a.open)} · closed ${_fundMoney(a.closed)}</div>` : '';
+    return `<div class="fund-row">
+      <div class="fund-row-main">${_fundWho(a.k)}
+        <div class="fund-bar"><span style="width:${(Math.abs(a.total) / largest * 100).toFixed(1)}%;background:${a.total >= 0 ? '#10b981' : '#ef4444'}"></span></div></div>
+      <div class="fund-row-side"><div class="fund-num fund-strong">${_fundPnl(a.total)}</div>${split}</div>
+    </div>`;
+  }).join('');
+  const attributionTotal = analysts.reduce((s, a) => s + a.total, 0);
+  const allOpen = analysts.every(a => !a.closed);
+
+  // Trades and their reasons: transfers made at the same moment read as one entry.
+  const entries = [];
+  (d.trades || []).forEach(t => {
+    const last = entries[entries.length - 1];
+    if (t.action === 'transfer' && last && last.transfer && last.ts === t.ts) last.items.push(t);
+    else entries.push(t.action === 'transfer' ? { transfer: true, ts: t.ts, items: [t] } : { trade: t, ts: t.ts });
+  });
+  const tradeItems = entries.map(e => {
+    if (e.transfer) {
+      const list = e.items.map(t => `<tr><td>${escHtml(FUND_SIDE_LABELS[t.side] || t.side || '')} · ${escHtml(_fundName(t))}</td><td>${Math.round(Number(t.price) * 100)}¢</td></tr>`).join('');
+      return `<div class="fund-row">
+        <div class="fund-row-main"><div class="fund-name"><span class="fund-pill">Carried over</span> ${e.items.length} position${e.items.length === 1 ? '' : 's'} from the agent's account</div>
+          <details class="fund-details"><summary>The positions, at their entry prices</summary><table class="fund-facts">${list}</table></details></div>
+        <div class="fund-row-side">${escHtml(_fundWhen(e.ts))}</div>
+      </div>`;
+    }
+    const t = e.trade;
+    const action = FUND_ACTION_LABELS[t.action] || _fundCap(t.action);
+    // A fact-sheet note repeats its evidence; its last sentence is the reason.
+    const reason = t.note_source === 'model'
+      ? escHtml(t.note || '')
+      : escHtml(_fundCap((String(t.note || '').match(/Reason:\s*(.+)$/) || [])[1] || t.note || ''));
+    const evidence = t.evidence || [];
+    const source = t.note_source === 'model' ? 'worded by the on-device model, checked against them' : 'plain fact sheet';
+    return `<div class="fund-row">
+      <div class="fund-row-main"><div class="fund-name"><span class="fund-pill">${escHtml(action)} · ${escHtml(FUND_SIDE_LABELS[t.side] || t.side || '')}</span> ${escHtml(_fundName(t))}</div>
+        <p class="fund-note">${reason}</p>
+        ${evidence.length ? `<details class="fund-details"><summary>${evidence.length} fact${evidence.length === 1 ? '' : 's'} behind it (${source})</summary>${_fundFacts(evidence)}</details>` : ''}</div>
+      <div class="fund-row-side"><div class="fund-num fund-strong">${_fundMoney(t.notional_usd)}</div><div>${escHtml(_fundWhen(t.ts))}</div></div>
+    </div>`;
   }).join('');
 
-  const tradeItems = (d.trades || []).map(t => {
-    const when = t.ts ? new Date(t.ts).toLocaleString() : '';
-    const evidence = (t.evidence || [])
-      .map(e => `<li>${escHtml(e.figure || '')} <span style="color:var(--text-mute)">(${escHtml(e.source || '')})</span></li>`).join('');
-    const source = t.note_source === 'model'
-      ? 'Worded by the on-device model and checked against these facts'
-      : 'Plain fact sheet';
-    return `<article class="agentic-activity">
-      <div class="agentic-activity-meta">
-        <span><b>${escHtml(t.action || '')}</b> · ${escHtml(t.purpose || '')} · ${escHtml(FUND_SIDE_LABELS[t.side] || t.side || '')} · ${escHtml(_fundName(t))}</span>
-        <span>${escHtml(when)}</span>
-      </div>
-      <div class="agentic-activity-body">
-        <p style="margin:0 0 6px">${escHtml(t.note || '')}</p>
-        ${evidence ? `<details><summary class="text-xs" style="cursor:pointer">Evidence (${escHtml(source)})</summary><ul class="text-xs" style="margin:6px 0 0 16px">${evidence}</ul></details>` : ''}
-      </div>
-    </article>`;
-  }).join('');
-
+  // Shadow analysts: one status line each; long "would trade" lists fold away.
   const shadowItems = Object.entries(d.shadow || {}).map(([name, s]) => {
     const t = s.test || {};
-    const would = (s.would_trade || []).map(w => `${escHtml(w.side || '')} ${escHtml(w.label || '')}`).join('; ');
-    const tested = t.test_markets
-      ? ` Tested on ${t.test_markets} markets resolved after ${escHtml(t.cutoff || '')}: Brier ${t.blend_brier} against the market's ${t.market_brier}.`
-      : '';
+    let status = 'Recording, not trading';
+    let pill = 'fund-pill--record';
+    let line;
     if (s.kind === 'vixfade') {
-      const shorts = s.shorts ? ` ${s.shorts} short trade(s) so far, averaging ${(Number(s.short_mean_return) * 100).toFixed(2)}% after costs.` : ' No signal yet.';
-      return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading; ${s.sessions || 0} session(s) checked since ${escHtml(s.since || '')}.${shorts} Verdict due after 50 short trades.</li>`;
+      const shorts = s.shorts ? `${s.shorts} short trade${s.shorts === 1 ? '' : 's'} so far, averaging ${_fundPct(s.short_mean_return, 2)} after costs.` : 'No signal yet.';
+      line = `${s.sessions || 0} session${s.sessions === 1 ? '' : 's'} checked since ${escHtml(_fundDay(s.since))}. ${shorts} Verdict after 50 short trades.`;
+    } else if (s.kind === 'live') {
+      const fills = s.fills ? `${s.fills} could be bought (mean ${Math.round(Number(s.mean_price) * 1000) / 10}¢, ${_fundMoney(s.dollars_filled)} in all)` : 'none could be bought yet';
+      const settled = s.settled ? ` ${s.settled} settled, ${s.losses || 0} lost, averaging ${_fundPct(s.mean_return)} per dollar after fees.` : '';
+      line = `${Number(s.decided_seen || 0).toLocaleString()} ranges already decided by airport readings; ${fills}.${settled} Verdict after 100 settled fills over 7 days.`;
+    } else if (s.kind === 'weather') {
+      const tested = t.trades ? ` Its test (${escHtml(_fundDay(t.window?.first))} to ${escHtml(_fundDay(t.window?.last))}) averaged ${_fundPct(t.mean_return)} per dollar after fees over ${Number(t.trades).toLocaleString()} trades${_fundRange(t.mean_return_ci)}, so it waits for a re-test.` : '';
+      line = `${s.days_recorded || 0} day${s.days_recorded === 1 ? '' : 's'} of predictions on Kalshi's daily high temperatures.${tested}`;
+    } else if (s.kind === 'options') {
+      line = t.trades ? `Backtest on Nifty, ${escHtml(String(t.first || '').slice(0, 4))} to ${escHtml(String(t.last || '').slice(0, 4))}: ${t.trades} trades averaging ${_fundPct(t.mean_return)} per rupee at risk${_fundRange(t.mean_return_ci)}, short of the bar.` : 'Checks index options during trading hours.';
+    } else if (s.kind === 'checker') {
+      status = 'Checking, not blocking';
+      pill = 'fund-pill--check';
+      const flags = s.flags || [];
+      line = `${s.markets || 0} recent forecasts read against their own rationales. ${flags.length ? `${flags.length} forecast${flags.length === 1 ? ' points' : 's point'} away from its own reasoning.` : 'No forecast contradicts its own reasoning.'}`;
+    } else {
+      const tested = t.test_markets ? ` Tested on ${t.test_markets} markets resolved after ${escHtml(_fundDay(t.cutoff))}: Brier ${t.blend_brier} against the market's ${t.market_brier}.` : '';
+      line = `${s.days_recorded || 0} day${s.days_recorded === 1 ? '' : 's'} of predictions on ${s.markets || 0} markets.${tested}`;
     }
-    if (s.kind === 'live') {
-      const ret = s.settled ? ` ${s.settled} settled, ${s.losses || 0} lost, averaging ${(Number(s.mean_return) * 100).toFixed(1)}% per dollar after fees.` : '';
-      const fills = s.fills ? ` ${s.fills} could be bought (mean price ${Math.round(Number(s.mean_price) * 1000) / 10} cents, $${Number(s.dollars_filled).toLocaleString()} in all).` : ' None could be bought yet.';
-      return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading; ${s.decided_seen || 0} ranges already decided by the airport readings.${fills}${ret} Verdict due after 100 settled fills over 7 days.</li>`;
-    }
-    if (s.kind === 'weather') {
-      const ci = t.mean_return_ci ? ` (95% range ${(t.mean_return_ci[0] * 100).toFixed(1)}% to ${(t.mean_return_ci[1] * 100).toFixed(1)}%)` : '';
-      const result = t.trades ? ` Its test on settled markets (${escHtml(t.window?.first || '')} to ${escHtml(t.window?.last || '')}) made ${t.trades} trades averaging ${(Number(t.mean_return) * 100).toFixed(1)}% per dollar after fees${ci}, so it records until a re-test.` : '';
-      return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading; ${s.days_recorded || 0} day(s) of predictions on Kalshi's daily high temperatures.${result} ${would ? `Would trade: ${would}.` : 'Would trade nothing today.'}</li>`;
-    }
-    if (s.kind === 'options') {
-      const ci = t.mean_return_ci ? ` (95% range ${(t.mean_return_ci[0] * 100).toFixed(1)}% to ${(t.mean_return_ci[1] * 100).toFixed(1)}%)` : '';
-      const tested = t.trades ? ` Its backtest on Nifty (${escHtml(t.first || '')} to ${escHtml(t.last || '')}) made ${t.trades} trades averaging ${(Number(t.mean_return) * 100).toFixed(1)}% per rupee at risk${ci}, short of the bar.` : '';
-      return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading.${tested} ${would ? `Would trade: ${would}.` : (s.checked ? 'Would trade nothing this cycle.' : 'Checks index options during trading hours.')}</li>`;
-    }
-    if (s.kind === 'checker') {
-      const flags = (s.flags || []).map(f => `${escHtml(f.label || '')} (forecast ${Math.round(Number(f.forecast) * 100)}%, its rationale reads ${Math.round(Number(f.rationale_yes) * 100)}% yes)`).join('; ');
-      return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: checking, not blocking; ${s.markets || 0} recent forecasts read against their own rationales. ${flags ? `Number points away from its reasoning: ${flags}.` : 'No forecast contradicts its own reasoning.'}</li>`;
-    }
-    return `<li><b>${escHtml(_fundAnalystLabel(name))}</b>: recording, not trading; ${s.days_recorded || 0} day(s) of predictions on ${s.markets || 0} markets.${tested} ${would ? `Would trade: ${would}.` : 'Would trade nothing today.'}</li>`;
+    const flagList = (s.flags || []).map(f => `<tr><td>${escHtml(f.label || '')}</td><td>forecast ${Math.round(Number(f.forecast) * 100)}%, rationale ${Math.round(Number(f.rationale_yes) * 100)}% yes</td></tr>`).join('');
+    const would = (s.would_trade || []).map(w => `<span class="fund-pill">${escHtml(FUND_SIDE_LABELS[w.side] || w.side || '')} · ${escHtml(w.label || '')}</span>`).join('');
+    return `<div class="fund-row">
+      <div class="fund-row-main"><div class="fund-name">${escHtml(_fundAnalystLabel(name))} <span class="fund-pill ${pill}">${status}</span></div>
+        <p class="fund-note">${line}</p>
+        ${flagList ? `<details class="fund-details"><summary>The forecasts it flagged</summary><table class="fund-facts">${flagList}</table></details>` : ''}
+        ${would ? `<details class="fund-details"><summary>Would trade now (${(s.would_trade || []).length})</summary><div class="fund-chips">${would}</div></details>` : ''}</div>
+    </div>`;
   }).join('');
-  const passedItems = [...(d.cycle?.skipped || []), ...(d.cycle?.passed || [])]
-    .map(s => `<li><b>${escHtml(s.label || s.pair || _fundName({ instrument_id: s.instrument || '' }))}</b>: ${escHtml(s.reason || '')}</li>`).join('');
+
+  // Passed on this cycle: identical reasons fold into one line.
+  const groups = new Map();
+  [...(d.cycle?.skipped || []), ...(d.cycle?.passed || [])].forEach(s => {
+    const reason = _fundReason(s.reason);
+    if (!groups.has(reason)) groups.set(reason, []);
+    groups.get(reason).push(s.label || (s.pair ? _fundPair(s.pair) : _fundName({ instrument_id: s.instrument || '' })));
+  });
+  const passedItems = [...groups.entries()].map(([reason, names]) => {
+    if (names.length === 1) {
+      return `<div class="fund-row"><div class="fund-row-main"><div class="fund-name">${escHtml(names[0])}</div><p class="fund-note">${escHtml(_fundCap(reason))}</p></div></div>`;
+    }
+    const tail = names[0].split(' ').slice(-2).join(' ');
+    const shared = tail.includes(' ') && names.every(n => n.endsWith(' ' + tail));
+    const short = shared ? names.map(n => n.slice(0, -tail.length - 1)) : names;
+    const shown = short.slice(0, 8).map(escHtml).join(', ');
+    const more = short.length > 8 ? ` and ${short.length - 8} more` : '';
+    return `<div class="fund-row"><div class="fund-row-main"><div class="fund-name">${escHtml(_fundCap(reason))}</div><p class="fund-note">${shared ? `${escHtml(_fundCap(tail))}: ` : ''}${shown}${more}</p></div>
+      <div class="fund-row-side">${names.length} signals</div></div>`;
+  }).join('');
+
   const limits = d.limits || {};
   const universe = d.universe || {};
+  const pctOf = x => `${Math.round((x || 0) * 100)}%`;
+  const limitChips = [
+    `${pctOf(limits.position)} max per position`, `${pctOf(limits.asset_class)} per asset class`,
+    `${pctOf(limits.underlying)} net per underlying`, `${pctOf(limits.cash_floor)} kept in cash`,
+    ...(d.options ? [`options: ${Math.round((d.options.risk_per_structure || 0) * 1000) / 10}% at risk each, ${pctOf(d.options.class_cap)} in all`] : []),
+  ].map(c => `<span class="fund-pill">${escHtml(c)}</span>`).join('');
+  const indices = universe.indices || [];
+  const pairs = universe.pairs || [];
 
   host.innerHTML = `
     <section class="agentic-panel">
@@ -8143,31 +8295,36 @@ function renderFundBoard(d) {
     </section>
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Holdings</h4>
-        <p class="agentic-panel-copy">Valued at what each position would sell for now. "Why" is the share each analyst had in opening it.</p></div></div>
-      <div class="agentic-table-wrap"><table class="eb-table agentic-table"><thead><tr><th>Asset</th><th>Instrument</th><th>Side</th><th>Quantity</th><th>Value</th><th>P&amp;L</th><th>Why</th></tr></thead>
-      <tbody>${positionRows || '<tr><td colspan="7" class="text-sm text-gray-500">No open positions.</td></tr>'}</tbody></table></div>
+        <p class="agentic-panel-copy">Valued at what each position would sell for now. The coloured tag is the analyst behind it.</p></div></div>
+      <div class="fund-table-wrap"><table class="eb-table fund-table"><thead><tr><th>Position</th><th class="fund-num">Value</th><th class="fund-num">P&amp;L</th></tr></thead>
+      <tbody>${positionRows || '<tr><td colspan="3" class="text-sm text-gray-500">No open positions.</td></tr>'}</tbody></table></div>
     </section>
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Who made the money</h4>
-        <p class="agentic-panel-copy">Profit and loss split back to the analyst behind each position, in proportion to its share.</p></div></div>
-      <div class="agentic-table-wrap"><table class="eb-table agentic-table"><thead><tr><th>Analyst</th><th>Closed</th><th>Open</th><th>Total</th></tr></thead>
-      <tbody>${attributionRows || '<tr><td colspan="4" class="text-sm text-gray-500">Nothing to attribute yet.</td></tr>'}</tbody></table></div>
+        <p class="agentic-panel-copy">Profit and loss split back to the analyst behind each position, in proportion to its share.</p></div>
+        ${analysts.length ? `<div class="fund-row-side"><div class="fund-num fund-strong">${_fundPnl(attributionTotal)}</div><div>${allOpen ? 'in all, still open' : 'in all'}</div></div>` : ''}</div>
+      <div class="fund-list">${attributionRows || '<p class="fund-empty">Nothing to attribute yet.</p>'}</div>
     </section>
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Trades and their reasons</h4>
         <p class="agentic-panel-copy">A note may only state numbers from its evidence; one that adds anything else is replaced by the plain fact sheet.</p></div></div>
-      <div class="agentic-activity-list">${tradeItems || '<p class="text-sm text-gray-500">No trades yet.</p>'}</div>
+      <div class="fund-list">${tradeItems || '<p class="fund-empty">No trades yet.</p>'}</div>
     </section>
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Shadow analysts</h4>
         <p class="agentic-panel-copy">New models record their predictions and are graded before they may trade.</p></div></div>
-      ${shadowItems ? `<ul class="text-sm" style="margin:0 0 0 18px;display:grid;gap:6px">${shadowItems}</ul>` : '<p class="text-sm text-gray-500">No shadow analysts yet.</p>'}
+      <div class="fund-list">${shadowItems || '<p class="fund-empty">No shadow analysts yet.</p>'}</div>
     </section>
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Passed on this cycle</h4>
         <p class="agentic-panel-copy">Signals the orchestrator did not trade, and why.</p></div></div>
-      ${passedItems ? `<ul class="text-sm" style="margin:0 0 0 18px;display:grid;gap:6px">${passedItems}</ul>` : '<p class="text-sm text-gray-500">Nothing passed on this cycle.</p>'}
-      <p class="text-xs" style="color:var(--text-dim);margin-top:12px">Limits: ${Math.round((limits.position || 0) * 100)}% of the fund per position, ${Math.round((limits.asset_class || 0) * 100)}% per asset class, ${Math.round((limits.underlying || 0) * 100)}% net per underlying, ${Math.round((limits.cash_floor || 0) * 100)}% kept in cash.${d.options ? ` Options: at most ${Math.round((d.options.risk_per_structure || 0) * 1000) / 10}% of the fund at risk per structure and ${Math.round((d.options.class_cap || 0) * 100)}% in all, priced from the ${escHtml(d.options.prices || '')}.` : ''} Universe (${escHtml(universe.as_of || '')}): ${escHtml((universe.indices || []).join(', '))}; pairs: ${escHtml((universe.pairs || []).join(', '))}. Paper trading only.</p>
+      <div class="fund-list">${passedItems || '<p class="fund-empty">Nothing passed on this cycle.</p>'}</div>
+      <div class="fund-foot">
+        <div class="fund-chips">${limitChips}</div>
+        ${indices.length || pairs.length ? `<details class="fund-details"><summary>Universe: ${indices.length} indices and ${pairs.length} pairs (as of ${escHtml(universe.as_of || '')})</summary>
+          <p class="fund-note"><b>Indices:</b> ${escHtml(indices.join(', '))}</p><p class="fund-note"><b>Pairs:</b> ${escHtml(pairs.join(', '))}</p></details>` : ''}
+        <p class="fund-note">${d.options ? `Options are priced from the ${escHtml(d.options.prices || '')}. ` : ''}Paper trading only.</p>
+      </div>
     </section>`;
   const chartEl = document.getElementById('fundChart');
   if (chartEl) _attachEquityHover(chartEl);
