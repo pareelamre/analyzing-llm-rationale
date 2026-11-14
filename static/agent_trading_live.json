@@ -13,7 +13,7 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.172,
+      "return_pct": 0.08,
       "settled_count": 0,
       "sharpe": 0.3333
     }
@@ -71,9 +71,9 @@
           "ts": "2026-11-08T12:34:07.374527+00:00"
         },
         {
-          "account_value": 10017.198631,
+          "account_value": 10007.998631,
           "event_type": "mark_to_market",
-          "ts": "2026-11-14T04:01:21.473984+00:00"
+          "ts": "2026-11-14T06:01:13.494680+00:00"
         }
       ]
     }
@@ -91,7 +91,7 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-11-14T04:01:21.475656+00:00",
+  "generated_at": "2026-11-14T06:01:13.496427+00:00",
   "latest_theses": {
     "qwen3.5-9b-selfhosted": {
       "agent_id": "qwen3.5-9b-selfhosted",
@@ -103,17 +103,25 @@
   },
   "leaderboard": [
     {
-      "account_value": 10017.198631,
+      "account_value": 10007.998631,
       "agent_id": "qwen3.5-9b-selfhosted",
       "cash": 6774.0569,
       "fees_paid": 0.0,
-      "illiquid_positions": [],
+      "illiquid_positions": [
+        {
+          "ident": "KXTHC3MG-FED-26NOV13",
+          "platform": "kalshi",
+          "quantity": 10.0,
+          "reason": "zero_or_missing_bid",
+          "side": "YES"
+        }
+      ],
       "mark_coverage": {
         "open_positions": 8,
-        "priced_cost_basis": 3225.9431,
-        "priced_positions": 8,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
+        "priced_cost_basis": 3216.7431,
+        "priced_positions": 7,
+        "unpriced_cost_basis": 9.2,
+        "unpriced_positions": 1
       },
       "open_positions": [
         {
@@ -155,14 +163,14 @@
         {
           "avg_entry_price": 0.92,
           "cost_basis": 9.2,
-          "current_price": 0.92,
+          "current_price": null,
           "ident": "KXTHC3MG-FED-26NOV13",
           "indicative_price": null,
           "platform": "kalshi",
           "quantity": 10.0,
           "side": "YES",
-          "unrealized_pnl": 0.0,
-          "valuation_status": "bid_liquidation"
+          "unrealized_pnl": null,
+          "valuation_status": "unpriced_no_executable_bid"
         },
         {
           "avg_entry_price": 0.92,
@@ -215,13 +223,13 @@
       ],
       "realized_count": 0,
       "realized_pnl": 0.0,
-      "return_pct": 0.172,
+      "return_pct": 0.08,
       "rule_exit_count": 0,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "total_pnl": 17.198631,
+      "total_pnl": 7.998631,
       "trade_count": 8,
-      "unrealized_pnl": 17.198631,
+      "unrealized_pnl": 7.998631,
       "updated_at": "2026-11-08T12:34:07.373918+00:00",
       "win_rate": null,
       "won_count": 0
@@ -230,7 +238,7 @@
   "mode": "shadow",
   "model_health": {
     "qwen3.5-9b-selfhosted": {
-      "cycle_age_seconds": 460481,
+      "cycle_age_seconds": 467673,
       "delayed_after_seconds": 50400,
       "detail": "The most recent confirmed cycle is beyond the stale window.",
       "expected_cycle_seconds": 43200,
