@@ -7,18 +7,20 @@
     "weather_model"
   ],
   "attribution": {
-    "realized": {},
+    "realized": {
+      "agent_transfer": 0.8
+    },
     "unrealized": {
-      "agent_transfer": 28.4364,
+      "agent_transfer": 33.0881,
       "event_model": 58.1483,
       "put_premium": 7.3123
     }
   },
   "by_asset_class": {
-    "event": 4056.5144,
+    "event": 4051.9661,
     "option": 207.6965
   },
-  "cash_usd": 5829.6861,
+  "cash_usd": 5839.6861,
   "curve": [
     {
       "nav_usd": 10106.6444,
@@ -379,6 +381,10 @@
     {
       "nav_usd": 10093.8969,
       "ts": "2026-11-14T14:01:20.215968+00:00"
+    },
+    {
+      "nav_usd": 10099.3486,
+      "ts": "2026-11-14T16:01:14.886911+00:00"
     }
   ],
   "cycle": {
@@ -399,10 +405,10 @@
       }
     ],
     "traded": false,
-    "window": "19:31 IST is outside the trading hours"
+    "window": "21:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-14T14:01:20.215968+00:00",
+  "generated_at": "2026-11-14T16:01:14.886911+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -410,13 +416,12 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10093.8969,
+  "nav_usd": 10099.3486,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
     "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 354.33,
     "kalshi:KXTHC3MG-FED-26DEC10": 356.4,
-    "kalshi:KXTHC3MG-FED-26NOV13": 9.2,
     "kalshi:KXUKCHAGOS-28JAN01-26DEC01": 18.4,
     "kalshi:KXUSAEXPANDTERRITORY-29JAN21": 380.331,
     "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31": 261.5735,
@@ -498,36 +503,15 @@
       "instrument_id": "kalshi:KXTHC3MG-FED-26DEC10",
       "kind": "binary",
       "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-      "mark": 0.93,
+      "mark": 0.94,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 20.25,
+      "pnl_usd": 24.3,
       "quantity": 405.0,
       "side": "YES",
       "underlying": "kalshi:KXTHC3MG-FED-26DEC10",
-      "value_usd": 376.65,
-      "venue": "kalshi"
-    },
-    {
-      "asset_class": "event",
-      "attribution": {
-        "agent_transfer": 1.0
-      },
-      "collateral_usd": 9.2,
-      "entry_price": 0.9199999999999999,
-      "instrument_id": "kalshi:KXTHC3MG-FED-26NOV13",
-      "kind": "binary",
-      "label": "Will 3 mg THC beverages qualify as hemp under federal law on Nov 13, 2026?",
-      "mark": 0.0,
-      "marked": true,
-      "opened_at": "2026-11-08T23:10:50.271479+00:00",
-      "pair_key": null,
-      "pnl_usd": -9.2,
-      "quantity": 10.0,
-      "side": "YES",
-      "underlying": "kalshi:KXTHC3MG-FED-26NOV13",
-      "value_usd": 0.0,
+      "value_usd": 380.7,
       "venue": "kalshi"
     },
     {
@@ -645,15 +629,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.062000000000000055,
+      "mark": 0.061000000000000054,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 34.3933,
+      "pnl_usd": 25.795,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 533.0953,
+      "value_usd": 524.497,
       "venue": "polymarket"
     },
     {
@@ -678,9 +662,17 @@
       "venue": "nse_fo"
     }
   ],
-  "realized_pnl_usd": 0.0,
-  "return_pct": 0.939,
-  "settled": [],
+  "realized_pnl_usd": 0.8,
+  "return_pct": 0.993,
+  "settled": [
+    {
+      "instrument": "kalshi:KXTHC3MG-FED-26NOV13",
+      "label": "Will 3 mg THC beverages qualify as hemp under federal law on Nov 13, 2026?",
+      "result": "yes",
+      "side": "YES",
+      "value": 1.0
+    }
+  ],
   "shadow": {
     "blend_model": {
       "days_recorded": 6,
@@ -718,16 +710,16 @@
           "model": 0.02
         },
         {
+          "blend": 0.9578,
+          "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
+          "market": 0.936,
+          "model": 0.94
+        },
+        {
           "blend": 0.0326,
           "label": "Will Hamas agree to disarm by December 31?",
           "market": 0.037,
           "model": 0.04
-        },
-        {
-          "blend": 0.9592,
-          "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-          "market": 0.938,
-          "model": 0.94
         }
       ],
       "predictions_recorded": 61,
@@ -757,12 +749,12 @@
       "would_trade": []
     },
     "decided_ranges": {
-      "decided_seen": 931,
+      "decided_seen": 938,
       "dollars_filled": 0,
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 0,
+        "decided_new": 7,
         "events": 96,
         "filled_now": 0,
         "graded": 0
@@ -851,6 +843,31 @@
   },
   "starting_value": 10000.0,
   "trades": [
+    {
+      "action": "settle",
+      "attribution": {
+        "agent_transfer": 1.0
+      },
+      "cycle_id": "settle-20261114",
+      "evidence": [
+        {
+          "figure": "result: yes",
+          "source": "Kalshi"
+        }
+      ],
+      "instrument_id": "kalshi:KXTHC3MG-FED-26NOV13",
+      "label": "Will 3 mg THC beverages qualify as hemp under federal law on Nov 13, 2026?",
+      "note": "Settled: Will 3 mg THC beverages qualify as hemp under federal law on Nov 13, 2026? resolved Yes, so YES paid $1.00 a contract.",
+      "note_source": "facts",
+      "notional_usd": 10.0,
+      "pair_key": null,
+      "price": 1.0,
+      "purpose": "settlement",
+      "quantity": 10.0,
+      "realized_pnl_usd": 0.8000000000000007,
+      "side": "YES",
+      "ts": "2026-11-14T16:01:14.886911+00:00"
+    },
     {
       "action": "open",
       "attribution": {
