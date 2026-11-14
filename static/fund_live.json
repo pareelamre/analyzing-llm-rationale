@@ -385,6 +385,10 @@
     {
       "nav_usd": 10099.3486,
       "ts": "2026-11-14T16:01:14.886911+00:00"
+    },
+    {
+      "nav_usd": 10099.3486,
+      "ts": "2026-11-14T18:01:14.305577+00:00"
     }
   ],
   "cycle": {
@@ -399,16 +403,21 @@
         "reason": "forecast 15.0% is 53 points from the market; treated as a likely model error until the model has a record"
       },
       {
+        "instrument": "polymarket:will-bitcoin-dip-to-64k-november-9-15-2026",
+        "label": "Will Bitcoin dip to $64,000 November 9-15?",
+        "reason": "forecast 15.0% is 43 points from the market; treated as a likely model error until the model has a record"
+      },
+      {
         "pair": "copper-gold",
         "reason": "stretched at z=-2.75 but its backtest averaged -0.6% per signal",
         "z": -2.752
       }
     ],
     "traded": false,
-    "window": "21:31 IST is outside the trading hours"
+    "window": "23:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-14T16:01:14.886911+00:00",
+  "generated_at": "2026-11-14T18:01:14.305577+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -664,19 +673,11 @@
   ],
   "realized_pnl_usd": 0.8,
   "return_pct": 0.993,
-  "settled": [
-    {
-      "instrument": "kalshi:KXTHC3MG-FED-26NOV13",
-      "label": "Will 3 mg THC beverages qualify as hemp under federal law on Nov 13, 2026?",
-      "result": "yes",
-      "side": "YES",
-      "value": 1.0
-    }
-  ],
+  "settled": [],
   "shadow": {
     "blend_model": {
       "days_recorded": 6,
-      "markets": 7,
+      "markets": 8,
       "mode": "shadow",
       "predictions": [
         {
@@ -684,6 +685,18 @@
           "label": "Will A New Season of Prison Break be released Worldwide before Jan 1, 2028?",
           "market": 0.68,
           "model": 0.15
+        },
+        {
+          "blend": 0.4388,
+          "label": "Will Bitcoin dip to $64,000 November 9-15?",
+          "market": 0.443,
+          "model": 0.15
+        },
+        {
+          "blend": 0.0656,
+          "label": "Will the U.S. invade Iran before 2027?",
+          "market": 0.075,
+          "model": 0.04
         },
         {
           "blend": 0.0569,
@@ -698,31 +711,25 @@
           "model": 0.08
         },
         {
-          "blend": 0.0802,
-          "label": "Will the U.S. invade Iran before 2027?",
-          "market": 0.085,
-          "model": 0.08
-        },
-        {
           "blend": 0.0204,
           "label": "Will the Iranian regime fall before 2027?",
           "market": 0.025,
           "model": 0.02
         },
         {
-          "blend": 0.9578,
-          "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-          "market": 0.936,
-          "model": 0.94
-        },
-        {
           "blend": 0.0326,
           "label": "Will Hamas agree to disarm by December 31?",
           "market": 0.037,
           "model": 0.04
+        },
+        {
+          "blend": 0.9598,
+          "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
+          "market": 0.939,
+          "model": 0.94
         }
       ],
-      "predictions_recorded": 61,
+      "predictions_recorded": 62,
       "test": {
         "blend_brier": 0.1179,
         "blend_minus_market": -0.0011,
@@ -746,15 +753,22 @@
         "resolved_through": "2026-11-07",
         "snapshots": 80988
       },
-      "would_trade": []
+      "would_trade": [
+        {
+          "edge": 0.3036,
+          "label": "Will Bitcoin dip to $64,000 November 9-15?",
+          "price": 0.42400000000000004,
+          "side": "NO"
+        }
+      ]
     },
     "decided_ranges": {
-      "decided_seen": 938,
+      "decided_seen": 957,
       "dollars_filled": 0,
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 7,
+        "decided_new": 19,
         "events": 96,
         "filled_now": 0,
         "graded": 0
@@ -793,7 +807,7 @@
       "days_recorded": 6,
       "flags": [],
       "kind": "checker",
-      "markets": 14,
+      "markets": 15,
       "mode": "shadow"
     },
     "vix_fade": {
