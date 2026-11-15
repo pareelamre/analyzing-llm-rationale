@@ -545,6 +545,29 @@ share of the fund's decisions, only from that record.
   number pointing the other way is flagged. It is a guard against the
   2026-11-08 inversions, not a forecaster, and it blocks nothing in shadow.
 
+### Shadow cleanup (owner, 2026-11-15)
+
+The owner approved trading only on what has earned it. From 2026-11-15:
+
+- **Prediction markets trade on the blend, not the raw model.** The raw
+  on-device model trails the market (+0.0076 Brier, 95% CI excludes 0); the
+  blend ties it. So `blend_model` is now the prediction-market analyst, and its
+  odds also decide exits (`fund_cycle.prediction_market_signals`). Because the
+  blend leans hard on the market, it rarely finds an edge, which means new
+  prediction-market risk mostly pauses until the model earns a record. Held
+  positions keep their original attribution and settle as before.
+- **Retired** (`fund_cycle.RETIRED`, listed on the board with the reasons):
+  - `weather_model`: lost money in every weather test.
+  - `decided_ranges`: 0 of 1,141 decided ranges could be bought, so its
+    100-fill verdict could never come.
+  - `options_model`: straddles and condors failed their backtest (the put side
+    trades as `put_premium`).
+  - `vix_fade`: about 12 signals a year put its 50-trade verdict years away,
+    and no same-night VIX price exists to trade it.
+  - `event_model`: replaced by the blend, as above.
+- **Kept:** `rationale_check`, the one remaining shadow analyst. It is a guard,
+  not a trader.
+
 ## Live Polymarket decided-ranges test (pre-registered 2026-11-10, before any live record)
 
 **Why.** Price history could not show whether a range the airport readings had

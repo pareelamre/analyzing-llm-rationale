@@ -14,9 +14,9 @@ Inputs: the Edge board (static/mark_to_market_live.json), the pairs tracker
 options analyst), the fund universe (static/fund_universe.json, rebuilt when older than
 FUND_UNIVERSE_MAX_AGE_DAYS), live quotes, and USD/INR. Option prices come from the live order
 book when UPSTOX_ANALYTICS_TOKEN is set and from Upstox's open last trades otherwise
-(fund_options). The weather analyst (fund_weather) prices Kalshi's daily high-temperature
-markets; it trades only if its pre-registered test (reports/fund_weather_eval.json) said GO,
-and otherwise records its predictions in shadow mode. Option structures past expiry are settled
+(fund_options). Prediction markets trade on the blend analyst's odds (market and model,
+configs/fund_blend.json), not the raw model; the weather, decided-ranges, options and VIX fade
+analysts are retired (RETIRED, docs/fund.md). Option structures past expiry are settled
 at the index's close, and Kalshi positions at their market's result, every run. Kalshi buys pay
 Kalshi's taker fee. Trade
 notes are worded by the on-device model (FUND_LLM_URL + SELF_HOSTED_LLM_API_KEY) when it is
@@ -42,9 +42,7 @@ from analyzing_llm_rationale import fund_ledger as ledger  # noqa: E402
 from analyzing_llm_rationale import fund_notes, market_data  # noqa: E402
 from analyzing_llm_rationale import fund_options as fo  # noqa: E402
 from analyzing_llm_rationale import fund_orchestrator as orch  # noqa: E402
-from analyzing_llm_rationale import fund_pm_live as fpl  # noqa: E402
 from analyzing_llm_rationale import fund_universe as fu  # noqa: E402
-from analyzing_llm_rationale import fund_vix_fade as fvf  # noqa: E402
 from analyzing_llm_rationale import fund_weather as fw  # noqa: E402
 
 FUND_ID = "foresea-fund"
@@ -55,8 +53,6 @@ UNIVERSE_PATH = ROOT / "static" / "fund_universe.json"
 BOARD_PATH = ROOT / "static" / "mark_to_market_live.json"
 PAIRS_PATH = ROOT / "static" / "commodity_pairs_live.json"
 INDEX_FORECAST_PATH = ROOT / "static" / "index_forecast_live.json"
-WEATHER_REPORT_PATH = ROOT / "reports" / "fund_weather_eval.json"
-OPTIONS_REPORT_PATH = ROOT / "reports" / "fund_nifty_premium_eval.json"
 PUT_SLEEVE_REPORT_PATH = ROOT / "reports" / "fund_ndx_put_eval.json"
 #: The put premium sleeve's analyst (docs/fund.md, "Put premium sleeve").
 PUT_SLEEVE = "put_premium"
@@ -64,6 +60,20 @@ BLEND_PATH = ROOT / "configs" / "fund_blend.json"
 CHECKS_PATH = ROOT / "static" / "fund_rationale_checks.json"
 #: Rationale checks older than this no longer describe a live forecast.
 CHECKS_MAX_AGE_H = 48
+#: Retired by the owner on 2026-11-15 (docs/fund.md, "Shadow cleanup"): each failed its
+#: pre-registered test or could never reach a verdict. They no longer run, record or trade.
+RETIRED = (
+    {"analyst": "event_model", "reason": "the on-device model's raw odds trail the market on Foresea's record; "
+                                         "prediction markets now trade on the blend of market and model"},
+    {"analyst": "weather_model", "reason": "lost money in every weather test: Kalshi and Polymarket daily highs, "
+                                           "and Kalshi's hourly markets"},
+    {"analyst": "decided_ranges", "reason": "none of 1,141 already-decided ranges could be bought, so its "
+                                            "100-fill verdict could never come"},
+    {"analyst": "options_model", "reason": "index straddles and condors failed their backtest; the put side "
+                                           "trades as the put premium sleeve"},
+    {"analyst": "vix_fade", "reason": "about 12 signals a year put its 50-trade verdict years away, and no "
+                                      "same-night VIX price exists to trade it"},
+)
 FX_URLS = (
     "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
     "https://latest.currency-api.pages.dev/v1/currencies/usd.json",
@@ -250,17 +260,18 @@ def settle_events(conn: sqlite3.Connection, now: datetime, stamp: str) -> list[d
     return settled
 
 
-def weather_mode() -> tuple[str, dict]:
-    """GO only when the pre-registered test said so; SHADOW otherwise (docs/fund.md)."""
-    report = _load_json(WEATHER_REPORT_PATH)
-    return ("GO" if report.get("verdict") == "GO" else "SHADOW"), report
+def prediction_market_signals(board: list, now: datetime) -> tuple[list, list, dict]:
+    """Signals, skips and exit forecasts for prediction markets, all from the blend analyst's odds.
 
-
-def options_mode() -> tuple[str, dict]:
-    """The options analyst trades only while its backtest's live-rule test says GO (docs/fund.md)."""
-    report = _load_json(OPTIONS_REPORT_PATH)
-    test = report.get("test_a_live_rule") or {}
-    return ("GO" if test.get("verdict") == "GO" else "SHADOW"), test
+    The raw on-device model trails the market on Foresea's record, so it no longer trades
+    (owner, 2026-11-15); with no blend parameters, nothing trades in prediction markets.
+    """
+    params = _load_json(BLEND_PATH)
+    if not params.get("coef"):
+        return [], [{"instrument": "event", "label": "Prediction markets", "reason": "no blend parameters"}], {}
+    priced = orch.blend_board(board, params)
+    signals, skipped = orch.event_signals(priced, now, analyst="blend_model", model_label="the blend analyst")
+    return signals, skipped, {orch.event_instrument(r)["id"]: r for r in priced}
 
 
 def put_sleeve_mode() -> str:
@@ -316,10 +327,9 @@ def run(now: Optional[datetime] = None) -> dict:
     universe = load_universe(today, fx)
     board = (_load_json(BOARD_PATH).get("edge_board") or [])
     tracker = _load_json(PAIRS_PATH)
-    signals, skipped_events = orch.event_signals(board, now)
+    signals, skipped_events, forecasts = prediction_market_signals(board, now)
     pair_signals, skipped_pairs = orch.pair_signals(tracker, universe.get("pairs", []))
     signals += pair_signals
-    forecasts = {orch.event_instrument(r)["id"]: r for r in board}
 
     held_ids = {p["instrument_id"] for p in ledger.positions(conn, FUND_ID)}
     hedges = {p["b"]["underlying"]: p["b"] for p in universe.get("pairs", []) if p["b"]["venue"] == "kalshi_perp"}
@@ -331,9 +341,7 @@ def run(now: Optional[datetime] = None) -> dict:
     can_trade, why = trading_window(conn, now)
     executed, passed = [], []
     options = {"signals": [], "skipped": [], "values": {}, "quotes": {}, "sleeve": None}
-    weather = {"signals": [], "priced": [], "skipped": []}
-    mode, weather_report = weather_mode()
-    option_mode, option_test = options_mode()
+    option_skips: list = []
     sleeve_mode = put_sleeve_mode()
     # The sleeve holds one spread at a time, to expiry: its spreads never take the options
     # analyst's early exits, which the tested rule did not have.
@@ -341,18 +349,15 @@ def run(now: Optional[datetime] = None) -> dict:
     if can_trade:
         options = options_cycle(_load_json(INDEX_FORECAST_PATH), now, quote_fn, price_source, option_specs,
                                 sleeve=sleeve_mode == "GO" and not sleeve_ids)
-        if option_mode == "GO":
-            signals += options["signals"]
         quotes.update(options["quotes"])
+        # The options analyst is retired: only a failed option list and the sleeve's own skips are reported.
+        option_skips = [s for s in options["skipped"] if s.get("instrument") == "nse_fo"]
         if options.get("sleeve"):
             if options["sleeve"]["signal"]:
                 signals.append(options["sleeve"]["signal"])
                 quotes.update(options["sleeve"]["quotes"])
             else:
-                options["skipped"].append(options["sleeve"]["skipped"])
-        weather = fw.weather_signals(now)
-        if mode == "GO":
-            signals += weather["signals"]
+                option_skips.append(options["sleeve"]["skipped"])
         held_pairs = {}
         for pos in snapshot["positions"]:
             if pos.get("pair_key"):
@@ -386,51 +391,19 @@ def run(now: Optional[datetime] = None) -> dict:
         conn.commit()
         snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
-    shadow = record_shadow(conn, board, now, stamp)
-    if option_mode != "GO":
-        shadow["options_model"] = {
-            "mode": "shadow", "kind": "options", "checked": can_trade,
-            "test": {k: option_test.get(k) for k in ("verdict", "trades", "first", "last", "mean_return",
-                                                     "mean_return_ci", "win_share")},
-            "would_trade": [{"label": s.instrument.get("label"), "side": s.side, "price": round(s.price, 2),
-                             "edge": round(s.edge, 4)} for s in options["signals"]],
-        }
-    # The live Polymarket decided-ranges test records what the order book offered at every run
-    # (docs/fund.md); it never trades, and a failed pass leaves the rest of the cycle alone.
-    try:
-        shadow[fpl.ANALYST] = fpl.run(conn, FUND_ID, now)
-    except (requests.RequestException, ValueError, KeyError) as exc:
-        print(f"  live decided-ranges pass failed: {exc}", file=sys.stderr)
-    # The US VIX fade is graded forward on finished sessions once FRED posts the VIX close (docs/fund.md).
-    try:
-        shadow[fvf.ANALYST] = fvf.run(conn, FUND_ID, now)
-    except (requests.RequestException, ValueError, KeyError) as exc:
-        print(f"  VIX fade pass failed: {exc}", file=sys.stderr)
-    if mode != "GO" and weather["priced"]:
-        ledger.record_predictions(conn, FUND_ID, "weather_model", "shadow", weather["priced"], weather["signals"],
-                                  now=stamp)
-    days = conn.execute("SELECT COUNT(DISTINCT day), COUNT(*) FROM analyst_predictions WHERE fund_id = ?"
-                        " AND analyst = 'weather_model'", (FUND_ID,)).fetchone()
-    if mode != "GO":
-        pooled = weather_report.get("pooled") or {}
-        shadow["weather_model"] = {
-            "mode": "shadow", "kind": "weather", "markets": len(weather["priced"]), "days_recorded": days[0],
-            "predictions_recorded": days[1],
-            "test": {"verdict": weather_report.get("verdict"), "trades": pooled.get("trades"),
-                     "mean_return": pooled.get("mean_return"), "mean_return_ci": pooled.get("mean_return_ci"),
-                     "brier_skill": pooled.get("brier_skill"), "window": weather_report.get("window")},
-            "would_trade": [{"label": s.instrument.get("label"), "side": s.side, "price": s.price,
-                             "edge": round(s.edge, 4)} for s in weather["signals"]],
-        }
+    shadow = record_shadow(conn, now, stamp)
     ledger.record_nav(conn, snapshot, now=stamp)
     conn.commit()
     payload = build_payload(conn, snapshot, universe, now=now, window=why, traded=can_trade, executed=executed,
-                            passed=passed, skipped=skipped_events + skipped_pairs + options["skipped"] + weather["skipped"],
+                            passed=passed, skipped=skipped_events + skipped_pairs + option_skips,
                             signals=signals, seeded=seeded)
     payload["shadow"] = shadow
+    payload["retired"] = [{**r, "since": "2026-11-15"} for r in RETIRED]
+    blend = _load_json(BLEND_PATH)
+    payload["prediction_markets"] = {"analyst": "blend_model", "test": blend.get("time_split_test"),
+                                     "trained_on": blend.get("trained_on")}
     payload["settled"] = settled_events
-    payload["weather"] = {"mode": mode, "cities": len(fw.CITIES), "verdict_window": weather_report.get("window")}
-    payload["options"] = {"mode": option_mode, "put_sleeve": {"mode": sleeve_mode, "holding": sorted(sleeve_ids)},
+    payload["options"] = {"mode": "OFF", "put_sleeve": {"mode": sleeve_mode, "holding": sorted(sleeve_ids)},
                           "prices": price_source, "settled": settled,
                           "indices": [name for name, _key in fo.INDEX_OPTIONS.values()],
                           "risk_per_structure": orch.OPTION_RISK, "class_cap": orch.OPTION_CLASS_CAP}
@@ -439,8 +412,9 @@ def run(now: Optional[datetime] = None) -> dict:
     return payload
 
 
-def record_shadow(conn: sqlite3.Connection, board: list, now: datetime, stamp: str) -> dict:
-    """Shadow analysts: record what each would predict and trade, without trading it."""
+def record_shadow(conn: sqlite3.Connection, now: datetime, stamp: str) -> dict:
+    """Shadow analysts: record what each would predict, without trading it. Only the rationale
+    checker remains (the blend trades since 2026-11-15; the rest are in RETIRED)."""
     shadow: dict = {}
     checks = [c for c in (_load_json(CHECKS_PATH).get("checks") or [])
               if (orch._age_hours(c.get("forecasted_at"), now) or 1e9) <= CHECKS_MAX_AGE_H]
@@ -456,23 +430,7 @@ def record_shadow(conn: sqlite3.Connection, board: list, now: datetime, stamp: s
             "flags": [{"label": c.get("question"), "forecast": c["forecast"], "rationale_yes": c["rationale_yes"],
                        "forecasted_at": c.get("forecasted_at")} for c in checks if c.get("verdict") == "contradicts"],
         }
-    params = _load_json(BLEND_PATH)
-    if not params.get("coef"):
-        return shadow
-    rows = orch.blend_board(board, params)
-    would, _ = orch.event_signals(rows, now, analyst="blend_model", model_label="the blend analyst")
-    ledger.record_predictions(conn, FUND_ID, "blend_model", "shadow", rows, would, now=stamp)
-    days = conn.execute("SELECT COUNT(DISTINCT day), COUNT(*) FROM analyst_predictions WHERE fund_id = ?"
-                        " AND analyst = 'blend_model'", (FUND_ID,)).fetchone()
-    return {**shadow, "blend_model": {
-        "mode": "shadow", "markets": len(rows), "days_recorded": days[0], "predictions_recorded": days[1],
-        "test": params.get("time_split_test"), "trained_on": params.get("trained_on"),
-        "would_trade": [{"label": s.instrument.get("label"), "side": s.side, "price": s.price,
-                         "edge": round(s.edge, 4)} for s in would],
-        "predictions": [{"label": r.get("question"), "blend": r["model_probability"],
-                         "model": r.get("raw_model_probability"), "market": r.get("market_probability")}
-                        for r in rows],
-    }}
+    return shadow
 
 
 def build_payload(conn: sqlite3.Connection, snapshot: dict, universe: dict, *, now: datetime, window: str,
@@ -487,7 +445,7 @@ def build_payload(conn: sqlite3.Connection, snapshot: dict, universe: dict, *, n
         t["evidence"] = json.loads(t.pop("evidence_json") or "[]")
     curve = [{"ts": r[0], "nav_usd": r[1]} for r in conn.execute(
         "SELECT ts, nav_usd FROM fund_nav WHERE fund_id = ? ORDER BY ts", (FUND_ID,))]
-    analysts = sorted({s.analyst for s in signals} | {"event_model", "pairs_model", "options_model", "weather_model", PUT_SLEEVE})
+    analysts = sorted({s.analyst for s in signals} | {"blend_model", "pairs_model", PUT_SLEEVE})
     return {
         "generated_at": now.isoformat(), "fund_id": FUND_ID, "paper": True,
         "nav_usd": snapshot["nav_usd"], "cash_usd": snapshot["cash_usd"], "starting_value": snapshot["starting_value"],

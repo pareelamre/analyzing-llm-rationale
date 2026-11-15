@@ -66,10 +66,10 @@ class FundCycleTests(unittest.TestCase):
             ]}))
             fund = sqlite3.connect(":memory:")
             fund_ledger.ensure_schema(fund)
-            with mock.patch.object(cycle, "CHECKS_PATH", checks), \
-                    mock.patch.object(cycle, "BLEND_PATH", Path(tmp) / "absent.json"):
-                shadow = cycle.record_shadow(fund, [], datetime(2026, 11, 10, 0, 0, tzinfo=timezone.utc),
+            with mock.patch.object(cycle, "CHECKS_PATH", checks):
+                shadow = cycle.record_shadow(fund, datetime(2026, 11, 10, 0, 0, tzinfo=timezone.utc),
                                              "2026-11-10T00:00:00+00:00")
+        self.assertEqual(set(shadow), {"rationale_check"})  # the only shadow analyst left (2026-11-15)
         checker = shadow["rationale_check"]
         self.assertEqual(checker["markets"], 2)
         self.assertEqual([f["label"] for f in checker["flags"]], ["Iran?"])
@@ -143,26 +143,32 @@ class FundCycleTests(unittest.TestCase):
         self.assertAlmostEqual(realized, 100 * (1 - 0.40) - 100 * 0.40)
         self.assertIsNone(cycle._last_cycle(fund))  # settling is not a trading cycle
 
-    def test_the_weather_analyst_trades_only_on_a_go_verdict(self):
+    def test_prediction_markets_trade_on_the_blend_not_the_raw_model(self):
+        # Owner, 2026-11-15: the raw on-device model trails the market, so its odds no longer trade.
+        params = {"intercept": 0.173417, "coef": [0.693864, 0.402811, -0.291052]}
+        row = {"platform": "Polymarket", "ident": "x", "question": "Will x?", "model_probability": 0.9,
+               "market_bid": 0.49, "market_ask": 0.51, "forecasted_at": "2026-11-09T17:25:00+00:00"}
+        now = datetime(2026, 11, 9, 20, 0, tzinfo=timezone.utc)
+        raw, raw_skipped = cycle.orch.event_signals([row], now)
+        self.assertEqual(raw, [])  # 40 points from the market: the raw model would be skipped
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "report.json"
-            with mock.patch.object(cycle, "WEATHER_REPORT_PATH", path):
-                self.assertEqual(cycle.weather_mode()[0], "SHADOW")  # no report yet
-                path.write_text(json.dumps({"verdict": "SHADOW"}))
-                self.assertEqual(cycle.weather_mode()[0], "SHADOW")
-                path.write_text(json.dumps({"verdict": "GO"}))
-                self.assertEqual(cycle.weather_mode()[0], "GO")
+            path = Path(tmp) / "blend.json"
+            path.write_text(json.dumps(params))
+            with mock.patch.object(cycle, "BLEND_PATH", path):
+                signals, skipped, forecasts = cycle.prediction_market_signals([row], now)
+            with mock.patch.object(cycle, "BLEND_PATH", Path(tmp) / "absent.json"):
+                none, why, no_forecasts = cycle.prediction_market_signals([row], now)
+        self.assertEqual([(s.analyst, s.side) for s in signals], [("blend_model", "YES")])
+        [forecast] = forecasts.values()
+        self.assertAlmostEqual(forecast["model_probability"], 0.603, places=2)
+        self.assertEqual(forecast["raw_model_probability"], 0.9)
+        self.assertEqual((none, no_forecasts, why[0]["reason"]), ([], {}, "no blend parameters"))
 
-    def test_the_options_analyst_trades_only_while_its_backtest_says_go(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "report.json"
-            with mock.patch.object(cycle, "OPTIONS_REPORT_PATH", path):
-                self.assertEqual(cycle.options_mode()[0], "SHADOW")
-                path.write_text(json.dumps({"test_a_live_rule": {"verdict": "NO-GO", "trades": 145}}))
-                mode, test = cycle.options_mode()
-                self.assertEqual((mode, test["trades"]), ("SHADOW", 145))
-                path.write_text(json.dumps({"test_a_live_rule": {"verdict": "GO"}}))
-                self.assertEqual(cycle.options_mode()[0], "GO")
+    def test_the_retired_analysts_no_longer_run(self):
+        self.assertEqual([r["analyst"] for r in cycle.RETIRED],
+                         ["event_model", "weather_model", "decided_ranges", "options_model", "vix_fade"])
+        for gone in ("fpl", "fvf", "weather_mode", "options_mode"):
+            self.assertFalse(hasattr(cycle, gone))
 
     def test_the_put_sleeve_trades_only_while_its_out_of_sample_check_says_go(self):
         with tempfile.TemporaryDirectory() as tmp:
