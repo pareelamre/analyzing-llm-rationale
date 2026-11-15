@@ -863,6 +863,8 @@ function escHtml(s) {
                 self.assertIn("(timed out)", index)
                 # The holdings table keeps its columns on a phone.
                 self.assertNotIn("agentic-table fund-table", renderer)
+                # Retired analysts are listed with why (owner, 2026-11-15).
+                self.assertIn("(d.retired || []).map(r =>", renderer)
 
     def test_track_record_is_off_the_site(self):
         # Retired 2026-11-08: the data stays at GET /track-record, the page,

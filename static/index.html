@@ -1248,6 +1248,7 @@
     .fund-foot { background: #fafafa; border-top: 1px solid var(--border); padding: 12px 18px 14px; }
     .fund-foot .fund-chips { margin-top: 0; }
     .fund-empty { color: var(--text-dim); font-size: 12px; margin: 0; padding: 14px 18px; }
+    .fund-retired { color: var(--text-dim); display: grid; font-size: 11.5px; gap: 4px; line-height: 1.5; margin: 6px 0 0 16px; padding: 0; }
     @media (max-width: 640px) { .fund-row { grid-template-columns: 1fr; } .fund-row-side { align-items: baseline; display: flex; gap: 10px; text-align: left; } .fund-row-side .fund-num { text-align: left; } }
     .agentic-positions-table code { overflow-wrap: anywhere; word-break: break-word; }
     @media (max-width: 720px) {
@@ -8258,6 +8259,10 @@ function renderFundBoard(d) {
     </div>`;
   }).join('');
 
+  // Retired analysts, with why (docs/fund.md, "Shadow cleanup").
+  const retired = (d.retired || []).map(r => `<li><b>${escHtml(_fundAnalystLabel(r.analyst))}</b>: ${escHtml(r.reason || '')}</li>`).join('');
+  const retiredOn = (d.retired || [])[0]?.since;
+
   // Passed on this cycle: identical reasons fold into one line.
   const groups = new Map();
   [...(d.cycle?.skipped || []), ...(d.cycle?.passed || [])].forEach(s => {
@@ -8324,6 +8329,7 @@ function renderFundBoard(d) {
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Shadow analysts</h4>
         <p class="agentic-panel-copy">New models record their predictions and are graded before they may trade.</p></div></div>
       <div class="fund-list">${shadowItems || '<p class="fund-empty">No shadow analysts yet.</p>'}</div>
+      ${retired ? `<div class="fund-foot"><p class="fund-note" style="margin:0"><b>Retired${retiredOn ? ` ${escHtml(_fundDay(retiredOn))}` : ''}</b>: each failed its test or could never reach a verdict.</p><ul class="fund-retired">${retired}</ul></div>` : ''}
     </section>
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Passed on this cycle</h4>
