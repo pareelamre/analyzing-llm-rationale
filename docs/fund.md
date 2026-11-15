@@ -1168,6 +1168,88 @@ The market maker's opening weakness described in the trader's account is not
 there any more. The opening-prices idea is dropped with the rest of the hourly
 markets, and no live listener will be built.
 
+## Trend-following test (pre-registered 2026-11-15, before any result)
+
+**Why.** The owner wants one system that looks across all markets for the largest
+upside. The put-spread sleeve is the fund's one proven edge. It loses money when
+the index falls hard, so a second engine that earns in falls is what would let it
+grow. Time-series momentum (trend following) has decades of published evidence
+across asset classes and tends to profit in long sell-offs. This tests it on
+markets the fund can trade.
+
+**Markets and data.** Daily closes.
+
+- **Nifty 50 and Nifty Bank:** Upstox, from 2008.
+- **Nasdaq-100:** FRED `NASDAQ100`, from 1986.
+- **WTI crude and Henry Hub natural gas futures:** EIA's daily NYMEX
+  contract-1 and contract-2 prices (`RCLC1`/`RCLC2` from 1983, `RNGC1`/`RNGC2`
+  from 1994).
+
+**Returns.**
+
+- **Indices: excess returns over cash.**
+  - Nifty: the daily price change minus 5% a year. That is a fixed estimate of
+    Indian cash rates minus dividends. FRED has no current Indian short rate.
+  - Nasdaq-100: minus the 3-month T-bill rate (`DTB3`) less 0.8% a year in
+    dividends.
+- **Futures: the return of the contract held.** The test holds contract 1 and
+  switches to contract 2 five sessions before contract 1 expires. That is the
+  usual index roll, and it steps past the April 2020 negative WTI price. Expiry
+  follows NYMEX rules, counted in sessions with an EIA price:
+  - WTI: the third session before the 25th of the month before delivery, or
+    before the last session before the 25th when the 25th is not a session.
+  - Gas: the third session before the first of the delivery month.
+
+**The rule (fixed here, not tuned on the results).**
+
+- **Signal:** the average of the signs of the past 63-, 126- and 252-session
+  excess returns. It takes -1, -1/3, +1/3 or +1.
+- **Size:** a 10% annual volatility target, from the last 60 sessions. The
+  position is the signal times 10% divided by that volatility, capped at 3x.
+- **Timing:** set after the close of each week's last session and held through
+  the next week. A position earns from the session after it is set.
+- **Costs:** per unit of position traded, 0.05% for index futures and 0.10% for
+  commodity futures. The same is charged per unit held at each monthly roll
+  (index futures roll monthly too).
+- **Portfolio:** the equal-weight average of the markets that have a position
+  that day.
+
+**Test A: a source of returns.**
+
+- Window: from the first week all five markets have a position (2009, after
+  Nifty's warm-up) to the last full week.
+- The portfolio's mean annual return after costs gets a 95% interval from 2,000
+  bootstrap draws of calendar years (seed 20261115).
+- **GO:** the interval is entirely above zero.
+
+**Test B: a hedge for the put sleeve.** It asks whether trend made money in the
+stretches when Nifty puts lost.
+
+- Cut the window into back-to-back 21-session blocks, the put sleeve's holding
+  period.
+- Take the blocks in which the Nifty 50 fell 5% or more.
+- Find the portfolio's mean return in those blocks, with a 95% interval from
+  2,000 bootstrap draws of the blocks.
+- **GO:** at least 15 such blocks, and the interval is entirely above zero.
+
+**Verdict.**
+
+- **GO:** Test A passes. Trend becomes a fund analyst under the usual limits,
+  starting at the starting trust.
+- **GO as a hedge:** Test B passes and Test A's mean is not negative. Trend then
+  trades only as the put sleeve's offset, sized against it.
+- **NO-GO:** anything else.
+
+**Reported for description only:**
+
+- each market alone;
+- the three long-history markets from 1995 (Nasdaq-100, WTI, gas);
+- Sharpe ratio, worst drawdown, and the worst and best years;
+- the same test with Nasdaq-100 falls in place of Nifty's.
+
+No setting above may change after a result is seen. A variant can only be
+tested as a dated amendment written before it is run.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
