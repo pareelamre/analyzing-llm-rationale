@@ -1,23 +1,21 @@
 {
   "analysts": [
-    "event_model",
-    "options_model",
+    "blend_model",
     "pairs_model",
-    "put_premium",
-    "weather_model"
+    "put_premium"
   ],
   "attribution": {
     "realized": {
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": -3.8704,
+      "agent_transfer": 0.1796,
       "event_model": 49.6015,
       "put_premium": 7.3258
     }
   },
   "by_asset_class": {
-    "event": 4006.4607,
+    "event": 4010.5107,
     "option": 207.7101
   },
   "cash_usd": 5839.6861,
@@ -469,30 +467,29 @@
     {
       "nav_usd": 10053.8569,
       "ts": "2026-11-15T22:01:12.819505+00:00"
+    },
+    {
+      "nav_usd": 10057.9069,
+      "ts": "2026-11-15T22:26:01.828346+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 0,
+    "signals": 2,
     "skipped": [
       {
-        "instrument": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
-        "label": "Will A New Season of Prison Break be released Worldwide before Jan 1, 2028?",
-        "reason": "forecast 15.0% is 54 points from the market; treated as a likely model error until the model has a record"
-      },
-      {
         "pair": "copper-gold",
-        "reason": "stretched at z=-2.75 but its backtest averaged -0.6% per signal",
+        "reason": "stretched at z=-2.75 but its expected return is -0.4% per signal",
         "z": -2.752
       }
     ],
     "traded": false,
-    "window": "03:31 IST is outside the trading hours"
+    "window": "03:56 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-15T22:01:12.819505+00:00",
+  "generated_at": "2026-11-15T22:26:01.828346+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -500,7 +497,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10053.8569,
+  "nav_usd": 10057.9069,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -522,7 +519,7 @@
       "Nifty Midcap Select",
       "Nifty Next 50"
     ],
-    "mode": "SHADOW",
+    "mode": "OFF",
     "prices": "last trades (Upstox open data), 2% taken off each side",
     "put_sleeve": {
       "holding": [
@@ -587,15 +584,15 @@
       "instrument_id": "kalshi:KXTHC3MG-FED-26DEC10",
       "kind": "binary",
       "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-      "mark": 0.96,
+      "mark": 0.97,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 32.4,
+      "pnl_usd": 36.45,
       "quantity": 405.0,
       "side": "YES",
       "underlying": "kalshi:KXTHC3MG-FED-26DEC10",
-      "value_usd": 388.8,
+      "value_usd": 392.85,
       "venue": "kalshi"
     },
     {
@@ -746,124 +743,63 @@
       "venue": "nse_fo"
     }
   ],
+  "prediction_markets": {
+    "analyst": "blend_model",
+    "test": {
+      "blend_brier": 0.1179,
+      "blend_minus_market": -0.0011,
+      "blend_minus_market_ci95": [
+        -0.006,
+        0.0042
+      ],
+      "cutoff": "2026-10-01",
+      "market_brier": 0.119,
+      "model_brier": 0.1266,
+      "model_minus_market": 0.0076,
+      "model_minus_market_ci95": [
+        0.0012,
+        0.0146
+      ],
+      "test_markets": 116,
+      "test_snapshots": 37285
+    },
+    "trained_on": {
+      "markets": 698,
+      "resolved_through": "2026-11-07",
+      "snapshots": 80988
+    }
+  },
   "realized_pnl_usd": 0.8,
-  "return_pct": 0.539,
+  "retired": [
+    {
+      "analyst": "event_model",
+      "reason": "the on-device model's raw odds trail the market on Foresea's record; prediction markets now trade on the blend of market and model",
+      "since": "2026-11-15"
+    },
+    {
+      "analyst": "weather_model",
+      "reason": "lost money in every weather test: Kalshi and Polymarket daily highs, and Kalshi's hourly markets",
+      "since": "2026-11-15"
+    },
+    {
+      "analyst": "decided_ranges",
+      "reason": "none of 1,141 already-decided ranges could be bought, so its 100-fill verdict could never come",
+      "since": "2026-11-15"
+    },
+    {
+      "analyst": "options_model",
+      "reason": "index straddles and condors failed their backtest; the put side trades as the put premium sleeve",
+      "since": "2026-11-15"
+    },
+    {
+      "analyst": "vix_fade",
+      "reason": "about 12 signals a year put its 50-trade verdict years away, and no same-night VIX price exists to trade it",
+      "since": "2026-11-15"
+    }
+  ],
+  "return_pct": 0.579,
   "settled": [],
   "shadow": {
-    "blend_model": {
-      "days_recorded": 7,
-      "markets": 7,
-      "mode": "shadow",
-      "predictions": [
-        {
-          "blend": 0.6681,
-          "label": "Will A New Season of Prison Break be released Worldwide before Jan 1, 2028?",
-          "market": 0.675,
-          "model": 0.15
-        },
-        {
-          "blend": 0.0569,
-          "label": "US announces end of Iranian blockade by November 30, 2026?",
-          "market": 0.065,
-          "model": 0.04
-        },
-        {
-          "blend": 0.0569,
-          "label": "Will the U.S. invade Iran before 2027?",
-          "market": 0.065,
-          "model": 0.04
-        },
-        {
-          "blend": 0.097,
-          "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
-          "market": 0.103,
-          "model": 0.08
-        },
-        {
-          "blend": 0.0301,
-          "label": "Will Hamas agree to disarm by December 31?",
-          "market": 0.037,
-          "model": 0.02
-        },
-        {
-          "blend": 0.023,
-          "label": "Will the Iranian regime fall before 2027?",
-          "market": 0.026,
-          "model": 0.04
-        },
-        {
-          "blend": 0.9598,
-          "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-          "market": 0.939,
-          "model": 0.94
-        }
-      ],
-      "predictions_recorded": 71,
-      "test": {
-        "blend_brier": 0.1179,
-        "blend_minus_market": -0.0011,
-        "blend_minus_market_ci95": [
-          -0.006,
-          0.0042
-        ],
-        "cutoff": "2026-10-01",
-        "market_brier": 0.119,
-        "model_brier": 0.1266,
-        "model_minus_market": 0.0076,
-        "model_minus_market_ci95": [
-          0.0012,
-          0.0146
-        ],
-        "test_markets": 116,
-        "test_snapshots": 37285
-      },
-      "trained_on": {
-        "markets": 698,
-        "resolved_through": "2026-11-07",
-        "snapshots": 80988
-      },
-      "would_trade": []
-    },
-    "decided_ranges": {
-      "decided_seen": 1141,
-      "dollars_filled": 0,
-      "fills": 0,
-      "kind": "live",
-      "last_pass": {
-        "decided_new": 0,
-        "events": 96,
-        "filled_now": 0,
-        "graded": 0
-      },
-      "losses": 0,
-      "mean_price": null,
-      "mean_return": null,
-      "mean_return_ci": null,
-      "mode": "shadow",
-      "recent": [],
-      "settled": 0,
-      "settled_days": 0,
-      "since": "2026-11-10T03:53:20.388695+00:00",
-      "verdict": "pending"
-    },
-    "options_model": {
-      "checked": false,
-      "kind": "options",
-      "mode": "shadow",
-      "test": {
-        "first": "2010-05-11",
-        "last": "2026-10-06",
-        "mean_return": 0.04026,
-        "mean_return_ci": [
-          -0.05743,
-          0.13644
-        ],
-        "trades": 145,
-        "verdict": "NO-GO",
-        "win_share": 0.6207
-      },
-      "would_trade": []
-    },
     "rationale_check": {
       "checker": "Open-Jev 2B (Qwen3.5-2B base)",
       "days_recorded": 7,
@@ -871,50 +807,6 @@
       "kind": "checker",
       "markets": 16,
       "mode": "shadow"
-    },
-    "vix_fade": {
-      "added_this_run": 0,
-      "kind": "vixfade",
-      "long_mean_return": null,
-      "longs": 0,
-      "mode": "shadow",
-      "recent": [
-        {
-          "net_return": -0.012218,
-          "session": "2026-11-12",
-          "side": "SHORT",
-          "vix_change": -1.97
-        }
-      ],
-      "sessions": 2,
-      "short_mean_return": -0.012218,
-      "short_mean_return_ci": null,
-      "shorts": 1,
-      "since": "2026-11-10",
-      "verdict": "pending"
-    },
-    "weather_model": {
-      "days_recorded": 6,
-      "kind": "weather",
-      "markets": 0,
-      "mode": "shadow",
-      "predictions_recorded": 1332,
-      "test": {
-        "brier_skill": -0.22138,
-        "mean_return": -0.25176,
-        "mean_return_ci": [
-          -0.32523,
-          -0.17528
-        ],
-        "trades": 4960,
-        "verdict": "SHADOW",
-        "window": {
-          "first": "2026-09-24",
-          "last": "2026-11-08",
-          "settled_through": "2026-11-09"
-        }
-      },
-      "would_trade": []
     }
   },
   "starting_value": 10000.0,
@@ -1270,14 +1162,5 @@
       "Crude: MCX / Kalshi WTI future",
       "Zinc / Lead (MCX)"
     ]
-  },
-  "weather": {
-    "cities": 24,
-    "mode": "SHADOW",
-    "verdict_window": {
-      "first": "2026-09-24",
-      "last": "2026-11-08",
-      "settled_through": "2026-11-09"
-    }
   }
 }
