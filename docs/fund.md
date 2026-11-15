@@ -1250,6 +1250,16 @@ stretches when Nifty puts lost.
 No setting above may change after a result is seen. A variant can only be
 tested as a dated amendment written before it is run.
 
+**Data note (2026-11-15, written after the download and before any result).**
+
+- EIA's futures prices stop on 2024-04-05: EIA no longer publishes NYMEX
+  settlements. WTI and gas therefore count only until their data ends. After
+  that, the portfolio averages the three index markets, which keeps to "the
+  markets that have a position that day".
+- The computed expiries match NYMEX's last trading days where checked, for
+  example 20 February 2015 for March 2015 crude and 28 January 2015 for
+  February 2015 gas.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
