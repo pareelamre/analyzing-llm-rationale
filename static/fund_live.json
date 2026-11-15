@@ -465,6 +465,10 @@
     {
       "nav_usd": 10053.8569,
       "ts": "2026-11-15T21:24:50.993576+00:00"
+    },
+    {
+      "nav_usd": 10053.8569,
+      "ts": "2026-11-15T22:01:12.819505+00:00"
     }
   ],
   "cycle": {
@@ -482,38 +486,13 @@
         "pair": "copper-gold",
         "reason": "stretched at z=-2.75 but its backtest averaged -0.6% per signal",
         "z": -2.752
-      },
-      {
-        "instrument": "nse_fo:NIFTYNXT50",
-        "label": "Nifty Next 50 options",
-        "reason": "no quote for the 2026-11-23 options near the money"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTATL",
-        "label": "Atlanta high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTDAL",
-        "label": "Dallas high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTLV",
-        "label": "Las Vegas high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
-        "instrument": "kalshi:KXHIGHTSATX",
-        "label": "San Antonio high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
       }
     ],
-    "traded": true,
-    "window": "in window"
+    "traded": false,
+    "window": "03:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-15T21:24:50.993576+00:00",
+  "generated_at": "2026-11-15T22:01:12.819505+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -851,7 +830,7 @@
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 11,
+        "decided_new": 0,
         "events": 96,
         "filled_now": 0,
         "graded": 0
@@ -868,7 +847,7 @@
       "verdict": "pending"
     },
     "options_model": {
-      "checked": true,
+      "checked": false,
       "kind": "options",
       "mode": "shadow",
       "test": {
@@ -883,14 +862,7 @@
         "verdict": "NO-GO",
         "win_share": 0.6207
       },
-      "would_trade": [
-        {
-          "edge": 0.0713,
-          "label": "Nifty Bank straddle at 61,000, 23 Nov 2026",
-          "price": 1240.98,
-          "side": "MOVE"
-        }
-      ]
+      "would_trade": []
     },
     "rationale_check": {
       "checker": "Open-Jev 2B (Qwen3.5-2B base)",
@@ -924,7 +896,7 @@
     "weather_model": {
       "days_recorded": 6,
       "kind": "weather",
-      "markets": 120,
+      "markets": 0,
       "mode": "shadow",
       "predictions_recorded": 1332,
       "test": {
@@ -942,278 +914,7 @@
           "settled_through": "2026-11-09"
         }
       },
-      "would_trade": [
-        {
-          "edge": 0.5367,
-          "label": "New York City high on 16 Nov: 51\u00b0 or below",
-          "price": 0.45,
-          "side": "YES"
-        },
-        {
-          "edge": 0.2976,
-          "label": "New York City high on 16 Nov: 52\u00b0 to 53\u00b0",
-          "price": 0.56,
-          "side": "NO"
-        },
-        {
-          "edge": 0.1135,
-          "label": "New York City high on 16 Nov: 54\u00b0 to 55\u00b0",
-          "price": 0.86,
-          "side": "NO"
-        },
-        {
-          "edge": 2.2901,
-          "label": "Los Angeles high on 16 Nov: 67\u00b0 or below",
-          "price": 0.09,
-          "side": "YES"
-        },
-        {
-          "edge": 0.0692,
-          "label": "Los Angeles high on 16 Nov: 68\u00b0 to 69\u00b0",
-          "price": 0.6,
-          "side": "NO"
-        },
-        {
-          "edge": 0.2191,
-          "label": "Los Angeles high on 16 Nov: 70\u00b0 to 71\u00b0",
-          "price": 0.6,
-          "side": "NO"
-        },
-        {
-          "edge": 0.8583,
-          "label": "Miami high on 16 Nov: 80\u00b0 to 81\u00b0",
-          "price": 0.29000000000000004,
-          "side": "NO"
-        },
-        {
-          "edge": 1.2596,
-          "label": "Miami high on 16 Nov: 82\u00b0 to 83\u00b0",
-          "price": 0.18,
-          "side": "YES"
-        },
-        {
-          "edge": 1.1303,
-          "label": "Chicago high on 16 Nov: 51\u00b0 to 52\u00b0",
-          "price": 0.2,
-          "side": "YES"
-        },
-        {
-          "edge": 0.6791,
-          "label": "Chicago high on 16 Nov: 53\u00b0 to 54\u00b0",
-          "price": 0.35,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0734,
-          "label": "Chicago high on 16 Nov: 55\u00b0 to 56\u00b0",
-          "price": 0.86,
-          "side": "NO"
-        },
-        {
-          "edge": 1.1053,
-          "label": "Austin high on 16 Nov: 54\u00b0 to 55\u00b0",
-          "price": 0.06,
-          "side": "YES"
-        },
-        {
-          "edge": 0.1476,
-          "label": "Austin high on 16 Nov: 58\u00b0 or above",
-          "price": 0.37,
-          "side": "NO"
-        },
-        {
-          "edge": 0.3237,
-          "label": "Philadelphia high on 16 Nov: 53\u00b0 to 54\u00b0",
-          "price": 0.33,
-          "side": "YES"
-        },
-        {
-          "edge": 2.6663,
-          "label": "San Francisco high on 16 Nov: 58\u00b0 to 59\u00b0",
-          "price": 0.1,
-          "side": "YES"
-        },
-        {
-          "edge": 0.1478,
-          "label": "San Francisco high on 16 Nov: 60\u00b0 to 61\u00b0",
-          "price": 0.47,
-          "side": "NO"
-        },
-        {
-          "edge": 0.1248,
-          "label": "San Francisco high on 16 Nov: 62\u00b0 to 63\u00b0",
-          "price": 0.78,
-          "side": "NO"
-        },
-        {
-          "edge": 1.5677,
-          "label": "Denver high on 16 Nov: 60\u00b0 to 61\u00b0",
-          "price": 0.11,
-          "side": "YES"
-        },
-        {
-          "edge": 0.2934,
-          "label": "Denver high on 16 Nov: 64\u00b0 to 65\u00b0",
-          "price": 0.61,
-          "side": "NO"
-        },
-        {
-          "edge": 0.2198,
-          "label": "Phoenix high on 16 Nov: 78\u00b0 to 79\u00b0",
-          "price": 0.23,
-          "side": "YES"
-        },
-        {
-          "edge": 0.715,
-          "label": "Phoenix high on 16 Nov: 80\u00b0 to 81\u00b0",
-          "price": 0.32999999999999996,
-          "side": "NO"
-        },
-        {
-          "edge": 1.3164,
-          "label": "Phoenix high on 16 Nov: 82\u00b0 to 83\u00b0",
-          "price": 0.08,
-          "side": "YES"
-        },
-        {
-          "edge": 4.5846,
-          "label": "Minneapolis high on 16 Nov: 52\u00b0 to 53\u00b0",
-          "price": 0.04,
-          "side": "YES"
-        },
-        {
-          "edge": 0.3025,
-          "label": "Minneapolis high on 16 Nov: 54\u00b0 to 55\u00b0",
-          "price": 0.22,
-          "side": "YES"
-        },
-        {
-          "edge": 0.0518,
-          "label": "Minneapolis high on 16 Nov: 58\u00b0 to 59\u00b0",
-          "price": 0.85,
-          "side": "NO"
-        },
-        {
-          "edge": 0.5531,
-          "label": "Seattle high on 16 Nov: 50\u00b0 to 51\u00b0",
-          "price": 0.11,
-          "side": "YES"
-        },
-        {
-          "edge": 0.36,
-          "label": "Seattle high on 16 Nov: 52\u00b0 to 53\u00b0",
-          "price": 0.43000000000000005,
-          "side": "NO"
-        },
-        {
-          "edge": 0.1756,
-          "label": "Seattle high on 16 Nov: 54\u00b0 to 55\u00b0",
-          "price": 0.25,
-          "side": "YES"
-        },
-        {
-          "edge": 1.6415,
-          "label": "Seattle high on 16 Nov: 56\u00b0 to 57\u00b0",
-          "price": 0.03,
-          "side": "YES"
-        },
-        {
-          "edge": 3.5396,
-          "label": "Houston high on 16 Nov: 57\u00b0 to 58\u00b0",
-          "price": 0.03,
-          "side": "YES"
-        },
-        {
-          "edge": 1.1832,
-          "label": "Houston high on 16 Nov: 59\u00b0 to 60\u00b0",
-          "price": 0.08,
-          "side": "YES"
-        },
-        {
-          "edge": 0.0807,
-          "label": "Houston high on 16 Nov: 61\u00b0 to 62\u00b0",
-          "price": 0.74,
-          "side": "NO"
-        },
-        {
-          "edge": 0.2202,
-          "label": "Houston high on 16 Nov: 63\u00b0 to 64\u00b0",
-          "price": 0.6799999999999999,
-          "side": "NO"
-        },
-        {
-          "edge": 0.1513,
-          "label": "Houston high on 16 Nov: 65\u00b0 or above",
-          "price": 0.69,
-          "side": "NO"
-        },
-        {
-          "edge": 3.2912,
-          "label": "Boston high on 16 Nov: 47\u00b0 to 48\u00b0",
-          "price": 0.05,
-          "side": "YES"
-        },
-        {
-          "edge": 0.3619,
-          "label": "Boston high on 16 Nov: 49\u00b0 to 50\u00b0",
-          "price": 0.38,
-          "side": "YES"
-        },
-        {
-          "edge": 8.7228,
-          "label": "Washington DC high on 16 Nov: 54\u00b0 or below",
-          "price": 0.03,
-          "side": "YES"
-        },
-        {
-          "edge": 1.1089,
-          "label": "Washington DC high on 16 Nov: 55\u00b0 to 56\u00b0",
-          "price": 0.19,
-          "side": "YES"
-        },
-        {
-          "edge": 0.0608,
-          "label": "Washington DC high on 16 Nov: 59\u00b0 to 60\u00b0",
-          "price": 0.89,
-          "side": "NO"
-        },
-        {
-          "edge": 0.1938,
-          "label": "Oklahoma City high on 16 Nov: 55\u00b0 to 56\u00b0",
-          "price": 0.47,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0731,
-          "label": "San Diego high on 16 Nov: 71\u00b0 to 72\u00b0",
-          "price": 0.5800000000000001,
-          "side": "NO"
-        },
-        {
-          "edge": 0.5608,
-          "label": "Louisville high on 16 Nov: 52\u00b0 or below",
-          "price": 0.17,
-          "side": "YES"
-        },
-        {
-          "edge": 0.1802,
-          "label": "Louisville high on 16 Nov: 55\u00b0 to 56\u00b0",
-          "price": 0.62,
-          "side": "NO"
-        },
-        {
-          "edge": 0.0943,
-          "label": "Trenton high on 16 Nov: 52\u00b0 or below",
-          "price": 0.67,
-          "side": "YES"
-        },
-        {
-          "edge": 0.1098,
-          "label": "Trenton high on 16 Nov: 53\u00b0 to 54\u00b0",
-          "price": 0.6799999999999999,
-          "side": "NO"
-        }
-      ]
+      "would_trade": []
     }
   },
   "starting_value": 10000.0,
