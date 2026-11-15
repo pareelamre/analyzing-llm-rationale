@@ -11,13 +11,13 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": -3.3721,
+      "agent_transfer": -3.8704,
       "event_model": 49.6015,
       "put_premium": 7.3258
     }
   },
   "by_asset_class": {
-    "event": 4006.9591,
+    "event": 4006.4607,
     "option": 207.7101
   },
   "cash_usd": 5839.6861,
@@ -461,6 +461,10 @@
     {
       "nav_usd": 10054.3552,
       "ts": "2026-11-15T20:01:22.100849+00:00"
+    },
+    {
+      "nav_usd": 10053.8569,
+      "ts": "2026-11-15T21:24:50.993576+00:00"
     }
   ],
   "cycle": {
@@ -485,23 +489,23 @@
         "reason": "no quote for the 2026-11-23 options near the money"
       },
       {
-        "instrument": "kalshi:KXHIGHTPHX",
-        "label": "Phoenix high temperature",
-        "reason": "no forecast or market data: ReadTimeout"
-      },
-      {
         "instrument": "kalshi:KXHIGHTATL",
         "label": "Atlanta high temperature",
         "reason": "no forecast or market data: ReadTimeout"
       },
       {
-        "instrument": "kalshi:KXHIGHTSATX",
-        "label": "San Antonio high temperature",
+        "instrument": "kalshi:KXHIGHTDAL",
+        "label": "Dallas high temperature",
         "reason": "no forecast or market data: ReadTimeout"
       },
       {
-        "instrument": "kalshi:KXHIGHTNOLA",
-        "label": "New Orleans high temperature",
+        "instrument": "kalshi:KXHIGHTLV",
+        "label": "Las Vegas high temperature",
+        "reason": "no forecast or market data: ReadTimeout"
+      },
+      {
+        "instrument": "kalshi:KXHIGHTSATX",
+        "label": "San Antonio high temperature",
         "reason": "no forecast or market data: ReadTimeout"
       }
     ],
@@ -509,7 +513,7 @@
     "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-15T20:01:22.100849+00:00",
+  "generated_at": "2026-11-15T21:24:50.993576+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -517,7 +521,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10054.3552,
+  "nav_usd": 10053.8569,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -604,15 +608,15 @@
       "instrument_id": "kalshi:KXTHC3MG-FED-26DEC10",
       "kind": "binary",
       "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-      "mark": 0.94,
+      "mark": 0.96,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 24.3,
+      "pnl_usd": 32.4,
       "quantity": 405.0,
       "side": "YES",
       "underlying": "kalshi:KXTHC3MG-FED-26DEC10",
-      "value_usd": 380.7,
+      "value_usd": 388.8,
       "venue": "kalshi"
     },
     {
@@ -730,15 +734,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.05800000000000005,
+      "mark": 0.05700000000000005,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 0.0,
+      "pnl_usd": -8.5983,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 498.702,
+      "value_usd": 490.1037,
       "venue": "polymarket"
     },
     {
@@ -764,7 +768,7 @@
     }
   ],
   "realized_pnl_usd": 0.8,
-  "return_pct": 0.544,
+  "return_pct": 0.539,
   "settled": [],
   "shadow": {
     "blend_model": {
@@ -773,9 +777,9 @@
       "mode": "shadow",
       "predictions": [
         {
-          "blend": 0.678,
+          "blend": 0.6681,
           "label": "Will A New Season of Prison Break be released Worldwide before Jan 1, 2028?",
-          "market": 0.685,
+          "market": 0.675,
           "model": 0.15
         },
         {
@@ -803,15 +807,15 @@
           "model": 0.02
         },
         {
-          "blend": 0.0221,
+          "blend": 0.023,
           "label": "Will the Iranian regime fall before 2027?",
-          "market": 0.025,
+          "market": 0.026,
           "model": 0.04
         },
         {
-          "blend": 0.9565,
+          "blend": 0.9598,
           "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-          "market": 0.934,
+          "market": 0.939,
           "model": 0.94
         }
       ],
@@ -842,12 +846,12 @@
       "would_trade": []
     },
     "decided_ranges": {
-      "decided_seen": 1130,
+      "decided_seen": 1141,
       "dollars_filled": 0,
       "fills": 0,
       "kind": "live",
       "last_pass": {
-        "decided_new": 4,
+        "decided_new": 11,
         "events": 96,
         "filled_now": 0,
         "graded": 0
@@ -922,7 +926,7 @@
       "kind": "weather",
       "markets": 120,
       "mode": "shadow",
-      "predictions_recorded": 1320,
+      "predictions_recorded": 1332,
       "test": {
         "brier_skill": -0.22138,
         "mean_return": -0.25176,
@@ -940,249 +944,273 @@
       },
       "would_trade": [
         {
-          "edge": 0.3729,
-          "label": "New York City high on 16 Nov: 52\u00b0 to 53\u00b0",
-          "price": 0.5900000000000001,
-          "side": "NO"
-        },
-        {
-          "edge": 0.1222,
-          "label": "New York City high on 16 Nov: 54\u00b0 to 55\u00b0",
-          "price": 0.87,
-          "side": "NO"
-        },
-        {
-          "edge": 2.4239,
-          "label": "Los Angeles high on 16 Nov: 67\u00b0 or below",
-          "price": 0.08,
+          "edge": 0.5367,
+          "label": "New York City high on 16 Nov: 51\u00b0 or below",
+          "price": 0.45,
           "side": "YES"
         },
         {
-          "edge": 0.3063,
+          "edge": 0.2976,
+          "label": "New York City high on 16 Nov: 52\u00b0 to 53\u00b0",
+          "price": 0.56,
+          "side": "NO"
+        },
+        {
+          "edge": 0.1135,
+          "label": "New York City high on 16 Nov: 54\u00b0 to 55\u00b0",
+          "price": 0.86,
+          "side": "NO"
+        },
+        {
+          "edge": 2.2901,
+          "label": "Los Angeles high on 16 Nov: 67\u00b0 or below",
+          "price": 0.09,
+          "side": "YES"
+        },
+        {
+          "edge": 0.0692,
+          "label": "Los Angeles high on 16 Nov: 68\u00b0 to 69\u00b0",
+          "price": 0.6,
+          "side": "NO"
+        },
+        {
+          "edge": 0.2191,
           "label": "Los Angeles high on 16 Nov: 70\u00b0 to 71\u00b0",
-          "price": 0.55,
+          "price": 0.6,
           "side": "NO"
         },
         {
-          "edge": 0.6239,
+          "edge": 0.8583,
           "label": "Miami high on 16 Nov: 80\u00b0 to 81\u00b0",
-          "price": 0.31999999999999995,
+          "price": 0.29000000000000004,
           "side": "NO"
         },
         {
-          "edge": 1.1421,
+          "edge": 1.2596,
           "label": "Miami high on 16 Nov: 82\u00b0 to 83\u00b0",
           "price": 0.18,
           "side": "YES"
         },
         {
-          "edge": 1.2132,
+          "edge": 1.1303,
           "label": "Chicago high on 16 Nov: 51\u00b0 to 52\u00b0",
           "price": 0.2,
           "side": "YES"
         },
         {
-          "edge": 0.7628,
+          "edge": 0.6791,
           "label": "Chicago high on 16 Nov: 53\u00b0 to 54\u00b0",
-          "price": 0.33999999999999997,
+          "price": 0.35,
           "side": "NO"
         },
         {
-          "edge": 0.4497,
-          "label": "Philadelphia high on 16 Nov: 55\u00b0 to 56\u00b0",
-          "price": 0.6,
+          "edge": 0.0734,
+          "label": "Chicago high on 16 Nov: 55\u00b0 to 56\u00b0",
+          "price": 0.86,
           "side": "NO"
         },
         {
-          "edge": 1.3943,
+          "edge": 1.1053,
+          "label": "Austin high on 16 Nov: 54\u00b0 to 55\u00b0",
+          "price": 0.06,
+          "side": "YES"
+        },
+        {
+          "edge": 0.1476,
+          "label": "Austin high on 16 Nov: 58\u00b0 or above",
+          "price": 0.37,
+          "side": "NO"
+        },
+        {
+          "edge": 0.3237,
+          "label": "Philadelphia high on 16 Nov: 53\u00b0 to 54\u00b0",
+          "price": 0.33,
+          "side": "YES"
+        },
+        {
+          "edge": 2.6663,
           "label": "San Francisco high on 16 Nov: 58\u00b0 to 59\u00b0",
-          "price": 0.15,
+          "price": 0.1,
           "side": "YES"
         },
         {
-          "edge": 0.1617,
+          "edge": 0.1478,
           "label": "San Francisco high on 16 Nov: 60\u00b0 to 61\u00b0",
-          "price": 0.49,
+          "price": 0.47,
           "side": "NO"
         },
         {
-          "edge": 0.1708,
+          "edge": 0.1248,
           "label": "San Francisco high on 16 Nov: 62\u00b0 to 63\u00b0",
-          "price": 0.74,
+          "price": 0.78,
           "side": "NO"
         },
         {
-          "edge": 2.2974,
+          "edge": 1.5677,
           "label": "Denver high on 16 Nov: 60\u00b0 to 61\u00b0",
-          "price": 0.09,
+          "price": 0.11,
           "side": "YES"
         },
         {
-          "edge": 0.2739,
+          "edge": 0.2934,
           "label": "Denver high on 16 Nov: 64\u00b0 to 65\u00b0",
-          "price": 0.63,
+          "price": 0.61,
           "side": "NO"
         },
         {
-          "edge": 0.0797,
-          "label": "Denver high on 16 Nov: 66\u00b0 to 67\u00b0",
-          "price": 0.89,
+          "edge": 0.2198,
+          "label": "Phoenix high on 16 Nov: 78\u00b0 to 79\u00b0",
+          "price": 0.23,
+          "side": "YES"
+        },
+        {
+          "edge": 0.715,
+          "label": "Phoenix high on 16 Nov: 80\u00b0 to 81\u00b0",
+          "price": 0.32999999999999996,
           "side": "NO"
         },
         {
-          "edge": 4.6497,
-          "label": "Dallas high on 16 Nov: 58\u00b0 to 59\u00b0",
-          "price": 0.05,
+          "edge": 1.3164,
+          "label": "Phoenix high on 16 Nov: 82\u00b0 to 83\u00b0",
+          "price": 0.08,
           "side": "YES"
         },
         {
-          "edge": 0.2033,
-          "label": "Dallas high on 16 Nov: 60\u00b0 to 61\u00b0",
-          "price": 0.38,
-          "side": "YES"
-        },
-        {
-          "edge": 6.5578,
+          "edge": 4.5846,
           "label": "Minneapolis high on 16 Nov: 52\u00b0 to 53\u00b0",
+          "price": 0.04,
+          "side": "YES"
+        },
+        {
+          "edge": 0.3025,
+          "label": "Minneapolis high on 16 Nov: 54\u00b0 to 55\u00b0",
+          "price": 0.22,
+          "side": "YES"
+        },
+        {
+          "edge": 0.0518,
+          "label": "Minneapolis high on 16 Nov: 58\u00b0 to 59\u00b0",
+          "price": 0.85,
+          "side": "NO"
+        },
+        {
+          "edge": 0.5531,
+          "label": "Seattle high on 16 Nov: 50\u00b0 to 51\u00b0",
+          "price": 0.11,
+          "side": "YES"
+        },
+        {
+          "edge": 0.36,
+          "label": "Seattle high on 16 Nov: 52\u00b0 to 53\u00b0",
+          "price": 0.43000000000000005,
+          "side": "NO"
+        },
+        {
+          "edge": 0.1756,
+          "label": "Seattle high on 16 Nov: 54\u00b0 to 55\u00b0",
+          "price": 0.25,
+          "side": "YES"
+        },
+        {
+          "edge": 1.6415,
+          "label": "Seattle high on 16 Nov: 56\u00b0 to 57\u00b0",
           "price": 0.03,
           "side": "YES"
         },
         {
-          "edge": 0.2376,
-          "label": "Minneapolis high on 16 Nov: 54\u00b0 to 55\u00b0",
-          "price": 0.24,
-          "side": "YES"
-        },
-        {
-          "edge": 0.0684,
-          "label": "Minneapolis high on 16 Nov: 58\u00b0 to 59\u00b0",
-          "price": 0.84,
-          "side": "NO"
-        },
-        {
-          "edge": 1.6952,
-          "label": "Seattle high on 16 Nov: 50\u00b0 to 51\u00b0",
-          "price": 0.07,
-          "side": "YES"
-        },
-        {
-          "edge": 0.3187,
-          "label": "Seattle high on 16 Nov: 52\u00b0 to 53\u00b0",
-          "price": 0.43999999999999995,
-          "side": "NO"
-        },
-        {
-          "edge": 4.9397,
+          "edge": 3.5396,
           "label": "Houston high on 16 Nov: 57\u00b0 to 58\u00b0",
           "price": 0.03,
           "side": "YES"
         },
         {
-          "edge": 1.0466,
+          "edge": 1.1832,
           "label": "Houston high on 16 Nov: 59\u00b0 to 60\u00b0",
-          "price": 0.11,
+          "price": 0.08,
           "side": "YES"
         },
         {
-          "edge": 0.1053,
+          "edge": 0.0807,
           "label": "Houston high on 16 Nov: 61\u00b0 to 62\u00b0",
-          "price": 0.7,
+          "price": 0.74,
           "side": "NO"
         },
         {
-          "edge": 0.2653,
+          "edge": 0.2202,
           "label": "Houston high on 16 Nov: 63\u00b0 to 64\u00b0",
-          "price": 0.6699999999999999,
+          "price": 0.6799999999999999,
           "side": "NO"
         },
         {
-          "edge": 0.1533,
+          "edge": 0.1513,
           "label": "Houston high on 16 Nov: 65\u00b0 or above",
-          "price": 0.78,
+          "price": 0.69,
           "side": "NO"
         },
         {
-          "edge": 3.6339,
+          "edge": 3.2912,
           "label": "Boston high on 16 Nov: 47\u00b0 to 48\u00b0",
-          "price": 0.06,
+          "price": 0.05,
           "side": "YES"
         },
         {
-          "edge": 0.1834,
+          "edge": 0.3619,
           "label": "Boston high on 16 Nov: 49\u00b0 to 50\u00b0",
-          "price": 0.39,
+          "price": 0.38,
           "side": "YES"
         },
         {
-          "edge": 0.8128,
+          "edge": 8.7228,
+          "label": "Washington DC high on 16 Nov: 54\u00b0 or below",
+          "price": 0.03,
+          "side": "YES"
+        },
+        {
+          "edge": 1.1089,
           "label": "Washington DC high on 16 Nov: 55\u00b0 to 56\u00b0",
-          "price": 0.21,
+          "price": 0.19,
           "side": "YES"
         },
         {
-          "edge": 0.0652,
+          "edge": 0.0608,
           "label": "Washington DC high on 16 Nov: 59\u00b0 to 60\u00b0",
           "price": 0.89,
           "side": "NO"
         },
         {
-          "edge": 0.1613,
-          "label": "Oklahoma City high on 16 Nov: 53\u00b0 to 54\u00b0",
-          "price": 0.31,
-          "side": "YES"
-        },
-        {
-          "edge": 0.1752,
+          "edge": 0.1938,
           "label": "Oklahoma City high on 16 Nov: 55\u00b0 to 56\u00b0",
           "price": 0.47,
           "side": "NO"
         },
         {
-          "edge": 0.0821,
-          "label": "Las Vegas high on 16 Nov: 65\u00b0 or below",
-          "price": 0.9,
+          "edge": 0.0731,
+          "label": "San Diego high on 16 Nov: 71\u00b0 to 72\u00b0",
+          "price": 0.5800000000000001,
           "side": "NO"
         },
         {
-          "edge": 0.227,
-          "label": "Las Vegas high on 16 Nov: 66\u00b0 to 67\u00b0",
-          "price": 0.64,
-          "side": "NO"
-        },
-        {
-          "edge": 0.3896,
-          "label": "Las Vegas high on 16 Nov: 68\u00b0 to 69\u00b0",
-          "price": 0.33,
-          "side": "YES"
-        },
-        {
-          "edge": 0.6304,
-          "label": "Las Vegas high on 16 Nov: 70\u00b0 to 71\u00b0",
-          "price": 0.16,
-          "side": "YES"
-        },
-        {
-          "edge": 0.7019,
+          "edge": 0.5608,
           "label": "Louisville high on 16 Nov: 52\u00b0 or below",
-          "price": 0.23,
+          "price": 0.17,
           "side": "YES"
         },
         {
-          "edge": 0.1344,
+          "edge": 0.1802,
           "label": "Louisville high on 16 Nov: 55\u00b0 to 56\u00b0",
-          "price": 0.72,
+          "price": 0.62,
           "side": "NO"
         },
         {
-          "edge": 0.2026,
+          "edge": 0.0943,
           "label": "Trenton high on 16 Nov: 52\u00b0 or below",
-          "price": 0.68,
+          "price": 0.67,
           "side": "YES"
         },
         {
-          "edge": 0.1513,
+          "edge": 0.1098,
           "label": "Trenton high on 16 Nov: 53\u00b0 to 54\u00b0",
-          "price": 0.72,
+          "price": 0.6799999999999999,
           "side": "NO"
         }
       ]
