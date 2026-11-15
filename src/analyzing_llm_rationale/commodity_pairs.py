@@ -2,7 +2,9 @@
 
 Each pair's spread is the log price of one leg minus a hedge ratio times the log price of the
 other, with the hedge ratio refit every day by least squares on up to 250 sessions. The spread's
-z-score against its last 60 sessions says how stretched the pair is. A pair is "stretched" at
+z-score against its last 60 sessions says how stretched the pair is. A pair starts reading after
+20 sessions, with the score's window and the hedge's fit growing to 60 and 250 sessions as prices
+come in (owner, 2026-11-15: start with what we have and let the reads calibrate themselves). A pair is "stretched" at
 |z| >= 2, and the tracker records that as a signal, then follows it until |z| falls below 0.5
 (reverted) or 20 sessions pass (timed out).
 
@@ -56,7 +58,8 @@ PAIRS: tuple[dict[str, str], ...] = (
 )
 HEDGE_WINDOW = 250
 Z_WINDOW = 60
-MIN_SESSIONS = 80
+#: The first session a pair is read. Until Z_WINDOW sessions exist the score uses all of them.
+MIN_SESSIONS = 20
 FULL_HISTORY = HEDGE_WINDOW + Z_WINDOW
 ENTRY_Z = 2.0
 EXIT_Z = 0.5
@@ -64,6 +67,10 @@ MAX_HOLD = 20
 COST_PER_SIDE = 0.001
 #: The first session the live tracker evaluated. Signals before it come only from the replay.
 LIVE_SINCE = date(2026, 11, 6)
+#: A pair's expected return per signal blends the US backtest, counted as this many signals,
+#: with every MCX signal it has closed (replayed before live tracking, or live), one each. The
+#: pair's own record takes over as it grows; a pair with no US backtest starts from zero.
+PRIOR_SIGNALS = 20
 
 #: This module's rule walked over 2010-2026 daily US futures closes (Yahoo Finance continuous
 #: front months, so roll gaps add noise) for the pairs with a US contract on both legs, 0.1%
@@ -389,14 +396,18 @@ def _hedge(la: np.ndarray, lb: np.ndarray, fixed: bool) -> tuple[float, float]:
 
 
 def history(days: Sequence[date], la: np.ndarray, lb: np.ndarray, *, fixed: bool = False) -> list[dict]:
-    """Per-session hedge ratio and z-score, each from data up to that session only."""
+    """Per-session hedge ratio and z-score, each from data up to that session only.
+
+    Early on, the score's window is every session so far; it stops growing at Z_WINDOW.
+    """
     out = []
     for t in range(MIN_SESSIONS - 1, len(days)):
         lo = max(0, t + 1 - HEDGE_WINDOW)
         beta, _ = _hedge(la[lo:t + 1], lb[lo:t + 1], fixed)
-        window = la[t + 1 - Z_WINDOW:t + 1] - beta * lb[t + 1 - Z_WINDOW:t + 1]
+        start = max(0, t + 1 - Z_WINDOW)
+        window = la[start:t + 1] - beta * lb[start:t + 1]
         sd = float(np.std(window, ddof=1))
-        if not sd > 0:
+        if not sd > 1e-9:  # flat prices: rounding noise is not a gap
             continue
         out.append({"date": days[t], "i": t, "beta": beta, "spread": float(window[-1]), "mean": float(window.mean()),
                     "z": float((window[-1] - window.mean()) / sd)})
@@ -409,10 +420,14 @@ def diagnostics(la: np.ndarray, lb: np.ndarray, *, fixed: bool = False) -> dict[
     beta, alpha = _hedge(la, lb, fixed)
     resid = la - alpha - beta * lb
     lag, diff = resid[:-1], np.diff(resid)
+    if not float(lag @ lag) > 0:
+        return {"eg_t": None, "eg_crit_5pct": None, "cointegrated": False, "half_life": None}
     # Engle-Granger: Dickey-Fuller regression of the residual change on its lagged level.
     rho = float(lag @ diff / (lag @ lag))
     err = diff - rho * lag
     se = math.sqrt(float(err @ err) / (len(diff) - 1) / float(lag @ lag))
+    if not se > 0:
+        return {"eg_t": None, "eg_crit_5pct": None, "cointegrated": False, "half_life": None}
     n = len(resid)
     # MacKinnon (2010) 5% critical value, two variables with a constant.
     crit = -3.3377 - 5.967 / n - 8.98 / n ** 2
@@ -468,6 +483,17 @@ def summarize(trades: list[dict]) -> dict[str, Any]:
     }
 
 
+def expected_return(key: str, replay: dict[str, Any], live: dict[str, Any]) -> dict[str, Any]:
+    """Expected return per signal after costs: the US backtest as PRIOR_SIGNALS signals, plus each closed MCX one."""
+    prior = (BACKTEST["pairs"].get(key) or {}).get("avg_return")
+    closed = [(int(r.get("closed") or 0), float(r.get("avg_return") or 0.0)) for r in (replay, live)]
+    n = sum(c for c, _ in closed)
+    local = sum(c * avg for c, avg in closed)
+    per_signal = (PRIOR_SIGNALS * float(prior or 0.0) + local) / (PRIOR_SIGNALS + n)
+    return {"per_signal": round(per_signal, 5), "us_backtest": prior, "prior_signals": PRIOR_SIGNALS,
+            "mcx_signals": n, "mcx_avg": round(local / n, 5) if n else None}
+
+
 def _legs(pair: dict[str, str]) -> tuple[str, str]:
     if pair["source"] == "parity":
         return "MCX gold", "Import cost"
@@ -494,6 +520,9 @@ def track_pair(pair: dict[str, str], series: dict) -> Optional[dict[str, Any]]:
         return {"key": pair["key"], "label": pair["label"], "why": pair["why"], "source": pair["source"],
                 "sessions": len(days), "note": f"{len(days)} sessions of history; tracking starts at {MIN_SESSIONS}."}
     hist = history(days, la, lb, fixed=fixed)
+    if not hist:
+        return {"key": pair["key"], "label": pair["label"], "why": pair["why"], "source": pair["source"],
+                "sessions": len(days), "note": "The two prices have not moved against each other yet."}
     last = hist[-1]
     # The replay covers the sessions before live tracking began; from then on the ledger records signals.
     replay = [t for t in simulate(days, la, lb, hist) if t["entry_date"] < LIVE_SINCE.isoformat()]
@@ -503,7 +532,7 @@ def track_pair(pair: dict[str, str], series: dict) -> Optional[dict[str, Any]]:
     return {
         "key": pair["key"], "label": pair["label"], "legs": list(_legs(pair)), "why": pair["why"], "source": pair["source"],
         "sessions": len(days), "data_from": days[0].isoformat(), "date": last["date"].isoformat(),
-        "short_history": len(days) < FULL_HISTORY,
+        "short_history": len(days) < FULL_HISTORY, "early": len(days) < Z_WINDOW,
         "ratio": round(ratio, 6),
         "usual_ratio": round(ratio * math.exp(-gap), 6),
         "to_usual": {"a": round(math.expm1(-gap), 5), "b": round(math.expm1(gap / last["beta"]), 5)},
@@ -570,6 +599,9 @@ def run(series: dict, ledger: list[dict], now: datetime) -> tuple[dict, list[dic
         events = [e for e in ledger if e["pair"] == pair["key"]]
         live[pair["key"]] = summarize(events) | {"open": sum(e["status"] == "open" for e in events)}
     public = [{k: v for k, v in row.items() if not k.startswith("_")} for row in rows]
+    for row in public:
+        if row.get("z") is not None:
+            row["expected"] = expected_return(row["key"], row.get("replay") or {}, live[row["key"]])
     dated = [row["date"] for row in public if row.get("date")]
     payload = {
         "generated_at": now.astimezone(timezone.utc).isoformat(),
@@ -578,6 +610,7 @@ def run(series: dict, ledger: list[dict], now: datetime) -> tuple[dict, list[dic
         "rule": {
             "hedge_window": HEDGE_WINDOW, "z_window": Z_WINDOW, "entry_z": ENTRY_Z, "exit_z": EXIT_Z,
             "max_hold": MAX_HOLD, "cost_per_side": COST_PER_SIDE, "min_sessions": MIN_SESSIONS,
+            "prior_signals": PRIOR_SIGNALS,
         },
         "backtest": BACKTEST,
         "pairs": public,

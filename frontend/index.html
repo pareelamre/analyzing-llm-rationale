@@ -1139,7 +1139,9 @@
     .cpt-facts { display: grid; font-size: 12px; gap: 8px 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 8px 0 0; }
     .cpt-facts dt, .cpt-record dt { color: var(--text-dim); font-size: 10.5px; font-weight: 600; letter-spacing: .03em; }
     .cpt-facts dd, .cpt-record dd { margin: 1px 0 0; }
-    .cpt-record { border-top: 1px solid var(--border); display: grid; font-size: 11.5px; gap: 4px 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 10px 0 0; padding-top: 8px; }
+    .cpt-record { border-top: 1px solid var(--border); display: grid; font-size: 11.5px; gap: 4px 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 10px 0 0; padding-top: 8px; }
+    @media (max-width: 520px) { .cpt-record { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .cpt-early { color: var(--caution); font-size: 11.5px; line-height: 1.4; margin: 2px 0 4px; }
     .cpt-record b { display: block; font-size: 12.5px; }
     .cpt-dim { color: var(--text-dim); }
     .cpt-tip { background: none; border: 0; border-bottom: 1px dotted currentColor; color: inherit; cursor: help; font: inherit; padding: 0; position: relative; }
@@ -7173,7 +7175,9 @@ function _cptCard(p, ctx) {
   if (p.z == null) {
     return `<article class="cpt-card">${head}<span class="cpt-badge">${p.paused ? 'Paused' : 'Warming up'}</span></div><p class="cpt-say cpt-dim">${escHtml(p.note || 'Not enough history yet.')}</p></article>`;
   }
-  const { entryZ, exitZ, maxHold, zWindow, hedgeWindow, liveSince } = ctx;
+  const { entryZ, exitZ, maxHold, hedgeWindow, liveSince } = ctx;
+  // Early on, a pair's score uses every session it has; the window grows to the full one.
+  const zWindow = Math.min(ctx.zWindow, Number(p.sessions) || ctx.zWindow);
   const z = Number(p.z), az = Math.abs(z);
   const badge = az >= entryZ ? '<span class="cpt-badge hot">Stretched</span>'
     : az >= 1.5 ? '<span class="cpt-badge near">Near signal</span>' : '<span class="cpt-badge">Normal</span>';
@@ -7206,9 +7210,12 @@ function _cptCard(p, ctx) {
       r.signals ? `<b>${_cptPlural(r.signals, 'signal')}</b>${r.avg_return != null ? `avg ${_cptPct(r.avg_return)}` : ''}` : '<b>none</b>'],
     [_cptTip('US 2011–26', 'The same rule on 2011–2026 US futures prices after costs: average return per signal and the number of profitable years. MCX and parity pairs have no US contract to test.'),
       b ? `<b>avg ${_cptPct(b.avg_return)}</b>up ${b.years_up} of ${b.years} yrs` : '<b class="cpt-dim">not testable</b>'],
+    ...(p.expected ? [[_cptTip('Expected', `Average return per signal after costs that the tracker now expects. The US test counts as ${p.expected.prior_signals} signals${p.expected.us_backtest == null ? ' at zero, since this pair has no US contract to test' : ''}, and every closed MCX signal (before live and live) counts as one, so this pair's own record takes over as it grows. The fund trades a stretched pair only when this is above zero.`),
+      `<b class="${Number(p.expected.per_signal) > 0 ? 'cpt-up' : Number(p.expected.per_signal) < 0 ? 'cpt-down' : ''}">${_cptPct(p.expected.per_signal)}</b>${_cptPlural(Number(p.expected.mcx_signals) || 0, 'MCX signal')}`]] : []),
   ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   return `<article class="cpt-card${az >= entryZ ? ' hot' : ''}">${head}${badge}</div>`
     + `<p class="cpt-say">${escHtml(_cptSay(p, legs, entryZ))}</p>`
+    + (p.early ? `<p class="cpt-early">Early read on ${_cptPlural(Number(p.sessions), 'session')}. The usual range uses all of them and firms up as sessions come in (full read at ${ctx.zWindow}).</p>` : '')
     + _cptBack(p, legs, zWindow)
     + _cptSpark(p, entryZ, legs)
     + `<dl class="cpt-facts">${facts}</dl><dl class="cpt-record">${record}</dl></article>`;
@@ -7239,6 +7246,7 @@ function renderCommodityPairs(d) {
   const ctx = {
     entryZ: rule.entry_z || 2, exitZ: rule.exit_z || 0.5, maxHold: rule.max_hold || 20,
     zWindow: rule.z_window || 60, hedgeWindow: rule.hedge_window || 250,
+    minSessions: rule.min_sessions || 20, priorSignals: rule.prior_signals || 20,
     costPct: (rule.cost_per_side || 0.001) * 100,
     liveSince: d.track_record?.live_since || d.data_through, dataThrough: d.data_through,
     back: d.backtest?.pairs || {}, live: d.track_record?.by_pair || {},
@@ -7277,7 +7285,9 @@ function renderCommodityPairs(d) {
       <li><b>Signal:</b> at ±${ctx.entryZ} the pair is stretched, and the tracker records a bet that the pricier side falls back against the cheaper one. It follows the bet until the gap closes (score back within ±${ctx.exitZ}) or ${ctx.maxHold} sessions pass.</li>
       <li><b>Back to usual:</b> how far either commodity would have to move, with the other holding still, to bring the pair back to its usual level. It says nothing about which one will move, or when.</li>
       <li><b>Hedge:</b> how much money goes on each side, so that a move lifting both prices together cancels out and only the gap is left.</li>
-      <li><b>A monitor, not a strategy:</b> over 2011–26 on US futures, the same rule made money on three pairs and lost on three.</li>
+      <li><b>Expected:</b> the return per signal the tracker now expects. It starts from the 2011–26 US futures test (counted as ${ctx.priorSignals} signals; zero for pairs with no US contract) and moves toward each pair's own MCX record as its signals close. The fund trades a stretched pair only when this is above zero.</li>
+      <li><b>Early read:</b> a pair is read from ${ctx.minSessions} sessions of prices. Until it has ${ctx.zWindow}, its score uses all of them, so it firms up as sessions come in.</li>
+      <li><b>A monitor first:</b> over 2011–26 on US futures, the same rule made money on three pairs and lost on three.</li>
     </ol></div>
     <p class="cpt-summary">${summary}</p>${why}${stale}
     <div class="cpt-grid">${scored.concat(pairs.filter(p => p.z == null)).map(p => _cptCard(p, ctx)).join('')}</div>

@@ -834,6 +834,16 @@ function escHtml(s) {
                 self.assertIn("Paper trading only.", renderer)
                 self.assertIn("Checking, not blocking", renderer)
 
+    def test_pair_cards_read_early_and_show_the_expected_return(self):
+        # Owner, 2026-11-15: start with what we have; reads calibrate themselves as data comes in.
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                card = index.split("function _cptCard(p, ctx) {", 1)[1].split("function _cptSignalTable", 1)[0]
+                self.assertIn("const zWindow = Math.min(ctx.zWindow, Number(p.sessions) || ctx.zWindow);", card)
+                self.assertIn("Early read on ${_cptPlural(Number(p.sessions), 'session')}", card)
+                self.assertIn("_cptTip('Expected'", card)
+                self.assertIn("<li><b>Expected:</b>", index)
+
     def test_the_fund_board_reads_cleanly(self):
         # Owner, 2026-11-13: the board's attribution and logs looked cluttered.
         for name, index in self._both().items():
