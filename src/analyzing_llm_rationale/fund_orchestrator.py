@@ -207,9 +207,15 @@ def blend_board(board: Iterable[Mapping[str, Any]], params: Mapping[str, Any]) -
 
 def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[str, Any]], *,
                  analyst: str = "pairs_model", trust: float = DEFAULT_TRUST) -> tuple[list[Signal], list[dict]]:
-    """Signals for stretched fund pairs whose backtest made money; and the skipped ones, with why."""
+    """Signals for stretched fund pairs expected to make money; and the skipped ones, with why.
+
+    The expected return per signal is the tracker's blend of the US backtest with the pair's own
+    MCX signals (commodity_pairs.expected_return), so it recalibrates as signals close. A tracker
+    without that blend falls back to the US backtest alone.
+    """
     rows = {p.get("key"): p for p in tracker.get("pairs") or []}
     backtest = (tracker.get("backtest") or {}).get("pairs") or {}
+    window = (tracker.get("backtest") or {}).get("window", "")
     rule = tracker.get("rule") or {}
     signals, skipped = [], []
     for pair in universe_pairs:
@@ -218,10 +224,21 @@ def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[st
             continue
         if not row.get("stretched"):
             continue
-        if not record or float(record.get("avg_return") or 0.0) <= 0.0:
+        expected = row.get("expected")
+        if expected is not None:
+            edge = float(expected.get("per_signal") or 0.0)
+            n = int(expected.get("mcx_signals") or 0)
+            basis = (f"US backtest {window} counted as {expected.get('prior_signals')} signals"
+                     if expected.get("us_backtest") is not None else "no US backtest (starts from zero)")
+            source = f"{basis}, plus {n} MCX signal{'' if n == 1 else 's'}"
+            label = "its expected return is"
+        else:
+            edge = float((record or {}).get("avg_return") or 0.0)
+            source = f"pairs backtest {window}".strip()
+            label = "its backtest averaged"
+        if edge <= 0.0:
             skipped.append({"pair": pair["key"], "z": row["z"],
-                            "reason": f"stretched at z={row['z']:.2f} but its backtest averaged "
-                                      f"{_pct(float((record or {}).get('avg_return') or 0.0))} per signal"})
+                            "reason": f"stretched at z={row['z']:.2f} but {label} {_pct(edge)} per signal"})
             continue
         z, beta = float(row["z"]), float(row.get("beta") or 1.0)
         # z < 0: leg a is cheap against b, so buy a and sell b (and the reverse).
@@ -229,14 +246,14 @@ def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[st
         facts = [_fact("pair", pair.get("label") or pair["key"], "fund universe"),
                  _fact("spread z-score", f"{z:.2f}", f"pairs tracker, data through {row.get('date')}"),
                  _fact("entry rule", f"|z| >= {rule.get('entry_z', 2.0)}", "pairs tracker"),
-                 _fact("backtest average per signal after costs", _pct(float(record['avg_return'])),
-                       f"pairs backtest {tracker.get('backtest', {}).get('window', '')}".strip()),
-                 _fact("backtest win rate", _pct(float(record.get("win_rate") or 0.0)), "pairs backtest"),
-                 _fact("hedge ratio", f"{beta:.2f}", "pairs tracker")]
+                 _fact("expected return per signal after costs", _pct(edge), source)]
+        if record:
+            facts.append(_fact("US backtest win rate", _pct(float(record.get("win_rate") or 0.0)), "pairs backtest"))
+        facts.append(_fact("hedge ratio", f"{beta:.2f}", "pairs tracker"))
         # Equal-dollar legs; the regression hedge ratio is reported, not yet applied.
         for leg, side in (("a", a_side), ("b", b_side)):
             signals.append(Signal(analyst=analyst, instrument=dict(pair[leg]), side=side, price=0.0,
-                                  edge=float(record["avg_return"]), trust=trust, facts=facts, pair_key=pair["key"]))
+                                  edge=edge, trust=trust, facts=facts, pair_key=pair["key"]))
     return signals, skipped
 
 

@@ -312,11 +312,32 @@ class TrackerTests(unittest.TestCase):
         self.assertEqual((row["hedge"], row["beta"]), ("ratio", 1.0))
 
     def test_too_little_history_gives_a_note_instead_of_a_z_score(self):
+        days = _weekdays(date(2026, 7, 6), 15)
+        row = cp.track_pair(GOLD_SILVER, _series(days, np.full(15, 4000.0), np.full(15, 50.0)))
+
+        self.assertNotIn("z", row)
+        self.assertIn("15 sessions", row["note"])
+
+    def test_prices_that_never_moved_give_a_note_not_an_error(self):
         days = _weekdays(date(2026, 7, 6), 40)
         row = cp.track_pair(GOLD_SILVER, _series(days, np.full(40, 4000.0), np.full(40, 50.0)))
 
         self.assertNotIn("z", row)
-        self.assertIn("40 sessions", row["note"])
+        self.assertIn("not moved", row["note"])
+
+    def test_a_short_history_reads_early_with_a_window_that_grows(self):
+        # Owner, 2026-11-15: start with what we have; the read firms up as sessions come in.
+        days = _weekdays(date(2026, 7, 6), 35)
+        gold, silver = _cointegrated(35, seed=2)
+        row = cp.track_pair(GOLD_SILVER, _series(days, gold, silver))
+
+        self.assertIsNotNone(row["z"])
+        self.assertTrue(row["early"])
+        self.assertEqual(len(row["z_recent"]), 35 - cp.MIN_SESSIONS + 1)
+        hist = row["_hist"]
+        first = hist[0]
+        window = row["_la"][: first["i"] + 1] - first["beta"] * row["_lb"][: first["i"] + 1]
+        self.assertAlmostEqual(first["z"], (window[-1] - window.mean()) / np.std(window, ddof=1))
 
     def test_history_uses_no_later_data(self):
         days = _weekdays(date(2025, 6, 2), 200)
@@ -327,6 +348,28 @@ class TrackerTests(unittest.TestCase):
         cut = cp.history(d_all[:150], la[:150], lb[:150])
 
         self.assertEqual([round(h["z"], 10) for h in full[: len(cut)]], [round(h["z"], 10) for h in cut])
+
+
+class ExpectedReturnTests(unittest.TestCase):
+    def test_the_us_backtest_counts_as_twenty_signals_and_each_mcx_signal_as_one(self):
+        prior = cp.BACKTEST["pairs"]["brent-wti"]["avg_return"]
+        got = cp.expected_return("brent-wti", {"closed": 12, "avg_return": 0.0097}, {"closed": 3, "avg_return": -0.01})
+        self.assertAlmostEqual(got["per_signal"], (20 * prior + 12 * 0.0097 - 3 * 0.01) / 35, places=5)
+        self.assertEqual((got["mcx_signals"], got["prior_signals"]), (15, cp.PRIOR_SIGNALS))
+
+    def test_a_pair_with_no_us_backtest_starts_at_zero_and_follows_its_own_record(self):
+        self.assertEqual(cp.expected_return("zinc-lead", {}, {})["per_signal"], 0.0)
+        got = cp.expected_return("zinc-lead", {"closed": 4, "avg_return": 0.02}, {"closed": 0})
+        self.assertAlmostEqual(got["per_signal"], 4 * 0.02 / 24, places=5)
+        self.assertIsNone(got["us_backtest"])
+
+    def test_every_read_pair_carries_its_expected_return(self):
+        days = _weekdays(date(2025, 6, 2), 120)
+        gold, silver = _cointegrated(120)
+        payload, _ = cp.run(_series(days, gold, silver), [], datetime(2025, 12, 1, tzinfo=timezone.utc))
+        row = next(p for p in payload["pairs"] if p["key"] == "gold-silver")
+        self.assertIn("per_signal", row["expected"])
+        self.assertEqual(payload["rule"]["prior_signals"], cp.PRIOR_SIGNALS)
 
 
 class LedgerTests(unittest.TestCase):

@@ -284,6 +284,26 @@ options analyst, which stays in shadow mode.
 - **Off switch:** the sleeve trades only while `reports/fund_ndx_put_eval.json`
   says GO.
 
+## Pairs: start with what we have (owner, 2026-11-15)
+
+The owner asked for reads from the data already in hand, calibrated as more comes
+in, instead of waiting for longer histories.
+
+- **Reads start at 20 sessions.** Until a pair has 60 sessions, its score uses
+  every session it has, and its hedge uses up to 250. Both firm up as prices
+  come in. Before this, the four base-metal pairs waited for 80 sessions.
+- **Expected return per signal.** Each pair's expected return blends two
+  sources, each closed MCX signal counting as one signal:
+  - the 2011-26 US futures backtest, counted as 20 signals (zero for pairs with
+    no US contract);
+  - every closed MCX signal: replayed before live tracking, or live.
+
+  The pair's own record takes over as it grows. The figure is
+  `commodity_pairs.expected_return`, published on each card.
+- **The fund trades a stretched pair only when that figure is above zero, and
+  sizes by it.** Before this, it needed the US backtest alone to be positive, so
+  pairs with no US contract could never trade.
+
 ## Models
 
 Open-weight models come first; the owner's own fine-tunes follow.

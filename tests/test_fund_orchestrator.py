@@ -69,6 +69,22 @@ class EventSignalTests(unittest.TestCase):
 
 
 class PairSignalTests(unittest.TestCase):
+    def test_the_blended_expected_return_decides_and_recalibrates(self):
+        # Owner, 2026-11-15: start with what we have; a pair's own MCX record takes over as it grows.
+        tracker = {**TRACKER, "pairs": [
+            {**TRACKER["pairs"][0], "expected": {"per_signal": -0.002, "us_backtest": 0.003, "prior_signals": 20,
+                                                 "mcx_signals": 12, "mcx_avg": -0.01}},
+            {**TRACKER["pairs"][1], "expected": {"per_signal": 0.004, "us_backtest": None, "prior_signals": 20,
+                                                 "mcx_signals": 5, "mcx_avg": 0.02}}]}
+        signals, skipped = orch.pair_signals(tracker, UNIVERSE_PAIRS)
+
+        self.assertEqual({s.pair_key for s in signals}, {"copper-gold"})
+        self.assertTrue(all(abs(s.edge - 0.004) < 1e-12 for s in signals))
+        facts = {f["label"]: f for f in signals[0].facts}
+        self.assertIn("no US backtest (starts from zero), plus 5 MCX signals", facts["expected return per signal after costs"]["source"])
+        self.assertEqual(skipped[0]["pair"], "copper-aluminium")
+        self.assertIn("its expected return is", skipped[0]["reason"])
+
     def test_only_pairs_with_a_profitable_backtest_trade_and_skips_say_why(self):
         signals, skipped = orch.pair_signals(TRACKER, UNIVERSE_PAIRS)
         self.assertEqual({(s.instrument["id"], s.side) for s in signals},
