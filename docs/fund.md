@@ -1260,6 +1260,38 @@ tested as a dated amendment written before it is run.
   example 20 February 2015 for March 2015 crude and 28 January 2015 for
   February 2015 gas.
 
+### Result (2026-11-15): NO-GO on both tests
+
+The window ran from 16 January 2009 to 13 November 2026 (all five markets until
+April 2024, the three index markets after).
+
+- **Test A (a source of returns): NO-GO.** +0.3% a year (95% CI -1.9% to
+  +2.7%), Sharpe 0.06. The worst fall was -22%, and 2026 was the worst year at
+  -10%. Trend lost money on both Indian indices: Nifty 50 -0.3% a year, Nifty
+  Bank -1.9%.
+- **Test B (a hedge for the put sleeve): NO-GO.** There were 24 blocks of 21
+  sessions in which the Nifty 50 fell 5% or more. Trend averaged -0.44% in them
+  (95% CI -1.24% to +0.37%) and made money in only a third. Nifty's falls are
+  mostly too quick for a 3-to-12-month signal to turn short in time. The Covid
+  crash, the one long slide, was among the few gains (+3.1%). Using Nasdaq-100
+  falls instead gives the same picture: -0.31% in 24 blocks.
+
+For description only:
+
+- The long-history markets did better. Nasdaq-100, WTI and gas together, from
+  1995 to 2026, made +2.5% a year (95% CI +1.1% to +3.9%), Sharpe 0.43, with a
+  worst fall of -12%.
+- Nasdaq-100 alone, from 1987, made +3.0% a year (95% CI +0.6% to +5.7%).
+
+That matches the published evidence: a small, slow premium in liquid US and
+commodity futures. But the fund cannot trade it as tested. Its US access is
+Kalshi perps, and MCX has months of history, not decades. In Indian indices,
+trend neither earned nor hedged.
+
+So trend following is not added. The put sleeve stays at its current size, with
+nothing found yet to offset its crash risk. The report is
+`reports/fund_trend_eval.json`.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
