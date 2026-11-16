@@ -38,6 +38,9 @@ class CasesTests(unittest.TestCase):
             ("d", "Kalshi", "OLD", MODEL, "Before the fix?", 0.98, "2026-11-08T17:25:00+00:00", "No."),
             ("e", "Kalshi", "LATE", MODEL, "After the window?", 0.98, "2026-11-16T00:00:00+00:00", "Yes."),
             ("f", "Kalshi", "OTHER", "council", "Other model", 0.9, "2026-11-10T01:00:00+00:00", "Yes."),
+            ("f2", "Kalshi", "OTHER", "council", "Other model", 0.1, "2026-11-11T01:00:00+00:00", "Now no."),
+            ("f3", "Kalshi", "OTHER", "gpt-oss-120b", "Other model", 0.5, "2026-11-11T01:00:00+00:00", "Unsure."),
+            ("f4", "Kalshi", "FED", "gpt-oss-120b", "Fed cut?", 0.95, "2026-11-12T01:00:00+00:00", "A cut."),
             ("g", "Kalshi", "BLANK", MODEL, "No rationale", 0.9, "2026-11-10T01:00:00+00:00", "  "),
             ("h", "Kalshi", "EDGE", MODEL, "Exactly at the bar", 0.30, "2026-11-13T01:00:00+00:00", "Unlikely."),
         ]
@@ -45,14 +48,29 @@ class CasesTests(unittest.TestCase):
             store = Path(tmp) / "s.duckdb"
             _store(store, rows)
             cases = ev.live_cases(store)
-        self.assertEqual([c["id"] for c in cases], ["live:a", "live:b", "live:h"])
-        self.assertEqual([c["label"] for c in cases], [1, 0, 0])
-        self.assertEqual(cases[1]["market"], "polymarket:ham")
+        set_a = [c for c in cases if c["set"] == "A"]
+        set_b = [c for c in cases if c["set"] == "B"]
+        self.assertEqual([c["id"] for c in set_a], ["live:a", "live:b", "live:h"])
+        self.assertEqual([c["label"] for c in set_a], [1, 0, 0])
+        self.assertEqual(set_a[1]["market"], "polymarket:ham")
+        # Set B (amendment): each other model's latest clear forecast per market, after set A.
+        self.assertEqual(sorted(c["id"] for c in set_b), ["live:f2", "live:f4"])
+        self.assertEqual(cases[:3], set_a)
+        self.assertEqual({c["id"]: c["label"] for c in set_b}, {"live:f2": 0, "live:f4": 1})
 
     def test_known_cases_are_the_seven_of_2026_11_08_with_four_inversions(self):
         known = ev.known_cases()
         self.assertEqual(len(known), 7)
         self.assertEqual(sum(c["expected"] == "contradicts" for c in known), 4)
+
+    def test_no_new_case_starts_after_the_time_budget(self):
+        ticks = iter(range(0, 1000, 40))
+        cases = [{"id": str(i), "question": "q", "rationale": "r", "forecast": 0.9} for i in range(10)]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = ev.score(cases, lambda q, r: 0.9, "clm", Path(tmp) / "s.json", budget_seconds=100,
+                           clock=lambda: next(ticks))
+        self.assertTrue(out["stopped_early"])
+        self.assertEqual(len(out["scores"]), 2)
 
     def test_shards_split_the_cases_without_overlap(self):
         cases = [{"id": str(i)} for i in range(13)]
@@ -62,7 +80,8 @@ class CasesTests(unittest.TestCase):
 
 def _cases(n_live: int, n_markets: int) -> list[dict]:
     known = ev.known_cases()
-    live = [{"id": f"live:{i}", "kind": "live", "market": f"m{i % n_markets}", "forecast": 0.9 if i % 2 else 0.1,
+    live = [{"id": f"live:{i}", "kind": "live", "set": "AB"[i % 2], "model": "m", "market": f"m{i % n_markets}",
+             "forecast": 0.9 if i % 2 else 0.1,
              "label": i % 2, "question": "q", "rationale": "r"} for i in range(n_live)]
     return known + live
 
@@ -89,6 +108,7 @@ class ReportTests(unittest.TestCase):
         self.assertLess(r["brier_difference_ci95"][1], 0)
         self.assertEqual(r["checkers"]["clm"]["known"]["inversions_caught"], 4)
         self.assertEqual(r["checkers"]["clm"]["known"]["false_flags"], 0)
+        self.assertEqual(r["description_only"]["by_set"]["A"]["cases"] + r["description_only"]["by_set"]["B"]["cases"], 60)
 
     def test_a_worse_or_slow_clm_keeps_the_2b(self):
         cases = _cases(60, 20)

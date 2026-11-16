@@ -61,32 +61,50 @@ def _when(ts) -> datetime:
     return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
 
 
-def live_cases(store: Path, *, start: datetime = START, end: datetime = END) -> list[dict]:
-    """Clear on-device forecasts with a rationale in [start, end), one per market and rationale."""
+def _clear_rows(store: Path, start: datetime, end: datetime) -> list[dict]:
+    """Every clear forecast with a rationale in [start, end), oldest first."""
     import duckdb
     con = duckdb.connect(str(store), read_only=True)
     rows = con.execute("""
-        SELECT key, platform, ident, question, model_probability, snapshot_ts, rationale
+        SELECT key, platform, ident, model, question, model_probability, snapshot_ts, rationale
         FROM forecast_snapshot
-        WHERE model = ? AND rationale IS NOT NULL AND length(trim(rationale)) > 0
-          AND model_probability IS NOT NULL
-    """, [check.FORECAST_MODEL]).fetchall()
+        WHERE rationale IS NOT NULL AND length(trim(rationale)) > 0 AND model_probability IS NOT NULL
+    """).fetchall()
     con.close()
-    out, seen = [], set()
-    for key, platform, ident, question, p, ts, rationale in sorted(rows, key=lambda r: (_when(r[5]), str(r[0]))):
-        when = _when(ts)
-        p = float(p)
+    out = []
+    for key, platform, ident, model, question, p, ts, rationale in rows:
+        when, p = _when(ts), float(p)
         if not (start <= when < end) or CLEAR_NUMBER < p < 1 - CLEAR_NUMBER:
             continue
-        market = f"{str(platform or 'kalshi').lower()}:{ident}"
-        text = str(rationale).strip()
-        if (market, text) in seen:
+        out.append({"key": str(key), "model": str(model), "market": f"{str(platform or 'kalshi').lower()}:{ident}",
+                    "question": question or ident, "forecast": p, "when": when, "rationale": str(rationale).strip()})
+    return sorted(out, key=lambda r: (r["when"], r["key"]))
+
+
+def _case(row: dict, live_set: str) -> dict:
+    return {"id": f"live:{row['key']}", "kind": "live", "set": live_set, "model": row["model"],
+            "market": row["market"], "question": row["question"], "forecast": row["forecast"],
+            "label": 1 if row["forecast"] >= 0.5 else 0, "forecasted_at": row["when"].isoformat(),
+            "rationale": row["rationale"][:check.MAX_RATIONALE_CHARS]}
+
+
+def live_cases(store: Path, *, start: datetime = START, end: datetime = END, seed: int = SEED) -> list[dict]:
+    """Set A: the on-device model's clear forecasts, one per market and rationale.
+    Set B (amendment): the other models' latest clear forecast per market, shuffled."""
+    rows = _clear_rows(store, start, end)
+    set_a, seen = [], set()
+    for r in rows:
+        if r["model"] != check.FORECAST_MODEL or (r["market"], r["rationale"]) in seen:
             continue
-        seen.add((market, text))
-        out.append({"id": f"live:{key}", "kind": "live", "market": market, "question": question or ident,
-                    "forecast": p, "label": 1 if p >= 0.5 else 0, "forecasted_at": when.isoformat(),
-                    "rationale": text[:check.MAX_RATIONALE_CHARS]})
-    return out
+        seen.add((r["market"], r["rationale"]))
+        set_a.append(_case(r, "A"))
+    latest: dict[tuple[str, str], dict] = {}
+    for r in rows:
+        if r["model"] != check.FORECAST_MODEL:
+            latest[(r["model"], r["market"])] = r
+    set_b = [_case(r, "B") for r in sorted(latest.values(), key=lambda r: (r["model"], r["market"]))]
+    random.Random(seed).shuffle(set_b)
+    return set_a + set_b
 
 
 def known_cases(path: Path = KNOWN_PATH) -> list[dict]:
@@ -117,10 +135,17 @@ def shard_of(cases: list[dict], shard: str) -> list[dict]:
 
 
 def score(cases: list[dict], ask: Callable[[str, str], float], checker: str, out_path: Path,
-          load_seconds: float = 0.0) -> dict:
-    """Ask the checker about every case, saving after each so a timeout keeps what was done."""
-    result = {"checker": checker, "load_seconds": round(load_seconds, 2), "scores": {}}
+          load_seconds: float = 0.0, budget_seconds: Optional[float] = None,
+          clock: Callable[[], float] = time.perf_counter) -> dict:
+    """Ask the checker about every case, saving after each so a timeout keeps what was done.
+    No new case starts once ``budget_seconds`` have passed (amendment of 2026-11-16)."""
+    result = {"checker": checker, "load_seconds": round(load_seconds, 2), "scores": {}, "stopped_early": False}
+    began = clock()
     for case in cases:
+        if budget_seconds is not None and clock() - began >= budget_seconds:
+            result["stopped_early"] = True
+            print(f"{checker}: time budget reached after {len(result['scores'])} of {len(cases)} cases", flush=True)
+            break
         t0 = time.perf_counter()
         p_yes = ask(case["question"], case["rationale"])
         seconds = time.perf_counter() - t0
@@ -187,6 +212,12 @@ def report(cases: list[dict], scores: dict[str, dict[str, dict]]) -> dict:
     agree = (sum(check.verdict(c["forecast"], scores["clm"][c["id"]]["p_yes"])
                  == check.verdict(c["forecast"], scores["jev2b"][c["id"]]["p_yes"]) for c in live) / len(live)
              if live else None)
+    by_set = {}
+    for name in ("A", "B"):
+        part = [d for c, d in zip(live, diffs) if c.get("set", "A") == name]
+        by_set[name] = {"cases": len(part), "markets": len({m for m, _ in part}),
+                        "brier_difference_clm_minus_jev2b": statistics.fmean(d for _, d in part) if part else None,
+                        "ci95": list(market_bootstrap(part)) if part else [None, None]}
     clm, jev = per["clm"], per["jev2b"]
     tests = {
         "clm_brier_better": hi is not None and hi < 0,
@@ -210,8 +241,9 @@ def report(cases: list[dict], scores: dict[str, dict[str, dict]]) -> dict:
         "brier_difference_ci95": [lo, hi],
         "tests": tests,
         "checkers": per,
-        "description_only": {"verdicts_agree_share": agree},
-        "cases": [{"id": c["id"], "kind": c["kind"], "market": c["market"], "forecast": round(c["forecast"], 4),
+        "description_only": {"verdicts_agree_share": agree, "by_set": by_set},
+        "cases": [{"id": c["id"], "kind": c["kind"], "set": c.get("set"), "model": c.get("model"),
+                   "market": c["market"], "forecast": round(c["forecast"], 4),
                    **({"label": c["label"]} if c["kind"] == "live" else {"expected": c["expected"]}),
                    **{f"p_yes_{k}": scores.get(k, {}).get(c["id"], {}).get("p_yes") for k in CHECKERS}}
                   for c in cases],
@@ -230,6 +262,7 @@ def main() -> int:
     s.add_argument("--shard", default="0/1")
     s.add_argument("--emb-url", default="http://127.0.0.1:8090/v1/embeddings")
     s.add_argument("--head")
+    s.add_argument("--budget-minutes", type=float, help="start no new case after this long")
     s.add_argument("--out", type=Path, required=True)
     r = sub.add_parser("report")
     r.add_argument("--cases", type=Path, required=True)
@@ -240,9 +273,10 @@ def main() -> int:
     if args.cmd == "cases":
         cases = known_cases() + live_cases(args.store)
         args.out.write_text(json.dumps(cases, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-        live = [x for x in cases if x["kind"] == "live"]
-        print(f"known={len(cases) - len(live)} live={len(live)} markets={len({x['market'] for x in live})} "
-              f"yes_labels={sum(x['label'] for x in live)}")
+        for name in ("A", "B"):
+            part = [x for x in cases if x.get("set") == name]
+            print(f"set {name}: cases={len(part)} markets={len({x['market'] for x in part})} "
+                  f"yes_labels={sum(x['label'] for x in part)} models={len({x['model'] for x in part})}")
         return 0
     if args.cmd == "score":
         cases = shard_of(json.loads(args.cases.read_text(encoding="utf-8")), args.shard)
@@ -258,7 +292,8 @@ def main() -> int:
                 print(f"sanity p_yes {ask(q, r_):.3f} | {r_[:60]}", flush=True)
         else:
             ask = check.open_jev_checker(device="cpu")
-        score(cases, ask, args.checker, args.out, load_seconds=time.perf_counter() - t0)
+        score(cases, ask, args.checker, args.out, load_seconds=time.perf_counter() - t0,
+              budget_seconds=args.budget_minutes * 60 if args.budget_minutes else None)
         return 0
     cases = json.loads(args.cases.read_text(encoding="utf-8"))
     result = report(cases, merge_scores(args.scores))

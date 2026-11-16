@@ -65,7 +65,11 @@ jobs:
   jev2b:
     needs: cases
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 200
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -85,22 +89,24 @@ jobs:
           pip install --quiet transformers==5.10.2 peft==0.19.1 accelerate==1.13.0 safetensors huggingface_hub duckdb \
             "open-jev @ git+https://github.com/Zefan-Cai/Open-Jev@${OPEN_JEV_COMMIT}"
       - name: Score Open-Jev 2B
-        run: python scripts/fund_rationale_checker_eval.py score --cases cases.json --checker jev2b --out scores-jev2b.json
+        run: |
+          python scripts/fund_rationale_checker_eval.py score --cases cases.json --checker jev2b \
+            --shard ${{ matrix.shard }}/4 --budget-minutes 150 --out scores-jev2b-${{ matrix.shard }}.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: scores-jev2b
-          path: scores-jev2b.json
+          name: scores-jev2b-${{ matrix.shard }}
+          path: scores-jev2b-${{ matrix.shard }}.json
           retention-days: 7
 
   clm:
     needs: cases
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 200
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -153,7 +159,8 @@ jobs:
       - name: Score CLM-8B
         run: |
           python scripts/fund_rationale_checker_eval.py score --cases cases.json --checker clm \
-            --shard ${{ matrix.shard }}/6 --head "$CLM_HEAD" --out scores-clm-${{ matrix.shard }}.json
+            --shard ${{ matrix.shard }}/12 --budget-minutes 150 --head "$CLM_HEAD" \
+            --out scores-clm-${{ matrix.shard }}.json
       - name: Encoder log
         if: always()
         run: tail -30 llama.log || true
