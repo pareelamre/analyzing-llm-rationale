@@ -1,0 +1,56 @@
+# Knowledge base
+
+Foresea's long-term memory: reports turned into dated, cited claims and a knowledge graph, so a
+forecast on a long-horizon question can draw on what serious sources project (owner, 2026-11-17:
+"as more documents get added foresea should become knowledgeable in long term horizon tasks").
+
+## Where things live
+
+- **Data:** the private repo `pareelamre/foresea-knowledge`. Reports are usually licensed, so
+  their claims, passages and graph stay private. Nothing from it is committed here; the tests use a
+  made-up fixture.
+- **Engine:** `src/analyzing_llm_rationale/knowledge.py` (load, validate, index, search, ingest)
+  and `scripts/knowledge.py` (CLI). Tests: `tests/test_knowledge.py`.
+- **Forecasts:** `/predict` adds up to two knowledge-base articles (a source's best claims with
+  page numbers) ahead of the news when `KNOWLEDGE_DIR` points at a clone of the data repo.
+  `KNOWLEDGE_EVIDENCE=0` turns it off. Without `KNOWLEDGE_DIR` nothing changes.
+
+## What a claim is
+
+One atomic statement in our own words, with its source and page, a `kind` (projection, estimate,
+fact, policy, finding, risk), the graph entities it is about, and for numbers its `metric`,
+`value`, `unit`, `geo`, `horizon` (the year) and `scenario`. The data repo's README has the full
+layout.
+
+## Retrieval
+
+Four ranked lists fused by reciprocal rank fusion:
+
+1. **Lexical:** BM25 over claim text and context (SQLite FTS5, Porter stemming).
+2. **Dense:** MiniLM similarity, when an embedder is loaded (the app's sentence-transformer, or
+   the same model through transformers). Vectors are cached by text hash, so a rebuild only embeds
+   new claims. The request path never loads a model.
+3. **Graph:** claims about the entities a question names (matched by name and alias), then claims
+   about their neighbours.
+4. **Horizon:** projections and estimates for the years a question asks about (within two years).
+
+Then:
+
+- **No look-ahead:** every query takes `as_of`, and sources published later are invisible, so
+  backtests stay honest. `/predict` uses today.
+- **Knowledge moves on:** when a newer source projects the same metric, place, year and scenario,
+  the older projection is demoted and shown as "Earlier: ..." beside the new number. The
+  `timeline` command lists every revision.
+- **Agreement:** forecasts only get claims that at least two retrievers agree on, so a question
+  that merely shares a word with a report gets nothing.
+
+## Adding a report
+
+```bash
+python scripts/knowledge.py add report.pdf --id <publisher>-<yyyy>-<mm>-<topic> \
+  --title "..." --publisher "..." --published YYYY-MM-DD --llm
+python scripts/knowledge.py validate
+```
+
+`--llm` extracts claims passage by passage with the self-hosted model and drops any claim whose
+numbers are not in its passage. Review, then commit to the data repo, one report per commit.

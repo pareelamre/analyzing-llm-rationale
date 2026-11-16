@@ -6748,6 +6748,26 @@ def _clean_article(article: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
+def _knowledge_articles(question: str) -> List[Dict[str, Any]]:
+    """Cited claims from Foresea's knowledge base (``KNOWLEDGE_DIR``) for a forecast question.
+
+    Lexical, graph and horizon retrieval only, so no model loads on the request path. The base
+    answers only when two retrievers agree, uses no source published after today, and an error
+    never blocks the forecast. ``KNOWLEDGE_EVIDENCE=0`` turns it off.
+    """
+    if os.environ.get("KNOWLEDGE_EVIDENCE", "1").strip().lower() in {"0", "false", "no", "off"}:
+        return []
+    try:
+        from analyzing_llm_rationale import knowledge
+        index = knowledge.shared_index()
+        if index is None:
+            return []
+        return index.evidence_articles(question, as_of=datetime.now(timezone.utc).date(), k=2)
+    except Exception:  # aqg: top-level boundary -- the base is optional context
+        logger.warning("knowledge base evidence unavailable", exc_info=True)
+        return []
+
+
 def _merge_evidence_articles(
     supplied: List[Dict[str, Any]],
     retrieved: List[Dict[str, Any]],
@@ -8117,6 +8137,12 @@ async def _prepare_predict_messages(
             )
 
     evidence_articles = _merge_evidence_articles(supplied_articles, retrieved_articles)
+    if req.attach_evidence:
+        # Foresea's own knowledge base (reports turned into dated, cited claims) goes first:
+        # it is what lets a long-horizon question see a serious source's projection.
+        knowledge_articles = _knowledge_articles(evidence_question)
+        if knowledge_articles:
+            evidence_articles = _merge_evidence_articles(knowledge_articles, evidence_articles)
     evidence_articles = [_clean_article(a) for a in evidence_articles]
     # Personalised retrieval: prepend signed-in KB hits only when the embedder is
     # already warm. Forecasts should not pay a sentence-transformer cold start.
