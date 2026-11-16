@@ -1,0 +1,189 @@
+name: Fund rationale checker eval
+
+# One-off pre-registered test (docs/fund.md, "Rationale checker: CLM-8B against Open-Jev 2B"):
+# scores both checkers on the same known and live cases on GitHub's CPU and uploads the report.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rationale-checker-test]
+    paths:
+      - .github/workflows/fund-rationale-checker-eval.yml
+      - scripts/fund_rationale_checker_eval.py
+
+env:
+  GCP_PROJECT_ID: brave-drive-471109-d9
+  FORESEA_STORAGE_BACKEND: ${{ vars.FORESEA_STORAGE_BACKEND || 'gcs' }}
+  R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+  R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+  PYTHONPATH: src
+  TRACK_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
+  TRACK_STORE_OBJECT: track_record_store.duckdb
+  # Pinned as registered.
+  OPEN_JEV_COMMIT: bd4118882f733574a3250a4b65fe4d884130c08b
+  CLM_COMMIT: d5f9ef0fd9bde185df0ceaad4f4ecc6cfe8c34f6
+  CLM_HEAD_REVISION: e939398d4556fcd9400c76fa8c5a513202f42b0a
+  QWEN_GGUF_REVISION: 7c41481f57cb95916b40956ab2f0b139b296d974
+  LLAMA_CPP_BUILD: b12426
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fund-rationale-checker-eval
+  cancel-in-progress: true
+
+jobs:
+  cases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install store tools
+        run: >-
+          pip install --quiet 'boto3>=1.35,<2' google-cloud-storage duckdb requests
+          opentelemetry-sdk opentelemetry-instrumentation-requests
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Download track record store
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: python -m analyzing_llm_rationale.r2_store cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
+      - name: Build the cases
+        run: python scripts/fund_rationale_checker_eval.py cases --store data/track_record_store.duckdb --out cases.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cases
+          path: cases.json
+          retention-days: 7
+
+  jev2b:
+    needs: cases
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: cases
+      - name: Cache the checker weights
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: open-jev-2b-${{ env.OPEN_JEV_COMMIT }}
+      - name: Install Open-Jev 2B (CPU)
+        run: |
+          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet transformers==5.10.2 peft==0.19.1 accelerate==1.13.0 safetensors huggingface_hub duckdb \
+            "open-jev @ git+https://github.com/Zefan-Cai/Open-Jev@${OPEN_JEV_COMMIT}"
+      - name: Score Open-Jev 2B
+        run: python scripts/fund_rationale_checker_eval.py score --cases cases.json --checker jev2b --out scores-jev2b.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scores-jev2b
+          path: scores-jev2b.json
+          retention-days: 7
+
+  clm:
+    needs: cases
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: cases
+      - name: Pick a disk for the weights
+        run: |
+          df -h / /mnt 2>/dev/null || true
+          if sudo mkdir -p /mnt/models 2>/dev/null && sudo chown "$USER" /mnt/models; then
+            echo "MODEL_DIR=/mnt/models" >> "$GITHUB_ENV"
+          else
+            mkdir -p "$RUNNER_TEMP/models" && echo "MODEL_DIR=$RUNNER_TEMP/models" >> "$GITHUB_ENV"
+          fi
+      - name: Install CLM (CPU, no vLLM) and llama.cpp
+        run: |
+          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet 'numpy>=1.24' 'requests>=2.28' huggingface_hub duckdb
+          pip install --quiet --no-deps "contrastive-lm @ git+https://github.com/Contrastive-LM/CLM@${CLM_COMMIT}"
+          curl -fsSL -o "$RUNNER_TEMP/llama.tar.gz" \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_CPP_BUILD}/llama-${LLAMA_CPP_BUILD}-bin-ubuntu-x64.tar.gz"
+          mkdir -p "$RUNNER_TEMP/llama" && tar -xzf "$RUNNER_TEMP/llama.tar.gz" -C "$RUNNER_TEMP/llama"
+          server="$(find "$RUNNER_TEMP/llama" -name llama-server -type f | head -1)"
+          echo "LLAMA_SERVER=$server" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$(dirname "$server")" >> "$GITHUB_ENV"
+      - name: Download the encoder and head
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import hf_hub_download
+          d = os.environ["MODEL_DIR"]
+          gguf = hf_hub_download("Qwen/Qwen3-8B-GGUF", "Qwen3-8B-Q8_0.gguf",
+                                 revision=os.environ["QWEN_GGUF_REVISION"], local_dir=d)
+          head = hf_hub_download("Contrastive-LM/CLM-v0.1-8B", "CLM_v0.1-8B.pt",
+                                 revision=os.environ["CLM_HEAD_REVISION"], local_dir=d)
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"GGUF={gguf}\nCLM_HEAD={head}\n")
+          PY
+      - name: Start the Qwen3-8B encoder (last-token pooling)
+        run: |
+          nohup "$LLAMA_SERVER" -m "$GGUF" --embeddings --pooling last --alias qwen3-8b \
+            -c 4096 -b 4096 -ub 4096 -np 1 -t "$(nproc)" --host 127.0.0.1 --port 8090 > llama.log 2>&1 &
+          for i in $(seq 1 120); do
+            if curl -fs http://127.0.0.1:8090/health > /dev/null; then echo "encoder up after ${i}x5s"; exit 0; fi
+            sleep 5
+          done
+          tail -50 llama.log; exit 1
+      - name: Score CLM-8B
+        run: |
+          python scripts/fund_rationale_checker_eval.py score --cases cases.json --checker clm \
+            --shard ${{ matrix.shard }}/6 --head "$CLM_HEAD" --out scores-clm-${{ matrix.shard }}.json
+      - name: Encoder log
+        if: always()
+        run: tail -30 llama.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scores-clm-${{ matrix.shard }}
+          path: scores-clm-${{ matrix.shard }}.json
+          retention-days: 7
+
+  report:
+    needs: [cases, jev2b, clm]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+      - run: pip install --quiet duckdb
+      - name: Report
+        run: |
+          python scripts/fund_rationale_checker_eval.py report --cases art/cases/cases.json \
+            --scores art/scores-*/*.json --out reports/fund_rationale_checker_eval.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: reports/fund_rationale_checker_eval.json
+          retention-days: 30
