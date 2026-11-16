@@ -1,0 +1,724 @@
+{
+  "verdict": "KEEP (too few to tell)",
+  "rule": "docs/fund.md, Rationale checker: CLM-8B against Open-Jev 2B (pre-registered 2026-11-16)",
+  "live_cases": 52,
+  "live_markets": 10,
+  "live_cases_missing_a_score": 0,
+  "brier_difference_clm_minus_jev2b": 0.28907847499598077,
+  "brier_difference_ci95": [
+    0.16026087151734783,
+    0.4242855133045
+  ],
+  "tests": {
+    "clm_brier_better": false,
+    "known_cases_no_worse": false,
+    "live_false_flags_no_more": false,
+    "fast_enough": true
+  },
+  "checkers": {
+    "jev2b": {
+      "name": "Open-Jev 2B",
+      "brier": 0.005315312759192308,
+      "known": {
+        "scored": 7,
+        "right": 7,
+        "inversions_caught": 4,
+        "inversions": 4,
+        "false_flags": 0,
+        "correct_forecasts": 3
+      },
+      "live_false_flags": 0,
+      "live_unclear_share": 0.019230769230769232,
+      "median_seconds": 12.419
+    },
+    "clm": {
+      "name": "CLM-8B",
+      "brier": 0.29439378775517305,
+      "known": {
+        "scored": 7,
+        "right": 1,
+        "inversions_caught": 0,
+        "inversions": 4,
+        "false_flags": 0,
+        "correct_forecasts": 3
+      },
+      "live_false_flags": 7,
+      "live_unclear_share": 0.7307692307692307,
+      "median_seconds": 15.45
+    }
+  },
+  "description_only": {
+    "verdicts_agree_share": 0.15384615384615385,
+    "by_set": {
+      "A": {
+        "cases": 52,
+        "markets": 10,
+        "brier_difference_clm_minus_jev2b": 0.28907847499598077,
+        "ci95": [
+          0.16026087151734783,
+          0.4242855133045
+        ]
+      },
+      "B": {
+        "cases": 0,
+        "markets": 0,
+        "brier_difference_clm_minus_jev2b": null,
+        "ci95": [
+          null,
+          null
+        ]
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "known:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "kind": "known",
+      "set": null,
+      "model": null,
+      "market": "will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "forecast": 0.94,
+      "expected": "agrees",
+      "p_yes_jev2b": 0.927937,
+      "p_yes_clm": 0.929508
+    },
+    {
+      "id": "known:KXUSAEXPANDTERRITORY-29JAN21",
+      "kind": "known",
+      "set": null,
+      "model": null,
+      "market": "KXUSAEXPANDTERRITORY-29JAN21",
+      "forecast": 0.08,
+      "expected": "agrees",
+      "p_yes_jev2b": 0.006507,
+      "p_yes_clm": 0.678585
+    },
+    {
+      "id": "known:will-hamas-agree-to-disarm-by-december-31",
+      "kind": "known",
+      "set": null,
+      "model": null,
+      "market": "will-hamas-agree-to-disarm-by-december-31",
+      "forecast": 0.98,
+      "expected": "contradicts",
+      "p_yes_jev2b": 0.025194,
+      "p_yes_clm": 0.518927
+    },
+    {
+      "id": "known:will-the-iranian-regime-fall-by-the-end-of-2026",
+      "kind": "known",
+      "set": null,
+      "model": null,
+      "market": "will-the-iranian-regime-fall-by-the-end-of-2026",
+      "forecast": 0.98,
+      "expected": "contradicts",
+      "p_yes_jev2b": 0.006817,
+      "p_yes_clm": 0.630395
+    },
+    {
+      "id": "known:will-the-us-invade-iran-before-2027",
+      "kind": "known",
+      "set": null,
+      "model": null,
+      "market": "will-the-us-invade-iran-before-2027",
+      "forecast": 0.08,
+      "expected": "agrees",
+      "p_yes_jev2b": 0.004837,
+      "p_yes_clm": 0.579946
+    },
+    {
+      "id": "known:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+      "kind": "known",
+      "set": null,
+      "model": null,
+      "market": "KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+      "forecast": 0.85,
+      "expected": "contradicts",
+      "p_yes_jev2b": 0.047303,
+      "p_yes_clm": 0.655982
+    },
+    {
+      "id": "known:lal-mad-bar-2026-11-08-mad",
+      "kind": "known",
+      "set": null,
+      "model": null,
+      "market": "lal-mad-bar-2026-11-08-mad",
+      "forecast": 0.72,
+      "expected": "contradicts",
+      "p_yes_jev2b": 0.05892,
+      "p_yes_clm": 0.540922
+    },
+    {
+      "id": "live:Polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026:qwen3.5-9b-selfhosted:2026-11-09T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "forecast": 0.94,
+      "label": 1,
+      "p_yes_jev2b": 0.915229,
+      "p_yes_clm": 0.94484
+    },
+    {
+      "id": "live:Polymarket:will-hamas-agree-to-disarm-by-december-31:qwen3.5-9b-selfhosted:2026-11-09T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-hamas-agree-to-disarm-by-december-31",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.017401,
+      "p_yes_clm": 0.438796
+    },
+    {
+      "id": "live:Polymarket:will-the-iranian-regime-fall-by-the-end-of-2026:qwen3.5-9b-selfhosted:2026-11-09T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-iranian-regime-fall-by-the-end-of-2026",
+      "forecast": 0.02,
+      "label": 0,
+      "p_yes_jev2b": 0.11246,
+      "p_yes_clm": 0.599154
+    },
+    {
+      "id": "live:Kalshi:KXUSAEXPANDTERRITORY-29JAN21:qwen3.5-9b-selfhosted:2026-11-09T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "forecast": 0.02,
+      "label": 0,
+      "p_yes_jev2b": 0.012626,
+      "p_yes_clm": 0.651222
+    },
+    {
+      "id": "live:Polymarket:will-the-us-invade-iran-before-2027:qwen3.5-9b-selfhosted:2026-11-09T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-us-invade-iran-before-2027",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.004646,
+      "p_yes_clm": 0.5204
+    },
+    {
+      "id": "live:Kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01:qwen3.5-9b-selfhosted:2026-11-09T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+      "forecast": 0.15,
+      "label": 0,
+      "p_yes_jev2b": 0.016314,
+      "p_yes_clm": 0.477678
+    },
+    {
+      "id": "live:Polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026:qwen3.5-9b-selfhosted:2026-11-09T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.030015,
+      "p_yes_clm": 0.693509
+    },
+    {
+      "id": "live:Polymarket:will-the-us-invade-iran-before-2027:qwen3.5-9b-selfhosted:2026-11-10T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-us-invade-iran-before-2027",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.004767,
+      "p_yes_clm": 0.514152
+    },
+    {
+      "id": "live:Polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026:qwen3.5-9b-selfhosted:2026-11-10T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.008741,
+      "p_yes_clm": 0.77529
+    },
+    {
+      "id": "live:Polymarket:will-hamas-agree-to-disarm-by-december-31:qwen3.5-9b-selfhosted:2026-11-10T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-hamas-agree-to-disarm-by-december-31",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.08211,
+      "p_yes_clm": 0.62623
+    },
+    {
+      "id": "live:Polymarket:will-the-iranian-regime-fall-by-the-end-of-2026:qwen3.5-9b-selfhosted:2026-11-10T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-iranian-regime-fall-by-the-end-of-2026",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.006817,
+      "p_yes_clm": 0.674496
+    },
+    {
+      "id": "live:Kalshi:KXUSAEXPANDTERRITORY-29JAN21:qwen3.5-9b-selfhosted:2026-11-10T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.028225,
+      "p_yes_clm": 0.789015
+    },
+    {
+      "id": "live:Polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026:qwen3.5-9b-selfhosted:2026-11-10T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "forecast": 0.94,
+      "label": 1,
+      "p_yes_jev2b": 0.951576,
+      "p_yes_clm": 0.938842
+    },
+    {
+      "id": "live:Kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01:qwen3.5-9b-selfhosted:2026-11-10T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+      "forecast": 0.15,
+      "label": 0,
+      "p_yes_jev2b": 0.02112,
+      "p_yes_clm": 0.415404
+    },
+    {
+      "id": "live:Polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026:qwen3.5-9b-selfhosted:2026-11-11T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "forecast": 0.94,
+      "label": 1,
+      "p_yes_jev2b": 0.913227,
+      "p_yes_clm": 0.940885
+    },
+    {
+      "id": "live:Kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01:qwen3.5-9b-selfhosted:2026-11-11T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+      "forecast": 0.15,
+      "label": 0,
+      "p_yes_jev2b": 0.036949,
+      "p_yes_clm": 0.328221
+    },
+    {
+      "id": "live:Polymarket:will-the-us-invade-iran-before-2027:qwen3.5-9b-selfhosted:2026-11-11T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-us-invade-iran-before-2027",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.004978,
+      "p_yes_clm": 0.393252
+    },
+    {
+      "id": "live:Polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026:qwen3.5-9b-selfhosted:2026-11-11T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.018375,
+      "p_yes_clm": 0.563928
+    },
+    {
+      "id": "live:Polymarket:will-hamas-agree-to-disarm-by-december-31:qwen3.5-9b-selfhosted:2026-11-11T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-hamas-agree-to-disarm-by-december-31",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.008684,
+      "p_yes_clm": 0.471924
+    },
+    {
+      "id": "live:Polymarket:will-the-iranian-regime-fall-by-the-end-of-2026:qwen3.5-9b-selfhosted:2026-11-11T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-iranian-regime-fall-by-the-end-of-2026",
+      "forecast": 0.02,
+      "label": 0,
+      "p_yes_jev2b": 0.020418,
+      "p_yes_clm": 0.691271
+    },
+    {
+      "id": "live:Kalshi:KXUSAEXPANDTERRITORY-29JAN21:qwen3.5-9b-selfhosted:2026-11-11T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.003906,
+      "p_yes_clm": 0.752947
+    },
+    {
+      "id": "live:Polymarket:uwcl-juv-oly-2026-11-11-juv:qwen3.5-9b-selfhosted:2026-11-11T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:uwcl-juv-oly-2026-11-11-juv",
+      "forecast": 0.06,
+      "label": 0,
+      "p_yes_jev2b": 0.007984,
+      "p_yes_clm": 0.467717
+    },
+    {
+      "id": "live:Polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026:qwen3.5-9b-selfhosted:2026-11-12T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "forecast": 0.94,
+      "label": 1,
+      "p_yes_jev2b": 0.942942,
+      "p_yes_clm": 0.92724
+    },
+    {
+      "id": "live:Kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01:qwen3.5-9b-selfhosted:2026-11-12T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+      "forecast": 0.15,
+      "label": 0,
+      "p_yes_jev2b": 0.012656,
+      "p_yes_clm": 0.324004
+    },
+    {
+      "id": "live:Polymarket:will-hamas-agree-to-disarm-by-december-31:qwen3.5-9b-selfhosted:2026-11-12T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-hamas-agree-to-disarm-by-december-31",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.010188,
+      "p_yes_clm": 0.511268
+    },
+    {
+      "id": "live:Polymarket:will-the-iranian-regime-fall-by-the-end-of-2026:qwen3.5-9b-selfhosted:2026-11-12T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-iranian-regime-fall-by-the-end-of-2026",
+      "forecast": 0.02,
+      "label": 0,
+      "p_yes_jev2b": 0.013434,
+      "p_yes_clm": 0.604748
+    },
+    {
+      "id": "live:Kalshi:KXUSAEXPANDTERRITORY-29JAN21:qwen3.5-9b-selfhosted:2026-11-12T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.020638,
+      "p_yes_clm": 0.873056
+    },
+    {
+      "id": "live:Polymarket:will-the-us-invade-iran-before-2027:qwen3.5-9b-selfhosted:2026-11-12T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-us-invade-iran-before-2027",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.006726,
+      "p_yes_clm": 0.514862
+    },
+    {
+      "id": "live:Polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026:qwen3.5-9b-selfhosted:2026-11-12T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.006905,
+      "p_yes_clm": 0.513217
+    },
+    {
+      "id": "live:Polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026:qwen3.5-9b-selfhosted:2026-11-13T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "forecast": 0.94,
+      "label": 1,
+      "p_yes_jev2b": 0.956457,
+      "p_yes_clm": 0.945593
+    },
+    {
+      "id": "live:Kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01:qwen3.5-9b-selfhosted:2026-11-13T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+      "forecast": 0.15,
+      "label": 0,
+      "p_yes_jev2b": 0.026624,
+      "p_yes_clm": 0.396161
+    },
+    {
+      "id": "live:Polymarket:will-hamas-agree-to-disarm-by-december-31:qwen3.5-9b-selfhosted:2026-11-13T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-hamas-agree-to-disarm-by-december-31",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.027364,
+      "p_yes_clm": 0.500172
+    },
+    {
+      "id": "live:Polymarket:will-the-iranian-regime-fall-by-the-end-of-2026:qwen3.5-9b-selfhosted:2026-11-13T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-iranian-regime-fall-by-the-end-of-2026",
+      "forecast": 0.02,
+      "label": 0,
+      "p_yes_jev2b": 0.150616,
+      "p_yes_clm": 0.670601
+    },
+    {
+      "id": "live:Kalshi:KXUSAEXPANDTERRITORY-29JAN21:qwen3.5-9b-selfhosted:2026-11-13T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.021207,
+      "p_yes_clm": 0.815934
+    },
+    {
+      "id": "live:Polymarket:will-the-us-invade-iran-before-2027:qwen3.5-9b-selfhosted:2026-11-13T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-us-invade-iran-before-2027",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.005218,
+      "p_yes_clm": 0.499557
+    },
+    {
+      "id": "live:Polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026:qwen3.5-9b-selfhosted:2026-11-13T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.012036,
+      "p_yes_clm": 0.525209
+    },
+    {
+      "id": "live:Polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026:qwen3.5-9b-selfhosted:2026-11-14T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "forecast": 0.94,
+      "label": 1,
+      "p_yes_jev2b": 0.94906,
+      "p_yes_clm": 0.908316
+    },
+    {
+      "id": "live:Kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01:qwen3.5-9b-selfhosted:2026-11-14T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+      "forecast": 0.15,
+      "label": 0,
+      "p_yes_jev2b": 0.087382,
+      "p_yes_clm": 0.387118
+    },
+    {
+      "id": "live:Polymarket:will-the-us-invade-iran-before-2027:qwen3.5-9b-selfhosted:2026-11-14T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-us-invade-iran-before-2027",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.00528,
+      "p_yes_clm": 0.545804
+    },
+    {
+      "id": "live:Polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026:qwen3.5-9b-selfhosted:2026-11-14T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.010687,
+      "p_yes_clm": 0.557326
+    },
+    {
+      "id": "live:Polymarket:will-hamas-agree-to-disarm-by-december-31:qwen3.5-9b-selfhosted:2026-11-14T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-hamas-agree-to-disarm-by-december-31",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.018881,
+      "p_yes_clm": 0.372003
+    },
+    {
+      "id": "live:Polymarket:will-the-iranian-regime-fall-by-the-end-of-2026:qwen3.5-9b-selfhosted:2026-11-14T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-iranian-regime-fall-by-the-end-of-2026",
+      "forecast": 0.02,
+      "label": 0,
+      "p_yes_jev2b": 0.144408,
+      "p_yes_clm": 0.564886
+    },
+    {
+      "id": "live:Kalshi:KXUSAEXPANDTERRITORY-29JAN21:qwen3.5-9b-selfhosted:2026-11-14T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.013317,
+      "p_yes_clm": 0.82838
+    },
+    {
+      "id": "live:Polymarket:will-bitcoin-dip-to-64k-november-9-15-2026:qwen3.5-9b-selfhosted:2026-11-14T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-bitcoin-dip-to-64k-november-9-15-2026",
+      "forecast": 0.15,
+      "label": 0,
+      "p_yes_jev2b": 0.027805,
+      "p_yes_clm": 0.646196
+    },
+    {
+      "id": "live:Polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026:qwen3.5-9b-selfhosted:2026-11-15T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "forecast": 0.94,
+      "label": 1,
+      "p_yes_jev2b": 0.946047,
+      "p_yes_clm": 0.948516
+    },
+    {
+      "id": "live:Kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01:qwen3.5-9b-selfhosted:2026-11-15T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXMEDIARELEASEPRISONBREAK-30JAN01-28JAN01",
+      "forecast": 0.15,
+      "label": 0,
+      "p_yes_jev2b": 0.407416,
+      "p_yes_clm": 0.437858
+    },
+    {
+      "id": "live:Polymarket:will-hamas-agree-to-disarm-by-december-31:qwen3.5-9b-selfhosted:2026-11-15T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-hamas-agree-to-disarm-by-december-31",
+      "forecast": 0.02,
+      "label": 0,
+      "p_yes_jev2b": 0.007399,
+      "p_yes_clm": 0.505266
+    },
+    {
+      "id": "live:Polymarket:will-the-iranian-regime-fall-by-the-end-of-2026:qwen3.5-9b-selfhosted:2026-11-15T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-iranian-regime-fall-by-the-end-of-2026",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.019724,
+      "p_yes_clm": 0.562622
+    },
+    {
+      "id": "live:Kalshi:KXUSAEXPANDTERRITORY-29JAN21:qwen3.5-9b-selfhosted:2026-11-15T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.039009,
+      "p_yes_clm": 0.838147
+    },
+    {
+      "id": "live:Polymarket:will-the-us-invade-iran-before-2027:qwen3.5-9b-selfhosted:2026-11-15T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:will-the-us-invade-iran-before-2027",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.004963,
+      "p_yes_clm": 0.517849
+    },
+    {
+      "id": "live:Polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026:qwen3.5-9b-selfhosted:2026-11-15T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "forecast": 0.04,
+      "label": 0,
+      "p_yes_jev2b": 0.015394,
+      "p_yes_clm": 0.582266
+    },
+    {
+      "id": "live:Polymarket:unl-fra-tur-2026-11-15-tur:qwen3.5-9b-selfhosted:2026-11-15T17:20",
+      "kind": "live",
+      "set": "A",
+      "model": "qwen3.5-9b-selfhosted",
+      "market": "polymarket:unl-fra-tur-2026-11-15-tur",
+      "forecast": 0.08,
+      "label": 0,
+      "p_yes_jev2b": 0.008351,
+      "p_yes_clm": 0.534211
+    }
+  ]
+}
