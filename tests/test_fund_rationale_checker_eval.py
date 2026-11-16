@@ -147,5 +147,14 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("rationale", json.dumps(r["cases"]))
 
 
+class CommittedReportTests(unittest.TestCase):
+    def test_the_committed_result_keeps_the_2b(self):
+        r = json.loads((_ROOT / "reports" / "fund_rationale_checker_eval.json").read_text(encoding="utf-8"))
+        self.assertTrue(r["verdict"].startswith("KEEP"))
+        self.assertEqual(r["checkers"]["jev2b"]["known"]["inversions_caught"], 4)
+        self.assertEqual(r["checkers"]["clm"]["known"]["inversions_caught"], 0)
+        self.assertFalse(r["tests"]["known_cases_no_worse"])
+
+
 if __name__ == "__main__":
     unittest.main()

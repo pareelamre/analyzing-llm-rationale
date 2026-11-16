@@ -2,14 +2,10 @@ name: Fund rationale checker eval
 
 # One-off pre-registered test (docs/fund.md, "Rationale checker: CLM-8B against Open-Jev 2B"):
 # scores both checkers on the same known and live cases on GitHub's CPU and uploads the report.
+# Result 2026-11-16: keep the 2B. Kept runnable by hand only.
 
 on:
   workflow_dispatch:
-  push:
-    branches: [rationale-checker-test]
-    paths:
-      - .github/workflows/fund-rationale-checker-eval.yml
-      - scripts/fund_rationale_checker_eval.py
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9

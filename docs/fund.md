@@ -745,6 +745,36 @@ read when this was written, and that run was cancelled.
   markets counted across both. Each set's Brier difference is also reported,
   description only.
 
+#### Result (2026-11-16): KEEP the 2B
+
+Run 43820324331 on GitHub's CPU. Report: `reports/fund_rationale_checker_eval.json`.
+
+- **Set B came back empty.** Only the on-device model stores a rationale with
+  its forecast, so the live cases are set A alone: 52 cases from 10 markets (7
+  argue Yes).
+- **As registered, the verdict is "too few to tell", so the 2B stays.** But
+  CLM-8B would not switch even with enough markets. It missed all 4 known
+  inversions, and those 7 known cases do not change with more data.
+
+| | Open-Jev 2B | CLM-8B |
+| --- | --- | --- |
+| Known cases right (of 7) | 7 | 1 |
+| Inversions caught (of 4) | 4 | 0 |
+| Live Brier (52 cases) | 0.005 | 0.294 |
+| Live false flags | 0 | 7 |
+| Live "unclear" answers | 2% | 73% |
+| Median seconds per check | 12.4 | 15.5 |
+
+- **Brier difference:** CLM-8B minus the 2B is +0.289 (95% CI +0.160 to
+  +0.424), so CLM-8B is worse. A flat 50% on every case would score 0.25.
+- **Why it fails:** CLM-8B reads "yes" but barely reads "no". On rationales
+  that argue Yes it gives 0.91 to 0.95. On rationales that argue No it gives
+  0.32 to 0.87, mostly about 0.5. The setup check showed the same: 0.91 for "rain
+  is very likely" and 0.47 for "rain is very unlikely". Most of the on-device
+  model's rationales argue No.
+- **Caveat:** it was tested at 8-bit through llama.cpp, not at the makers'
+  16-bit on vLLM. 8-bit is what Foresea could run.
+
 ## Live Polymarket decided-ranges test (pre-registered 2026-11-10, before any live record)
 
 **Why.** Price history could not show whether a range the airport readings had
