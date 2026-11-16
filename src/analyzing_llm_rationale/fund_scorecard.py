@@ -37,10 +37,14 @@ STARTING_SIZE = {"option": orch.OPTION_RISK, "pair": 2 * orch.PAIR_RISK, "event"
 
 #: The strategies the fund runs, and how each is sized.
 STRATEGIES = {
-    "put_premium": {"label": "Put premium (Nifty put spreads)", "kind": "option", "market": "Index options"},
+    "put_premium": {"label": "Put premium (Nifty and Bank Nifty put spreads)", "kind": "option",
+                    "market": "Index options"},
     "pairs_model": {"label": "Commodity pairs", "kind": "pair", "market": "Commodities"},
     "blend_model": {"label": "Blend analyst (market and model)", "kind": "event", "market": "Prediction markets"},
 }
+
+#: The Bank Nifty put-spread test (docs/fund.md, "Bank Nifty put spreads").
+BANK_NIFTY_REPORT = "fund_banknifty_put_eval.json"
 
 OPENING = {"open", "add", "transfer"}
 CLOSING = {"close", "settle", "expire"}
@@ -99,18 +103,42 @@ def _load(path: Path) -> dict:
         return {}
 
 
+def _put_test(root: Path, report: str, label: str) -> Optional[Evidence]:
+    test = _load(root / "reports" / report).get("put_spread") or {}
+    if not (test.get("trades") and test.get("stdev") is not None and test.get("mean_return") is not None):
+        return None
+    years = f"{str(test.get('first', ''))[:4]}-{str(test.get('last', ''))[:4]}"
+    return Evidence(f"{label}, {years}", int(test["trades"]), float(test["mean_return"]), float(test["stdev"]),
+                    PROXY_WEIGHT, f"reports/{report}")
+
+
+def bank_nifty_on(root: Path) -> bool:
+    """Bank Nifty's put spreads trade, and count, only while their own test says GO (docs/fund.md)."""
+    return (_load(root / "reports" / BANK_NIFTY_REPORT).get("put_spread") or {}).get("verdict") == "GO"
+
+
+def together(analyst: str, root: Path) -> Optional[float]:
+    """For a strategy that holds positions which move together, their correlation (ρ): the put
+    premium sleeve's Nifty and Bank Nifty spreads, from the Bank Nifty test."""
+    if analyst != "put_premium" or not bank_nifty_on(root):
+        return None
+    rho = ((_load(root / "reports" / BANK_NIFTY_REPORT).get("description_only") or {}).get("both_sold") or {}).get("rho")
+    return float(rho) if rho is not None and 0 <= float(rho) <= 1 else 1.0
+
+
 def test_evidence(analyst: str, root: Path) -> tuple[list[Evidence], Optional[str]]:
     """An analyst's out-of-sample tests in return per dollar at risk, and a line of context for
     evidence that does not count (an in-sample backtest, or a test scored in Brier)."""
     if analyst == "put_premium":
-        test = _load(root / "reports" / "fund_ndx_put_eval.json").get("put_spread") or {}
-        if test.get("trades") and test.get("stdev") is not None and test.get("mean_return") is not None:
-            years = f"{str(test.get('first', ''))[:4]}-{str(test.get('last', ''))[:4]}"
-            return [Evidence(f"Out-of-sample test on the Nasdaq-100, {years}", int(test["trades"]),
-                             float(test["mean_return"]), float(test["stdev"]), PROXY_WEIGHT,
-                             "reports/fund_ndx_put_eval.json")], \
-                "The Nifty backtest it was designed on is in-sample, so it is not counted."
-        return [], "Its out-of-sample report is missing."
+        ndx = _put_test(root, "fund_ndx_put_eval.json", "Out-of-sample test on the Nasdaq-100")
+        if ndx is None:
+            return [], "Its out-of-sample report is missing."
+        context = "The Nifty backtest it was designed on is in-sample, so it is not counted."
+        bank = _put_test(root, BANK_NIFTY_REPORT, "Bank Nifty test") if bank_nifty_on(root) else None
+        if bank is None:
+            return [ndx], context
+        return [ndx, bank], (f"{context} Bank Nifty counts at half weight: it shares the Nifty backtest's months "
+                             f"and much of its movement.")
     if analyst == "pairs_model":
         return [], ("No out-of-sample test yet: the US backtest (2011-2026) chose which pairs to trade, "
                     "so it is not counted.")
@@ -194,22 +222,32 @@ def _size_text(kind: str, scale: float) -> str:
     return f"1/{round(1 / share)} of the Kelly bet per market" if share > 0 else "no money"
 
 
-def allocate(score: Mapping[str, Any], kind: str) -> tuple[str, float, Optional[float]]:
-    """Status, size multiple and (for a proven strategy) the quarter-Kelly share at the low end."""
+def allocate(score: Mapping[str, Any], kind: str, rho: Optional[float] = None) -> tuple[str, float, Optional[float]]:
+    """Status, size multiple and (for a proven strategy) the quarter-Kelly share at the low end.
+
+    ``rho`` is the correlation of two positions the strategy holds at once. For two bets with the
+    same edge and risk, the Kelly bet on each is the single bet's divided by (1 + rho)."""
     low, high, sd = score.get("low"), score.get("high"), score.get("sd")
     enough = float(score.get("counted") or 0.0) >= MIN_POSITIONS
     if enough and high is not None and high < 0:
         return "failed", 0.0, None
     if enough and low is not None and low > 0 and sd:
         kelly = orch.KELLY_FRACTION * low / (sd * sd)
-        return "proven", round(min(MAX_SCALE, max(MIN_PROVEN_SCALE, kelly / STARTING_SIZE[kind])), 4), round(kelly, 5)
+        each = kelly / (1 + rho) if rho is not None else kelly
+        return "proven", round(min(MAX_SCALE, max(MIN_PROVEN_SCALE, each / STARTING_SIZE[kind])), 4), round(kelly, 5)
     return "trial", TRIAL_SCALE, None
 
 
-def _why(status: str, score: Mapping[str, Any], kelly: Optional[float], scale: float) -> str:
+def _why(status: str, score: Mapping[str, Any], kelly: Optional[float], scale: float,
+         rho: Optional[float] = None) -> str:
     n = score.get("counted") or 0
     if status == "proven":
         capped = f", above the {MAX_SCALE:g}x limit" if scale >= MAX_SCALE else ""
+        if rho is not None:
+            return (f"The low end of its range is above zero. A quarter-Kelly bet at that low end is "
+                    f"{kelly * 100:.1f}% of the fund at risk. Its two spreads move together (correlation "
+                    f"{rho:.2f}), so each gets that divided by {1 + rho:.2f}: "
+                    f"{kelly / (1 + rho) * 100:.1f}%{capped}.")
         return (f"The low end of its range is above zero. A quarter-Kelly bet at that low end is "
                 f"{kelly * 100:.1f}% of the fund at risk{capped}.")
     if status == "failed":
@@ -231,13 +269,15 @@ def scorecard(conn: Optional[sqlite3.Connection], fund_id: str, root: Path,
         tests, context = test_evidence(analyst, root)
         live = [p["return"] for p in closed if p["analyst"] == analyst]
         score = pool(tests, live)
-        status, scale, kelly = allocate(score, spec["kind"])
+        rho = together(analyst, root)
+        status, scale, kelly = allocate(score, spec["kind"], rho)
         live_score = pool([], live)
         rows.append({
             "analyst": analyst, "label": spec["label"], "market": spec["market"], "kind": spec["kind"],
             "status": status, "scale": scale, "trust": round(orch.DEFAULT_TRUST * scale, 4),
             "size": _size_text(spec["kind"], scale), "starting_size": _size_text(spec["kind"], 1.0),
-            "kelly_at_low": kelly, "score": score, "why": _why(status, score, kelly, scale), "context": context,
+            "kelly_at_low": kelly, "together": rho, "score": score, "why": _why(status, score, kelly, scale, rho),
+            "context": context,
             "tests": [{"label": e.label, "trades": e.trades, "counted": e.counted, "mean": e.mean, "sd": e.sd,
                        "source": e.source} for e in tests],
             "live": {"positions": len(live), "mean": live_score["mean"], "low": live_score["low"],
