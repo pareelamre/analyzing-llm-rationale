@@ -315,6 +315,27 @@ class PutSleeveTests(unittest.TestCase):
         self.assertIsNone(out["signal"])
         self.assertIn("too thin", out["skipped"]["reason"])
 
+    def test_the_sleeve_sells_bank_niftys_put_spread_by_the_same_rule(self):
+        forecast = _forecast()
+        forecast["indices"] = [{**forecast["indices"][0], "name": "Nifty Bank"}]
+        rows = [{**r, "underlying_symbol": "BANKNIFTY", "trading_symbol": r["trading_symbol"].replace("NIFTY", "BANKNIFTY")}
+                for r in self._rows()]
+        base = self._market(0.01)
+
+        def quote_fn(keys):
+            out = base(["NSE_INDEX|Nifty 50" if k == "NSE_INDEX|Nifty Bank" else k for k in keys])
+            return {("NSE_INDEX|Nifty Bank" if k == "NSE_INDEX|Nifty 50" else k): q for k, q in out.items()}
+        out = fo.put_spread_signal(forecast, rows, NOW, quote_fn=quote_fn, price_source="x", symbol="BANKNIFTY")
+        s = out["signal"]
+        self.assertEqual((s.analyst, s.instrument["symbol"], s.instrument["structure"]),
+                         ("put_premium", "BANKNIFTY", "put_spread"))
+        self.assertTrue(s.instrument["id"].startswith("nse_fo:BANKNIFTY:put_spread:2026-12-08"))
+        self.assertEqual(s.reason, fo.SLEEVE_RULES["BANKNIFTY"])
+        # Nifty's own forecast and chain do not stand in for Bank Nifty's.
+        none = fo.put_spread_signal(_forecast(), rows, NOW, quote_fn=quote_fn, price_source="x", symbol="BANKNIFTY")
+        self.assertEqual((none["signal"], none["skipped"]["label"]), (None, "Bank Nifty put premium"))
+        self.assertIn("Nifty Bank", none["skipped"]["reason"])
+
     def test_an_order_from_a_rule_carries_the_rule_as_its_reason(self):
         out = fo.put_spread_signal(_forecast(), self._rows(), NOW, quote_fn=self._market(0.01), price_source="x")
         [order] = orch.plan({"nav_usd": 10_000.0, "cash_usd": 6_000.0, "positions": [], "by_asset_class": {},

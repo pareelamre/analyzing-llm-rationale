@@ -31,7 +31,7 @@ import sqlite3
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 import requests
 
@@ -55,6 +55,8 @@ BOARD_PATH = ROOT / "static" / "mark_to_market_live.json"
 PAIRS_PATH = ROOT / "static" / "commodity_pairs_live.json"
 INDEX_FORECAST_PATH = ROOT / "static" / "index_forecast_live.json"
 PUT_SLEEVE_REPORT_PATH = ROOT / "reports" / "fund_ndx_put_eval.json"
+#: Bank Nifty's own test (docs/fund.md, "Bank Nifty put spreads"), on top of the sleeve's.
+BANKNIFTY_SLEEVE_REPORT_PATH = ROOT / "reports" / "fund_banknifty_put_eval.json"
 #: The put premium sleeve's analyst (docs/fund.md, "Put premium sleeve").
 PUT_SLEEVE = "put_premium"
 BLEND_PATH = ROOT / "configs" / "fund_blend.json"
@@ -280,11 +282,25 @@ def put_sleeve_mode() -> str:
     return "GO" if (_load_json(PUT_SLEEVE_REPORT_PATH).get("put_spread") or {}).get("verdict") == "GO" else "OFF"
 
 
+def put_sleeve_modes() -> dict[str, str]:
+    """Each index the sleeve may sell on: Nifty while the sleeve's check says GO, Bank Nifty while
+    its own test says GO as well."""
+    base = put_sleeve_mode()
+    bank = (_load_json(BANKNIFTY_SLEEVE_REPORT_PATH).get("put_spread") or {}).get("verdict") == "GO"
+    return {"NIFTY": base, "BANKNIFTY": base if bank else "OFF"}
+
+
+def sleeve_symbol(instrument_id: str) -> str:
+    """The index of a sleeve spread, from its id ``nse_fo:{symbol}:...``."""
+    parts = instrument_id.split(":")
+    return parts[1] if len(parts) > 1 else ""
+
+
 def options_cycle(index_forecast: dict, now: datetime, quote_fn, price_source: str, held: dict, *,
-                  sleeve: bool = False) -> dict:
-    """The options analyst's signals, values and quotes, and the put premium sleeve's spread when
-    ``sleeve`` asks for one, or why there were none."""
-    empty = {"signals": [], "skipped": [], "values": {}, "quotes": {}, "sleeve": None}
+                  sleeve: Sequence[str] = ()) -> dict:
+    """The options analyst's signals, values and quotes, and the put premium sleeve's spread on each
+    index in ``sleeve``, or why there were none."""
+    empty = {"signals": [], "skipped": [], "values": {}, "quotes": {}, "sleeve": []}
     if not index_forecast.get("indices"):
         return empty
     try:
@@ -292,8 +308,8 @@ def options_cycle(index_forecast: dict, now: datetime, quote_fn, price_source: s
     except (fu.FeedError, requests.RequestException, ValueError) as exc:
         return {**empty, "skipped": [{"instrument": "nse_fo", "label": "Index options", "reason": f"no option list: {exc}"}]}
     out = fo.option_signals(index_forecast, rows, now, quote_fn=quote_fn, price_source=price_source, held=held)
-    out["sleeve"] = fo.put_spread_signal(index_forecast, rows, now, quote_fn=quote_fn,
-                                         price_source=price_source) if sleeve else None
+    out["sleeve"] = [fo.put_spread_signal(index_forecast, rows, now, quote_fn=quote_fn, price_source=price_source,
+                                          symbol=symbol) for symbol in sleeve]
     return out
 
 
@@ -348,24 +364,26 @@ def run(now: Optional[datetime] = None) -> dict:
 
     can_trade, why = trading_window(conn, now)
     executed, passed = [], []
-    options = {"signals": [], "skipped": [], "values": {}, "quotes": {}, "sleeve": None}
+    options = {"signals": [], "skipped": [], "values": {}, "quotes": {}, "sleeve": []}
     option_skips: list = []
-    sleeve_mode = put_sleeve_mode()
-    # The sleeve holds one spread at a time, to expiry: its spreads never take the options
-    # analyst's early exits, which the tested rule did not have.
+    sleeve_modes = put_sleeve_modes()
+    # The sleeve holds one spread per index at a time, to expiry: its spreads never take the
+    # options analyst's early exits, which the tested rule did not have.
     sleeve_ids = {p["instrument_id"] for p in snapshot["positions"] if PUT_SLEEVE in (p.get("attribution") or {})}
+    sleeve_wanted = [sym for sym in fo.SLEEVE_SYMBOLS
+                     if sleeve_modes.get(sym) == "GO" and sym not in {sleeve_symbol(i) for i in sleeve_ids}]
     if can_trade:
         options = options_cycle(_load_json(INDEX_FORECAST_PATH), now, quote_fn, price_source, option_specs,
-                                sleeve=sleeve_mode == "GO" and not sleeve_ids)
+                                sleeve=sleeve_wanted)
         quotes.update(options["quotes"])
         # The options analyst is retired: only a failed option list and the sleeve's own skips are reported.
         option_skips = [s for s in options["skipped"] if s.get("instrument") == "nse_fo"]
-        if options.get("sleeve"):
-            if options["sleeve"]["signal"]:
-                signals.append(options["sleeve"]["signal"])
-                quotes.update(options["sleeve"]["quotes"])
+        for spread in options.get("sleeve") or []:
+            if spread["signal"]:
+                signals.append(spread["signal"])
+                quotes.update(spread["quotes"])
             else:
-                option_skips.append(options["sleeve"]["skipped"])
+                option_skips.append(spread["skipped"])
         held_pairs = {}
         for pos in snapshot["positions"]:
             if pos.get("pair_key"):
@@ -414,7 +432,8 @@ def run(now: Optional[datetime] = None) -> dict:
     payload["prediction_markets"] = {"analyst": "blend_model", "test": blend.get("time_split_test"),
                                      "trained_on": blend.get("trained_on")}
     payload["settled"] = settled_events
-    payload["options"] = {"mode": "OFF", "put_sleeve": {"mode": sleeve_mode, "holding": sorted(sleeve_ids)},
+    payload["options"] = {"mode": "OFF", "put_sleeve": {"mode": sleeve_modes["NIFTY"], "modes": sleeve_modes,
+                                                        "holding": sorted(sleeve_ids)},
                           "prices": price_source, "settled": settled,
                           "indices": [name for name, _key in fo.INDEX_OPTIONS.values()],
                           "risk_per_structure": orch.OPTION_RISK * _scale(card, PUT_SLEEVE),

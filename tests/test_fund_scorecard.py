@@ -113,9 +113,16 @@ class ScorecardTests(unittest.TestCase):
         card = sc.scorecard(None, FUND, _ROOT)
         rows = {r["analyst"]: r for r in card["strategies"]}
         put = rows["put_premium"]
-        self.assertEqual((put["status"], put["scale"]), ("proven", sc.MAX_SCALE))
-        self.assertEqual(put["size"], "5.0% of the fund at risk per spread")
-        self.assertEqual(put["tests"][0]["counted"], put["tests"][0]["trades"] * sc.PROXY_WEIGHT)
+        # Nasdaq-100 and Bank Nifty at half weight; the two spreads share a quarter-Kelly by (1 + rho).
+        self.assertEqual(put["status"], "proven")
+        self.assertEqual([t["source"] for t in put["tests"]],
+                         ["reports/fund_ndx_put_eval.json", "reports/fund_banknifty_put_eval.json"])
+        self.assertTrue(all(t["counted"] == t["trades"] * sc.PROXY_WEIGHT for t in put["tests"]))
+        self.assertAlmostEqual(put["together"], 0.7071, places=3)
+        self.assertAlmostEqual(put["scale"] * sc.STARTING_SIZE["option"],
+                               put["kelly_at_low"] / (1 + put["together"]), places=4)
+        self.assertEqual(put["size"], "4.1% of the fund at risk per spread")
+        self.assertIn("move together", put["why"])
         self.assertEqual((rows["pairs_model"]["status"], rows["pairs_model"]["size"]),
                          ("trial", "2.5% of the fund per leg"))
         self.assertEqual((rows["blend_model"]["status"], rows["blend_model"]["size"]),
@@ -159,6 +166,29 @@ class ScorecardTests(unittest.TestCase):
         self.assertEqual({r["analyst"]: r["live"]["positions"] for r in card["strategies"]},
                          {"put_premium": 0, "pairs_model": 0, "blend_model": 0})
 
+    def test_bank_nifty_counts_and_shares_the_size_only_while_its_test_says_go(self):
+        import json
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "reports").mkdir()
+            shutil.copy(_ROOT / "reports" / "fund_ndx_put_eval.json", Path(tmp) / "reports")
+            alone = {r["analyst"]: r for r in sc.scorecard(None, FUND, Path(tmp))["strategies"]}["put_premium"]
+            self.assertEqual((len(alone["tests"]), alone["together"], alone["scale"]), (1, None, sc.MAX_SCALE))
+            report = json.loads((_ROOT / "reports" / sc.BANK_NIFTY_REPORT).read_text())
+            report["put_spread"]["verdict"] = "NO-GO"
+            (Path(tmp) / "reports" / sc.BANK_NIFTY_REPORT).write_text(json.dumps(report))
+            off = {r["analyst"]: r for r in sc.scorecard(None, FUND, Path(tmp))["strategies"]}["put_premium"]
+            self.assertEqual((len(off["tests"]), off["together"]), (1, None))
+
+    def test_two_positions_that_move_together_split_the_kelly_bet(self):
+        score = {"counted": 200, "mean": 0.08, "sd": 0.4, "low": 0.025, "high": 0.135}
+        _status, alone, kelly = sc.allocate(score, "option")
+        _status, each, _kelly = sc.allocate(score, "option", rho=0.6)
+        self.assertAlmostEqual(kelly, 0.25 * 0.025 / 0.16, places=5)
+        self.assertAlmostEqual(each, round(alone / 1.6, 4), places=3)
+        _status, same, _kelly = sc.allocate(score, "option", rho=1.0)  # one bet in two halves
+        self.assertAlmostEqual(same, round(max(sc.MIN_PROVEN_SCALE, alone / 2), 4), places=3)
+
     def test_a_missing_report_leaves_the_strategy_on_trial(self):
         with tempfile.TemporaryDirectory() as tmp:
             rows = {r["analyst"]: r for r in sc.scorecard(None, FUND, Path(tmp))["strategies"]}
@@ -182,7 +212,7 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(skipped, [{"instrument": "blend_model:x", "label": "x",
                                     "reason": "the scorecard gives Blend no money: Failed: below zero."}])
 
-    def test_a_proven_put_spread_is_sized_at_five_percent_at_risk(self):
+    def test_a_proven_put_spread_at_the_cap_is_sized_at_five_percent_at_risk(self):
         inst = {"id": "nse_fo:NIFTY:put_spread:2026-12-08:x", "label": "spread", "asset_class": "option",
                 "underlying": "NIFTY", "currency": "INR", "multiplier": 1.0}
         s = orch.Signal(analyst="put_premium", instrument=inst, side="BULL", price=50.0, edge=0.1, trust=0.625)

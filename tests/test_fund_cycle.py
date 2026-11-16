@@ -186,6 +186,24 @@ class FundCycleTests(unittest.TestCase):
                 path.write_text(json.dumps({"put_spread": {"verdict": "GO"}}))
                 self.assertEqual(cycle.put_sleeve_mode(), "GO")
 
+    def test_bank_nifty_joins_the_sleeve_only_while_both_tests_say_go(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base, bank = Path(tmp) / "ndx.json", Path(tmp) / "bank.json"
+            with mock.patch.object(cycle, "PUT_SLEEVE_REPORT_PATH", base), \
+                    mock.patch.object(cycle, "BANKNIFTY_SLEEVE_REPORT_PATH", bank):
+                bank.write_text(json.dumps({"put_spread": {"verdict": "GO"}}))
+                self.assertEqual(cycle.put_sleeve_modes(), {"NIFTY": "OFF", "BANKNIFTY": "OFF"})
+                base.write_text(json.dumps({"put_spread": {"verdict": "GO"}}))
+                self.assertEqual(cycle.put_sleeve_modes(), {"NIFTY": "GO", "BANKNIFTY": "GO"})
+                bank.write_text(json.dumps({"put_spread": {"verdict": "NO-GO"}}))
+                self.assertEqual(cycle.put_sleeve_modes(), {"NIFTY": "GO", "BANKNIFTY": "OFF"})
+        self.assertEqual(cycle.put_sleeve_modes()["BANKNIFTY"], "GO")  # the repo's own reports
+
+    def test_a_held_spread_blocks_only_its_own_index(self):
+        self.assertEqual(cycle.sleeve_symbol("nse_fo:BANKNIFTY:put_spread:2026-12-29:57000/55000"), "BANKNIFTY")
+        self.assertEqual(cycle.sleeve_symbol("nse_fo:NIFTY:put_spread:2026-12-08:24500/24000"), "NIFTY")
+        self.assertEqual(cycle.sleeve_symbol("odd"), "")
+
 
 if __name__ == "__main__":
     unittest.main()
