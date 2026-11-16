@@ -10,14 +10,14 @@
     },
     "unrealized": {
       "agent_transfer": 10.9776,
-      "event_model": 61.2744,
+      "event_model": 59.4786,
       "pairs_model": -4.5115,
       "put_premium": 7.9442
     }
   },
   "by_asset_class": {
     "commodity": 499.7128,
-    "event": 4032.9817,
+    "event": 4031.1859,
     "option": 625.2615
   },
   "cash_usd": 4918.5287,
@@ -537,34 +537,31 @@
     {
       "nav_usd": 10076.4847,
       "ts": "2026-11-16T18:44:14.772340+00:00"
+    },
+    {
+      "nav_usd": 10074.6889,
+      "ts": "2026-11-16T20:01:19.562630+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [],
+    "passed": [
+      {
+        "instrument": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
+        "reason": "no room under the fund's limits"
+      },
+      {
+        "instrument": "kalshi:KXAGICO-COMP-27Q4",
+        "reason": "no room under the fund's limits"
+      },
+      {
+        "instrument": "polymarket:will-jensen-huang-rejoin-nvidia-by-december-31-2026",
+        "reason": "no room under the fund's limits"
+      }
+    ],
     "seeded": null,
-    "signals": 3,
+    "signals": 5,
     "skipped": [
-      {
-        "instrument": "polymarket:unl-grc-ser-2026-11-16-draw",
-        "label": "Will Greece vs. Serbia end in a draw?",
-        "reason": "closes within a day"
-      },
-      {
-        "instrument": "polymarket:unl-ger-nld-2026-11-16-nld",
-        "label": "Will Netherlands win on 2026-11-16?",
-        "reason": "closes within a day"
-      },
-      {
-        "instrument": "polymarket:unl-grc-ser-2026-11-16-ser",
-        "label": "Will Serbia win on 2026-11-16?",
-        "reason": "closes within a day"
-      },
-      {
-        "instrument": "polymarket:unl-ger-nld-2026-11-16-ger",
-        "label": "Will Germany win on 2026-11-16?",
-        "reason": "closes within a day"
-      },
       {
         "pair": "copper-gold",
         "reason": "stretched at z=-3.26 but its expected return is -0.4% per signal",
@@ -576,14 +573,14 @@
         "z": -3.237
       }
     ],
-    "traded": false,
-    "window": "00:14 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-16T18:44:14.772340+00:00",
+  "generated_at": "2026-11-16T20:01:19.562630+00:00",
   "guard": {
-    "board": 28,
-    "checked": 28,
+    "board": 24,
+    "checked": 24,
     "checker": "Open-Jev 2B (Qwen3.5-2B base)",
     "days_recorded": 8,
     "dropped": [],
@@ -600,7 +597,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10076.4847,
+  "nav_usd": 10074.6889,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -820,15 +817,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.956,
+      "mark": 0.952,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 65.5478,
+      "pnl_usd": 63.752,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 429.2033,
+      "value_usd": 427.4075,
       "venue": "polymarket"
     },
     {
@@ -970,7 +967,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 0.765,
+  "return_pct": 0.747,
   "scorecard": {
     "retired_records": [
       {
