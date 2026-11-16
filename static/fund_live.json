@@ -12,13 +12,13 @@
       "agent_transfer": 17.8767,
       "event_model": 54.0911,
       "pairs_model": 0.0,
-      "put_premium": 7.3168
+      "put_premium": 4.0549
     }
   },
   "by_asset_class": {
     "commodity": 504.2244,
     "event": 4032.6974,
-    "option": 624.6341
+    "option": 621.3722
   },
   "cash_usd": 4918.5287,
   "curve": [
@@ -505,13 +505,17 @@
     {
       "nav_usd": 10080.0845,
       "ts": "2026-11-16T08:01:17.337704+00:00"
+    },
+    {
+      "nav_usd": 10076.8226,
+      "ts": "2026-11-16T08:09:34.006783+00:00"
     }
   ],
   "cycle": {
-    "orders": 3,
+    "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 3,
+    "signals": 2,
     "skipped": [
       {
         "pair": "copper-gold",
@@ -519,11 +523,11 @@
         "z": -2.752
       }
     ],
-    "traded": true,
-    "window": "in window"
+    "traded": false,
+    "window": "last trading cycle 08:01 UTC, under 10 hours ago"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-16T08:01:17.337704+00:00",
+  "generated_at": "2026-11-16T08:09:34.006783+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -531,7 +535,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10080.0845,
+  "nav_usd": 10076.8226,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -559,6 +563,7 @@
     "prices": "last trades (Upstox open data), 2% taken off each side",
     "put_sleeve": {
       "holding": [
+        "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
         "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600"
       ],
       "mode": "GO",
@@ -813,15 +818,15 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2038.92,
+      "mark": 2027.6609999999998,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": -4.4027,
+      "pnl_usd": -7.3292,
       "quantity": 19.041196356558505,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 412.5304,
+      "value_usd": 409.6038,
       "venue": "nse_fo"
     },
     {
@@ -838,11 +843,11 @@
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 11.7194,
+      "pnl_usd": 11.3841,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 212.1037,
+      "value_usd": 211.7684,
       "venue": "nse_fo"
     }
   ],
@@ -900,7 +905,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 0.801,
+  "return_pct": 0.768,
   "scorecard": {
     "retired_records": [
       {
