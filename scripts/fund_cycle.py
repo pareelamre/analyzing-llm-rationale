@@ -23,7 +23,10 @@ decided-ranges, options and VIX fade analysts are retired (RETIRED, docs/fund.md
 at the index's close, and Kalshi positions at their market's result, every run. Kalshi buys pay
 Kalshi's taker fee. Trade
 notes are worded by the on-device model (FUND_LLM_URL + SELF_HOSTED_LLM_API_KEY) when it is
-reachable; otherwise each note is the plain fact sheet.
+reachable; otherwise each note is the plain fact sheet. When Foresea's knowledge base is
+checked out (KNOWLEDGE_DIR), each commodity pair trade also carries what the newest report's
+price forecasts imply for the pair, and whether that agrees with the trade (fund_knowledge;
+evidence only, sizes unchanged).
 """
 from __future__ import annotations
 
@@ -42,6 +45,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import fund_hours as fh  # noqa: E402
+from analyzing_llm_rationale import fund_knowledge as fk  # noqa: E402
 from analyzing_llm_rationale import fund_ledger as ledger  # noqa: E402
 from analyzing_llm_rationale import fund_notes, market_data  # noqa: E402
 from analyzing_llm_rationale import fund_options as fo  # noqa: E402
@@ -413,6 +417,8 @@ def run(now: Optional[datetime] = None) -> dict:
     tracker = _load_json(PAIRS_PATH)
     signals, skipped_events, forecasts, guard = prediction_market_signals(board, now)
     pair_signals, skipped_pairs = orch.pair_signals(tracker, universe.get("pairs", []))
+    # What the knowledge base's newest price forecasts imply for each pair: evidence, not sizing.
+    knowledge_views = fk.annotate(pair_signals, universe.get("pairs", []), today)
     signals += pair_signals
 
     held_ids = {p["instrument_id"] for p in ledger.positions(conn, FUND_ID)}
@@ -499,6 +505,7 @@ def run(now: Optional[datetime] = None) -> dict:
     payload["hours"] = {"holiday_list": calendar is not None,
                         "venues": {venue: {"open": ok, "why": why_not} for venue, (ok, why_not) in hours.items()}}
     payload["scorecard"] = card
+    payload["knowledge"] = {"pairs": knowledge_views}
     payload["retired"] = [{**r, "since": "2026-11-15"} for r in RETIRED]
     blend = _load_json(BLEND_PATH)
     payload["prediction_markets"] = {"analyst": "blend_model", "test": blend.get("time_split_test"),

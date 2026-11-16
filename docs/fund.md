@@ -1669,6 +1669,22 @@ At 13:30 IST it also trades NSE options and MCX pairs at that session's prices.
 Pair signals still come from the last daily close, so a signal from one close
 now fills at the next session's live price, not at that close.
 
+## Knowledge base view on pairs (owner, 2026-11-17)
+
+The owner asked for Foresea's knowledge base to reach the fund. Each commodity pair now carries
+the newest report's view of where the pair's price ratio is heading:
+
+- **What it reads:** the newest source in the base that forecasts both legs' prices for this year
+  and next (baseline only: adverse, downside and futures scenarios are left out). Today that is the
+  World Bank's October 2026 Commodity Markets Outlook.
+- **What it says:** the forecast ratio for each year, the change, and which leg it favours. A
+  change under 1% is no tilt. Ratios are compared within one source, so the view is a direction,
+  not a level for the MCX ratio.
+- **What it does:** each pair trade's evidence gains a "knowledge base view" line saying whether the
+  view agrees with the trade; `fund_live.json` lists every pair's view under `knowledge`.
+- **What it does not do:** change sizes. The view is new and unscored; like the rationale checker
+  it is shown first and judged on resolved pair trades before it may move money.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes

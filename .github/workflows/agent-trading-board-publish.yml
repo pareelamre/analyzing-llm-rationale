@@ -73,8 +73,23 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Foresea's private knowledge base (docs/knowledge.md) adds its view to the fund's pair trades.
+      # Without the KNOWLEDGE_REPO_TOKEN secret the checkout is skipped and the fund runs as before.
+      KNOWLEDGE_DIR: ${{ github.workspace }}/knowledge-base
+      HAS_KNOWLEDGE_TOKEN: ${{ secrets.KNOWLEDGE_REPO_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check out the knowledge base
+        if: env.HAS_KNOWLEDGE_TOKEN == 'true'
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: pareelamre/foresea-knowledge
+          token: ${{ secrets.KNOWLEDGE_REPO_TOKEN }}
+          path: knowledge-base
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:

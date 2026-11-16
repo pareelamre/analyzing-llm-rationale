@@ -45,6 +45,24 @@ class ResearchPacketTests(unittest.TestCase):
         self.assertNotIn("do-not-copy", steps[0]["observation"])
         self.assertEqual(steps[0]["initiated_by"], "system_prefetch")
 
+    def test_knowledge_base_claims_join_the_packet_only_when_present(self):
+        claim = {"claim": "Widget demand reaches 120 million units in 2030.", "kind": "projection",
+                 "source": "Acme Research, Jun 2026, p. 3", "published": "2026-06-01", "horizon": "2030"}
+        for found in ([claim], []):
+            with (
+                mock.patch.object(research, "NewsPipeline") as pipeline,
+                mock.patch.object(research.market_data, "fetch_kalshi_orderbook", return_value={}),
+                mock.patch.object(research.knowledge, "brief", return_value=found) as brief,
+            ):
+                self.articles(pipeline, [])
+                packet = json.loads(research.prefetch_market_research([self.quote()])[0]["observation"])
+            brief.assert_called_once_with("Will the event happen?")
+            if found:
+                self.assertEqual(packet["knowledge_base"], [claim])
+                self.assertIn("not facts", packet["knowledge_base_note"])
+            else:
+                self.assertNotIn("knowledge_base", packet)
+
     def test_fanout_is_capped_deduplicated_and_failures_are_explicit(self):
         quotes = [self.quote(), self.quote(), self.quote("KXSECOND"), self.quote("KXTHIRD")]
         with (

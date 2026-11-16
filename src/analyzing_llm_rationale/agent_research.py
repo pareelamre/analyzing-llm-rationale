@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
 
-from . import market_data
+from . import knowledge, market_data
 from .benchmark_tools import _domain_blacklisted
 from .news_pipeline import _QUERY_AGNOSTIC_CHANNELS, NewsPipeline
 
@@ -142,6 +142,13 @@ def _market_packet(quote: Mapping[str, Any]) -> dict[str, Any]:
         trace.get_current_span().set_status(Status(StatusCode.ERROR))
         logger.warning("Agent research book unavailable venue=%s (%s)", venue, type(exc).__name__)
     packet.update(search_market_evidence(question))
+    # Foresea's knowledge base (docs/knowledge.md): dated, cited claims from reports, when the
+    # job has the base checked out. Empty, and absent from the packet, otherwise.
+    claims = knowledge.brief(question)
+    if claims:
+        packet["knowledge_base"] = claims
+        packet["knowledge_base_note"] = ("Claims from reports in Foresea's knowledge base, with publisher, month "
+                                         "and page. Projections are the source's view as of its date, not facts.")
     return {"action": "research_brief", "args": {"platform": venue, "ticker": ident},
             "observation": json.dumps(packet, ensure_ascii=False), "initiated_by": "system_prefetch",
             "research_available": packet["orderbook_status"] == "available" or packet["evidence_status"] == "available"}
