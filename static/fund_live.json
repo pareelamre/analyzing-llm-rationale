@@ -9,16 +9,16 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": 23.1254,
-      "event_model": 62.1723,
-      "pairs_model": 0.0,
-      "put_premium": 7.6963
+      "agent_transfer": 10.9776,
+      "event_model": 61.2744,
+      "pairs_model": -4.5115,
+      "put_premium": 7.9442
     }
   },
   "by_asset_class": {
-    "commodity": 504.2244,
-    "event": 4046.0274,
-    "option": 625.0136
+    "commodity": 499.7128,
+    "event": 4032.9817,
+    "option": 625.2615
   },
   "cash_usd": 4918.5287,
   "curve": [
@@ -533,34 +533,63 @@
     {
       "nav_usd": 10093.7941,
       "ts": "2026-11-16T18:01:15.528727+00:00"
+    },
+    {
+      "nav_usd": 10076.4847,
+      "ts": "2026-11-16T18:44:14.772340+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 2,
+    "signals": 3,
     "skipped": [
       {
+        "instrument": "polymarket:unl-grc-ser-2026-11-16-draw",
+        "label": "Will Greece vs. Serbia end in a draw?",
+        "reason": "closes within a day"
+      },
+      {
+        "instrument": "polymarket:unl-ger-nld-2026-11-16-nld",
+        "label": "Will Netherlands win on 2026-11-16?",
+        "reason": "closes within a day"
+      },
+      {
+        "instrument": "polymarket:unl-grc-ser-2026-11-16-ser",
+        "label": "Will Serbia win on 2026-11-16?",
+        "reason": "closes within a day"
+      },
+      {
+        "instrument": "polymarket:unl-ger-nld-2026-11-16-ger",
+        "label": "Will Germany win on 2026-11-16?",
+        "reason": "closes within a day"
+      },
+      {
         "pair": "copper-gold",
-        "reason": "stretched at z=-2.75 but its expected return is -0.4% per signal",
-        "z": -2.752
+        "reason": "stretched at z=-3.26 but its expected return is -0.4% per signal",
+        "z": -3.259
+      },
+      {
+        "pair": "copper-zinc",
+        "reason": "stretched at z=-3.24 but its expected return is 0.0% per signal",
+        "z": -3.237
       }
     ],
     "traded": false,
-    "window": "23:31 IST is outside the trading hours"
+    "window": "00:14 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-16T18:01:15.528727+00:00",
+  "generated_at": "2026-11-16T18:44:14.772340+00:00",
   "guard": {
-    "board": 7,
-    "checked": 7,
+    "board": 28,
+    "checked": 28,
     "checker": "Open-Jev 2B (Qwen3.5-2B base)",
     "days_recorded": 8,
     "dropped": [],
     "flags": [],
     "kind": "checker",
-    "markets": 8,
+    "markets": 40,
     "mode": "live",
     "unchecked": 0
   },
@@ -571,7 +600,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10093.7941,
+  "nav_usd": 10076.4847,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -623,15 +652,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 328.6,
+      "mark": 327.85,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -0.0,
+      "pnl_usd": 0.5754,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 252.1122,
+      "value_usd": 252.6876,
       "venue": "mcx"
     },
     {
@@ -644,15 +673,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1308.4,
+      "mark": 1282.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 0.0,
+      "pnl_usd": -5.0869,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 252.1122,
+      "value_usd": 247.0252,
       "venue": "mcx"
     },
     {
@@ -791,15 +820,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.958,
+      "mark": 0.956,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 66.4457,
+      "pnl_usd": 65.5478,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 430.1013,
+      "value_usd": 429.2033,
       "venue": "polymarket"
     },
     {
@@ -812,15 +841,15 @@
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
       "kind": "binary",
       "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "mark": 0.9,
+      "mark": 0.89,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -48.5913,
+      "pnl_usd": -60.7391,
       "quantity": 1214.783211,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 1093.3049,
+      "value_usd": 1081.1571,
       "venue": "polymarket"
     },
     {
@@ -854,15 +883,15 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2035.069,
+      "mark": 2036.294,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": -5.1818,
+      "pnl_usd": -4.934,
       "quantity": 19.041196356558505,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 411.7512,
+      "value_usd": 411.9991,
       "venue": "nse_fo"
     },
     {
@@ -941,7 +970,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 0.938,
+  "return_pct": 0.765,
   "scorecard": {
     "retired_records": [
       {
