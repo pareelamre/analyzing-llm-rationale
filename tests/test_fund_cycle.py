@@ -164,6 +164,12 @@ class FundCycleTests(unittest.TestCase):
         self.assertEqual(forecast["raw_model_probability"], 0.9)
         self.assertEqual((none, no_forecasts, why[0]["reason"]), ([], {}, "no blend parameters"))
 
+    def test_the_scorecard_scale_is_read_per_analyst(self):
+        card = {"strategies": [{"analyst": "put_premium", "scale": 2.5}, {"analyst": "blend_model", "scale": 0.5}]}
+        self.assertEqual(cycle._scale(card, "put_premium"), 2.5)
+        self.assertEqual(cycle._scale(card, "someone_else"), 1.0)
+        self.assertEqual(cycle._scale({}, "put_premium"), 1.0)
+
     def test_the_retired_analysts_no_longer_run(self):
         self.assertEqual([r["analyst"] for r in cycle.RETIRED],
                          ["event_model", "weather_model", "decided_ranges", "options_model", "vix_fade"])

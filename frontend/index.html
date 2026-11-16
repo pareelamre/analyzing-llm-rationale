@@ -1215,6 +1215,10 @@
     .fund-pill { background: #f1f5f9; border-radius: 999px; color: #475569; display: inline-block; font-size: 10px; font-weight: 650; line-height: 1; padding: 3px 7px; vertical-align: 1px; white-space: nowrap; }
     .fund-pill--record { background: #fffbeb; color: #a16207; }
     .fund-pill--check { background: #eff6ff; color: #1d4ed8; }
+    .fund-pill--proven { background: #ecfdf5; color: #047857; }
+    .fund-pill--failed { background: #fef2f2; color: #b91c1c; }
+    .fund-evidence { color: var(--text-mute); font-size: 11px; line-height: 1.5; margin: 4px 0 0; }
+    .fund-scale { color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; font-weight: 650; }
     .fund-name { color: var(--ink); font-size: 12.5px; font-weight: 550; line-height: 1.4; }
     .fund-sub { align-items: center; color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 11px; gap: 3px 12px; margin-top: 4px; }
     .fund-who { align-items: flex-start; color: var(--text); display: inline-flex; font-size: 11px; gap: 6px; line-height: 1.4; }
@@ -8258,8 +8262,31 @@ function renderFundBoard(d) {
     </div>`;
   }).join('');
 
-  // Retired analysts, with why (docs/fund.md, "Shadow cleanup").
-  const retired = (d.retired || []).map(r => `<li><b>${escHtml(_fundAnalystLabel(r.analyst))}</b>: ${escHtml(r.reason || '')}</li>`).join('');
+  // Scorecard: every strategy scored the same way; money follows the low end of its range.
+  const card = d.scorecard || null;
+  const FUND_STATUS = { proven: ['Proven', 'fund-pill--proven'], trial: ['On trial', 'fund-pill--record'], failed: ['Failed', 'fund-pill--failed'] };
+  const scoreRows = (card?.strategies || []).map(r => {
+    const [status, pill] = FUND_STATUS[r.status] || [_fundCap(r.status), ''];
+    const s = r.score || {};
+    const headline = s.mean != null && s.low != null
+      ? `<b>${_fundPct(s.mean)} per dollar at risk</b>${_fundRange([s.low, s.high])}. `
+      : '';
+    const live = r.live || {};
+    const evidence = [
+      ...(r.tests || []).map(t => `${escHtml(t.label)}: ${Number(t.trades).toLocaleString()} trades, counted as ${Math.round(Number(t.counted))}`),
+      live.positions ? `${live.positions} closed in the fund, averaging ${_fundPct(live.mean)}` : 'none closed in the fund yet',
+    ].join(' · ');
+    return `<div class="fund-row">
+      <div class="fund-row-main"><div class="fund-name">${escHtml(r.label)} <span class="fund-pill ${pill}">${status}</span></div>
+        <p class="fund-note">${headline}${escHtml(r.why || '')} Now ${escHtml(r.size || '')}.</p>
+        <p class="fund-evidence">${_fundCap(evidence)}.${r.context ? ` ${escHtml(r.context)}` : ''}</p></div>
+      <div class="fund-row-side"><div class="fund-scale">${Number(r.scale || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}&times;</div><div>starting size</div></div>
+    </div>`;
+  }).join('');
+  const tested = (card?.tested || []).map(t => `<li><b>${escHtml(t.idea)}</b> (${escHtml(t.market)}, ${escHtml(_fundDay(t.date))}): ${escHtml(t.result || '')}</li>`).join('');
+
+  // Retired analysts, with why (docs/fund.md, "Shadow cleanup"); the scorecard lists them once it exists.
+  const retired = tested ? '' : (d.retired || []).map(r => `<li><b>${escHtml(_fundAnalystLabel(r.analyst))}</b>: ${escHtml(r.reason || '')}</li>`).join('');
   const retiredOn = (d.retired || [])[0]?.since;
 
   // Passed on this cycle: identical reasons fold into one line.
@@ -8319,6 +8346,12 @@ function renderFundBoard(d) {
         ${analysts.length ? `<div class="fund-row-side"><div class="fund-num fund-strong">${_fundPnl(attributionTotal)}</div><div>${allOpen ? 'in all, still open' : 'in all'}</div></div>` : ''}</div>
       <div class="fund-list">${attributionRows || '<p class="fund-empty">Nothing to attribute yet.</p>'}</div>
     </section>
+    ${card ? `<section class="agentic-panel">
+      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Scorecard</h4>
+        <p class="agentic-panel-copy">Every strategy is scored the same way: return per dollar at risk, after costs. Its size follows the low end of that range. Proven strategies get up to 2.5&times; their starting size, those on trial get half, and failed ones get nothing.</p></div></div>
+      <div class="fund-list">${scoreRows || '<p class="fund-empty">No strategies scored yet.</p>'}</div>
+      ${tested ? `<div class="fund-foot"><details class="fund-details" style="margin:0"><summary style="margin:0">Tested and not funded (${(card.tested || []).length})</summary><ul class="fund-retired">${tested}</ul></details></div>` : ''}
+    </section>` : ''}
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Trades and their reasons</h4>
         <p class="agentic-panel-copy">A note may only state numbers from its evidence; one that adds anything else is replaced by the plain fact sheet.</p></div></div>

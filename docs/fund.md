@@ -1315,6 +1315,68 @@ So trend following is not added. The put sleeve stays at its current size, with
 nothing found yet to offset its crash risk. The report is
 `reports/fund_trend_eval.json`.
 
+## Scorecard and allocator (owner, 2026-11-16)
+
+**Why.** Until now every analyst started at the same size (`DEFAULT_TRUST`),
+whatever its evidence, so money went wherever signals were available. From
+2026-11-16 money follows proven edge (build order step 5). These rules were
+written before the scorecard was first run on the fund's ledger.
+
+**One score.** Every strategy is scored the same way: return per dollar at risk
+per position, after costs.
+- Prediction-market contracts and option spreads: per dollar paid, which is the
+  most they can lose.
+- Pairs: per dollar of both legs' notional.
+
+**Evidence.** Two sources, pooled.
+1. An out-of-sample test reported in this unit (trades, mean, standard
+   deviation). A test run on a different market from the one the fund trades
+   counts as half its trades. In-sample backtests, and tests scored in another
+   unit such as Brier, are not counted; the scorecard shows them as context.
+2. The fund's own closed positions, each counted once (both legs of a pair are
+   one position), including fees. A position belongs to the analyst with the
+   largest attribution weight.
+
+The pooled mean and variance weight each source by its counted trades. The
+range is the mean plus or minus 1.96 standard errors.
+
+**Status and size.** Sizes are multiples of each strategy's starting size: 2% of
+the fund at risk per option spread, 5% per pair leg, and a sixteenth of the
+Kelly bet per prediction market.
+- **Proven:** at least 20 counted positions, and the low end of the range above
+  zero. Size: a quarter of the Kelly bet at the low end (the low end divided by
+  the variance, as a share of the fund at risk per position), divided by the
+  starting size and kept between 0.5x and 2.5x. For prediction markets the
+  starting position is taken as 2% of the fund.
+- **On trial:** everything else still running. Half the starting size, so it
+  builds a record with less money. A position counts the same at any size.
+- **Failed:** at least 20 counted positions, and the high end of the range below
+  zero. No money, and the scorecard flags it for retirement.
+- **Retired** analysts get nothing. Held positions settle as before.
+
+The scorecard is recomputed every fund cycle and sizes new positions only. All
+other limits stay: 10% per position, 40% per asset class (10% for options), 15%
+net per underlying and 20% in cash. Code: `fund_scorecard.py`.
+
+**Every idea is listed.** The scorecard also lists every idea tested since
+2026-11-09 that got no money, with its result, so the board keeps one record of
+what was tried.
+
+### First run (2026-11-16)
+
+The fund had one closed position, carried over from the agent, so every score
+comes from tests.
+
+- **Put premium: proven.** The Nasdaq-100 test (283 trades, counted as 141.5)
+  gives +10.3% per dollar at risk (range +3.9% to +16.7%). A quarter-Kelly bet at
+  +3.9% is 6.4% of the fund at risk, above the limit, so the sleeve trades at
+  2.5x: 5% at risk per spread, up from 2%. In that test, 10% at risk had a worst
+  fall of -24%, so 5% sits at about half. The spread it holds keeps its size.
+- **Commodity pairs: on trial,** 2.5% of the fund per leg (from 5%). There is no
+  out-of-sample test, and no closed positions.
+- **Blend analyst: on trial,** a 32nd of the Kelly bet per market (from a 16th).
+  Its test was scored in Brier (a tie), and it has no closed positions.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
@@ -1332,4 +1394,5 @@ nothing found yet to offset its crash risk. The report is
    evaluation). Next: Polymarket's daily temperature markets (about 80 cities,
    settled on airport METAR readings), as a dated amendment.
 4. A classifier trained on Foresea's graded forecasts: which gaps pay.
-5. Skill-based weights once each analyst has a record.
+5. Skill-based weights: the scorecard and allocator, live 2026-11-16 (see
+   Scorecard and allocator above).

@@ -865,6 +865,13 @@ function escHtml(s) {
                 self.assertNotIn("agentic-table fund-table", renderer)
                 # Retired analysts are listed with why (owner, 2026-11-15).
                 self.assertIn("(d.retired || []).map(r =>", renderer)
+                # The scorecard (2026-11-16): one row per strategy with its status and size multiple,
+                # and every idea tested and not funded, which replaces the separate retired list.
+                self.assertIn('<h4 class="agentic-panel-title">Scorecard</h4>', renderer)
+                self.assertIn("(card?.strategies || []).map(r =>", renderer)
+                self.assertIn("Tested and not funded (", renderer)
+                self.assertIn("const retired = tested ? '' :", renderer)
+                self.assertIn(".fund-pill--proven", index)
 
     def test_track_record_is_off_the_site(self):
         # Retired 2026-11-08: the data stays at GET /track-record, the page,
