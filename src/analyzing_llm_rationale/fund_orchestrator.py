@@ -26,9 +26,8 @@ Analysts in this first version (and why some are absent):
   them where a range is the whole bet: defined-risk option structures on the NSE indices it
   covers. It opens no index futures until a directional analyst joins.
 
-Shadow analysts are scored, not traded: blend_model (scripts/train_fund_blend.py) re-weighs a
-model forecast against the market price as Foresea's own graded record says it should, and its
-predictions are recorded each day until its live record earns it a place.
+Since 2026-11-16 the scorecard (fund_scorecard) sizes every analyst by its proven edge: the
+signals reach plan() with the trust it set.
 """
 from __future__ import annotations
 
@@ -45,7 +44,8 @@ KELLY_FRACTION = 0.25
 PAIR_RISK = 0.05
 #: Smallest edge per dollar worth paying the spread for.
 MIN_EDGE = 0.05
-#: Trust in an analyst with no graded record yet; rises with its record (step 5).
+#: The starting trust, behind every starting size. The scorecard (fund_scorecard) sets each
+#: analyst's trust from its proven edge: half this on trial, up to 2.5x this when proven.
 DEFAULT_TRUST = 0.25
 #: Binary prices outside this band leave too little to win or too much to lose on a model error.
 PRICE_BAND = (0.03, 0.97)

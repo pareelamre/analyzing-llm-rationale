@@ -1362,6 +1362,21 @@ net per underlying and 20% in cash. Code: `fund_scorecard.py`.
 2026-11-09 that got no money, with its result, so the board keeps one record of
 what was tried.
 
+### First run (2026-11-16)
+
+The fund had one closed position, carried over from the agent, so every score
+comes from tests.
+
+- **Put premium: proven.** The Nasdaq-100 test (283 trades, counted as 141.5)
+  gives +10.3% per dollar at risk (range +3.9% to +16.7%). A quarter-Kelly bet at
+  +3.9% is 6.4% of the fund at risk, above the limit, so the sleeve trades at
+  2.5x: 5% at risk per spread, up from 2%. In that test, 10% at risk had a worst
+  fall of -24%, so 5% sits at about half. The spread it holds keeps its size.
+- **Commodity pairs: on trial,** 2.5% of the fund per leg (from 5%). There is no
+  out-of-sample test, and no closed positions.
+- **Blend analyst: on trial,** a 32nd of the Kelly bet per market (from a 16th).
+  Its test was scored in Brier (a tie), and it has no closed positions.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes

@@ -42,6 +42,7 @@ from analyzing_llm_rationale import fund_ledger as ledger  # noqa: E402
 from analyzing_llm_rationale import fund_notes, market_data  # noqa: E402
 from analyzing_llm_rationale import fund_options as fo  # noqa: E402
 from analyzing_llm_rationale import fund_orchestrator as orch  # noqa: E402
+from analyzing_llm_rationale import fund_scorecard as fsc  # noqa: E402
 from analyzing_llm_rationale import fund_universe as fu  # noqa: E402
 from analyzing_llm_rationale import fund_weather as fw  # noqa: E402
 
@@ -296,6 +297,11 @@ def options_cycle(index_forecast: dict, now: datetime, quote_fn, price_source: s
     return out
 
 
+def _scale(card: dict, analyst: str) -> float:
+    """The scorecard's size multiple for ``analyst`` (1 when it is not scored)."""
+    return next((float(r["scale"]) for r in card.get("strategies") or [] if r["analyst"] == analyst), 1.0)
+
+
 def _sessions_since(stamp: str, today: date) -> int:
     start = datetime.fromisoformat(stamp).date()
     return sum(1 for d in range((today - start).days) if (start + timedelta(days=d + 1)).weekday() < 5)
@@ -323,6 +329,8 @@ def run(now: Optional[datetime] = None) -> dict:
     settled = settle_expired(conn, option_specs, now, stamp, rates)
     settled_events = settle_events(conn, now, stamp)
     conn.commit()
+    # The scorecard sizes every analyst by its proven edge, counting positions closed just now.
+    card = fsc.scorecard(conn, FUND_ID, ROOT)
     quote_fn, price_source = fo.quote_source(os.environ.get("UPSTOX_ANALYTICS_TOKEN", "").strip() or None, now=now)
     universe = load_universe(today, fx)
     board = (_load_json(BOARD_PATH).get("edge_board") or [])
@@ -363,6 +371,8 @@ def run(now: Optional[datetime] = None) -> dict:
             if pos.get("pair_key"):
                 held_pairs[pos["pair_key"]] = {"sessions": _sessions_since(pos["opened_at"], today)}
         pair_rows = {p.get("key"): p for p in tracker.get("pairs") or []}
+        signals, unfunded = fsc.apply(signals, card)
+        option_skips += unfunded
         result = orch.plan(snapshot, signals, quotes, hedges, forecasts=forecasts, held_pairs=held_pairs,
                            pair_rows=pair_rows, rates=rates,
                            option_values={k: v for k, v in options["values"].items() if k not in sleeve_ids})
@@ -398,6 +408,7 @@ def run(now: Optional[datetime] = None) -> dict:
                             passed=passed, skipped=skipped_events + skipped_pairs + option_skips,
                             signals=signals, seeded=seeded)
     payload["shadow"] = shadow
+    payload["scorecard"] = card
     payload["retired"] = [{**r, "since": "2026-11-15"} for r in RETIRED]
     blend = _load_json(BLEND_PATH)
     payload["prediction_markets"] = {"analyst": "blend_model", "test": blend.get("time_split_test"),
@@ -406,7 +417,8 @@ def run(now: Optional[datetime] = None) -> dict:
     payload["options"] = {"mode": "OFF", "put_sleeve": {"mode": sleeve_mode, "holding": sorted(sleeve_ids)},
                           "prices": price_source, "settled": settled,
                           "indices": [name for name, _key in fo.INDEX_OPTIONS.values()],
-                          "risk_per_structure": orch.OPTION_RISK, "class_cap": orch.OPTION_CLASS_CAP}
+                          "risk_per_structure": orch.OPTION_RISK * _scale(card, PUT_SLEEVE),
+                          "class_cap": orch.OPTION_CLASS_CAP}
     PAYLOAD_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
     conn.close()
     return payload
