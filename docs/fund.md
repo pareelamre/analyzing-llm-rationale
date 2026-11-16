@@ -1624,6 +1624,51 @@ spreads above), so put premium pools both tests: +8.8% per rupee at risk (range
 the quarter-Kelly bet divided by 1.71: 4.1% of the fund at risk per spread, and
 8.3% for both.
 
+## Trading hours (owner, 2026-11-16)
+
+The owner asked that the fund make proper use of each market's trading hours. A
+review of the first week found that it traded closed markets at stale prices:
+
+- **11 Nov, 01:31 IST:** the Nifty put spread opened with NSE closed, on last
+  trades from 9 Nov (10 Nov was an NSE holiday). No real order could have filled
+  until 09:15.
+- **16 Nov, 13:31 IST:** MCX copper was bought at Friday's close (1,308.4) while
+  it traded near 1,288. MCX legs were priced from the last daily candle, never a
+  live price.
+
+Every scheduled cycle did run: on each day from 9 to 16 Nov, both the 01:30 and
+13:30 IST runs completed the fund step. The problem was what they traded, not
+whether they ran.
+
+**The rule (`fund_hours`, from 2026-11-16).** A venue is traded only while it is
+open, and only on a price from the session under way:
+
+| Venue | Open |
+| --- | --- |
+| Kalshi and Polymarket events | Always |
+| Kalshi perps and futures | Kalshi's own schedule (`is_open`) |
+| NSE and BSE derivatives | 09:15-15:30 IST, weekdays |
+| MCX | 09:00-23:30 IST, weekdays; to 23:55 while the US is on standard time |
+
+- **Holidays and special sessions** come from Upstox's open holiday route, which
+  names the exchanges each day closes and gives the hours of any that stay
+  open. For example, on 10 Nov NSE was closed and MCX traded 17:00-23:55.
+- **Prices.** MCX and index contracts are priced at their latest 30-minute bar
+  of the day, not the last daily close. A price older than today's session open
+  does not count, so a feed that falls back to yesterday's close blocks the
+  trade even if the holiday list is unreachable. An option spread is as old as
+  its stalest leg.
+- **Both legs of a pair go or stay together.** Exits and hedges wait for their
+  venue too. Settlement is not affected.
+- **Each blocked trade is listed** under "Passed on this cycle", with the venue's
+  hours.
+
+**What each run now does.** At 01:30 IST, after the nightly forecast and the
+rationale check, the fund trades prediction markets and any open Kalshi perps.
+At 13:30 IST it also trades NSE options and MCX pairs at that session's prices.
+Pair signals still come from the last daily close, so a signal from one close
+now fills at the next session's live price, not at that close.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes

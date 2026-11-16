@@ -3,7 +3,9 @@
 
 Every run values the fund at current prices and republishes the page's payload. Trading
 happens only inside FUND_RUN_HOURS_IST and at least FUND_MIN_HOURS_BETWEEN_CYCLES after the
-last trading cycle (or with FUND_ANY_HOUR=1).
+last trading cycle (or with FUND_ANY_HOUR=1), and each venue only while it is open, on a
+price from its session under way (fund_hours: NSE and BSE derivatives 09:15-15:30 IST, MCX
+09:00-23:30/23:55 IST, on their trading days; Kalshi and Polymarket at any hour).
 
 The first run opens the fund from the on-device agent's account (FUND_SEED_AGENT_STORE):
 its cash, and each open position at the agent's own entry price, so the fund starts at the
@@ -39,6 +41,7 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from analyzing_llm_rationale import fund_hours as fh  # noqa: E402
 from analyzing_llm_rationale import fund_ledger as ledger  # noqa: E402
 from analyzing_llm_rationale import fund_notes, market_data  # noqa: E402
 from analyzing_llm_rationale import fund_options as fo  # noqa: E402
@@ -157,7 +160,11 @@ def event_quote(raw: dict) -> dict:
     return {"yes_bid": yb, "yes_ask": ya, "no_bid": nb, "no_ask": na}
 
 
-def fetch_quotes(instrument_ids: set[str], universe: dict, today: date) -> dict[str, dict]:
+def fetch_quotes(instrument_ids: set[str], universe: dict, now: datetime) -> dict[str, dict]:
+    """Quotes for the fund's instruments. An Upstox-listed contract (MCX, an index) is priced at
+    its latest trade: this session's 30-minute bar while it trades, else its last daily close,
+    with the time of that price (``at``), so the fund never trades on a stale close
+    (fund_hours). A Kalshi perp's quote carries whether its market is open."""
     quotes: dict[str, dict] = {}
     perps = None
     known = {i["id"]: i for i in universe.get("indices", [])}
@@ -175,12 +182,13 @@ def fetch_quotes(instrument_ids: set[str], universe: dict, today: date) -> dict[
                 if perps is None:
                     perps = {m.get("ticker"): m for m in fu.kalshi_margin_markets()}
                 if key in perps:
-                    quotes[iid] = fu.kalshi_quote(perps[key])
+                    schedule = perps[key].get("schedule") or {}
+                    quotes[iid] = {**fu.kalshi_quote(perps[key]), "open": schedule.get("is_open", True) is not False}
             elif iid in known:
-                candles = fu.daily_candles(known[iid]["key"], today - timedelta(days=7), today)
-                if candles:
-                    last = float(sorted(candles, key=lambda c: c[0])[-1][4])
-                    quotes[iid] = {"bid": last, "ask": last, "last": last}
+                candle = fo.latest_candle(known[iid]["key"], now, http_get=requests.get)
+                if candle is not None and candle[1] > 0:
+                    at, last, _volume = candle
+                    quotes[iid] = {"bid": last, "ask": last, "last": last, "at": at.isoformat(), "source": "last trade"}
         except (market_data.MarketDataError, fu.FeedError, requests.RequestException, ValueError) as exc:
             print(f"  no quote for {iid}: {exc}", file=sys.stderr)
     return quotes
@@ -397,6 +405,9 @@ def run(now: Optional[datetime] = None) -> dict:
     # The scorecard sizes every analyst by its proven edge, counting positions closed just now.
     card = fsc.scorecard(conn, FUND_ID, ROOT)
     quote_fn, price_source = fo.quote_source(os.environ.get("UPSTOX_ANALYTICS_TOKEN", "").strip() or None, now=now)
+    # Each venue trades only while it is open, on a price from that session (docs/fund.md, "Trading hours").
+    calendar = fh.fetch_calendar(today)
+    hours = {venue: fh.is_open(venue, now, calendar) for venue in fh.SESSIONS}
     universe = load_universe(today, fx)
     board = (_load_json(BOARD_PATH).get("edge_board") or [])
     tracker = _load_json(PAIRS_PATH)
@@ -407,7 +418,7 @@ def run(now: Optional[datetime] = None) -> dict:
     held_ids = {p["instrument_id"] for p in ledger.positions(conn, FUND_ID)}
     hedges = {p["b"]["underlying"]: p["b"] for p in universe.get("pairs", []) if p["b"]["venue"] == "kalshi_perp"}
     wanted = held_ids | {s.instrument["id"] for s in signals} | {h["id"] for h in hedges.values()}
-    quotes = fetch_quotes(wanted, universe, today)
+    quotes = fetch_quotes(wanted, universe, now)
     quotes.update(fo.structure_quotes({k: v for k, v in option_specs.items() if v.get("legs")}, quote_fn))
     snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
@@ -422,11 +433,16 @@ def run(now: Optional[datetime] = None) -> dict:
     sleeve_wanted = [sym for sym in fo.SLEEVE_SYMBOLS
                      if sleeve_modes.get(sym) == "GO" and sym not in {sleeve_symbol(i) for i in sleeve_ids}]
     if can_trade:
-        options = options_cycle(_load_json(INDEX_FORECAST_PATH), now, quote_fn, price_source, option_specs,
-                                sleeve=sleeve_wanted)
-        quotes.update(options["quotes"])
+        nse_open, nse_closed = hours["nse_fo"]
+        if nse_open:
+            options = options_cycle(_load_json(INDEX_FORECAST_PATH), now, quote_fn, price_source, option_specs,
+                                    sleeve=sleeve_wanted)
+            quotes.update(options["quotes"])
+        else:
+            option_skips = [{"instrument": f"nse_fo:{sym}", "label": f"{fo.SLEEVE_NAMES[sym]} put premium",
+                             "reason": nse_closed} for sym in sleeve_wanted]
         # The options analyst is retired: only a failed option list and the sleeve's own skips are reported.
-        option_skips = [s for s in options["skipped"] if s.get("instrument") == "nse_fo"]
+        option_skips += [s for s in options["skipped"] if s.get("instrument") == "nse_fo"]
         for spread in options.get("sleeve") or []:
             if spread["signal"]:
                 signals.append(spread["signal"])
@@ -440,13 +456,17 @@ def run(now: Optional[datetime] = None) -> dict:
         pair_rows = {p.get("key"): p for p in tracker.get("pairs") or []}
         signals, unfunded = fsc.apply(signals, card)
         option_skips += unfunded
+        signals, closed = fh.gate(signals, quotes, now, calendar)
+        option_skips += closed
         result = orch.plan(snapshot, signals, quotes, hedges, forecasts=forecasts, held_pairs=held_pairs,
                            pair_rows=pair_rows, rates=rates,
                            option_values={k: v for k, v in options["values"].items() if k not in sleeve_ids})
-        passed = result["passed"]
+        # Exits and hedges wait for their venue too; a pair's legs go or stay together.
+        orders, closed = fh.gate(result["orders"], quotes, now, calendar)
+        passed = result["passed"] + closed
         writer = note_writer()
         cycle_id = f"fund-{now:%Y%m%dT%H%M}"
-        for order in result["orders"]:
+        for order in orders:
             body = dataclasses.asdict(order)
             note = fund_notes.write_note(body, writer)
             rate = rates.get(order.instrument.get("currency", "USD"), 1.0)
@@ -476,6 +496,8 @@ def run(now: Optional[datetime] = None) -> dict:
                             signals=signals, seeded=seeded)
     payload["shadow"] = {}  # no shadow analysts left: the checker went live on 2026-11-16
     payload["guard"] = guard
+    payload["hours"] = {"holiday_list": calendar is not None,
+                        "venues": {venue: {"open": ok, "why": why_not} for venue, (ok, why_not) in hours.items()}}
     payload["scorecard"] = card
     payload["retired"] = [{**r, "since": "2026-11-15"} for r in RETIRED]
     blend = _load_json(BLEND_PATH)
