@@ -1426,7 +1426,7 @@
     "raw_skill_vs_market": -0.0023
   },
   "edge_model": "council",
-  "generated_at": "2026-11-15T21:50:19.694777+00:00",
+  "generated_at": "2026-11-16T02:03:09.112611+00:00",
   "knowledge_graph": {
     "domain_distribution": {
       "crypto": 10,
@@ -1546,7 +1546,7 @@
   "model": "council",
   "models_comparison": [
     {
-      "accuracy": 0.5,
+      "accuracy": 0.6,
       "by_horizon": [
         {
           "accuracy": 0.0,
@@ -1564,25 +1564,25 @@
           "skill_vs_market": -0.5431
         },
         {
-          "accuracy": 0.6667,
+          "accuracy": 0.75,
           "horizon": "<1d",
-          "market_brier": 0.0519,
-          "model_brier": 0.2001,
-          "n": 3,
-          "n_markets": 2,
+          "market_brier": 0.04,
+          "model_brier": 0.1517,
+          "n": 4,
+          "n_markets": 3,
           "skill_ci_comparisons": 6,
-          "skill_ci_high": 0.184,
-          "skill_ci_low": -0.4059,
-          "skill_ci_mean": -0.111,
+          "skill_ci_high": 0.1206,
+          "skill_ci_low": -0.27,
+          "skill_ci_mean": -0.0747,
           "skill_ci_method": "market_means_normal_bonferroni_v1",
           "skill_significant": false,
-          "skill_vs_market": -0.1482
+          "skill_vs_market": -0.1117
         }
       ],
       "model": "qwen3.5-9b-selfhosted",
-      "model_brier": 0.3307,
-      "n_markets_resolved": 3,
-      "n_snapshots_resolved": 4,
+      "model_brier": 0.2659,
+      "n_markets_resolved": 4,
+      "n_snapshots_resolved": 5,
       "paper_pnl": {
         "bets": [
           {
@@ -1659,98 +1659,135 @@
             "stake_edge": 0.25,
             "stake_flat": 1.0,
             "win": false
+          },
+          {
+            "calibrated_model_probability": 0.08,
+            "category": "Other",
+            "domain": "other",
+            "edge": 0.015,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0032,
+            "ident": "unl-fra-tur-2026-11-15-tur",
+            "in_validated": false,
+            "market_probability": 0.065,
+            "market_url": "https://polymarket.com/market/unl-fra-tur-2026-11-15-tur",
+            "model": "qwen3.5-9b-selfhosted",
+            "model_probability": 0.08,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.001,
+            "profit_flat": 0.0663,
+            "question": "Will T\u00fcrkiye win on 2026-11-15?",
+            "resolved_ts": "2026-11-16T01:57:36.261264+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-11-15T17:27:54.144223+00:00",
+            "stake_edge": 0.015,
+            "stake_flat": 1.0,
+            "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi & Polymarket category-based taker fees; 0% maker/geopolitics). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
         "flat": {
-          "compound_bankroll": 4372.630455,
-          "compound_return": -0.5627,
+          "compound_bankroll": 5667.726411,
+          "compound_return": -0.4332,
           "equity_curve": [
             -1.0362,
             -0.9683,
-            -2.0087
+            -2.0087,
+            -1.9424
           ],
           "equity_curve_ts": [
             "2026-11-08T23:44:14.351432+00:00",
             "2026-11-12T03:00:17.251579+00:00",
-            "2026-11-15T01:53:42.112970+00:00"
+            "2026-11-15T01:53:42.112970+00:00",
+            "2026-11-16T01:57:36.261264+00:00"
           ],
-          "fees": 0.0799,
+          "fees": 0.0832,
           "growth_curve": [
-            6545.833333,
-            6694.014153,
-            4372.630455
+            7409.375,
+            7535.171886,
+            5575.358449,
+            5667.726411
           ],
           "growth_curve_ts": [
             "2026-11-08T23:44:14.351432+00:00",
             "2026-11-12T03:00:17.251579+00:00",
-            "2026-11-15T01:53:42.112970+00:00"
+            "2026-11-15T01:53:42.112970+00:00",
+            "2026-11-16T01:57:36.261264+00:00"
           ],
-          "n_bets": 3,
-          "pnl": -2.0087,
-          "roi": -0.6696,
-          "total_staked": 3.0,
-          "win_rate": 0.3333
+          "n_bets": 4,
+          "pnl": -1.9424,
+          "roi": -0.4856,
+          "total_staked": 4.0,
+          "win_rate": 0.5
         },
         "growth_1pct": {
-          "compound_bankroll": 9800.068501,
-          "compound_return": -0.02,
+          "compound_bankroll": 9806.562881,
+          "compound_return": -0.0193,
           "equity_curve": [
             -103.625,
             -96.9041,
-            -199.9315
+            -199.9315,
+            -193.4371
           ],
           "equity_curve_ts": [
             "2026-11-08T23:44:14.351432+00:00",
             "2026-11-12T03:00:17.251579+00:00",
-            "2026-11-15T01:53:42.112970+00:00"
+            "2026-11-15T01:53:42.112970+00:00",
+            "2026-11-16T01:57:36.261264+00:00"
           ],
-          "fees": 7.9504,
+          "fees": 8.269,
           "growth_curve": [
             9896.375,
             9903.095854,
-            9800.068501
+            9800.068501,
+            9806.562881
           ],
           "growth_curve_ts": [
             "2026-11-08T23:44:14.351432+00:00",
             "2026-11-12T03:00:17.251579+00:00",
-            "2026-11-15T01:53:42.112970+00:00"
+            "2026-11-15T01:53:42.112970+00:00",
+            "2026-11-16T01:57:36.261264+00:00"
           ],
-          "n_bets": 3,
-          "pnl": -199.9315,
-          "roi": -0.6709,
-          "total_staked": 297.9947,
-          "win_rate": 0.3333
+          "n_bets": 4,
+          "pnl": -193.4371,
+          "roi": -0.4885,
+          "total_staked": 395.9954,
+          "win_rate": 0.5
         },
         "growth_2pct": {
-          "compound_bankroll": 9602.015476,
-          "compound_return": -0.0398,
+          "compound_bankroll": 9614.741741,
+          "compound_return": -0.0385,
           "equity_curve": [
             -207.25,
             -193.949,
-            -397.9845
+            -397.9845,
+            -385.2583
           ],
           "equity_curve_ts": [
             "2026-11-08T23:44:14.351432+00:00",
             "2026-11-12T03:00:17.251579+00:00",
-            "2026-11-15T01:53:42.112970+00:00"
+            "2026-11-15T01:53:42.112970+00:00",
+            "2026-11-16T01:57:36.261264+00:00"
           ],
-          "fees": 15.8157,
+          "fees": 16.4398,
           "growth_curve": [
             9792.75,
             9806.050959,
-            9602.015476
+            9602.015476,
+            9614.741741
           ],
           "growth_curve_ts": [
             "2026-11-08T23:44:14.351432+00:00",
             "2026-11-12T03:00:17.251579+00:00",
-            "2026-11-15T01:53:42.112970+00:00"
+            "2026-11-15T01:53:42.112970+00:00",
+            "2026-11-16T01:57:36.261264+00:00"
           ],
-          "n_bets": 3,
-          "pnl": -397.9845,
-          "roi": -0.6723,
-          "total_staked": 591.976,
-          "win_rate": 0.3333
+          "n_bets": 4,
+          "pnl": -385.2583,
+          "roi": -0.4914,
+          "total_staked": 784.0163,
+          "win_rate": 0.5
         },
         "half_kelly": {
           "compound_bankroll": 5112.565243,
@@ -1836,9 +1873,9 @@
           "win_rate": 1.0
         }
       },
-      "paper_roi": -0.6696,
+      "paper_roi": -0.4856,
       "paper_roi_smart": 0.3656,
-      "skill_vs_market": -0.247
+      "skill_vs_market": -0.198
     },
     {
       "accuracy": 0.8487,
