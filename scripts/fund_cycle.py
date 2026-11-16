@@ -15,8 +15,9 @@ options analyst), the fund universe (static/fund_universe.json, rebuilt when old
 FUND_UNIVERSE_MAX_AGE_DAYS), live quotes, and USD/INR. Option prices come from the live order
 book when UPSTOX_ANALYTICS_TOKEN is set and from Upstox's open last trades otherwise
 (fund_options). Prediction markets trade on the blend analyst's odds (market and model,
-configs/fund_blend.json), not the raw model; the weather, decided-ranges, options and VIX fade
-analysts are retired (RETIRED, docs/fund.md). Option structures past expiry are settled
+configs/fund_blend.json), not the raw model, and a forecast the rationale checker says
+contradicts its own rationale never reaches the blend (guard_board); the weather,
+decided-ranges, options and VIX fade analysts are retired (RETIRED, docs/fund.md). Option structures past expiry are settled
 at the index's close, and Kalshi positions at their market's result, every run. Kalshi buys pay
 Kalshi's taker fee. Trade
 notes are worded by the on-device model (FUND_LLM_URL + SELF_HOSTED_LLM_API_KEY) when it is
@@ -63,6 +64,9 @@ BLEND_PATH = ROOT / "configs" / "fund_blend.json"
 CHECKS_PATH = ROOT / "static" / "fund_rationale_checks.json"
 #: Rationale checks older than this no longer describe a live forecast.
 CHECKS_MAX_AGE_H = 48
+#: The rationale checker is a live guard (docs/fund.md, "Rationale checker goes live", owner 2026-11-16).
+CHECKER_LABEL = "Open-Jev 2B (Qwen3.5-2B base)"
+GUARD_REASON = "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
 #: Retired by the owner on 2026-11-15 (docs/fund.md, "Shadow cleanup"): each failed its
 #: pre-registered test or could never reach a verdict. They no longer run, record or trade.
 RETIRED = (
@@ -263,18 +267,63 @@ def settle_events(conn: sqlite3.Connection, now: datetime, stamp: str) -> list[d
     return settled
 
 
-def prediction_market_signals(board: list, now: datetime) -> tuple[list, list, dict]:
-    """Signals, skips and exit forecasts for prediction markets, all from the blend analyst's odds.
+def _instant(stamp: object) -> Optional[datetime]:
+    try:
+        then = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return then if then.tzinfo else then.replace(tzinfo=timezone.utc)
+
+
+def guard_board(board: list) -> tuple[list, dict]:
+    """The Edge board without the forecasts the rationale checker says contradict their own
+    rationale, and the guard's summary (docs/fund.md, "Rationale checker goes live").
+
+    A check counts only for the forecast it read (same market, same forecast time), so a newer
+    forecast is never dropped for an older one's rationale. A forecast not yet checked is used
+    as it is and counted as unchecked.
+    """
+    checks = {}
+    for c in _load_json(CHECKS_PATH).get("checks") or []:
+        when = _instant(c.get("forecasted_at"))
+        if when is not None:
+            checks[(c.get("instrument_id"), when)] = c
+    kept, dropped = [], []
+    unchecked = 0
+    for row in board:
+        when = _instant(row.get("forecasted_at"))
+        check = checks.get((orch.event_instrument(row)["id"], when)) if when is not None else None
+        if check is None:
+            unchecked += 1
+            kept.append(row)
+        elif check.get("verdict") == "contradicts":
+            dropped.append({k: row.get(k) for k in ("platform", "ident", "question", "model_probability",
+                                                   "market_bid", "market_ask", "market_probability",
+                                                   "forecasted_at")} | {"rationale_yes": check.get("rationale_yes")})
+        else:
+            kept.append(row)
+    return kept, {"mode": "live", "kind": "checker", "checker": CHECKER_LABEL, "board": len(board),
+                  "checked": len(board) - unchecked, "unchecked": unchecked, "dropped": dropped}
+
+
+def prediction_market_signals(board: list, now: datetime) -> tuple[list, list, dict, dict]:
+    """Signals, skips and exit forecasts for prediction markets, all from the blend analyst's odds,
+    and the rationale guard's summary.
 
     The raw on-device model trails the market on Foresea's record, so it no longer trades
-    (owner, 2026-11-15); with no blend parameters, nothing trades in prediction markets.
+    (owner, 2026-11-15); with no blend parameters, nothing trades in prediction markets. A
+    forecast that contradicts its own rationale never reaches the blend (owner, 2026-11-16).
     """
+    board, guard = guard_board(board)
+    dropped = [{"instrument": orch.event_instrument(r)["id"], "label": str(r.get("question") or r.get("ident")),
+                "reason": GUARD_REASON} for r in guard["dropped"]]
     params = _load_json(BLEND_PATH)
     if not params.get("coef"):
-        return [], [{"instrument": "event", "label": "Prediction markets", "reason": "no blend parameters"}], {}
+        return [], dropped + [{"instrument": "event", "label": "Prediction markets",
+                               "reason": "no blend parameters"}], {}, guard
     priced = orch.blend_board(board, params)
     signals, skipped = orch.event_signals(priced, now, analyst="blend_model", model_label="the blend analyst")
-    return signals, skipped, {orch.event_instrument(r)["id"]: r for r in priced}
+    return signals, dropped + skipped, {orch.event_instrument(r)["id"]: r for r in priced}, guard
 
 
 def put_sleeve_mode() -> str:
@@ -351,7 +400,7 @@ def run(now: Optional[datetime] = None) -> dict:
     universe = load_universe(today, fx)
     board = (_load_json(BOARD_PATH).get("edge_board") or [])
     tracker = _load_json(PAIRS_PATH)
-    signals, skipped_events, forecasts = prediction_market_signals(board, now)
+    signals, skipped_events, forecasts, guard = prediction_market_signals(board, now)
     pair_signals, skipped_pairs = orch.pair_signals(tracker, universe.get("pairs", []))
     signals += pair_signals
 
@@ -419,13 +468,14 @@ def run(now: Optional[datetime] = None) -> dict:
         conn.commit()
         snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
-    shadow = record_shadow(conn, now, stamp)
+    guard = record_guard(conn, guard, now, stamp)
     ledger.record_nav(conn, snapshot, now=stamp)
     conn.commit()
     payload = build_payload(conn, snapshot, universe, now=now, window=why, traded=can_trade, executed=executed,
                             passed=passed, skipped=skipped_events + skipped_pairs + option_skips,
                             signals=signals, seeded=seeded)
-    payload["shadow"] = shadow
+    payload["shadow"] = {}  # no shadow analysts left: the checker went live on 2026-11-16
+    payload["guard"] = guard
     payload["scorecard"] = card
     payload["retired"] = [{**r, "since": "2026-11-15"} for r in RETIRED]
     blend = _load_json(BLEND_PATH)
@@ -443,25 +493,30 @@ def run(now: Optional[datetime] = None) -> dict:
     return payload
 
 
-def record_shadow(conn: sqlite3.Connection, now: datetime, stamp: str) -> dict:
-    """Shadow analysts: record what each would predict, without trading it. Only the rationale
-    checker remains (the blend trades since 2026-11-15; the rest are in RETIRED)."""
-    shadow: dict = {}
+def record_guard(conn: sqlite3.Connection, guard: dict, now: datetime, stamp: str) -> dict:
+    """Keep the rationale guard's record and return its summary for the page.
+
+    Each recent check is recorded (analyst rationale_check), and so is every forecast the guard
+    dropped this cycle, with the market's price then (analyst rationale_dropped), so the drops
+    can be graded as their markets resolve (docs/fund.md, "Rationale checker goes live").
+    """
     checks = [c for c in (_load_json(CHECKS_PATH).get("checks") or [])
               if (orch._age_hours(c.get("forecasted_at"), now) or 1e9) <= CHECKS_MAX_AGE_H]
     if checks:
         rows = [{"platform": c["instrument_id"].split(":", 1)[0], "ident": c["instrument_id"].split(":", 1)[1],
                  "question": c.get("question"), "model_probability": c["rationale_yes"]} for c in checks]
-        ledger.record_predictions(conn, FUND_ID, "rationale_check", "shadow", rows, [], now=stamp)
-        shadow["rationale_check"] = {
-            "mode": "shadow", "kind": "checker", "markets": len(checks),
-            "days_recorded": conn.execute("SELECT COUNT(DISTINCT day) FROM analyst_predictions WHERE fund_id = ?"
-                                          " AND analyst = 'rationale_check'", (FUND_ID,)).fetchone()[0],
-            "checker": "Open-Jev 2B (Qwen3.5-2B base)",
+        ledger.record_predictions(conn, FUND_ID, "rationale_check", "live", rows, [], now=stamp)
+    dropped = [r for r in guard.get("dropped") or [] if r.get("model_probability") is not None]
+    if dropped:
+        ledger.record_predictions(conn, FUND_ID, "rationale_dropped", "live", dropped, [], now=stamp)
+    days = conn.execute("SELECT COUNT(DISTINCT day) FROM analyst_predictions WHERE fund_id = ?"
+                        " AND analyst = 'rationale_check'", (FUND_ID,)).fetchone()[0]
+    return {**guard, "markets": len(checks), "days_recorded": days,
+            "dropped": [{"label": r.get("question") or r.get("ident"), "forecast": r.get("model_probability"),
+                         "rationale_yes": r.get("rationale_yes"), "forecasted_at": r.get("forecasted_at")}
+                        for r in guard.get("dropped") or []],
             "flags": [{"label": c.get("question"), "forecast": c["forecast"], "rationale_yes": c["rationale_yes"],
-                       "forecasted_at": c.get("forecasted_at")} for c in checks if c.get("verdict") == "contradicts"],
-        }
-    return shadow
+                       "forecasted_at": c.get("forecasted_at")} for c in checks if c.get("verdict") == "contradicts"]}
 
 
 def build_payload(conn: sqlite3.Connection, snapshot: dict, universe: dict, *, now: datetime, window: str,
