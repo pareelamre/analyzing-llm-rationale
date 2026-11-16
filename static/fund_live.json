@@ -9,16 +9,18 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": -20.0661,
-      "event_model": 49.6015,
-      "put_premium": 12.0089
+      "agent_transfer": 17.8767,
+      "event_model": 54.0911,
+      "pairs_model": 0.0,
+      "put_premium": 7.3168
     }
   },
   "by_asset_class": {
-    "event": 3990.2651,
-    "option": 212.3931
+    "commodity": 504.2244,
+    "event": 4032.6974,
+    "option": 624.6341
   },
-  "cash_usd": 5839.6861,
+  "cash_usd": 4918.5287,
   "curve": [
     {
       "nav_usd": 10106.6444,
@@ -499,13 +501,17 @@
     {
       "nav_usd": 10042.3443,
       "ts": "2026-11-16T06:01:16.990712+00:00"
+    },
+    {
+      "nav_usd": 10080.0845,
+      "ts": "2026-11-16T08:01:17.337704+00:00"
     }
   ],
   "cycle": {
-    "orders": 0,
+    "orders": 3,
     "passed": [],
     "seeded": null,
-    "signals": 2,
+    "signals": 3,
     "skipped": [
       {
         "pair": "copper-gold",
@@ -513,11 +519,11 @@
         "z": -2.752
       }
     ],
-    "traded": false,
-    "window": "11:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-16T06:01:16.990712+00:00",
+  "generated_at": "2026-11-16T08:01:17.337704+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -525,9 +531,11 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10042.3443,
+  "nav_usd": 10080.0845,
   "net_exposure_by_underlying": {
-    "india_equity": 200.3843,
+    "aluminium": -252.1122,
+    "copper": 252.1122,
+    "india_equity": 617.3173,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
     "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 354.33,
     "kalshi:KXTHC3MG-FED-26DEC10": 356.4,
@@ -564,6 +572,48 @@
   },
   "paper": true,
   "positions": [
+    {
+      "asset_class": "commodity",
+      "attribution": {
+        "pairs_model": 1.0
+      },
+      "collateral_usd": 252.11218,
+      "entry_price": 328.6,
+      "instrument_id": "mcx:ALUMINI",
+      "kind": "linear",
+      "label": "Aluminium (MCX ALUMINI)",
+      "mark": 328.6,
+      "marked": true,
+      "opened_at": "2026-11-16T08:01:17.337704+00:00",
+      "pair_key": "copper-aluminium",
+      "pnl_usd": -0.0,
+      "quantity": 0.0722045798525614,
+      "side": "SHORT",
+      "underlying": "aluminium",
+      "value_usd": 252.1122,
+      "venue": "mcx"
+    },
+    {
+      "asset_class": "commodity",
+      "attribution": {
+        "pairs_model": 1.0
+      },
+      "collateral_usd": 252.11218000000002,
+      "entry_price": 1308.4,
+      "instrument_id": "mcx:COPPER",
+      "kind": "linear",
+      "label": "Copper (MCX COPPER)",
+      "mark": 1308.4,
+      "marked": true,
+      "opened_at": "2026-11-16T08:01:17.337704+00:00",
+      "pair_key": "copper-aluminium",
+      "pnl_usd": 0.0,
+      "quantity": 0.007253569226399168,
+      "side": "LONG",
+      "underlying": "copper",
+      "value_usd": 252.1122,
+      "venue": "mcx"
+    },
     {
       "asset_class": "event",
       "attribution": {
@@ -700,15 +750,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.9299999999999999,
+      "mark": 0.94,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 53.8749,
+      "pnl_usd": 58.3645,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 417.5305,
+      "value_usd": 422.02,
       "venue": "polymarket"
     },
     {
@@ -721,15 +771,15 @@
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
       "kind": "binary",
       "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "mark": 0.9,
+      "mark": 0.91,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -48.5913,
+      "pnl_usd": -36.4435,
       "quantity": 1214.783211,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 1093.3049,
+      "value_usd": 1105.4527,
       "venue": "polymarket"
     },
     {
@@ -742,16 +792,37 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.05700000000000005,
+      "mark": 0.06000000000000005,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -8.5983,
+      "pnl_usd": 17.1967,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 490.1037,
+      "value_usd": 515.8987,
       "venue": "polymarket"
+    },
+    {
+      "asset_class": "option",
+      "attribution": {
+        "put_premium": 1.0
+      },
+      "collateral_usd": 416.9330387968,
+      "entry_price": 2060.6800000000003,
+      "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
+      "kind": "option",
+      "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
+      "mark": 2038.92,
+      "marked": true,
+      "opened_at": "2026-11-16T08:01:17.337704+00:00",
+      "pair_key": null,
+      "pnl_usd": -4.4027,
+      "quantity": 19.041196356558505,
+      "side": "BULL",
+      "underlying": "india_equity",
+      "value_usd": 412.5304,
+      "venue": "nse_fo"
     },
     {
       "asset_class": "option",
@@ -763,15 +834,15 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 699.672,
+      "mark": 697.614,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 12.0089,
+      "pnl_usd": 11.7194,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 212.3931,
+      "value_usd": 212.1037,
       "venue": "nse_fo"
     }
   ],
@@ -829,7 +900,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 0.423,
+  "return_pct": 0.801,
   "scorecard": {
     "retired_records": [
       {
@@ -1063,6 +1134,161 @@
   },
   "starting_value": 10000.0,
   "trades": [
+    {
+      "action": "open",
+      "attribution": {
+        "pairs_model": 1.0
+      },
+      "cycle_id": "fund-20261116T0801",
+      "evidence": [
+        {
+          "figure": "pair: Copper / Aluminium (MCX)",
+          "source": "fund universe"
+        },
+        {
+          "figure": "spread z-score: -2.86",
+          "source": "pairs tracker, data through 2026-11-13"
+        },
+        {
+          "figure": "entry rule: |z| >= 2.0",
+          "source": "pairs tracker"
+        },
+        {
+          "figure": "expected return per signal after costs: 0.3%",
+          "source": "US backtest 2011-2026 counted as 20 signals, plus 1 MCX signal"
+        },
+        {
+          "figure": "US backtest win rate: 62.9%",
+          "source": "pairs backtest"
+        },
+        {
+          "figure": "hedge ratio: 0.24",
+          "source": "pairs tracker"
+        },
+        {
+          "figure": "size: 2.5% of the fund",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "mcx:COPPER",
+      "label": "Copper (MCX COPPER)",
+      "note": "This trade involves buying Copper futures as part of a strategy that pairs it with Aluminium to profit from their price relationship. The decision is based on a statistical signal indicating the Copper price is unusually low relative to Aluminium, with the plan to use 2.5% of the fund's capital.",
+      "note_source": "model",
+      "notional_usd": 252.11218000000002,
+      "pair_key": "copper-aluminium",
+      "price": 1308.4,
+      "purpose": "view",
+      "quantity": 0.007253569226399168,
+      "realized_pnl_usd": 0.0,
+      "side": "LONG",
+      "ts": "2026-11-16T08:01:17.337704+00:00"
+    },
+    {
+      "action": "open",
+      "attribution": {
+        "pairs_model": 1.0
+      },
+      "cycle_id": "fund-20261116T0801",
+      "evidence": [
+        {
+          "figure": "pair: Copper / Aluminium (MCX)",
+          "source": "fund universe"
+        },
+        {
+          "figure": "spread z-score: -2.86",
+          "source": "pairs tracker, data through 2026-11-13"
+        },
+        {
+          "figure": "entry rule: |z| >= 2.0",
+          "source": "pairs tracker"
+        },
+        {
+          "figure": "expected return per signal after costs: 0.3%",
+          "source": "US backtest 2011-2026 counted as 20 signals, plus 1 MCX signal"
+        },
+        {
+          "figure": "US backtest win rate: 62.9%",
+          "source": "pairs backtest"
+        },
+        {
+          "figure": "hedge ratio: 0.24",
+          "source": "pairs tracker"
+        },
+        {
+          "figure": "size: 2.5% of the fund",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "mcx:ALUMINI",
+      "label": "Aluminium (MCX ALUMINI)",
+      "note": "This trade involves buying a short position in Aluminium futures as part of a strategy that pairs it with Copper to profit from their price relationship. The decision is based on a statistical signal indicating the prices are currently diverging significantly, with historical tests suggesting a high probability of success.",
+      "note_source": "model",
+      "notional_usd": 252.11218,
+      "pair_key": "copper-aluminium",
+      "price": 328.6,
+      "purpose": "view",
+      "quantity": 0.0722045798525614,
+      "realized_pnl_usd": 0.0,
+      "side": "SHORT",
+      "ts": "2026-11-16T08:01:17.337704+00:00"
+    },
+    {
+      "action": "open",
+      "attribution": {
+        "put_premium": 1.0
+      },
+      "cycle_id": "fund-20261116T0801",
+      "evidence": [
+        {
+          "figure": "rule: sell one Bank Nifty put credit spread at a time, held to expiry; tested on Bank Nifty 2010-2026, beside the Nifty and Nasdaq-100 tests",
+          "source": "docs/fund.md, Bank Nifty put spreads"
+        },
+        {
+          "figure": "index: Nifty Bank at 61,489.85",
+          "source": "Upstox, last trade"
+        },
+        {
+          "figure": "expiry: 29 Dec 2026, 29.3 sessions left",
+          "source": "NSE"
+        },
+        {
+          "figure": "structure: sell 59,300 put; buy 57,000 put",
+          "source": "put premium sleeve"
+        },
+        {
+          "figure": "credit: \u20b9239.32 per unit",
+          "source": "last trades (Upstox open data), 2% taken off each side"
+        },
+        {
+          "figure": "the most it can lose: \u20b92,060.68 per unit",
+          "source": "last trades (Upstox open data), 2% taken off each side"
+        },
+        {
+          "figure": "model value at expiry: \u20b91,964.94 per unit",
+          "source": "index model, 2026-11-13 close"
+        },
+        {
+          "figure": "market forward: 61,858.90",
+          "source": "put-call parity at 61,500"
+        },
+        {
+          "figure": "size: 4.1% of the fund",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
+      "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
+      "note": "The trader is selling a Bank Nifty put credit spread that involves selling a 59,300 strike put and buying a 57,000 strike put, with the trade expiring on 29 December 2026. This position currently generates a credit of \u20b9239.32 per unit while limiting the maximum potential loss to \u20b92,060.68 per unit.",
+      "note_source": "model",
+      "notional_usd": 416.9330387968,
+      "pair_key": null,
+      "price": 2060.6800000000003,
+      "purpose": "view",
+      "quantity": 19.041196356558505,
+      "realized_pnl_usd": 0.0,
+      "side": "BULL",
+      "ts": "2026-11-16T08:01:17.337704+00:00"
+    },
     {
       "action": "settle",
       "attribution": {
