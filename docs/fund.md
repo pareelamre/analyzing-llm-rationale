@@ -637,7 +637,8 @@ share of the fund's decisions, only from that record.
   and decision head on Qwen3.5-2B, run on GitHub's CPUs) reads each on-device
   forecast's rationale and says whether it concludes the event is likely; a
   number pointing the other way is flagged. It is a guard against the
-  2026-11-08 inversions, not a forecaster, and it blocks nothing in shadow.
+  2026-11-08 inversions, not a forecaster. It blocked nothing until it went live
+  on 2026-11-16 ("Rationale checker goes live", below).
 
 ### Shadow cleanup (owner, 2026-11-15)
 
@@ -774,6 +775,39 @@ Run 43820324331 on GitHub's CPU. Report: `reports/fund_rationale_checker_eval.js
   model's rationales argue No.
 - **Caveat:** it was tested at 8-bit through llama.cpp, not at the makers'
   16-bit on vLLM. 8-bit is what Foresea could run.
+
+### Rationale checker goes live (owner, 2026-11-16)
+
+The owner approved making Open-Jev 2B a live guard on the on-device model's
+forecasts. Until now it only flagged; from here it removes.
+
+- **The rule.** When the checker says a forecast contradicts its own rationale
+  (the rationale argues one side at 70% or more and the number points the other
+  way), the fund drops that forecast before the blend sees it
+  (`fund_cycle.guard_board`). With no model number, the blend has nothing to
+  price that market with, so the fund opens no new position there. It also does
+  not exit a held one on that forecast, because the exit rule only acts on a
+  fresh forecast.
+- **Same market, same forecast.** A check counts only for the forecast it read
+  (same market, same forecast time). A newer forecast is never dropped for an
+  older one's rationale.
+- **Not yet checked means used as it is.** The checker runs after each
+  mark-to-market tick. The fund trades at 01:00, 02:00, 13:00 and 14:00 IST,
+  hours after the 22:00 IST nightly forecast, so forecasts are normally checked
+  first. A forecast the checker has not reached is used unchanged, and the page
+  counts these.
+- **Why now.** On the known cases it caught all 4 inversions of 2026-11-08 with
+  no false flags. On 52 live clear cases from 10 markets it made no false flags
+  and was unclear on 2% (Brier 0.005, PR #796). The cost of a false flag is
+  small: it skips one market's blend, and the blend leans on the market about
+  nine times more than on the model.
+- **What is recorded.** Every check is recorded as before (`analyst_predictions`,
+  analyst `rationale_check`, now mode `live`). Every dropped forecast is also
+  recorded with the market price at the time (analyst `rationale_dropped`), so
+  each drop can be graded when its market resolves.
+- **When it goes back to shadow.** Once 10 dropped forecasts have resolved, if
+  the blend built from them would have beaten the market's Brier on those
+  markets, the drops removed real edge and the checker returns to flagging only.
 
 ## Live Polymarket decided-ranges test (pre-registered 2026-11-10, before any live record)
 

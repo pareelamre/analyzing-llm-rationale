@@ -76,7 +76,7 @@ class RationaleCheckTests(unittest.TestCase):
         by_key = {c["key"]: c for c in payload["checks"]}
         self.assertEqual(by_key["k1"]["verdict"], "contradicts")
         self.assertEqual(by_key["k2"]["verdict"], "agrees")
-        self.assertEqual(payload["mode"], "shadow")
+        self.assertEqual(payload["mode"], "live")  # a live guard since 2026-11-16
         self.assertEqual(payload["checker"]["model"], "ZefanCai/Open-Jev-2B")
 
 

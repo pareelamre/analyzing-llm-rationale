@@ -8,8 +8,9 @@ way. The checker is Open-Jev 2B (ZefanCai/Open-Jev-2B: an Apache-2.0 LoRA and de
 on Qwen/Qwen3.5-2B, MIT code) which returns a calibrated yes/no probability without
 generating text. It is not a forecaster and is never asked about the event itself.
 
-It runs in shadow: verdicts go to static/fund_rationale_checks.json, which the fund records
-and publishes, and nothing is blocked until the flags prove worth trusting.
+It is a live guard (docs/fund.md, "Rationale checker goes live", owner 2026-11-16): verdicts
+go to static/fund_rationale_checks.json, and the fund drops each forecast the checker says
+contradicts its own rationale before the blend prices it (fund_cycle.guard_board).
 
 Usage:
   fund_rationale_check.py --store STORE.duckdb --list-only   # prints pending=N
@@ -117,7 +118,7 @@ def run(store: Path, out_path: Path, ask: Callable[[str, str], float], *, now: O
               f"{item['question'][:70]}")
     checks = sorted(checks, key=lambda c: c["forecasted_at"], reverse=True)[:KEEP]
     payload = {
-        "generated_at": now.isoformat(), "forecast_model": FORECAST_MODEL, "mode": "shadow",
+        "generated_at": now.isoformat(), "forecast_model": FORECAST_MODEL, "mode": "live",
         "checker": {"model": CHECKER_REPO, "revision": CHECKER_REVISION, "base": "Qwen/Qwen3.5-2B",
                     "question": QUESTION, "clear_threshold": CLEAR},
         "checks": checks,

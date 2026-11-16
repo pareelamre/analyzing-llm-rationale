@@ -53,7 +53,7 @@ class FundCycleTests(unittest.TestCase):
             actions = {r[0] for r in fund.execute("SELECT action FROM fund_trades")}
             self.assertEqual(actions, {"transfer"})
 
-    def test_recent_rationale_checks_become_a_shadow_analyst_with_its_flags(self):
+    def test_the_guard_records_recent_checks_and_every_forecast_it_dropped(self):
         with tempfile.TemporaryDirectory() as tmp:
             checks = Path(tmp) / "checks.json"
             checks.write_text(json.dumps({"checks": [
@@ -64,16 +64,24 @@ class FundCycleTests(unittest.TestCase):
                 {"instrument_id": "kalshi:OLD", "question": "Old?", "forecast": 0.9, "rationale_yes": 0.1,
                  "verdict": "contradicts", "forecasted_at": "2026-11-01T00:00:00+00:00"},
             ]}))
+            board = [{"platform": "Polymarket", "ident": "iran", "question": "Iran?", "model_probability": 0.98,
+                      "market_bid": 0.04, "market_ask": 0.06, "forecasted_at": "2026-11-09T17:25:00+00:00"}]
             fund = sqlite3.connect(":memory:")
             fund_ledger.ensure_schema(fund)
             with mock.patch.object(cycle, "CHECKS_PATH", checks):
-                shadow = cycle.record_shadow(fund, datetime(2026, 11, 10, 0, 0, tzinfo=timezone.utc),
-                                             "2026-11-10T00:00:00+00:00")
-        self.assertEqual(set(shadow), {"rationale_check"})  # the only shadow analyst left (2026-11-15)
-        checker = shadow["rationale_check"]
-        self.assertEqual(checker["markets"], 2)
-        self.assertEqual([f["label"] for f in checker["flags"]], ["Iran?"])
-        self.assertEqual(fund.execute("SELECT COUNT(*) FROM analyst_predictions").fetchone()[0], 2)
+                _kept, guard = cycle.guard_board(board)
+                guard = cycle.record_guard(fund, guard, datetime(2026, 11, 10, 0, 0, tzinfo=timezone.utc),
+                                           "2026-11-10T00:00:00+00:00")
+        self.assertEqual((guard["mode"], guard["markets"], guard["days_recorded"]), ("live", 2, 1))
+        self.assertEqual([f["label"] for f in guard["flags"]], ["Iran?"])
+        self.assertEqual(guard["dropped"], [{"label": "Iran?", "forecast": 0.98, "rationale_yes": 0.04,
+                                             "forecasted_at": "2026-11-09T17:25:00+00:00"}])
+        rows = [tuple(r) for r in fund.execute("SELECT analyst, mode, instrument_id, probability, market_probability"
+                                               " FROM analyst_predictions ORDER BY analyst, instrument_id")]
+        # The dropped forecast keeps its raw number and the market's price then, so it can be graded.
+        self.assertEqual(rows, [("rationale_check", "live", "kalshi:KXFED", 0.2, None),
+                                ("rationale_check", "live", "polymarket:iran", 0.04, None),
+                                ("rationale_dropped", "live", "polymarket:iran", 0.98, 0.05)])
 
     def test_polymarket_no_is_the_mirror_of_yes(self):
         quote = cycle.event_quote({"yes_bid": 0.04, "yes_ask": 0.06, "no_bid": None, "no_ask": None})
@@ -154,15 +162,59 @@ class FundCycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "blend.json"
             path.write_text(json.dumps(params))
-            with mock.patch.object(cycle, "BLEND_PATH", path):
-                signals, skipped, forecasts = cycle.prediction_market_signals([row], now)
-            with mock.patch.object(cycle, "BLEND_PATH", Path(tmp) / "absent.json"):
-                none, why, no_forecasts = cycle.prediction_market_signals([row], now)
+            with mock.patch.object(cycle, "BLEND_PATH", path), \
+                    mock.patch.object(cycle, "CHECKS_PATH", Path(tmp) / "no_checks.json"):
+                signals, skipped, forecasts, guard = cycle.prediction_market_signals([row], now)
+            with mock.patch.object(cycle, "BLEND_PATH", Path(tmp) / "absent.json"), \
+                    mock.patch.object(cycle, "CHECKS_PATH", Path(tmp) / "no_checks.json"):
+                none, why, no_forecasts, _ = cycle.prediction_market_signals([row], now)
         self.assertEqual([(s.analyst, s.side) for s in signals], [("blend_model", "YES")])
         [forecast] = forecasts.values()
         self.assertAlmostEqual(forecast["model_probability"], 0.603, places=2)
         self.assertEqual(forecast["raw_model_probability"], 0.9)
         self.assertEqual((none, no_forecasts, why[0]["reason"]), ([], {}, "no blend parameters"))
+        # With no checks yet, the forecast is used as it is and counted as unchecked.
+        self.assertEqual((guard["board"], guard["checked"], guard["unchecked"], guard["dropped"]), (1, 0, 1, []))
+
+    def _guarded(self, row: dict, checks: list, now: datetime) -> tuple:
+        params = {"intercept": 0.173417, "coef": [0.693864, 0.402811, -0.291052]}
+        with tempfile.TemporaryDirectory() as tmp:
+            blend, checks_path = Path(tmp) / "blend.json", Path(tmp) / "checks.json"
+            blend.write_text(json.dumps(params))
+            checks_path.write_text(json.dumps({"checks": checks}))
+            with mock.patch.object(cycle, "BLEND_PATH", blend), mock.patch.object(cycle, "CHECKS_PATH", checks_path):
+                return cycle.prediction_market_signals([row], now)
+
+    def test_a_forecast_that_contradicts_its_own_rationale_never_reaches_the_blend(self):
+        # Owner, 2026-11-16: the checker is a live guard. Unguarded, this row is a blend YES signal.
+        row = {"platform": "Polymarket", "ident": "x", "question": "Will x?", "model_probability": 0.9,
+               "market_bid": 0.49, "market_ask": 0.51, "forecasted_at": "2026-11-09T17:25:00.123456+00:00"}
+        now = datetime(2026, 11, 9, 20, 0, tzinfo=timezone.utc)
+        check = {"instrument_id": "polymarket:x", "question": "Will x?", "forecast": 0.9, "rationale_yes": 0.05,
+                 "verdict": "contradicts", "forecasted_at": "2026-11-09T17:25:00.123456Z"}
+        signals, skipped, forecasts, guard = self._guarded(row, [check], now)
+        self.assertEqual(signals, [])
+        # No forecast for the market either, so a held position is not sold on it.
+        self.assertEqual(forecasts, {})
+        self.assertEqual(skipped, [{"instrument": "polymarket:x", "label": "Will x?", "reason": cycle.GUARD_REASON}])
+        self.assertEqual((guard["checked"], guard["unchecked"]), (1, 0))
+        self.assertEqual([(d["ident"], d["model_probability"], d["rationale_yes"]) for d in guard["dropped"]],
+                         [("x", 0.9, 0.05)])
+
+    def test_the_guard_drops_only_the_forecast_it_read(self):
+        row = {"platform": "Polymarket", "ident": "x", "question": "Will x?", "model_probability": 0.9,
+               "market_bid": 0.49, "market_ask": 0.51, "forecasted_at": "2026-11-09T17:25:00+00:00"}
+        now = datetime(2026, 11, 9, 20, 0, tzinfo=timezone.utc)
+        older = {"instrument_id": "polymarket:x", "forecast": 0.9, "rationale_yes": 0.05, "verdict": "contradicts",
+                 "forecasted_at": "2026-11-08T17:25:00+00:00"}
+        other = {**older, "instrument_id": "polymarket:y", "forecasted_at": row["forecasted_at"]}
+        agrees = {**older, "rationale_yes": 0.95, "verdict": "agrees", "forecasted_at": row["forecasted_at"]}
+        unclear = {**agrees, "rationale_yes": 0.5, "verdict": "unclear"}
+        for checks, checked in (([older, other], 0), ([agrees], 1), ([unclear], 1)):
+            with self.subTest(verdicts=[c["verdict"] for c in checks]):
+                signals, _skipped, _forecasts, guard = self._guarded(row, checks, now)
+                self.assertEqual([(s.analyst, s.side) for s in signals], [("blend_model", "YES")])
+                self.assertEqual((guard["checked"], guard["unchecked"], guard["dropped"]), (checked, 1 - checked, []))
 
     def test_the_scorecard_scale_is_read_per_analyst(self):
         card = {"strategies": [{"analyst": "put_premium", "scale": 2.5}, {"analyst": "blend_model", "scale": 0.5}]}

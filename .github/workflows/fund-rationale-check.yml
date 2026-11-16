@@ -1,8 +1,9 @@
 name: Fund rationale check
 
-# Shadow analyst for the Foresea Fund (docs/fund.md): checks each of the on-device
-# model's forecasts against its own rationale with Open-Jev 2B on CPU, and publishes
-# static/fund_rationale_checks.json for the fund to record. It follows every MTM tick,
+# Live guard for the Foresea Fund (docs/fund.md, "Rationale checker goes live"): checks
+# each of the on-device model's forecasts against its own rationale with Open-Jev 2B on
+# CPU, and publishes static/fund_rationale_checks.json; the fund drops a forecast the
+# checker says contradicts its rationale. It follows every MTM tick,
 # which is when newly staged forecasts reach the store; with nothing new it exits after
 # a store download, before installing the model.
 
