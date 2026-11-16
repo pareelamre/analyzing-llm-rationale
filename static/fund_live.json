@@ -9,13 +9,13 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": -11.9683,
+      "agent_transfer": -3.37,
       "event_model": 49.6015,
       "put_premium": 7.3258
     }
   },
   "by_asset_class": {
-    "event": 3998.3629,
+    "event": 4006.9612,
     "option": 207.7101
   },
   "cash_usd": 5839.6861,
@@ -475,6 +475,10 @@
     {
       "nav_usd": 10045.7591,
       "ts": "2026-11-16T00:01:20.732865+00:00"
+    },
+    {
+      "nav_usd": 10054.3574,
+      "ts": "2026-11-16T00:57:35.746512+00:00"
     }
   ],
   "cycle": {
@@ -490,10 +494,10 @@
       }
     ],
     "traded": false,
-    "window": "05:31 IST is outside the trading hours"
+    "window": "06:27 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-16T00:01:20.732865+00:00",
+  "generated_at": "2026-11-16T00:57:35.746512+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -501,7 +505,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10045.7591,
+  "nav_usd": 10054.3574,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -531,7 +535,7 @@
       ],
       "mode": "GO"
     },
-    "risk_per_structure": 0.02,
+    "risk_per_structure": 0.05,
     "settled": []
   },
   "paper": true,
@@ -714,15 +718,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.05700000000000005,
+      "mark": 0.05800000000000005,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -8.5983,
+      "pnl_usd": 0.0,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 490.1037,
+      "value_usd": 498.702,
       "venue": "polymarket"
     },
     {
@@ -801,7 +805,216 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 0.458,
+  "return_pct": 0.544,
+  "scorecard": {
+    "retired_records": [
+      {
+        "analyst": "agent_transfer",
+        "positions": 1,
+        "realized_usd": 0.8
+      }
+    ],
+    "rules": {
+      "kelly_fraction": 0.25,
+      "min_positions": 20,
+      "proxy_weight": 0.5,
+      "scale_range": [
+        0.5,
+        2.5
+      ],
+      "trial_scale": 0.5
+    },
+    "strategies": [
+      {
+        "analyst": "put_premium",
+        "context": "The Nifty backtest it was designed on is in-sample, so it is not counted.",
+        "kelly_at_low": 0.06366,
+        "kind": "option",
+        "label": "Put premium (Nifty put spreads)",
+        "live": {
+          "high": null,
+          "low": null,
+          "mean": null,
+          "positions": 0,
+          "realized_usd": 0
+        },
+        "market": "Index options",
+        "scale": 2.5,
+        "score": {
+          "counted": 141.5,
+          "high": 0.16731,
+          "low": 0.03875,
+          "mean": 0.10303,
+          "sd": 0.3901
+        },
+        "size": "5.0% of the fund at risk per spread",
+        "starting_size": "2.0% of the fund at risk per spread",
+        "status": "proven",
+        "tests": [
+          {
+            "counted": 141.5,
+            "label": "Out-of-sample test on the Nasdaq-100, 2003-2026",
+            "mean": 0.10303,
+            "sd": 0.3901,
+            "source": "reports/fund_ndx_put_eval.json",
+            "trades": 283
+          }
+        ],
+        "trust": 0.625,
+        "why": "The low end of its range is above zero. A quarter-Kelly bet at that low end is 6.4% of the fund at risk, above the 2.5x limit."
+      },
+      {
+        "analyst": "pairs_model",
+        "context": "No out-of-sample test yet: the US backtest (2011-2026) chose which pairs to trade, so it is not counted.",
+        "kelly_at_low": null,
+        "kind": "pair",
+        "label": "Commodity pairs",
+        "live": {
+          "high": null,
+          "low": null,
+          "mean": null,
+          "positions": 0,
+          "realized_usd": 0
+        },
+        "market": "Commodities",
+        "scale": 0.5,
+        "score": {
+          "counted": 0.0,
+          "high": null,
+          "low": null,
+          "mean": null,
+          "sd": null
+        },
+        "size": "2.5% of the fund per leg",
+        "starting_size": "5.0% of the fund per leg",
+        "status": "trial",
+        "tests": [],
+        "trust": 0.125,
+        "why": "No record yet: it needs 20 positions before its record can decide."
+      },
+      {
+        "analyst": "blend_model",
+        "context": "Its out-of-sample test was scored in Brier, not returns: 0.1179 against the market's 0.119 on 116 markets, a tie (95% range of the gap -0.006 to +0.004).",
+        "kelly_at_low": null,
+        "kind": "event",
+        "label": "Blend analyst (market and model)",
+        "live": {
+          "high": null,
+          "low": null,
+          "mean": null,
+          "positions": 0,
+          "realized_usd": 0
+        },
+        "market": "Prediction markets",
+        "scale": 0.5,
+        "score": {
+          "counted": 0.0,
+          "high": null,
+          "low": null,
+          "mean": null,
+          "sd": null
+        },
+        "size": "1/32 of the Kelly bet per market",
+        "starting_size": "1/16 of the Kelly bet per market",
+        "status": "trial",
+        "tests": [],
+        "trust": 0.125,
+        "why": "No record yet: it needs 20 positions before its record can decide."
+      }
+    ],
+    "tested": [
+      {
+        "analyst": "event_model",
+        "date": "2026-11-09",
+        "idea": "On-device model's raw odds",
+        "market": "Prediction markets",
+        "result": "Brier 0.0076 worse than the market (95% range 0.0012 to 0.0146) on 116 markets",
+        "verdict": "Retired"
+      },
+      {
+        "date": "2026-11-09",
+        "idea": "News sentiment (FinBERT)",
+        "market": "Indices and oil",
+        "result": "rank correlation with the next day's return 0.005 (range -0.056 to 0.068)",
+        "verdict": "NO-GO"
+      },
+      {
+        "date": "2026-11-10",
+        "idea": "Commodities leading Indian indices",
+        "market": "Indices",
+        "result": "nothing held up in the 2019-2026 holdout",
+        "verdict": "NO-GO"
+      },
+      {
+        "analyst": "vix_fade",
+        "date": "2026-11-10",
+        "idea": "US VIX fade on Bank Nifty",
+        "market": "Indices",
+        "result": "about 12 signals a year put a verdict years away, and no same-night price exists to trade it",
+        "verdict": "Retired"
+      },
+      {
+        "analyst": "options_model",
+        "date": "2026-11-10",
+        "idea": "Nifty straddles and condors",
+        "market": "Index options",
+        "result": "+4.0% per rupee at risk (range -5.7% to +13.6%), short of the bar",
+        "verdict": "Retired"
+      },
+      {
+        "analyst": "weather_model",
+        "date": "2026-11-10",
+        "idea": "Weather forecasts, Kalshi daily highs",
+        "market": "Prediction markets",
+        "result": "-25.2% per dollar after fees (range -32.5% to -17.5%)",
+        "verdict": "Retired"
+      },
+      {
+        "analyst": "decided_ranges",
+        "date": "2026-11-10",
+        "idea": "Ranges already decided by airport readings",
+        "market": "Prediction markets",
+        "result": "1,808 of 1,818 decided ranges were already priced at a full dollar",
+        "verdict": "Retired"
+      },
+      {
+        "date": "2026-11-10",
+        "idea": "Weather forecasts, Polymarket daily highs",
+        "market": "Prediction markets",
+        "result": "-14.0% per dollar after fees (range -21.6% to -4.6%)",
+        "verdict": "NO-GO"
+      },
+      {
+        "date": "2026-11-11",
+        "idea": "NVIDIA Kumo forecasts",
+        "market": "Indices and oil",
+        "result": "36% larger errors than assuming no change on the indices",
+        "verdict": "NO-GO"
+      },
+      {
+        "date": "2026-11-12",
+        "idea": "HRRR forecasts, Kalshi hourly temperatures",
+        "market": "Prediction markets",
+        "result": "-44.5% per dollar after fees (range -49.9% to -38.9%)",
+        "verdict": "NO-GO"
+      },
+      {
+        "date": "2026-11-12",
+        "idea": "Market makers' opening prices, hourly markets",
+        "market": "Prediction markets",
+        "result": "14 loose ladders in 5,816 hours; the model at the open lost 58.9% per dollar",
+        "verdict": "NO-GO"
+      },
+      {
+        "date": "2026-11-15",
+        "idea": "Trend following, indices and commodities",
+        "market": "Indices and commodities",
+        "result": "+0.3% a year (range -1.9% to +2.7%), Sharpe 0.06",
+        "verdict": "NO-GO"
+      }
+    ],
+    "unit": "return per dollar at risk per position, after costs"
+  },
   "settled": [],
   "shadow": {
     "rationale_check": {
