@@ -725,6 +725,26 @@ is not a forecasting test.
   of "unclear" answers.
 - The checker stays in shadow either way; nothing is blocked.
 
+#### Amendment (2026-11-16, before any checker's score was read)
+
+The first run's case list held 52 clear on-device cases, but from only 10
+markets (7 of them Yes). That is below the 15-market bar, because the on-device
+model forecasts the same few markets every night. No checker's score had been
+read when this was written, and that run was cancelled.
+
+- **Added, live set B:** rationales from the other models in the store (the
+  council and the hosted models). Same window, same clear-number rule. One case
+  per model and market: the latest clear forecast in the window. The checker's
+  skill, reading which side a rationale argues, is the same whoever wrote it.
+- **Set A** is the on-device cases as first registered.
+- **Running time:** set B is shuffled (seed 0) and placed after the known cases
+  and set A. The cases are split across 12 runners for CLM-8B and 4 for the 2B.
+  Each runner stops starting new cases after 150 minutes. A case not scored by
+  both checkers is left out.
+- **Verdict:** the same rules, applied to sets A and B together, with cases and
+  markets counted across both. Each set's Brier difference is also reported,
+  description only.
+
 ## Live Polymarket decided-ranges test (pre-registered 2026-11-10, before any live record)
 
 **Why.** Price history could not show whether a range the airport readings had
