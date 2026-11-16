@@ -10,14 +10,14 @@
     },
     "unrealized": {
       "agent_transfer": 10.9776,
-      "event_model": 59.4786,
+      "event_model": 59.9275,
       "pairs_model": -4.5115,
       "put_premium": 7.9442
     }
   },
   "by_asset_class": {
     "commodity": 499.7128,
-    "event": 4031.1859,
+    "event": 4031.6348,
     "option": 625.2615
   },
   "cash_usd": 4918.5287,
@@ -541,6 +541,10 @@
     {
       "nav_usd": 10074.6889,
       "ts": "2026-11-16T20:01:19.562630+00:00"
+    },
+    {
+      "nav_usd": 10075.1378,
+      "ts": "2026-11-16T21:15:46.162314+00:00"
     }
   ],
   "cycle": {
@@ -553,14 +557,10 @@
       {
         "instrument": "kalshi:KXAGICO-COMP-27Q4",
         "reason": "no room under the fund's limits"
-      },
-      {
-        "instrument": "polymarket:will-jensen-huang-rejoin-nvidia-by-december-31-2026",
-        "reason": "no room under the fund's limits"
       }
     ],
     "seeded": null,
-    "signals": 5,
+    "signals": 2,
     "skipped": [
       {
         "pair": "copper-gold",
@@ -571,13 +571,23 @@
         "pair": "copper-zinc",
         "reason": "stretched at z=-3.24 but its expected return is 0.0% per signal",
         "z": -3.237
+      },
+      {
+        "instrument": "mcx:COPPER",
+        "label": "Copper (MCX COPPER)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:ALUMINI",
+        "label": "Aluminium (MCX ALUMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
     "traded": true,
     "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-16T20:01:19.562630+00:00",
+  "generated_at": "2026-11-16T21:15:46.162314+00:00",
   "guard": {
     "board": 24,
     "checked": 24,
@@ -590,6 +600,23 @@
     "mode": "live",
     "unchecked": 0
   },
+  "hours": {
+    "holiday_list": true,
+    "venues": {
+      "bse_fo": {
+        "open": false,
+        "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+      },
+      "mcx": {
+        "open": false,
+        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      "nse_fo": {
+        "open": false,
+        "why": "NSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+      }
+    }
+  },
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -597,7 +624,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10074.6889,
+  "nav_usd": 10075.1378,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -817,15 +844,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.952,
+      "mark": 0.953,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 63.752,
+      "pnl_usd": 64.2009,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 427.4075,
+      "value_usd": 427.8565,
       "venue": "polymarket"
     },
     {
@@ -967,7 +994,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 0.747,
+  "return_pct": 0.751,
   "scorecard": {
     "retired_records": [
       {
