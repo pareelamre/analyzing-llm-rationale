@@ -5,7 +5,6 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
