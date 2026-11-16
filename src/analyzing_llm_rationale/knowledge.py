@@ -42,6 +42,8 @@ NUMERIC_KINDS = ("projection", "estimate")
 RRF_K = 60
 #: Each ranked list contributes at most this many candidates to the fusion.
 LIST_DEPTH = 50
+#: A timeline keeps rows scoring at least this share of its best row.
+TIMELINE_FLOOR = 0.75
 YEAR = re.compile(r"\b(19[5-9]\d|20\d\d|21\d\d)\b")
 DATE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
 WORD = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?")
@@ -407,19 +409,20 @@ class Index:
         return sorted(older, key=lambda j: _desc(self._published[j]))
 
     def _horizon(self, asked: list[int]) -> list[int]:
+        """Claims about the years a question asks about: projections first, then risks and policies."""
         if not asked:
             return []
         scored = []
         for i, claim in enumerate(self.claims):
             when = parse_when(claim.get("horizon"))
-            if when is None or claim.get("kind") not in NUMERIC_KINDS:
+            if when is None:
                 continue
             gap = min(abs(when.year - y) for y in asked)
             if gap <= 2:
-                published = str(self.corpus.sources.get(claim.get("source"), {}).get("published") or "")
-                scored.append((gap, published, i))
-        scored.sort(key=lambda t: (t[0], _desc(t[1])))
-        return [i for _, _, i in scored]
+                kind_rank = 0 if claim.get("kind") in NUMERIC_KINDS else 1
+                scored.append((gap, kind_rank, self._published[i], i))
+        scored.sort(key=lambda t: (t[0], t[1], _desc(t[2])))
+        return [i for *_, i in scored]
 
     # -- public queries -----------------------------------------------------------------------
 
@@ -481,11 +484,13 @@ class Index:
         Within a group the newest source comes first and the older ones are its ``history``, so a
         revision (a 2035 estimate raised or cut by a later report) reads as one line.
         """
-        hits = self.search(topic, as_of=as_of, k=200, kinds=NUMERIC_KINDS)
+        # Scenario numbers (a "risk" with a value) count too; a claim reached only because it
+        # shares a year with the topic does not.
+        hits = self.search(topic, as_of=as_of, k=200)
         groups: dict[tuple, list[Hit]] = {}
         for hit in hits:
             c = hit.claim
-            if c.get("value") is None or not c.get("metric"):
+            if c.get("value") is None or not c.get("metric") or not c.get("horizon") or hit.lists == ["horizon"]:
                 continue
             key = (str(c.get("metric")).lower(), str(c.get("geo") or "").lower(), str(c.get("horizon") or ""),
                    str(c.get("unit") or "").lower(), str(c.get("scenario") or "").lower())
@@ -501,7 +506,9 @@ class Index:
                         "history": [{"value": h.claim.get("value"), "cite": h.cite(), "claim": h.claim}
                                     for h in group[1:]]})
         out.sort(key=lambda g: (-g["score"], str(g["horizon"])))
-        return out
+        # Keep what is about the topic: rows well below the best match only share a word or a year.
+        best = out[0]["score"] if out else 0.0
+        return [g for g in out if g["score"] >= TIMELINE_FLOOR * best]
 
     def evidence_articles(self, question: str, *, as_of: Optional[date] = None, k: int = 2,
                           per_source: int = 4, min_support: int = 2) -> list[dict]:
