@@ -135,13 +135,15 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
 )
 _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "30"))
 _TRACK_RECORD_LIVE_TIMEOUT = int(os.environ.get("TRACK_RECORD_LIVE_TIMEOUT", "20"))
-# 1800s assumes a half-hourly publish. Measured delivery is ~22% of a
-# half-hourly or hourly cron (docs/SCHEDULED_WORKFLOW_DELIVERY.md), so the
-# surfaces using this threshold report stale routinely rather than
-# exceptionally -- track_record_live.json was 20,059s old against it when
-# that was measured. Left as-is: what the flag should mean is a product
-# decision, not something the measurement settles.
+# The edge board is judged on the mark-to-market payload, which the box's cron
+# dispatches every 15 minutes (track-record-tick.yml), so 30 minutes is one
+# missed tick.
 _EDGE_BOARD_STALE_AFTER_S = int(os.environ.get("EDGE_BOARD_STALE_AFTER_S", "1800"))
+# track_record_live.json (the resolved record) is published about once an hour:
+# track-record-resolved.yml runs after an MTM tick once the record is 50
+# minutes old. Its own cron fired only every 4-8 hours, and at 1800s the record
+# read stale even when it was on time. Two hours is one missed hourly run.
+_TRACK_RECORD_STALE_AFTER_S = int(os.environ.get("TRACK_RECORD_STALE_AFTER_S", "7200"))
 _EDGE_BOARD_CURVE_MAX_POINTS = int(os.environ.get("EDGE_BOARD_CURVE_MAX_POINTS", "160"))
 # The Agentic board is a live transparency surface, not an archive export. Keep
 # its public payload bounded so a growing action history cannot make opening
@@ -2341,7 +2343,7 @@ _LIVE_TRACK_RECORD_READER = live_track_record_support.LiveTrackRecordReader(
     config=live_track_record_support.LiveTrackRecordConfig(
         live_url=_TRACK_RECORD_LIVE_URL,
         ttl_seconds=_TRACK_RECORD_LIVE_TTL,
-        stale_after_seconds=_EDGE_BOARD_STALE_AFTER_S,
+        stale_after_seconds=_TRACK_RECORD_STALE_AFTER_S,
         bundled_path=_STATIC_DIR / "track_record_live.json",
         request_timeout_seconds=_TRACK_RECORD_LIVE_TIMEOUT,
     ),
@@ -2389,6 +2391,9 @@ _MARK_TO_MARKET_READER = live_track_record_support.LiveTrackRecordReader(
     source=_gcs_payload_source("MARK_TO_MARKET", "mark_to_market_live.json"),
 )
 _read_mark_to_market_record = _MARK_TO_MARKET_READER.read
+# The edge board's generated_at is the MTM payload's (see
+# _merge_mark_to_market_record), so it is judged at the MTM threshold.
+_edge_board_freshness = _MARK_TO_MARKET_READER.freshness
 _INDEX_FORECAST_READER = live_track_record_support.LiveTrackRecordReader(
     cache_key=_cache_key,
     cache_get=_cache_get,
@@ -2546,6 +2551,14 @@ def _merge_mark_to_market_record(
         if resolved_generated_at:
             merged["resolved_generated_at"] = resolved_generated_at
     return merged
+
+
+def _open_market_counts(mtm_payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    return {
+        key: mtm_payload[key]
+        for key in ("n_markets_open", "n_markets_tracked")
+        if mtm_payload and mtm_payload.get(key) is not None
+    }
 
 
 def _read_edge_board_record() -> Dict[str, Any]:
@@ -4002,8 +4015,10 @@ async def track_record_digest():
     post (a weekly recap). Built from the resolved-forecast aggregate so it
     never overstates."""
     from analyzing_llm_rationale import track_record_live as trl
-    aggregate = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
-    return PlainTextResponse(trl.format_digest(aggregate),
+    # The merged record: resolved scores plus the live open count, which only
+    # the MTM payload carries (the resolved one alone always read "0 open").
+    aggregate = await asyncio.get_running_loop().run_in_executor(None, _read_edge_board_record)
+    return PlainTextResponse(trl.format_digest(aggregate or None),
                              headers={"Cache-Control": "public, max-age=600"})
 
 
@@ -4139,10 +4154,14 @@ async def track_record(request: Request):
     `gpt-oss-120b` against published Metaculus outcomes: accuracy, Brier score,
     calibration (ECE), a reliability curve, and a sample of resolved forecasts.
     """
-    live = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
+    loop = asyncio.get_running_loop()
+    live = await loop.run_in_executor(None, _read_live_track_record)
     if live and live.get("n_snapshots_resolved"):
         payload = dict(live)
         payload["freshness"] = _track_record_freshness(payload)
+        # The resolved record leaves out live counts (they would go stale
+        # between its hourly publishes); take them from the 15-minute MTM payload.
+        payload.update(_open_market_counts(await loop.run_in_executor(None, _read_mark_to_market_record)))
         return etag_helper.json_or_304(request, payload)
     path = _STATIC_DIR / "track_record.json"
     if not path.exists():
@@ -4172,7 +4191,7 @@ async def edge_board(request: Request):
     """
     live = await asyncio.get_running_loop().run_in_executor(None, _read_edge_board_record)
     live = live or {}
-    freshness = _track_record_freshness(live)
+    freshness = _edge_board_freshness(live)
     raw_board = live.get("edge_board", [])
     try:
         from analyzing_llm_rationale.edge_credibility import audit_edge_board
@@ -8968,7 +8987,7 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
         primary_n_snapshots_resolved=int(payload.get("primary_n_snapshots_resolved") or 0),
         primary_n_markets_resolved=int(payload.get("primary_n_markets_resolved") or 0),
         n_markets_open=int(payload.get("n_markets_open") or len(rows)),
-        freshness=_track_record_freshness(payload),
+        freshness=_edge_board_freshness(payload),
     )
     _cache_set(cache_key, response.model_dump(mode="json"), radar_cache_ttl)
     return response
