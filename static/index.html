@@ -8269,7 +8269,7 @@ function renderFundBoard(d) {
   const guardN = (guard?.dropped || []).length;
   const guardItem = guard ? `<div class="fund-row">
       <div class="fund-row-main"><div class="fund-name">${escHtml(_fundAnalystLabel('rationale_check'))} <span class="fund-pill fund-pill--check">Live</span></div>
-        <p class="fund-note">${guard.checked || 0} of ${guard.board || 0} forecasts on the board checked this cycle; ${guardN ? `${guardN} dropped for pointing away from ${guardN === 1 ? 'its' : 'their'} own reasoning` : 'none points away from its own reasoning'}.${guard.unchecked ? ` ${guard.unchecked} not checked yet ${guard.unchecked === 1 ? 'was used as it is' : 'were used as they are'}.` : ''}</p>
+        <p class="fund-note">${guard.checked || 0} of ${guard.board || 0} forecasts on the board checked this cycle; ${guardN ? `${guardN} dropped for pointing away from ${guardN === 1 ? 'its' : 'their'} own reasoning` : 'none points away from its own reasoning'}.${guard.unchecked ? ` ${guard.unchecked} not yet checked ${guard.unchecked === 1 ? 'was' : 'were'} used unchanged.` : ''}</p>
         ${guardDropped ? `<details class="fund-details"><summary>The forecasts it dropped</summary><table class="fund-facts">${guardDropped}</table></details>` : ''}</div>
     </div>` : '';
 
@@ -8376,7 +8376,7 @@ function renderFundBoard(d) {
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Shadow analysts</h4>
         <p class="agentic-panel-copy">New models record their predictions and are graded before they may trade.</p></div></div>
-      <div class="fund-list">${shadowItems || '<p class="fund-empty">No shadow analysts yet.</p>'}</div>
+      <div class="fund-list">${shadowItems || '<p class="fund-empty">No shadow analysts right now.</p>'}</div>
       ${retired ? `<div class="fund-foot"><p class="fund-note" style="margin:0"><b>Retired${retiredOn ? ` ${escHtml(_fundDay(retiredOn))}` : ''}</b>: each failed its test or could never reach a verdict.</p><ul class="fund-retired">${retired}</ul></div>` : ''}
     </section>
     <section class="agentic-panel">
