@@ -284,6 +284,66 @@ options analyst, which stays in shadow mode.
 - **Off switch:** the sleeve trades only while `reports/fund_ndx_put_eval.json`
   says GO.
 
+#### Bank Nifty put spreads (pre-registered 2026-11-16, before any result)
+
+**Why.** The sleeve sells only Nifty put spreads. Bank Nifty is NSE's other large
+index-options market. If the same rule works there, the sleeve can hold a second
+spread and build its record twice as fast. Bank Nifty moves with Nifty, so a
+crash would hit both spreads at once. The test measures how closely they move
+together, and the size rule below allows for it.
+
+**Data.** Upstox daily closes of Nifty Bank, Nifty 50 and India VIX from 2008,
+the Nifty backtest's source, through the 2026-11-13 close. There is no public
+volatility index for Bank Nifty.
+
+**Rule.** The Nifty backtest's put side, unchanged except for the index and its
+volatility.
+
+- Every 21 sessions, refit the index model (`index_forecast.fit_horizon`, 21
+  sessions) on Bank Nifty with India VIX, on data up to that day.
+- Take the put credit spread from `fund_options.candidate_structures`: short
+  near the model's 25% level, long near its 10% level.
+- Price it with Black-76, flat across strikes, with the forward equal to the
+  index. The volatility is India VIX times the ratio of Bank Nifty's to Nifty's
+  realized volatility over the 60 sessions to that day (standard deviation of
+  daily log returns, on days both have). Bank Nifty moves more than Nifty, so
+  its options cost more; the ratio assumes both carry the same premium over
+  realized movement.
+- Strikes sit on a grid of 0.2% of the index, rounded to 1, 2.5 or 5 times a
+  power of ten (100 points at today's level, as NSE lists them).
+- Each leg pays a half-spread of the larger of 0.002% of the index and 1% of its
+  price. Charges are 2% of the money at risk.
+- Hold to the close 21 sessions later.
+
+**Verdict.** GO if the put spread's mean net return per rupee at risk has a 95%
+interval (2,000 bootstrap draws over decisions) entirely above zero, over at
+least 60 trades.
+
+**Description only.**
+
+- The same spreads priced at India VIX itself, unscaled. That undercharges Bank
+  Nifty's options, so it is a harsher case.
+- Nifty's put spread on the same decision days (as in the Nifty backtest), the
+  correlation of the two return series (ρ), and the fund's path when both are
+  sold.
+
+**If GO:**
+
+- The sleeve also sells one Bank Nifty put spread at a time, by the Nifty rule:
+  the listed expiry nearest 21 sessions out, from 15 to 30, each leg with at
+  least 20 lots traded, held to expiry.
+- **Size.** Two spreads that move together are close to one bigger bet. For two
+  bets with the same edge and risk, the Kelly bet on each is the single bet's
+  divided by (1 + ρ). So each spread gets the scorecard's quarter-Kelly at the
+  low end divided by (1 + ρ), within the same 0.5x to 2.5x of the 2% starting
+  size. All option limits stay, including 10% of the fund across options.
+- **Evidence.** Bank Nifty's trades join the Nasdaq-100's in the put premium
+  score at half weight, because they share the months and much of the movement
+  of the Nifty backtest the rule was chosen on.
+
+**If NO-GO:** the sleeve stays Nifty-only, and the test joins the scorecard's
+list of ideas tested and not funded.
+
 ## Pairs: start with what we have (owner, 2026-11-15)
 
 The owner asked for reads from the data already in hand, calibrated as more comes
