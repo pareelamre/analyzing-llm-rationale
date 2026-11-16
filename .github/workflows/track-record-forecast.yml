@@ -20,10 +20,14 @@ on:
         description: "Force re-forecast all open markets regardless of slot (1=yes, 0=no)"
         required: false
         default: "0"
+      # The box's hourly cron dispatches with no inputs, so these defaults are
+      # what the nightly run uses. A default of 4 shards (picked by the 5-minute
+      # slot, the same slot every night) meant the same quarter of the markets
+      # was forecast each night and the rest never were.
       target_shard_count:
         description: "Number of rotating market/target shards"
         required: false
-        default: "4"
+        default: "1"
       target_shard_index:
         description: "0-based target shard to run; blank rotates from the 5-minute slot"
         required: false
@@ -31,7 +35,7 @@ on:
       max_targets:
         description: "Maximum markets to forecast in this run"
         required: false
-        default: "12"
+        default: "48"
       any_hour:
         description: "Forecast now instead of waiting for the 22:00 IST hour (1=yes, 0=no)"
         required: false
@@ -131,7 +135,7 @@ jobs:
           TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '1' }}
           TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
           TRACK_TARGET_SHARD_SLOT_MINUTES: "5"
-          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '12' }}
+          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '48' }}
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
           REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}
@@ -150,7 +154,9 @@ jobs:
     if: ${{ needs.roster.outputs.run == 'true' }}
     name: forecast (${{ matrix.model }})
     runs-on: ubuntu-latest
-    # 12 targets at up to five minutes a forecast on the Mac, with headroom.
+    # Up to 48 targets. A forecast takes about 25 s on the Mac (9 in under 4
+    # minutes on 2026-11-15), so a full night is about 20 minutes; the 50-minute
+    # forecast budget below keeps a slow night inside the hour and the timeout.
     timeout-minutes: 120
     continue-on-error: true
     strategy:
@@ -226,7 +232,7 @@ jobs:
           TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '1' }}
           TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
           TRACK_TARGET_SHARD_SLOT_MINUTES: "5"
-          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '12' }}
+          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '48' }}
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
           # Scheduled runs rotate target shards. Full reforecasting remains an
@@ -259,6 +265,8 @@ jobs:
           PREDICT_FAILURE_CIRCUIT_THRESHOLD: "2"
           TRACK_RECORD_SNAPSHOT_PASS_RETRIES: "1"
           TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S: "0"
+          # Stop starting forecasts 50 minutes in; the rest wait for tomorrow.
+          TRACK_RECORD_PREDICT_BUDGET_S: "3000"
         run: python scripts/track_record_tick.py --snapshot-only
 
       - name: Upload model forecast store

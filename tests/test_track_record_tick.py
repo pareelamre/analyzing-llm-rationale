@@ -245,6 +245,80 @@ class TrackRecordTickTests(unittest.TestCase):
             2,
         )
 
+    def test_the_nightly_dispatch_forecasts_every_market_not_one_shard(self):
+        import yaml
+
+        root = Path(__file__).resolve().parents[1]
+        parsed = yaml.safe_load(
+            (root / ".github" / "workflows" / "track-record-forecast.yml").read_text())
+        inputs = parsed[True]["workflow_dispatch"]["inputs"]
+        # The box's cron dispatches with no inputs, so the defaults are what
+        # runs. 4 shards picked by the 5-minute slot gave the same quarter of
+        # the markets every night (9 forecasts on 2026-11-15).
+        self.assertEqual(inputs["target_shard_count"]["default"], "1")
+        self.assertEqual(inputs["max_targets"]["default"], "48")
+        forecast_env = next(
+            step["env"] for step in parsed["jobs"]["forecast"]["steps"]
+            if step.get("name") == "Advance model forecast snapshots")
+        self.assertEqual(forecast_env["TRACK_RECORD_PREDICT_BUDGET_S"], "3000")
+        # The budget (50 min) plus setup and one slow last call fit the timeout.
+        self.assertGreater(parsed["jobs"]["forecast"]["timeout-minutes"] * 60, 3000 + 2 * 300 + 600)
+        for job in ("prepare-targets", "forecast"):
+            text = json.dumps(parsed["jobs"][job])
+            self.assertIn("github.event.inputs.max_targets || '48'", text)
+            self.assertIn("github.event.inputs.target_shard_count || '1'", text)
+
+    def test_forecasts_stop_starting_once_the_budget_is_spent(self):
+        response = {"model_probability": 0.6}
+        with (
+            mock.patch.object(track_record_tick, "_predict_stats", Counter()) as stats,
+            mock.patch.object(track_record_tick, "_PREDICT_BUDGET_S", 100.0),
+            mock.patch.object(track_record_tick, "_predict_started_at", None),
+            mock.patch.object(track_record_tick, "_PREDICT_MIN_INTERVAL_S", 0.0),
+            mock.patch.object(track_record_tick, "PREDICT_MODE", "local"),
+            mock.patch.object(track_record_tick, "_local_predict", return_value=response) as predict,
+            mock.patch.object(track_record_tick.time, "monotonic", side_effect=[0.0, 99.0, 100.0, 250.0]),
+        ):
+            payload = {"question": "q", "model": "qwen3.5-9b-selfhosted"}
+            self.assertEqual(track_record_tick._post_predict(payload), response)
+            self.assertEqual(track_record_tick._post_predict(payload), response)
+            self.assertIsNone(track_record_tick._post_predict(payload))
+            self.assertIsNone(track_record_tick._post_predict(payload))
+        self.assertEqual(predict.call_count, 2)
+        self.assertEqual(stats["attempts"], 2)
+        self.assertEqual(stats["budget_skipped"], 2)
+
+    def test_no_budget_means_no_limit(self):
+        with (
+            mock.patch.object(track_record_tick, "_PREDICT_BUDGET_S", 0.0),
+            mock.patch.object(track_record_tick, "_predict_started_at", None),
+        ):
+            self.assertFalse(track_record_tick._predict_budget_spent(now=0.0))
+            self.assertFalse(track_record_tick._predict_budget_spent(now=1e9))
+
+    def test_resolved_record_is_woken_by_every_mtm_tick_and_runs_when_due(self):
+        import yaml
+
+        root = Path(__file__).resolve().parents[1]
+        parsed = yaml.safe_load(
+            (root / ".github" / "workflows" / "track-record-resolved.yml").read_text())
+        mtm = yaml.safe_load(
+            (root / ".github" / "workflows" / "track-record-tick.yml").read_text())
+        trigger = parsed[True]["workflow_run"]
+        self.assertEqual(trigger["workflows"], [mtm["name"]])
+        self.assertEqual(trigger["types"], ["completed"])
+        self.assertIn("schedule", parsed[True])
+        self.assertIn("workflow_dispatch", parsed[True])
+        due = parsed["jobs"]["due"]
+        self.assertIn("scripts/track_record_due.py static/track_record_live.json",
+                      json.dumps(due["steps"]))
+        quality = parsed["jobs"]["resolved-quality"]
+        self.assertEqual(quality["needs"], "due")
+        self.assertIn("needs.due.outputs.run == 'true'", quality["if"])
+        # Only the pass itself takes the store lock, not the due check.
+        self.assertNotIn("concurrency", due)
+        self.assertEqual(quality["concurrency"]["group"], "track-record-store-gcs-write")
+
     def test_mtm_and_resolved_workflows_publish_independent_artifacts(self):
         root = Path(__file__).resolve().parents[1]
         mtm_workflow = (

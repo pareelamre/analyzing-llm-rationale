@@ -294,6 +294,14 @@ _SNAPSHOT_PASS_RETRIES = max(1, int(os.environ.get("TRACK_RECORD_SNAPSHOT_PASS_R
 _SNAPSHOT_PASS_RETRY_SLEEP_S = float(
     os.environ.get("TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S", "30") or 30.0
 )
+# Wall-clock seconds the model forecasts may take, counted from the first call
+# (0 = no limit). The nightly pass on the Mac must end inside its hour and before
+# the job timeout, or the store is never uploaded and the whole night is lost;
+# markets left when the budget runs out are skipped, and the next night starts
+# from the same open-market list.
+_PREDICT_BUDGET_S = max(
+    0.0, float(os.environ.get("TRACK_RECORD_PREDICT_BUDGET_S", "0") or 0.0)
+)
 EVALUATION_POLICY = EvaluationPolicy(
     min_resolved_markets=max(
         1, int(os.environ.get("EVALUATION_MIN_RESOLVED_MARKETS", "100") or 100)
@@ -324,6 +332,7 @@ _last_predict_ts: float = 0.0
 _predict_consecutive_failures: Counter = Counter()
 _predict_circuit_open_models: set[str] = set()
 _predict_stats = Counter()
+_predict_started_at: float | None = None
 _local_predict_lock = threading.Lock()
 _local_predict_ready = False
 
@@ -484,6 +493,16 @@ def _remote_predict(payload: dict, headers: dict[str, str]) -> dict:
         return json.loads(resp.read())
 
 
+def _predict_budget_spent(now: float | None = None) -> bool:
+    """True once the forecasts have used TRACK_RECORD_PREDICT_BUDGET_S."""
+    global _predict_started_at
+    now = time.monotonic() if now is None else now
+    with _predict_rate_lock:
+        if _predict_started_at is None:
+            _predict_started_at = now
+    return bool(_PREDICT_BUDGET_S) and now - _predict_started_at >= _PREDICT_BUDGET_S
+
+
 def _post_predict(payload: dict) -> dict | None:
     """Run /predict with thread-safe rate-limit pacing + retries.
 
@@ -496,6 +515,9 @@ def _post_predict(payload: dict) -> dict | None:
             _predict_stats["circuit_skipped"] += 1
             _predict_stats[f"circuit_skipped_model:{model_label}"] += 1
             return None
+    if _predict_budget_spent():
+        _predict_stats["budget_skipped"] += 1
+        return None
 
     with _predict_rate_lock:
         elapsed = time.time() - _last_predict_ts
@@ -1289,6 +1311,8 @@ async def main() -> int:
         "predict_http_401": _predict_stats["http_401"],
         "predict_circuit_opened": _predict_stats["circuit_opened"],
         "predict_circuit_skipped": _predict_stats["circuit_skipped"],
+        "predict_budget_skipped": _predict_stats["budget_skipped"],
+        "predict_budget_s": _PREDICT_BUDGET_S,
         "predict_failures_by_model": {
             key.removeprefix("failure_model:"): value
             for key, value in sorted(_predict_stats.items())

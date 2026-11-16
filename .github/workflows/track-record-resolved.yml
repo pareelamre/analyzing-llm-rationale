@@ -3,10 +3,20 @@ name: Track record resolved quality
 # Cheap resolved-quality pass: score newly resolved markets, sync the immutable
 # ledger, and publish the resolved forecast-quality aggregate. No LLM calls and
 # no mark-to-market artifact writes.
+#
+# GitHub delivered the hourly cron only every 4-8 hours, so /track-record read
+# stale most of the day. Every MTM tick (dispatched every 15 minutes by the
+# box's cron) now wakes this workflow, and the `due` job lets the pass run only
+# once the published record is 50 minutes old: about hourly. The cron stays as
+# a backstop.
 
 on:
   schedule:
     - cron: "7 * * * *"
+  workflow_run:
+    workflows: ["Track record MTM tick"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch: {}
 
 env:
@@ -27,7 +37,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  due:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.due.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            static/track_record_live.json
+            scripts/track_record_due.py
+          sparse-checkout-cone-mode: false
+
+      - name: Is the published record 50 minutes old?
+        id: due
+        run: python3 scripts/track_record_due.py static/track_record_live.json >> "$GITHUB_OUTPUT"
+
   resolved-quality:
+    needs: due
+    if: ${{ needs.due.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:

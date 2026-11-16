@@ -5502,6 +5502,68 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("Foresea forecast track record", r.text)
 
+    def _resolved_and_mtm(self, resolved_age_s=600, mtm_age_s=300):
+        now = datetime.now(timezone.utc)
+        # The resolved file leaves out live counts by design (tick
+        # _RESOLVED_PUBLIC_OMIT_KEYS); only the MTM payload carries them.
+        resolved = {
+            "generated_at": (now - timedelta(seconds=resolved_age_s)).isoformat(),
+            "n_snapshots_resolved": 9488,
+            "n_markets_resolved": 496,
+            "overall": {"accuracy": 0.84, "model_brier": 0.1093, "market_brier": 0.107},
+        }
+        mtm = {
+            "generated_at": (now - timedelta(seconds=mtm_age_s)).isoformat(),
+            "n_markets_open": 7,
+            "n_markets_tracked": 7,
+            "edge_board": [{"question": "Live edge?", "edge": 0.2}],
+        }
+        return resolved, mtm
+
+    def test_digest_counts_the_open_markets_from_the_mtm_payload(self):
+        resolved, mtm = self._resolved_and_mtm()
+        with (
+            mock.patch.object(server_module, "_read_live_track_record", return_value=resolved),
+            mock.patch.object(server_module, "_read_mark_to_market_record", return_value=mtm),
+        ):
+            r = self.client.get("/track-record/digest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("496 resolved, 7 open", r.text)
+
+    def test_track_record_carries_the_open_count_and_an_hourly_stale_limit(self):
+        resolved, mtm = self._resolved_and_mtm(resolved_age_s=90 * 60)
+        with (
+            mock.patch.object(server_module, "_read_live_track_record", return_value=resolved),
+            mock.patch.object(server_module, "_read_mark_to_market_record", return_value=mtm),
+        ):
+            payload = self.client.get("/track-record").json()
+        self.assertEqual(payload["n_markets_open"], 7)
+        self.assertEqual(payload["n_markets_tracked"], 7)
+        # Published about hourly: 90 minutes old is late, not stale.
+        self.assertFalse(payload["freshness"]["stale"])
+        self.assertEqual(payload["freshness"]["stale_after_seconds"], 7200)
+
+        resolved, mtm = self._resolved_and_mtm(resolved_age_s=3 * 3600)
+        with (
+            mock.patch.object(server_module, "_read_live_track_record", return_value=resolved),
+            mock.patch.object(server_module, "_read_mark_to_market_record", return_value=mtm),
+        ):
+            self.assertTrue(self.client.get("/track-record").json()["freshness"]["stale"])
+
+    def test_edge_board_stays_on_the_mtm_payloads_thirty_minute_limit(self):
+        # The edge board's clock is the 15-minute MTM tick, so the track
+        # record's looser limit must not reach it.
+        resolved, mtm = self._resolved_and_mtm(resolved_age_s=3 * 3600, mtm_age_s=45 * 60)
+        with (
+            mock.patch.object(server_module, "_read_live_track_record", return_value=resolved),
+            mock.patch.object(server_module, "_read_mark_to_market_record", return_value=mtm),
+        ):
+            payload = self.client.get("/edge-board").json()
+        self.assertEqual(payload["freshness"]["generated_at"], mtm["generated_at"])
+        self.assertEqual(payload["freshness"]["stale_after_seconds"], 1800)
+        self.assertTrue(payload["freshness"]["stale"])
+        self.assertEqual(payload["n_markets_open"], 7)
+
     def test_benchmark_score(self):
         r = self.client.post("/benchmark/score", json={
             "label": "test-forecaster",
