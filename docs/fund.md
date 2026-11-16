@@ -662,6 +662,69 @@ The owner approved trading only on what has earned it. From 2026-11-15:
 - **Kept:** `rationale_check`, the one remaining shadow analyst. It is a guard,
   not a trader.
 
+### Rationale checker: CLM-8B against Open-Jev 2B (pre-registered 2026-11-16, before any result)
+
+**Why.** The owner asked whether CLM-8B is a better checker than the Open-Jev 2B
+that `rationale_check` runs. CLM-8B is from Stanford and NVIDIA (Apache-2.0,
+September 2026). It is a trained pair of projection heads on a frozen Qwen3-8B
+encoder, and it scores yes/no questions without writing text. This tests the
+checker's one job: reading whether a rationale concludes the event is likely. It
+is not a forecasting test.
+
+**The two checkers, each as the job would run it on GitHub's CPU.**
+
+- **Open-Jev 2B:** exactly as `fund_rationale_check.open_jev_checker` runs it
+  (the pinned revision).
+- **CLM-8B:**
+  - CLM code at commit `d5f9ef0` (github.com/Contrastive-LM/CLM).
+  - Head `CLM_v0.1-8B.pt` at Hugging Face revision `e939398`.
+  - Encoder: Qwen3-8B Q8_0 (`Qwen/Qwen3-8B-GGUF` revision `7c41481`), served
+    by llama.cpp `b12426` with last-token pooling.
+  - The makers' encoder is Qwen3-8B in 16-bit on a GPU, which does not fit a
+    16 GB runner. 8-bit is what Foresea would run, so 8-bit is what is tested.
+- **The same input for both:** the state `{forecast_question, rationale}`
+  (rationale cut at 3,000 characters, as in the job) and the job's yes/no
+  question.
+
+**Cases.**
+
+1. **Known:** the 7 forecasts of 2026-11-08 in
+   `tests/fixtures/rationale_check_cases.json`, of which 4 are inversions.
+2. **Live:** every on-device forecast (`qwen3.5-9b-selfhosted`) with a
+   rationale, made from 2026-11-09 00:00 UTC (after the confidence fix, #746)
+   to 2026-11-16 00:00 UTC, whose number is clear (0.30 or less, or 0.70 or
+   more).
+   - The label is the side the number takes. After the fix, a clear number is
+     taken to agree with its rationale. Where that is wrong, the error hits
+     both checkers the same way.
+   - A rationale repeated for the same market counts once.
+
+**Measures.**
+
+- **Main:** the Brier score of each checker's probability that the rationale
+  concludes Yes, against the label, over the live cases. The difference is
+  CLM-8B minus the 2B, with a 95% bootstrap interval that resamples markets
+  (10,000 draws, seed 0).
+- **Known cases:** inversions caught (of 4) and false flags (of 3), using the
+  job's rule (a side is argued at 70%).
+- **Live false flags:** clear live cases flagged "contradicts".
+- **Speed:** median seconds per check on GitHub's runner, not counting loading.
+
+**Verdict.**
+
+- **SWITCH to CLM-8B** only if all of these hold:
+  - the interval's high end is below 0 (CLM-8B is better);
+  - on the known cases it catches at least as many inversions as the 2B, with
+    no more false flags;
+  - its live false flags are no more than the 2B's;
+  - its median check takes 60 seconds or less.
+- **KEEP the 2B** otherwise.
+- **Too few to tell (KEEP):** fewer than 40 live cases, or fewer than 15
+  markets.
+- **Description only:** how often the two checkers agree, and each one's share
+  of "unclear" answers.
+- The checker stays in shadow either way; nothing is blocked.
+
 ## Live Polymarket decided-ranges test (pre-registered 2026-11-10, before any live record)
 
 **Why.** Price history could not show whether a range the airport readings had
