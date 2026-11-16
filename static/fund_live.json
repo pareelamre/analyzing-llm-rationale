@@ -9,13 +9,13 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": -11.9683,
+      "agent_transfer": 9.2783,
       "event_model": 49.6015,
       "put_premium": 7.3258
     }
   },
   "by_asset_class": {
-    "event": 3998.3629,
+    "event": 4019.6095,
     "option": 207.7101
   },
   "cash_usd": 5839.6861,
@@ -487,6 +487,10 @@
     {
       "nav_usd": 10045.7591,
       "ts": "2026-11-16T02:01:19.842634+00:00"
+    },
+    {
+      "nav_usd": 10067.0057,
+      "ts": "2026-11-16T03:39:50.898112+00:00"
     }
   ],
   "cycle": {
@@ -502,10 +506,10 @@
       }
     ],
     "traded": false,
-    "window": "07:31 IST is outside the trading hours"
+    "window": "09:09 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-16T02:01:19.842634+00:00",
+  "generated_at": "2026-11-16T03:39:50.898112+00:00",
   "limits": {
     "asset_class": 0.4,
     "cash_floor": 0.2,
@@ -513,7 +517,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10045.7591,
+  "nav_usd": 10067.0057,
   "net_exposure_by_underlying": {
     "india_equity": 200.3843,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
@@ -541,9 +545,13 @@
       "holding": [
         "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600"
       ],
-      "mode": "GO"
+      "mode": "GO",
+      "modes": {
+        "BANKNIFTY": "GO",
+        "NIFTY": "GO"
+      }
     },
-    "risk_per_structure": 0.05,
+    "risk_per_structure": 0.041344000000000006,
     "settled": []
   },
   "paper": true,
@@ -600,15 +608,15 @@
       "instrument_id": "kalshi:KXTHC3MG-FED-26DEC10",
       "kind": "binary",
       "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-      "mark": 0.97,
+      "mark": 0.98,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 36.45,
+      "pnl_usd": 40.5,
       "quantity": 405.0,
       "side": "YES",
       "underlying": "kalshi:KXTHC3MG-FED-26DEC10",
-      "value_usd": 392.85,
+      "value_usd": 396.9,
       "venue": "kalshi"
     },
     {
@@ -726,15 +734,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.05700000000000005,
+      "mark": 0.05900000000000005,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -8.5983,
+      "pnl_usd": 8.5984,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 490.1037,
+      "value_usd": 507.3004,
       "venue": "polymarket"
     },
     {
@@ -813,7 +821,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 0.458,
+  "return_pct": 0.67,
   "scorecard": {
     "retired_records": [
       {
@@ -835,10 +843,10 @@
     "strategies": [
       {
         "analyst": "put_premium",
-        "context": "The Nifty backtest it was designed on is in-sample, so it is not counted.",
-        "kelly_at_low": 0.06366,
+        "context": "The Nifty backtest it was designed on is in-sample, so it is not counted. Bank Nifty counts at half weight: it shares the Nifty backtest's months and much of its movement.",
+        "kelly_at_low": 0.07058,
         "kind": "option",
-        "label": "Put premium (Nifty put spreads)",
+        "label": "Put premium (Nifty and Bank Nifty put spreads)",
         "live": {
           "high": null,
           "low": null,
@@ -847,15 +855,15 @@
           "realized_usd": 0
         },
         "market": "Index options",
-        "scale": 2.5,
+        "scale": 2.0672,
         "score": {
-          "counted": 141.5,
-          "high": 0.16731,
-          "low": 0.03875,
-          "mean": 0.10303,
-          "sd": 0.3901
+          "counted": 238.5,
+          "high": 0.13653,
+          "low": 0.04045,
+          "mean": 0.08849,
+          "sd": 0.37852
         },
-        "size": "5.0% of the fund at risk per spread",
+        "size": "4.1% of the fund at risk per spread",
         "starting_size": "2.0% of the fund at risk per spread",
         "status": "proven",
         "tests": [
@@ -866,10 +874,19 @@
             "sd": 0.3901,
             "source": "reports/fund_ndx_put_eval.json",
             "trades": 283
+          },
+          {
+            "counted": 97.0,
+            "label": "Bank Nifty test, 2010-2026",
+            "mean": 0.06727,
+            "sd": 0.3599,
+            "source": "reports/fund_banknifty_put_eval.json",
+            "trades": 194
           }
         ],
-        "trust": 0.625,
-        "why": "The low end of its range is above zero. A quarter-Kelly bet at that low end is 6.4% of the fund at risk, above the 2.5x limit."
+        "together": 0.7071,
+        "trust": 0.5168,
+        "why": "The low end of its range is above zero. A quarter-Kelly bet at that low end is 7.1% of the fund at risk. Its two spreads move together (correlation 0.71), so each gets that divided by 1.71: 4.1%."
       },
       {
         "analyst": "pairs_model",
@@ -897,6 +914,7 @@
         "starting_size": "5.0% of the fund per leg",
         "status": "trial",
         "tests": [],
+        "together": null,
         "trust": 0.125,
         "why": "No record yet: it needs 20 positions before its record can decide."
       },
@@ -926,6 +944,7 @@
         "starting_size": "1/16 of the Kelly bet per market",
         "status": "trial",
         "tests": [],
+        "together": null,
         "trust": 0.125,
         "why": "No record yet: it needs 20 positions before its record can decide."
       }
