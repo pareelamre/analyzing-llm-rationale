@@ -106,7 +106,8 @@ class Structure:
 
     def quote(self, quotes: Mapping[str, Mapping[str, Any]]) -> Optional[dict]:
         """What the structure costs (ask) and sells for (bid): each leg bought at its ask and
-        sold at its bid."""
+        sold at its bid. It is as old as its stalest leg (``at``), so the fund trades it only
+        on prices from the session under way (fund_hours)."""
         bid = ask = self.const
         for leg in self.legs:
             q = quotes.get(leg.key) or {}
@@ -114,7 +115,13 @@ class Structure:
                 return None
             bid += leg.sign * (q["bid"] if leg.sign > 0 else q["ask"])
             ask += leg.sign * (q["ask"] if leg.sign > 0 else q["bid"])
-        return {"bid": max(bid, 0.0), "ask": ask}
+        out = {"bid": max(bid, 0.0), "ask": ask}
+        legs = [quotes[leg.key] for leg in self.legs]
+        if all(q.get("source") == "book" for q in legs):
+            out["source"] = "book"
+        elif all(q.get("at") for q in legs):
+            out["at"] = min((str(q["at"]) for q in legs), key=datetime.fromisoformat)
+        return out
 
 
 SIDES = {"straddle": "MOVE", "condor": "RANGE", "put_spread": "BULL", "call_spread": "BEAR"}
@@ -270,7 +277,7 @@ def book_quotes(keys: Sequence[str], token: str, *, now: datetime, http_get: Htt
     return out
 
 
-def _latest_candle(key: str, now: datetime, *, http_get: HttpGet) -> Optional[tuple[datetime, float, float]]:
+def latest_candle(key: str, now: datetime, *, http_get: HttpGet) -> Optional[tuple[datetime, float, float]]:
     """The newest candle Upstox's open routes have for ``key``: this session's 30-minute bars
     while it trades, else the last daily bar. Returns (time it closed, close, session volume)."""
     k = quote(key, safe="")
@@ -298,7 +305,7 @@ def candle_quotes(keys: Sequence[str], *, now: datetime, http_get: HttpGet = req
     out: dict[str, dict] = {}
     for key in dict.fromkeys(keys):
         try:
-            candle = _latest_candle(key, now, http_get=http_get)
+            candle = latest_candle(key, now, http_get=http_get)
         except (requests.RequestException, ValueError, KeyError, TypeError, IndexError):
             continue
         if candle is None or candle[1] <= 0:

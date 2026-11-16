@@ -83,6 +83,22 @@ class FundCycleTests(unittest.TestCase):
                                 ("rationale_check", "live", "polymarket:iran", 0.04, None),
                                 ("rationale_dropped", "live", "polymarket:iran", 0.98, 0.05)])
 
+    def test_mcx_is_priced_at_this_sessions_bar_and_perps_say_if_they_are_open(self):
+        # 2026-11-16: copper was bought at Friday's daily close while it traded 1.6% lower.
+        now = datetime(2026, 11, 16, 8, 1, tzinfo=timezone.utc)
+        universe = {"pairs": [{"a": {"id": "mcx:COPPER", "key": "MCX_FO|578634"},
+                               "b": {"id": "kalshi_perp:KXGOLDPERP", "key": "KXGOLDPERP"}}]}
+        bar = (datetime(2026, 11, 16, 13, 30, tzinfo=cycle.IST), 1288.0, 5000.0)
+        perps = [{"ticker": "KXGOLDPERP", "bid": 0.1, "ask": 0.2, "schedule": {"is_open": False}}]
+        with mock.patch.object(cycle.fo, "latest_candle", return_value=bar) as latest, \
+                mock.patch.object(cycle.fu, "kalshi_margin_markets", return_value=perps), \
+                mock.patch.object(cycle.fu, "kalshi_quote", return_value={"bid": 0.1, "ask": 0.2}):
+            quotes = cycle.fetch_quotes({"mcx:COPPER", "kalshi_perp:KXGOLDPERP"}, universe, now)
+        self.assertEqual(latest.call_args.args[:2], ("MCX_FO|578634", now))
+        self.assertEqual(quotes["mcx:COPPER"], {"bid": 1288.0, "ask": 1288.0, "last": 1288.0,
+                                                "at": "2026-11-16T13:30:00+05:30", "source": "last trade"})
+        self.assertIs(quotes["kalshi_perp:KXGOLDPERP"]["open"], False)
+
     def test_polymarket_no_is_the_mirror_of_yes(self):
         quote = cycle.event_quote({"yes_bid": 0.04, "yes_ask": 0.06, "no_bid": None, "no_ask": None})
         self.assertAlmostEqual(quote["no_bid"], 0.94)
