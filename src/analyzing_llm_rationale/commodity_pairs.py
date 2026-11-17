@@ -8,6 +8,14 @@ come in (owner, 2026-11-15: start with what we have and let the reads calibrate 
 |z| >= 2, and the tracker records that as a signal, then follows it until |z| falls below 0.5
 (reverted) or 20 sessions pass (timed out).
 
+Since 2026-11-17 a pair is stretched only when its plain price ratio agrees: the log ratio's own
+z-score must sit at least RATIO_CONFIRM_Z from usual, the same way. A hedge fitted on a short or
+loosely tied history shrinks toward zero, and the hedged spread then mostly measures one leg's
+own move: on 48-98 sessions the copper pairs' scores were 87-94% correlated with copper's alone,
+and three "pair" signals were one bet on copper. On 1997-2026 FRED spot prices the check kept
+84-92% of signals and raised the average per signal on both oil pairs (Brent/WTI +1.52% to
++1.64%, WTI/gas +2.82% to +3.47%); the metal pairs have too little history to test it.
+
 Prices: MCX front-month futures from Upstox's open candle route, stitched across rolls and
 ratio-adjusted so a roll is not read as a move, then stored daily (data/commodity_prices.jsonl)
 because expired contracts leave the route. Brent, WTI and Henry Hub gas are daily spot prices
@@ -63,6 +71,9 @@ MIN_SESSIONS = 20
 FULL_HISTORY = HEDGE_WINDOW + Z_WINDOW
 ENTRY_Z = 2.0
 EXIT_Z = 0.5
+#: A stretched hedged score counts only when the plain price ratio is at least this stretched too,
+#: in the same direction (see the module docstring).
+RATIO_CONFIRM_Z = 1.5
 MAX_HOLD = 20
 COST_PER_SIDE = 0.001
 #: The first session the live tracker evaluated. Signals before it come only from the replay.
@@ -409,9 +420,18 @@ def history(days: Sequence[date], la: np.ndarray, lb: np.ndarray, *, fixed: bool
         sd = float(np.std(window, ddof=1))
         if not sd > 1e-9:  # flat prices: rounding noise is not a gap
             continue
+        z = float((window[-1] - window.mean()) / sd)
+        ratio = la[start:t + 1] - lb[start:t + 1]
+        ratio_sd = float(np.std(ratio, ddof=1))
+        z_ratio = z if beta == 1.0 else float((ratio[-1] - ratio.mean()) / ratio_sd) if ratio_sd > 1e-9 else 0.0
         out.append({"date": days[t], "i": t, "beta": beta, "spread": float(window[-1]), "mean": float(window.mean()),
-                    "z": float((window[-1] - window.mean()) / sd)})
+                    "z": z, "z_ratio": z_ratio})
     return out
+
+
+def confirmed(z: float, z_ratio: float) -> bool:
+    """A signal: the hedged score past ENTRY_Z and the plain price ratio past RATIO_CONFIRM_Z, the same way."""
+    return abs(z) >= ENTRY_Z and abs(z_ratio) >= RATIO_CONFIRM_Z and z * z_ratio > 0
 
 
 def diagnostics(la: np.ndarray, lb: np.ndarray, *, fixed: bool = False) -> dict[str, Any]:
@@ -458,7 +478,7 @@ def simulate(days: Sequence[date], la: np.ndarray, lb: np.ndarray, hist: list[di
                 trades.append(open_trade)
                 open_trade = None
             continue
-        if abs(row["z"]) >= ENTRY_Z:
+        if confirmed(row["z"], row["z_ratio"]):
             open_trade = {
                 "i": t, "entry_date": days[t].isoformat(), "entry_z": round(row["z"], 3), "beta": row["beta"],
                 "entry_spread": row["spread"], "side": -1 if row["z"] > 0 else 1,
@@ -501,12 +521,13 @@ def _legs(pair: dict[str, str]) -> tuple[str, str]:
     return first, second
 
 
-def _state(pair: dict[str, str], z: float) -> dict[str, Any]:
-    if abs(z) < ENTRY_Z:
-        return {"stretched": False, "rich": None, "cheap": None}
+def _state(pair: dict[str, str], z: float, z_ratio: float) -> dict[str, Any]:
+    if not confirmed(z, z_ratio):
+        # Past the line on the hedged score alone: shown, but no signal (see the module docstring).
+        return {"stretched": False, "rich": None, "cheap": None, "unconfirmed": abs(z) >= ENTRY_Z}
     first, second = _legs(pair)
     rich, cheap = (first, second) if z > 0 else (second, first)
-    return {"stretched": True, "rich": rich, "cheap": cheap}
+    return {"stretched": True, "rich": rich, "cheap": cheap, "unconfirmed": False}
 
 
 def track_pair(pair: dict[str, str], series: dict) -> Optional[dict[str, Any]]:
@@ -538,8 +559,9 @@ def track_pair(pair: dict[str, str], series: dict) -> Optional[dict[str, Any]]:
         "to_usual": {"a": round(math.expm1(-gap), 5), "b": round(math.expm1(gap / last["beta"]), 5)},
         "beta": round(last["beta"], 4), "hedge": "fixed" if fixed else ("ratio" if last["beta"] == 1.0 else "regression"),
         "z": round(last["z"], 3),
+        "z_ratio": round(last["z_ratio"], 3),
         "z_recent": [round(row["z"], 3) for row in hist[-Z_WINDOW:]],
-        **_state(pair, last["z"]),
+        **_state(pair, last["z"], last["z_ratio"]),
         **diagnostics(la, lb, fixed=fixed),
         "replay": summarize(replay),
         "replay_signals": [
@@ -580,7 +602,7 @@ def update_ledger(ledger: list[dict], rows: list[dict], now: datetime) -> int:
     seen = {(e["pair"], e["entry_date"]) for e in ledger}
     for key, row in by_key.items():
         last = row["_hist"][-1]
-        if key in open_pairs or abs(last["z"]) < ENTRY_Z or (key, last["date"].isoformat()) in seen:
+        if key in open_pairs or not confirmed(last["z"], last["z_ratio"]) or (key, last["date"].isoformat()) in seen:
             continue
         ledger.append({
             "pair": key, "entry_date": last["date"].isoformat(), "issued_at": now.isoformat(),
@@ -609,6 +631,7 @@ def run(series: dict, ledger: list[dict], now: datetime) -> tuple[dict, list[dic
         "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee)",
         "rule": {
             "hedge_window": HEDGE_WINDOW, "z_window": Z_WINDOW, "entry_z": ENTRY_Z, "exit_z": EXIT_Z,
+            "ratio_confirm_z": RATIO_CONFIRM_Z,
             "max_hold": MAX_HOLD, "cost_per_side": COST_PER_SIDE, "min_sessions": MIN_SESSIONS,
             "prior_signals": PRIOR_SIGNALS,
         },

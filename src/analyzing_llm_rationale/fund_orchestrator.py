@@ -245,12 +245,18 @@ def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[st
         a_side, b_side = ("LONG", "SHORT") if z < 0 else ("SHORT", "LONG")
         facts = [_fact("pair", pair.get("label") or pair["key"], "fund universe"),
                  _fact("spread z-score", f"{z:.2f}", f"pairs tracker, data through {row.get('date')}"),
-                 _fact("entry rule", f"|z| >= {rule.get('entry_z', 2.0)}", "pairs tracker"),
+                 _fact("entry rule", f"|z| >= {rule.get('entry_z', 2.0)}"
+                       + (f", price ratio |z| >= {rule['ratio_confirm_z']} the same way" if rule.get("ratio_confirm_z") else ""),
+                       "pairs tracker"),
                  _fact("expected return per signal after costs", _pct(edge), source)]
+        if row.get("z_ratio") is not None:
+            facts.append(_fact("price ratio z-score", f"{float(row['z_ratio']):.2f}",
+                               f"pairs tracker, data through {row.get('date')}"))
         if record:
             facts.append(_fact("US backtest win rate", _pct(float(record.get("win_rate") or 0.0)), "pairs backtest"))
         facts.append(_fact("hedge ratio", f"{beta:.2f}", "pairs tracker"))
-        # Equal-dollar legs; the regression hedge ratio is reported, not yet applied.
+        # Equal-dollar legs; the regression hedge ratio is reported, not applied. On 1997-2026 oil
+        # pairs, sizing by it did no better (2026-11-17), and on a short history it can be near zero.
         for leg, side in (("a", a_side), ("b", b_side)):
             signals.append(Signal(analyst=analyst, instrument=dict(pair[leg]), side=side, price=0.0,
                                   edge=edge, trust=trust, facts=facts, pair_key=pair["key"]))

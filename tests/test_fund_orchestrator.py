@@ -29,10 +29,11 @@ COPPER = {"id": "mcx:COPPER", "label": "Copper (MCX)", "venue": "mcx", "asset_cl
 ALUMINIUM = {"id": "mcx:ALUMINI", "label": "Aluminium (MCX)", "venue": "mcx", "asset_class": "commodity",
              "underlying": "aluminium", "currency": "INR", "multiplier": 1.0, "key": "MCX_FO|8"}
 TRACKER = {
-    "rule": {"entry_z": 2.0, "exit_z": 0.5},
+    "rule": {"entry_z": 2.0, "exit_z": 0.5, "ratio_confirm_z": 1.5},
     "backtest": {"window": "2011-2026", "pairs": {"copper-aluminium": {"avg_return": 0.003, "win_rate": 0.63},
                                                    "copper-gold": {"avg_return": -0.006, "win_rate": 0.56}}},
-    "pairs": [{"key": "copper-aluminium", "z": -2.4, "stretched": True, "beta": 0.9, "date": "2026-11-06"},
+    "pairs": [{"key": "copper-aluminium", "z": -2.4, "z_ratio": -1.8, "stretched": True, "beta": 0.9,
+               "date": "2026-11-06"},
               {"key": "copper-gold", "z": -2.58, "stretched": True, "beta": 0.16, "date": "2026-11-06"}],
 }
 UNIVERSE_PAIRS = [{"key": "copper-aluminium", "label": "Copper / Aluminium (MCX)", "a": COPPER, "b": ALUMINIUM},
@@ -84,6 +85,13 @@ class PairSignalTests(unittest.TestCase):
         self.assertIn("no US backtest (starts from zero), plus 5 MCX signals", facts["expected return per signal after costs"]["source"])
         self.assertEqual(skipped[0]["pair"], "copper-aluminium")
         self.assertIn("its expected return is", skipped[0]["reason"])
+
+    def test_a_pair_trade_shows_the_price_ratio_score_and_the_full_entry_rule(self):
+        signals, _ = orch.pair_signals(TRACKER, UNIVERSE_PAIRS)
+        facts = {f["label"]: f["value"] for f in signals[0].facts}
+        self.assertEqual(signals[0].pair_key, "copper-aluminium")
+        self.assertEqual(facts["price ratio z-score"], "-1.80")
+        self.assertEqual(facts["entry rule"], "|z| >= 2.0, price ratio |z| >= 1.5 the same way")
 
     def test_only_pairs_with_a_profitable_backtest_trade_and_skips_say_why(self):
         signals, skipped = orch.pair_signals(TRACKER, UNIVERSE_PAIRS)
