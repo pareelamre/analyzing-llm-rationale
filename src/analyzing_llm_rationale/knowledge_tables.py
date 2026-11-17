@@ -28,7 +28,7 @@ import re
 import shutil
 import zipfile
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
@@ -47,6 +47,8 @@ class Edition:
     claims: list[dict]
     #: The watch list's key for this edition, so its inbox row can be marked as read.
     watch_key: Optional[str] = None
+    #: Entities beyond ``ENTITIES`` that the edition's claims may need added to the base.
+    entities: dict = field(default_factory=dict)
 
 
 #: Entities the readers link to, added to entities.jsonl when the base lacks them.
@@ -63,7 +65,9 @@ ENTITIES = {
 
 #: Plausible values per unit; anything outside means the reader misread the table.
 BOUNDS = {"$/bbl": (5, 400), "$/mmbtu": (0.3, 60), "$/gal": (0.5, 15), "cents/kWh": (2, 80),
-          "million b/d": (0.5, 200), "bcf/d": (10, 300), "%": (-40, 150)}
+          "million b/d": (0.5, 200), "bcf/d": (10, 300), "%": (-40, 150),
+          "CNY/t": (1_000, 2_000_000), "CNY/g": (100, 10_000), "CNY/kg": (1_000, 500_000),
+          "contracts": (-5_000_000, 5_000_000)}
 #: How far a value may move from the publisher's previous edition before a person must look.
 MAX_MOVE_REL = 0.6
 MAX_MOVE_PP = 8.0
@@ -517,6 +521,8 @@ class Reader:
     read: Callable[..., Edition]
     scenario: str
     min_claims: int
+    #: Keep only this many editions of the reader's series (``source.json`` "series"); None keeps all.
+    keep: Optional[int] = None
 
 
 READERS = {
@@ -578,7 +584,8 @@ def write(root: Path, edition: Edition) -> Path:
     before = entities_path.read_text(encoding="utf-8") if entities_path.exists() else ""
     have = {json.loads(line)["id"] for line in before.splitlines() if line.strip()}
     needed = sorted({e for c in edition.claims for e in c["entities"]} - have)
-    missing = [e for e in needed if e not in ENTITIES]
+    known = {**ENTITIES, **edition.entities}
+    missing = [e for e in needed if e not in known]
     if missing:
         raise TableError(f"claims name entities the base does not have: {', '.join(missing)}")
     folder.mkdir(parents=True)
@@ -589,7 +596,7 @@ def write(root: Path, edition: Edition) -> Path:
         knowledge.write_jsonl(folder / "relations.jsonl", [])
         if needed:
             sep = "" if not before or before.endswith("\n") else "\n"
-            entities_path.write_text(before + sep + "".join(json.dumps({"id": e, **ENTITIES[e]}, ensure_ascii=False) + "\n"
+            entities_path.write_text(before + sep + "".join(json.dumps({"id": e, **known[e]}, ensure_ascii=False) + "\n"
                                                             for e in needed), encoding="utf-8")
         errors = knowledge.load(root).errors
         if errors:
@@ -617,15 +624,28 @@ def mark_inbox(root: Path, reader: str, watch_key: Optional[str], sid: str) -> i
     return changed
 
 
+def prune(root: Path, series: str, keep: int) -> list[str]:
+    """Remove all but the newest ``keep`` editions of a series; returns the removed source ids."""
+    editions = []
+    for path in (root / "sources").glob("*/source.json"):
+        source = json.loads(path.read_text(encoding="utf-8"))
+        if source.get("series") == series:
+            editions.append((str(source.get("published") or ""), source["id"]))
+    removed = [sid for _, sid in sorted(editions, reverse=True)[keep:]]
+    for sid in removed:
+        shutil.rmtree(root / "sources" / sid)
+    return removed
+
+
 def update(root: Path, crawler: watch.Crawler, *, today: date, only: Sequence[str] = (),
-           dry_run: bool = False) -> list[dict[str, Any]]:
+           dry_run: bool = False, readers: Optional[Mapping[str, Reader]] = None) -> list[dict[str, Any]]:
     """Read every publisher's current edition that the base does not have yet."""
     state = watch.load_json(root / "watch_state.json", {})
     corpus = knowledge.load(root)
     if corpus.errors:
         raise TableError("the base has errors: " + "; ".join(corpus.errors[:3]))
     results = []
-    for rid, reader in READERS.items():
+    for rid, reader in (READERS if readers is None else readers).items():
         if only and rid not in only:
             continue
         out: dict[str, Any] = {"reader": rid}
@@ -648,6 +668,10 @@ def update(root: Path, crawler: watch.Crawler, *, today: date, only: Sequence[st
                 else:
                     write(root, edition)
                     mark_inbox(root, rid, edition.watch_key, edition.source["id"])
+                    if reader.keep and edition.source.get("series"):
+                        removed = prune(root, edition.source["series"], reader.keep)
+                        if removed:
+                            out["removed"] = removed
                     corpus = knowledge.load(root)
                     out.update(status="added")
         except TableError as exc:
