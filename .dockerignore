@@ -44,3 +44,8 @@ SCADS_AI_API_KEY.txt
 # Prompt text files are needed — exclude all other .txt but keep prompts/
 *.txt
 !prompts/*.txt
+
+# The private knowledge base (licensed reports) must never enter the image, which also
+# goes to GHCR. The live server reads it from the private models bucket instead.
+knowledge-base/
+staged/

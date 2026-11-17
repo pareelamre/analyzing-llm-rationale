@@ -1,0 +1,80 @@
+name: Knowledge base sync
+
+# Copies the private knowledge base (pareelamre/foresea-knowledge) to Foresea's private
+# Cloudflare R2 state bucket as one archive, knowledge/knowledge.tar.gz. The live /predict
+# server (Cloud Run) downloads it with its read-only R2 key (KNOWLEDGE_R2_* in docker.yml)
+# and fetches it again only when it changes. R2 has no egress fees and a free tier that
+# covers this; no Google Cloud storage is used (owner, 2026-11-17).
+#
+# The data never goes into the Docker image: docker.yml also pushes the image to GHCR,
+# and some reports in the base are licensed. For the same reason this log prints only
+# counts, never file contents or validation messages.
+#
+# The server looks for a new archive at most every KNOWLEDGE_RESTAT_S (5 minutes), with
+# no redeploy. Run this by hand after adding reports to the base, or wait for the schedule.
+# A base that fails validation is not uploaded, so the server keeps the last good one.
+
+on:
+  schedule:
+    - cron: "41 */3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: knowledge-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+  R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      # A step's `if` cannot read secrets or its own env, so the job carries this flag.
+      HAS_KNOWLEDGE_TOKEN: ${{ secrets.KNOWLEDGE_REPO_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the knowledge base
+        if: env.HAS_KNOWLEDGE_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: pareelamre/foresea-knowledge
+          token: ${{ secrets.KNOWLEDGE_REPO_TOKEN }}
+          path: knowledge-base
+          persist-credentials: false
+
+      - name: Stage and validate what the server reads
+        run: |
+          if [ ! -f knowledge-base/entities.jsonl ]; then
+            echo "::error title=Knowledge base missing::No KNOWLEDGE_REPO_TOKEN secret, or it cannot read pareelamre/foresea-knowledge."
+            exit 1
+          fi
+          # Only the files the server loads: no git history, local caches or notes.
+          mkdir -p staged
+          cp knowledge-base/entities.jsonl staged/
+          cp -R knowledge-base/sources staged/
+          if ! python3 scripts/knowledge.py --dir staged validate > validate.txt; then
+            echo "::error title=Knowledge base invalid::$(($(wc -l < validate.txt) - 1)) problem(s); run scripts/knowledge.py validate locally. Not synced."
+            exit 1
+          fi
+          echo "Valid: $(tail -n 1 validate.txt)"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the R2 client
+        run: pip install --quiet boto3==1.43.108
+
+      - name: Copy it to R2
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_RUNTIME_ACCESS_KEY_ID: ${{ secrets.R2_RUNTIME_ACCESS_KEY_ID }}
+          R2_RUNTIME_SECRET_ACCESS_KEY: ${{ secrets.R2_RUNTIME_SECRET_ACCESS_KEY }}
+        run: python scripts/knowledge_r2_sync.py staged

@@ -213,6 +213,198 @@ class EvidenceTests(BaseCase):
             self.assertIsNone(kb.shared_index())
 
 
+class SharedIndexTests(BaseCase):
+    """On the live server KNOWLEDGE_DIR is a Cloud Storage mount, so files are re-checked on a timer."""
+
+    def setUp(self):
+        super().setUp()
+        kb._shared.clear()
+
+    def tearDown(self):
+        kb._shared.clear()
+        super().tearDown()
+
+    def _add_source(self, sid="acme-2026-09-gadgets"):
+        folder = self.root / "sources" / sid
+        _write(folder / "source.json", {"id": sid, "title": "Gadget Note", "publisher": "Acme Research",
+                                        "published": "2026-09-01"})
+        _write(folder / "claims.jsonl", [{"id": f"{sid}:c001", "kind": "fact", "page": 1,
+                                          "text": "Gadget output doubled in 2026.", "entities": ["gadgets"]}])
+        _write(folder / "relations.jsonl", [])
+        _write(folder / "chunks.jsonl", [])
+        return folder
+
+    def test_files_are_not_rechecked_inside_the_window(self):
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": str(self.root), "KNOWLEDGE_RESTAT_S": "300"}):
+            first = kb.shared_index()
+            self._add_source()
+            with mock.patch.object(Path, "rglob", side_effect=AssertionError("re-stat inside the window")):
+                self.assertIs(kb.shared_index(), first)
+            self.assertEqual(len(first.corpus.sources), 2)
+
+    def test_a_new_source_is_picked_up_once_the_window_passes(self):
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": str(self.root), "KNOWLEDGE_RESTAT_S": "0"}):
+            first = kb.shared_index()
+            self.assertIs(kb.shared_index(), first)  # nothing changed: no rebuild
+            self._add_source()
+            second = kb.shared_index()
+            self.assertIsNot(second, first)
+            self.assertEqual(len(second.corpus.sources), 3)
+
+    def test_a_removed_file_is_noticed_even_when_the_newest_mtime_is_unchanged(self):
+        folder = self._add_source()
+        for path in self.root.rglob("*.json*"):
+            os.utime(path, (1_700_000_000, 1_700_000_000))
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": str(self.root), "KNOWLEDGE_RESTAT_S": "0"}):
+            first = kb.shared_index()
+            for path in folder.iterdir():
+                path.unlink()
+            folder.rmdir()
+            second = kb.shared_index()
+            self.assertIsNot(second, first)
+            self.assertEqual(len(second.corpus.sources), 2)
+
+    def test_a_bad_window_setting_falls_back_to_five_minutes(self):
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_RESTAT_S": "soon"}):
+            self.assertEqual(kb._restat_seconds(), 300.0)
+
+    def test_forecast_evidence_never_carries_report_passages(self):
+        # /predict evidence is public; report passages are often licensed and stay in the base.
+        passages = [c["text"] for c in self.corpus.chunks]
+        self.assertTrue(passages)
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": str(self.root)}):
+            from analyzing_llm_rationale import server
+            articles = server._knowledge_articles("Will widget demand pass 110 million units by 2030?")
+        self.assertTrue(articles)
+        for article in articles:
+            for value in article.values():
+                for passage in passages:
+                    self.assertNotIn(passage, str(value))
+
+
+def _sync_script():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "knowledge_r2_sync", Path(__file__).resolve().parents[1] / "scripts" / "knowledge_r2_sync.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class FakeR2:
+    """head_object/get_object over one archive, like the private R2 bucket."""
+
+    def __init__(self, data: bytes, etag: str = '"e1"'):
+        self.data, self.etag, self.gets, self.fail = data, etag, 0, None
+
+    def head_object(self, Bucket, Key):
+        if self.fail:
+            raise self.fail
+        return {"ETag": self.etag, "ContentLength": len(self.data)}
+
+    def get_object(self, Bucket, Key, IfMatch=None):
+        self.gets += 1
+        return {"Body": io.BytesIO(self.data)}
+
+
+class RemoteBaseTests(BaseCase):
+    """The live server reads the base from a private R2 archive (KNOWLEDGE_R2_*)."""
+
+    def setUp(self):
+        super().setUp()
+        kb._shared.clear()
+        self.pack = _sync_script().pack
+        self.cache = Path(self.tmp.name) / "cache"
+        self.r2 = FakeR2(self.pack(self.root))
+        self.env = mock.patch.dict(os.environ, {
+            "KNOWLEDGE_R2_ENDPOINT_URL": "https://example.r2.cloudflarestorage.com",
+            "KNOWLEDGE_R2_BUCKET": "state", "KNOWLEDGE_R2_ACCESS_KEY_ID": "id",
+            "KNOWLEDGE_R2_SECRET_ACCESS_KEY": "secret", "KNOWLEDGE_CACHE_DIR": str(self.cache),
+            "KNOWLEDGE_RESTAT_S": "0"})
+        self.env.start()
+        os.environ.pop("KNOWLEDGE_DIR", None)
+        self.client = mock.patch.object(kb, "_remote_client", return_value=self.r2)
+        self.client.start()
+
+    def tearDown(self):
+        self.client.stop()
+        self.env.stop()
+        kb._shared.clear()
+        super().tearDown()
+
+    def _with_new_source(self):
+        folder = self.root / "sources" / "acme-2026-09-gadgets"
+        _write(folder / "source.json", {"id": "acme-2026-09-gadgets", "title": "Gadget Note",
+                                        "publisher": "Acme Research", "published": "2026-09-01"})
+        _write(folder / "claims.jsonl", [{"id": "acme-2026-09-gadgets:c001", "kind": "fact", "page": 1,
+                                          "text": "Gadget output doubled in 2026.", "entities": ["gadgets"]}])
+        return self.pack(self.root)
+
+    def test_the_server_reads_the_r2_copy(self):
+        index = kb.shared_index()
+        self.assertEqual(len(index.corpus.sources), 2)
+        from analyzing_llm_rationale import server
+        self.assertTrue(server._knowledge_articles("Will widget demand pass 110 million units by 2030?"))
+
+    def test_it_downloads_again_only_when_the_etag_changes(self):
+        first = kb.shared_index()
+        self.assertIs(kb.shared_index(), first)
+        self.assertEqual(self.r2.gets, 1)
+        self.r2.data, self.r2.etag = self._with_new_source(), '"e2"'
+        second = kb.shared_index()
+        self.assertEqual(self.r2.gets, 2)
+        self.assertEqual(len(second.corpus.sources), 3)
+        self.assertEqual(len(list(self.cache.iterdir())), 1)  # the old copy is gone
+
+    def test_inside_the_window_r2_is_not_asked_at_all(self):
+        os.environ["KNOWLEDGE_RESTAT_S"] = "300"
+        first = kb.shared_index()
+        self.r2.fail = AssertionError("asked R2 inside the window")
+        self.assertIs(kb.shared_index(), first)
+
+    def test_a_failed_fetch_keeps_the_last_good_index(self):
+        first = kb.shared_index()
+        self.r2.fail = ConnectionError("R2 is down")
+        with self.assertLogs("analyzing_llm_rationale.knowledge", "WARNING"):
+            self.assertIs(kb.shared_index(), first)
+
+    def test_a_new_copy_with_errors_keeps_the_last_good_index(self):
+        first = kb.shared_index()
+        _write(self.root / "sources" / NEW / "relations.jsonl", [{"subject": "ghost", "predicate": "x",
+                                                                  "object": "widgets"}])
+        self.r2.data, self.r2.etag = self.pack(self.root), '"e2"'
+        with self.assertLogs("analyzing_llm_rationale.knowledge", "WARNING"):
+            self.assertIs(kb.shared_index(), first)
+
+    def test_no_base_until_all_four_settings_are_there(self):
+        del os.environ["KNOWLEDGE_R2_SECRET_ACCESS_KEY"]
+        self.assertIsNone(kb.remote_config())
+        self.assertIsNone(kb.shared_index())
+        self.assertEqual(self.r2.gets, 0)
+
+    def test_an_existing_local_folder_wins_over_r2(self):
+        os.environ["KNOWLEDGE_DIR"] = str(self.root)
+        self.assertIsNotNone(kb.shared_index())
+        self.assertEqual(self.r2.gets, 0)
+
+    def test_unsafe_archives_are_refused(self):
+        import tarfile
+        for name, kind in (("../escape.json", tarfile.REGTYPE), ("/abs.json", tarfile.REGTYPE),
+                           ("link.json", tarfile.SYMTYPE)):
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                info = tarfile.TarInfo(name)
+                info.type = kind
+                if kind == tarfile.SYMTYPE:
+                    info.linkname = "/etc/passwd"
+                    tar.addfile(info)
+                else:
+                    info.size = 2
+                    tar.addfile(info, io.BytesIO(b"{}"))
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as out:
+                with self.assertRaises(ValueError):
+                    kb.unpack(buf.getvalue(), Path(out))
+
 class AgentFeedTests(BaseCase):
     def test_a_brief_is_compact_cited_and_current(self):
         rows = self.index.brief("widget demand by 2030", k=2)
