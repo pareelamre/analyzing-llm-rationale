@@ -14,6 +14,15 @@ forecast on a long-horizon question can draw on what serious sources project (ow
 - **Forecasts:** `/predict` adds up to two knowledge-base articles (a source's best claims with
   page numbers) ahead of the news when `KNOWLEDGE_DIR` points at a clone of the data repo.
   `KNOWLEDGE_EVIDENCE=0` turns it off. Without `KNOWLEDGE_DIR` nothing changes.
+- **Edge board agent:** each market's research packet carries up to four current, cited claims
+  (`knowledge_base`) that at least two retrievers agree on (`agent_research._market_packet`).
+- **Fund:** every commodity pair trade carries the newest report's forecast-implied direction for
+  the pair and whether it agrees with the trade (`fund_knowledge`; evidence only, sizes unchanged).
+  `fund_live.json` lists the view for every pair under `knowledge`.
+- **CI access (owner's one-time step):** the agent tick and the board/fund publish jobs check the
+  data repo out into `knowledge-base/` when the repo secret `KNOWLEDGE_REPO_TOKEN` exists: a
+  fine-grained GitHub token with read-only Contents access to `pareelamre/foresea-knowledge`.
+  Without it the checkout is skipped and both jobs run as before.
 
 ## What a claim is
 

@@ -547,6 +547,48 @@ class Index:
             })
         return articles
 
+    def brief(self, question: str, *, as_of: Optional[date] = None, k: int = 4,
+              min_support: int = 2) -> list[dict]:
+        """A compact list of the base's best current claims for an agent's research packet."""
+        out = []
+        for hit in self.search(question, as_of=as_of, k=24):
+            if hit.support < min_support or hit.superseded:
+                continue
+            row = {"claim": hit.claim["text"], "kind": hit.claim.get("kind"), "source": hit.cite(),
+                   "published": hit.source.get("published")}
+            if hit.claim.get("horizon"):
+                row["horizon"] = hit.claim["horizon"]
+            if hit.source.get("url"):
+                row["url"] = hit.source["url"]
+            out.append(row)
+            if len(out) == k:
+                break
+        return out
+
+    def figures(self, metric: str, *, as_of: Optional[date] = None, geo: Optional[str] = None) -> list[dict]:
+        """Every visible claim stating a value for ``metric`` (case-insensitive), with its source."""
+        want, place = metric.strip().lower(), (geo or "").strip().lower()
+        out = []
+        for i, claim in enumerate(self.claims):
+            if str(claim.get("metric") or "").strip().lower() != want or claim.get("value") is None:
+                continue
+            if place and str(claim.get("geo") or "").strip().lower() != place:
+                continue
+            if not self._visible(i, as_of, None):
+                continue
+            out.append({"claim": claim, "source": self.corpus.sources.get(claim.get("source"), {}),
+                        "published": self._published[i]})
+        return out
+
+
+def brief(question: str, *, as_of: Optional[date] = None, k: int = 4) -> list[dict]:
+    """``Index.brief`` over the shared base; empty when no base is configured or anything fails."""
+    try:
+        index = shared_index()
+        return index.brief(question, as_of=as_of or date.today(), k=k) if index is not None else []
+    except Exception:  # aqg: top-level boundary -- the base is optional context
+        return []
+
 
 def _projection_key(claim: dict) -> Optional[tuple]:
     """What a numeric claim measures, where and for when: two claims with one key are rival estimates."""

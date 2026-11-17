@@ -213,6 +213,28 @@ class EvidenceTests(BaseCase):
             self.assertIsNone(kb.shared_index())
 
 
+class AgentFeedTests(BaseCase):
+    def test_a_brief_is_compact_cited_and_current(self):
+        rows = self.index.brief("widget demand by 2030", k=2)
+        self.assertEqual(rows[0]["source"], "Acme Research, Jun 2026, p. 3")
+        self.assertEqual(rows[0]["horizon"], "2030")
+        self.assertNotIn("100 million", " ".join(r["claim"] for r in rows))  # superseded projection left out
+        self.assertEqual(self.index.brief("Who wins the Champions League final?"), [])
+
+    def test_the_module_brief_is_empty_without_a_base(self):
+        kb._shared.clear()
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": ""}):
+            self.assertEqual(kb.brief("widget demand by 2030"), [])
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": str(self.root)}):
+            self.assertTrue(kb.brief("widget demand by 2030"))
+
+    def test_figures_filter_by_metric_place_and_date(self):
+        self.assertEqual(len(self.index.figures("Widget Demand")), 2)
+        self.assertEqual(len(self.index.figures("widget demand", geo="mars")), 0)
+        early = self.index.figures("widget demand", as_of=date(2025, 6, 1))
+        self.assertEqual([f["claim"]["value"] for f in early], [100])
+
+
 class IngestTests(unittest.TestCase):
     def test_passages_carry_their_page_and_section_and_never_cross_a_page(self):
         pages = ["2.1. Demand grows fast\n" + "Widgets sell. " * 200, "", "Section 3. Policy\nTaxes rise."]
