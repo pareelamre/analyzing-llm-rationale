@@ -1,12 +1,13 @@
 {
- "generated_at": "2026-11-16T18:43:09.701354+00:00",
- "data_through": "2026-11-16",
+ "generated_at": "2026-11-17T21:08:38.061917+00:00",
+ "data_through": "2026-11-17",
  "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee)",
  "rule": {
   "hedge_window": 250,
   "z_window": 60,
   "entry_z": 2.0,
   "exit_z": 0.5,
+  "ratio_confirm_z": 1.5,
   "max_hold": 20,
   "cost_per_side": 0.001,
   "min_sessions": 20,
@@ -71,6 +72,18 @@
    }
   }
  },
+ "long_run": {
+  "driver_record": {
+   "temporary": {
+    "episodes": 21,
+    "back": 18
+   },
+   "lasting": {
+    "episodes": 2,
+    "back": 0
+   }
+  }
+ },
  "pairs": [
   {
    "key": "gold-silver",
@@ -81,22 +94,22 @@
    ],
    "why": "The gold-silver ratio, the most watched precious-metals spread.",
    "source": "india",
-   "sessions": 122,
+   "sessions": 123,
    "data_from": "2026-05-14",
-   "date": "2026-11-16",
+   "date": "2026-11-17",
    "short_history": true,
    "early": false,
-   "ratio": 80.088809,
-   "usual_ratio": 79.936796,
+   "ratio": 79.15824,
+   "usual_ratio": 79.448969,
    "to_usual": {
-    "a": -0.0019,
-    "b": 0.0046
+    "a": 0.00367,
+    "b": -0.00884
    },
-   "beta": 0.4136,
+   "beta": 0.4127,
    "hedge": "regression",
-   "z": 0.149,
+   "z": -0.32,
+   "z_ratio": 1.932,
    "z_recent": [
-    3.228,
     2.683,
     2.007,
     1.447,
@@ -155,21 +168,23 @@
     -0.004,
     -0.827,
     -0.177,
-    0.149
+    0.149,
+    -0.32
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
-   "eg_t": -2.505,
+   "unconfirmed": false,
+   "eg_t": -2.558,
    "eg_crit_5pct": -3.387,
    "cointegrated": false,
-   "half_life": 7.8,
+   "half_life": 7.6,
    "replay": {
-    "signals": 4,
-    "closed": 4,
+    "signals": 2,
+    "closed": 2,
     "reverted": 1.0,
-    "avg_return": 0.00849,
-    "total_return": 0.0339,
+    "avg_return": 0.01246,
+    "total_return": 0.0249,
     "win_rate": 1.0
    },
    "replay_signals": [
@@ -182,22 +197,6 @@
      "spread_return": 0.009615
     },
     {
-     "entry_date": "2026-07-14",
-     "entry_z": -2.125,
-     "status": "reverted",
-     "exit_date": "2026-07-22",
-     "sessions": 6,
-     "spread_return": 0.004162
-    },
-    {
-     "entry_date": "2026-08-17",
-     "entry_z": 2.116,
-     "status": "reverted",
-     "exit_date": "2026-09-07",
-     "sessions": 15,
-     "spread_return": 0.004862
-    },
-    {
      "entry_date": "2026-11-05",
      "entry_z": 2.187,
      "status": "reverted",
@@ -207,11 +206,11 @@
     }
    ],
    "expected": {
-    "per_signal": -0.00464,
+    "per_signal": -0.00548,
     "us_backtest": -0.00727,
     "prior_signals": 20,
-    "mcx_signals": 4,
-    "mcx_avg": 0.00849
+    "mcx_signals": 2,
+    "mcx_avg": 0.01246
    }
   },
   {
@@ -223,8 +222,8 @@
    ],
    "why": "The benchmark crude spread between the North Sea and US grades.",
    "source": "international",
-   "sessions": 401,
-   "data_from": "2025-03-27",
+   "sessions": 400,
+   "data_from": "2025-03-28",
    "date": "2026-11-11",
    "short_history": false,
    "early": false,
@@ -237,6 +236,7 @@
    "beta": 1.0902,
    "hedge": "regression",
    "z": -1.257,
+   "z_ratio": -1.312,
    "z_recent": [
     1.277,
     0.284,
@@ -302,98 +302,91 @@
    "stretched": false,
    "rich": null,
    "cheap": null,
+   "unconfirmed": false,
    "eg_t": -3.737,
    "eg_crit_5pct": -3.362,
    "cointegrated": true,
    "half_life": 6.0,
    "replay": {
-    "signals": 13,
-    "closed": 13,
-    "reverted": 0.692,
-    "avg_return": 0.00865,
-    "total_return": 0.1124,
-    "win_rate": 0.692
+    "signals": 12,
+    "closed": 12,
+    "reverted": 0.75,
+    "avg_return": 0.0152,
+    "total_return": 0.1824,
+    "win_rate": 0.75
    },
    "replay_signals": [
     {
-     "entry_date": "2025-04-25",
-     "entry_z": -2.645,
+     "entry_date": "2025-04-28",
+     "entry_z": -2.476,
      "status": "reverted",
      "exit_date": "2025-05-20",
-     "sessions": 16,
-     "spread_return": -0.003376
+     "sessions": 15,
+     "spread_return": -0.001119
     },
     {
      "entry_date": "2025-08-22",
-     "entry_z": 2.366,
+     "entry_z": 2.352,
      "status": "reverted",
      "exit_date": "2025-09-04",
      "sessions": 7,
-     "spread_return": 0.010209
+     "spread_return": 0.010245
     },
     {
      "entry_date": "2025-09-09",
-     "entry_z": 3.187,
+     "entry_z": 3.172,
      "status": "timed_out",
      "exit_date": "2025-10-07",
      "sessions": 20,
-     "spread_return": 0.001098
+     "spread_return": 0.00112
     },
     {
      "entry_date": "2025-11-10",
-     "entry_z": -2.213,
+     "entry_z": -2.212,
      "status": "reverted",
      "exit_date": "2025-11-18",
      "sessions": 5,
-     "spread_return": 0.008465
+     "spread_return": 0.008498
     },
     {
      "entry_date": "2025-11-24",
-     "entry_z": 2.357,
+     "entry_z": 2.338,
      "status": "reverted",
      "exit_date": "2025-12-04",
      "sessions": 7,
-     "spread_return": 0.009218
+     "spread_return": 0.009217
     },
     {
      "entry_date": "2026-01-09",
-     "entry_z": 2.197,
+     "entry_z": 2.201,
      "status": "timed_out",
      "exit_date": "2026-02-09",
      "sessions": 20,
-     "spread_return": -0.008293
-    },
-    {
-     "entry_date": "2026-03-03",
-     "entry_z": 2.274,
-     "status": "reverted",
-     "exit_date": "2026-03-06",
-     "sessions": 3,
-     "spread_return": 0.01541
+     "spread_return": -0.008447
     },
     {
      "entry_date": "2026-03-09",
-     "entry_z": -2.51,
+     "entry_z": -2.49,
      "status": "reverted",
      "exit_date": "2026-03-10",
      "sessions": 1,
-     "spread_return": 0.030157
+     "spread_return": 0.030118
     },
     {
-     "entry_date": "2026-03-17",
-     "entry_z": 2.566,
-     "status": "timed_out",
-     "exit_date": "2026-04-16",
+     "entry_date": "2026-03-18",
+     "entry_z": 4.682,
+     "status": "reverted",
+     "exit_date": "2026-04-17",
      "sessions": 20,
-     "spread_return": -0.037318
+     "spread_return": 0.033463
     },
     {
-     "entry_date": "2026-05-06",
-     "entry_z": -2.0,
+     "entry_date": "2026-05-07",
+     "entry_z": -2.155,
      "status": "timed_out",
-     "exit_date": "2026-06-04",
+     "exit_date": "2026-06-05",
      "sessions": 20,
-     "spread_return": -0.013253
+     "spread_return": -0.000834
     },
     {
      "entry_date": "2026-07-23",
@@ -421,11 +414,145 @@
     }
    ],
    "expected": {
-    "per_signal": 0.00554,
+    "per_signal": 0.0079,
     "us_backtest": 0.00352,
     "prior_signals": 20,
-    "mcx_signals": 13,
-    "mcx_avg": 0.00865
+    "mcx_signals": 12,
+    "mcx_avg": 0.0152
+   },
+   "long_run": {
+    "source": "FRED daily spot prices, monthly averages",
+    "data_from": "1997-01",
+    "data_to": "2026-10",
+    "window_months": 120,
+    "ratio": 1.0279,
+    "usual": 1.0698,
+    "low": 0.956,
+    "high": 1.2142,
+    "z": -1.032,
+    "percentile": 0.108,
+    "extreme": false,
+    "analogues": null,
+    "story": null,
+    "episodes": [
+     {
+      "side": "high",
+      "from": "2007-03",
+      "to": "2007-07",
+      "peak": "2007-04",
+      "ratio": 1.0548,
+      "usual": 0.9386,
+      "z": 2.69,
+      "after_12m": -0.0815,
+      "months_to_normal": 4,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2007-02",
+       "to": "2007-08",
+       "driver": "temporary",
+       "cause": "Refinery outages in the US Midwest left crude piling up at Cushing, Oklahoma, WTI's delivery point, holding WTI below Brent.",
+       "ended": "Back to normal within four months.",
+       "sources": [
+        "US EIA, This Week in Petroleum, 2007"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2009-01",
+      "to": "2009-02",
+      "peak": "2009-02",
+      "ratio": 1.1164,
+      "usual": 0.9553,
+      "z": 3.61,
+      "after_12m": -0.1352,
+      "months_to_normal": 1,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2009-01",
+       "to": "2009-03",
+       "driver": "temporary",
+       "cause": "A storage glut at Cushing during the 2008-09 crash pushed WTI below Brent.",
+       "ended": "Back to normal within a month.",
+       "sources": [
+        "US EIA, This Week in Petroleum, 2009"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2011-01",
+      "to": "2012-12",
+      "peak": "2011-09",
+      "ratio": 1.3195,
+      "usual": 0.9833,
+      "z": 4.44,
+      "after_12m": -0.095,
+      "months_to_normal": 22,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2010-12",
+       "to": "2013-06",
+       "driver": "temporary",
+       "cause": "Rising US shale and Canadian crude piled up at Cushing with too few pipelines to the Gulf Coast, while Libya's 2011 outage lifted Brent.",
+       "ended": "New and reversed pipelines (Seaway in 2012) drained Cushing; the gap was back to normal in about two years, though WTI never regained its old premium to Brent.",
+       "sources": [
+        "US EIA, Today in Energy, 2011-2013"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2020-04",
+      "to": "2020-04",
+      "peak": "2020-04",
+      "ratio": 0.956,
+      "usual": 1.0915,
+      "z": -2.06,
+      "after_12m": 0.0984,
+      "months_to_normal": 1,
+      "settled": true,
+      "story": {
+       "side": "low",
+       "from": "2020-03",
+       "to": "2020-05",
+       "driver": "temporary",
+       "cause": "The pandemic crash, when storage filled and US crude briefly traded below zero.",
+       "ended": "Back to normal within a month.",
+       "sources": [
+        "US EIA, Today in Energy, Apr 2020"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2026-09",
+      "to": "2026-10",
+      "peak": "2026-10",
+      "ratio": 1.2142,
+      "usual": 1.0698,
+      "z": 3.26,
+      "after_12m": null,
+      "months_to_normal": null,
+      "settled": false,
+      "story": {
+       "side": "high",
+       "from": "2026-03",
+       "to": null,
+       "driver": "temporary",
+       "cause": "The Strait of Hormuz closure from March 2026, and later the Iran conflict and tanker attacks, added a shipping-risk premium to seaborne Brent over inland WTI.",
+       "ended": null,
+       "sources": [
+        "IMF, World Economic Outlook, Oct 2026",
+        "Rigzone, Oct 2026: analysts look at the WTI-Brent spread"
+       ]
+      }
+     }
+    ],
+    "tide": "toward"
    }
   },
   {
@@ -437,8 +564,8 @@
    ],
    "why": "The oil-gas ratio: energy priced as liquid fuel against gas.",
    "source": "international",
-   "sessions": 405,
-   "data_from": "2025-03-27",
+   "sessions": 404,
+   "data_from": "2025-03-28",
    "date": "2026-11-11",
    "short_history": false,
    "early": false,
@@ -451,6 +578,7 @@
    "beta": 1.0,
    "hedge": "ratio",
    "z": -1.046,
+   "z_ratio": -1.046,
    "z_recent": [
     0.416,
     0.625,
@@ -516,6 +644,7 @@
    "stretched": false,
    "rich": null,
    "cheap": null,
+   "unconfirmed": false,
    "eg_t": -2.406,
    "eg_crit_5pct": -3.362,
    "cointegrated": false,
@@ -524,26 +653,26 @@
     "signals": 6,
     "closed": 5,
     "reverted": 0.8,
-    "avg_return": 0.08319,
-    "total_return": 0.4159,
+    "avg_return": 0.08289,
+    "total_return": 0.4145,
     "win_rate": 1.0
    },
    "replay_signals": [
     {
      "entry_date": "2025-06-11",
-     "entry_z": 2.227,
+     "entry_z": 2.229,
      "status": "reverted",
      "exit_date": "2025-06-24",
      "sessions": 8,
-     "spread_return": 0.064998
+     "spread_return": 0.062616
     },
     {
      "entry_date": "2025-10-02",
-     "entry_z": -2.131,
+     "entry_z": -2.081,
      "status": "timed_out",
      "exit_date": "2025-10-31",
      "sessions": 20,
-     "spread_return": 0.000956
+     "spread_return": 0.001873
     },
     {
      "entry_date": "2025-11-19",
@@ -579,11 +708,190 @@
     }
    ],
    "expected": {
-    "per_signal": 0.02265,
+    "per_signal": 0.02259,
     "us_backtest": 0.00752,
     "prior_signals": 20,
     "mcx_signals": 5,
-    "mcx_avg": 0.08319
+    "mcx_avg": 0.08289
+   },
+   "long_run": {
+    "source": "FRED daily spot prices, monthly averages",
+    "data_from": "1997-01",
+    "data_to": "2026-10",
+    "window_months": 120,
+    "ratio": 29.8145,
+    "usual": 21.3459,
+    "low": 7.7789,
+    "high": 54.4394,
+    "z": 0.967,
+    "percentile": 0.8,
+    "extreme": false,
+    "analogues": null,
+    "story": null,
+    "episodes": [
+     {
+      "side": "high",
+      "from": "2007-09",
+      "to": "2007-11",
+      "peak": "2007-09",
+      "ratio": 13.145,
+      "usual": 7.4905,
+      "z": 2.24,
+      "after_12m": 0.0321,
+      "months_to_normal": 14,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2007-06",
+       "to": "2008-09",
+       "driver": "temporary",
+       "cause": "Oil's run to $147 a barrel in July 2008 far outpaced gas.",
+       "ended": "The crash brought the ratio back within months, just before the shale era began.",
+       "sources": [
+        "US EIA, Short-Term Energy Outlook, 2008"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2009-05",
+      "to": "2009-11",
+      "peak": "2009-08",
+      "ratio": 22.6189,
+      "usual": 8.2908,
+      "z": 3.02,
+      "after_12m": -0.2152,
+      "months_to_normal": 128,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2009-03",
+       "to": "2012-12",
+       "driver": "lasting",
+       "cause": "The shale gas boom: horizontal drilling and fracking flooded the US with gas, and Henry Hub fell below $2 in April 2012 while oil recovered to about $100.",
+       "ended": "The ratio never went back to its pre-2009 range: a barrel of oil has bought far more gas ever since.",
+       "sources": [
+        "US EIA, Today in Energy, 2012"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2020-04",
+      "to": "2020-04",
+      "peak": "2020-04",
+      "ratio": 11.0543,
+      "usual": 21.6034,
+      "z": -2.53,
+      "after_12m": 1.0966,
+      "months_to_normal": 2,
+      "settled": true,
+      "story": {
+       "side": "low",
+       "from": "2020-03",
+       "to": "2020-05",
+       "driver": "temporary",
+       "cause": "The pandemic oil crash; WTI went below zero on 20 April 2020.",
+       "ended": "Back to normal within two months.",
+       "sources": [
+        "US EIA, Today in Energy, Apr 2020"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2021-02",
+      "to": "2021-02",
+      "peak": "2021-02",
+      "ratio": 11.0291,
+      "usual": 21.4542,
+      "z": -2.44,
+      "after_12m": 0.7711,
+      "months_to_normal": 1,
+      "settled": true,
+      "story": {
+       "side": "low",
+       "from": "2021-02",
+       "to": "2021-02",
+       "driver": "temporary",
+       "cause": "Winter Storm Uri froze Texas gas production and spiked spot gas prices.",
+       "ended": "Back to normal within a month.",
+       "sources": [
+        "US EIA, Today in Energy, Feb 2021"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2022-08",
+      "to": "2022-09",
+      "peak": "2022-08",
+      "ratio": 10.6369,
+      "usual": 19.7504,
+      "z": -2.69,
+      "after_12m": 1.9621,
+      "months_to_normal": 5,
+      "settled": true,
+      "story": {
+       "side": "low",
+       "from": "2022-06",
+       "to": "2022-10",
+       "driver": "temporary",
+       "cause": "Europe's energy crisis pulled record US LNG exports and Henry Hub rose to about $9, its highest since 2008.",
+       "ended": "Back to normal within five months as European demand eased.",
+       "sources": [
+        "US EIA, Today in Energy, 2022"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2024-02",
+      "to": "2024-08",
+      "peak": "2024-03",
+      "ratio": 54.4394,
+      "usual": 19.9492,
+      "z": 3.55,
+      "after_12m": -0.6958,
+      "months_to_normal": 9,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2023-01",
+       "to": "2024-09",
+       "driver": "temporary",
+       "cause": "Mild winters and record US gas output filled storage; Henry Hub fell below $2 in early 2024.",
+       "ended": "Producers cut back and LNG demand grew; back to normal within nine months of the 2024 low.",
+       "sources": [
+        "US EIA, Today in Energy, 2024"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2026-01",
+      "to": "2026-01",
+      "peak": "2026-01",
+      "ratio": 7.7789,
+      "usual": 20.5713,
+      "z": -2.92,
+      "after_12m": null,
+      "months_to_normal": 1,
+      "settled": false,
+      "story": {
+       "side": "low",
+       "from": "2026-01",
+       "to": "2026-02",
+       "driver": "temporary",
+       "cause": "Winter Storm Fern: Henry Hub spot hit a record $30.72 on 23 January 2026 and averaged $7.72 for the month.",
+       "ended": "Back to normal within a month.",
+       "sources": [
+        "US EIA, Today in Energy, Feb 2026 (https://www.eia.gov/todayinenergy/detail.php?id=67046)"
+       ]
+      }
+     }
+    ],
+    "tide": "neutral"
    }
   },
   {
@@ -595,22 +903,22 @@
    ],
    "why": "The copper-gold ratio, read as growth against safety.",
    "source": "india",
-   "sessions": 98,
+   "sessions": 99,
    "data_from": "2026-07-01",
-   "date": "2026-11-16",
+   "date": "2026-11-17",
    "short_history": true,
    "early": false,
    "ratio": 9.5e-05,
    "usual_ratio": 0.000101,
    "to_usual": {
-    "a": 0.05938,
-    "b": -0.20231
+    "a": 0.05974,
+    "b": -0.18393
    },
-   "beta": 0.2552,
+   "beta": 0.2855,
    "hedge": "regression",
-   "z": -3.259,
+   "z": -3.077,
+   "z_ratio": 0.437,
    "z_recent": [
-    0.554,
     0.745,
     0.652,
     0.832,
@@ -669,55 +977,28 @@
     -1.817,
     -2.031,
     -2.752,
-    -3.259
+    -3.259,
+    -3.077
    ],
-   "stretched": true,
-   "rich": "Gold",
-   "cheap": "Copper",
-   "eg_t": -2.049,
-   "eg_crit_5pct": -3.4,
+   "stretched": false,
+   "rich": null,
+   "cheap": null,
+   "unconfirmed": true,
+   "eg_t": -1.942,
+   "eg_crit_5pct": -3.399,
    "cointegrated": false,
-   "half_life": 7.7,
+   "half_life": 8.6,
    "replay": {
-    "signals": 3,
-    "closed": 2,
-    "reverted": 1.0,
-    "avg_return": 0.01255,
-    "total_return": 0.0251,
-    "win_rate": 1.0
+    "signals": 0,
+    "closed": 0
    },
-   "replay_signals": [
-    {
-     "entry_date": "2026-09-08",
-     "entry_z": 2.01,
-     "status": "reverted",
-     "exit_date": "2026-09-10",
-     "sessions": 2,
-     "spread_return": 0.017556
-    },
-    {
-     "entry_date": "2026-09-24",
-     "entry_z": 2.07,
-     "status": "reverted",
-     "exit_date": "2026-10-19",
-     "sessions": 16,
-     "spread_return": 0.007553
-    },
-    {
-     "entry_date": "2026-11-05",
-     "entry_z": -2.303,
-     "status": "open",
-     "exit_date": null,
-     "sessions": null,
-     "spread_return": null
-    }
-   ],
+   "replay_signals": [],
    "expected": {
-    "per_signal": -0.00427,
+    "per_signal": -0.00595,
     "us_backtest": -0.00595,
     "prior_signals": 20,
-    "mcx_signals": 2,
-    "mcx_avg": 0.01255
+    "mcx_signals": 0,
+    "mcx_avg": null
    }
   },
   {
@@ -729,22 +1010,22 @@
    ],
    "why": "Monetary against industrial precious metal.",
    "source": "international",
-   "sessions": 298,
+   "sessions": 299,
    "data_from": "2025-08-15",
-   "date": "2026-11-16",
+   "date": "2026-11-17",
    "short_history": true,
    "early": false,
-   "ratio": 2.599063,
-   "usual_ratio": 2.677342,
+   "ratio": 2.631399,
+   "usual_ratio": 2.681665,
    "to_usual": {
-    "a": 0.03012,
-    "b": -0.0602
+    "a": 0.0191,
+    "b": -0.03872
    },
-   "beta": 0.4779,
+   "beta": 0.4792,
    "hedge": "regression",
-   "z": -1.567,
+   "z": -1.033,
+   "z_ratio": 1.166,
    "z_recent": [
-    2.406,
     2.528,
     2.487,
     2.376,
@@ -803,22 +1084,24 @@
     -0.487,
     -1.02,
     -1.697,
-    -1.567
+    -1.567,
+    -1.033
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
-   "eg_t": -2.436,
+   "unconfirmed": false,
+   "eg_t": -2.439,
    "eg_crit_5pct": -3.362,
    "cointegrated": false,
-   "half_life": 14.2,
+   "half_life": 14.3,
    "replay": {
-    "signals": 6,
-    "closed": 6,
-    "reverted": 0.667,
-    "avg_return": -0.0036,
-    "total_return": -0.0216,
-    "win_rate": 0.667
+    "signals": 2,
+    "closed": 2,
+    "reverted": 0.5,
+    "avg_return": -0.02617,
+    "total_return": -0.0523,
+    "win_rate": 0.5
    },
    "replay_signals": [
     {
@@ -836,46 +1119,14 @@
      "exit_date": "2026-01-14",
      "sessions": 20,
      "spread_return": -0.079321
-    },
-    {
-     "entry_date": "2026-02-06",
-     "entry_z": 2.182,
-     "status": "timed_out",
-     "exit_date": "2026-03-09",
-     "sessions": 20,
-     "spread_return": -0.009707
-    },
-    {
-     "entry_date": "2026-07-16",
-     "entry_z": -2.229,
-     "status": "reverted",
-     "exit_date": "2026-07-22",
-     "sessions": 4,
-     "spread_return": 0.013749
-    },
-    {
-     "entry_date": "2026-08-05",
-     "entry_z": -3.026,
-     "status": "reverted",
-     "exit_date": "2026-08-06",
-     "sessions": 1,
-     "spread_return": 0.01961
-    },
-    {
-     "entry_date": "2026-08-11",
-     "entry_z": 2.97,
-     "status": "reverted",
-     "exit_date": "2026-09-02",
-     "sessions": 16,
-     "spread_return": 0.007104
     }
    ],
    "expected": {
-    "per_signal": -0.00293,
+    "per_signal": -0.00486,
     "us_backtest": -0.00273,
     "prior_signals": 20,
-    "mcx_signals": 6,
-    "mcx_avg": -0.0036
+    "mcx_signals": 2,
+    "mcx_avg": -0.02617
    }
   },
   {
@@ -887,20 +1138,21 @@
    ],
    "why": "The two largest base metals, substitutes in wiring and cable.",
    "source": "india",
-   "sessions": 53,
+   "sessions": 54,
    "data_from": "2026-09-01",
-   "date": "2026-11-16",
+   "date": "2026-11-17",
    "short_history": true,
    "early": true,
-   "ratio": 3.925291,
-   "usual_ratio": 4.229537,
+   "ratio": 3.938879,
+   "usual_ratio": 4.239641,
    "to_usual": {
-    "a": 0.07751,
-    "b": -0.22864
+    "a": 0.07636,
+    "b": -0.19404
    },
-   "beta": 0.2876,
+   "beta": 0.3411,
    "hedge": "regression",
-   "z": -3.319,
+   "z": -2.996,
+   "z_ratio": -1.521,
    "z_recent": [
     0.231,
     0.193,
@@ -935,17 +1187,19 @@
     -2.153,
     -2.45,
     -2.862,
-    -3.319
+    -3.319,
+    -2.996
    ],
    "stretched": true,
    "rich": "Aluminium",
    "cheap": "Copper",
-   "eg_t": 0.412,
-   "eg_crit_5pct": -3.453,
+   "unconfirmed": false,
+   "eg_t": 0.351,
+   "eg_crit_5pct": -3.451,
    "cointegrated": false,
    "half_life": null,
    "replay": {
-    "signals": 2,
+    "signals": 1,
     "closed": 1,
     "reverted": 1.0,
     "avg_return": 0.00162,
@@ -960,14 +1214,6 @@
      "exit_date": "2026-10-27",
      "sessions": 13,
      "spread_return": 0.001616
-    },
-    {
-     "entry_date": "2026-11-03",
-     "entry_z": -2.074,
-     "status": "open",
-     "exit_date": null,
-     "sessions": null,
-     "spread_return": null
     }
    ],
    "expected": {
@@ -976,6 +1222,90 @@
     "prior_signals": 20,
     "mcx_signals": 1,
     "mcx_avg": 0.00162
+   },
+   "long_run": {
+    "source": "IMF monthly prices (FRED)",
+    "data_from": "1992-01",
+    "data_to": "2026-09",
+    "window_months": 120,
+    "ratio": 4.3004,
+    "usual": 3.5228,
+    "low": 2.8401,
+    "high": 4.4095,
+    "z": 1.975,
+    "percentile": 0.983,
+    "extreme": true,
+    "analogues": {
+     "months": 76,
+     "back_3m": 0.479,
+     "median_3m": -0.0013,
+     "back_12m": 0.343,
+     "median_12m": -0.0621
+    },
+    "story": {
+     "side": "high",
+     "from": "2026-01",
+     "to": null,
+     "driver": "mixed",
+     "cause": "Copper set records on mine outages (the Grasberg mud rush of September 2025, with repairs expected to run to the end of 2027, and Kamoa-Kakula), US tariff plans that pulled metal into US warehouses, and demand from grids and data centers. Aluminium was tight too after the Strait of Hormuz closure curtailed Middle East smelters.",
+     "ended": null,
+     "sources": [
+      "S&P Global, Copper Market Report, Oct 2026",
+      "IEA, Global Critical Minerals Outlook, Jul 2026",
+      "World Bank, Commodity Markets Outlook, Oct 2026"
+     ]
+    },
+    "episodes": [
+     {
+      "side": "high",
+      "from": "2005-05",
+      "to": "2006-11",
+      "peak": "2006-05",
+      "ratio": 2.8257,
+      "usual": 1.3506,
+      "z": 3.44,
+      "after_12m": -0.0312,
+      "months_to_normal": null,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2004-01",
+       "to": "2007-12",
+       "driver": "lasting",
+       "cause": "China's industrial boom lifted copper demand faster than mines could respond after years of low investment, while new Chinese smelters kept aluminium plentiful.",
+       "ended": "The 2008 crash cut the ratio, but it never went back to its 1990s level: copper has stayed far dearer against aluminium since.",
+       "sources": [
+        "World Bank, Global Commodity Markets / Commodity Markets Outlook, 2005-2008"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2026-07",
+      "to": "2026-09",
+      "peak": "2026-08",
+      "ratio": 4.4095,
+      "usual": 3.5112,
+      "z": 2.28,
+      "after_12m": null,
+      "months_to_normal": null,
+      "settled": false,
+      "story": {
+       "side": "high",
+       "from": "2026-01",
+       "to": null,
+       "driver": "mixed",
+       "cause": "Copper set records on mine outages (the Grasberg mud rush of September 2025, with repairs expected to run to the end of 2027, and Kamoa-Kakula), US tariff plans that pulled metal into US warehouses, and demand from grids and data centers. Aluminium was tight too after the Strait of Hormuz closure curtailed Middle East smelters.",
+       "ended": null,
+       "sources": [
+        "S&P Global, Copper Market Report, Oct 2026",
+        "IEA, Global Critical Minerals Outlook, Jul 2026",
+        "World Bank, Commodity Markets Outlook, Oct 2026"
+       ]
+      }
+     }
+    ],
+    "tide": "away"
    }
   },
   {
@@ -987,20 +1317,21 @@
    ],
    "why": "Mined together and traded as a classic base-metal pair.",
    "source": "india",
-   "sessions": 35,
+   "sessions": 36,
    "data_from": "2026-09-10",
-   "date": "2026-11-16",
+   "date": "2026-11-17",
    "short_history": true,
    "early": true,
-   "ratio": 2.077042,
-   "usual_ratio": 2.088714,
+   "ratio": 2.08035,
+   "usual_ratio": 2.086703,
    "to_usual": {
-    "a": 0.00562,
-    "b": -0.00711
+    "a": 0.00305,
+    "b": -0.00384
    },
-   "beta": 0.7858,
+   "beta": 0.7935,
    "hedge": "regression",
-   "z": -0.336,
+   "z": -0.185,
+   "z_ratio": -0.111,
    "z_recent": [
     0.904,
     1.471,
@@ -1017,13 +1348,15 @@
     0.941,
     0.581,
     -0.199,
-    -0.336
+    -0.336,
+    -0.185
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
-   "eg_t": -3.292,
-   "eg_crit_5pct": -3.516,
+   "unconfirmed": false,
+   "eg_t": -3.355,
+   "eg_crit_5pct": -3.51,
    "cointegrated": false,
    "half_life": 1.2,
    "replay": {
@@ -1037,6 +1370,183 @@
     "prior_signals": 20,
     "mcx_signals": 0,
     "mcx_avg": null
+   },
+   "long_run": {
+    "source": "IMF monthly prices (FRED)",
+    "data_from": "1992-01",
+    "data_to": "2026-09",
+    "window_months": 120,
+    "ratio": 2.1381,
+    "usual": 1.363,
+    "low": 1.0975,
+    "high": 2.1467,
+    "z": 3.176,
+    "percentile": 0.992,
+    "extreme": true,
+    "analogues": {
+     "months": 58,
+     "back_3m": 0.491,
+     "median_3m": -0.0042,
+     "back_12m": 0.674,
+     "median_12m": 0.0538
+    },
+    "story": {
+     "side": "high",
+     "from": "2026-01",
+     "to": null,
+     "driver": "temporary",
+     "cause": "A shortage of zinc ore: the fees smelters charge to process it fell below zero to record lows, while lead stayed well supplied. The World Bank expects zinc to ease from $3,500 a tonne in 2026 to $2,800 in 2028, with lead flat.",
+     "ended": null,
+     "sources": [
+      "Bloomberg, Jun 2026: China's zinc margins crushed as fees plunge to record lows",
+      "IEA, Global Critical Minerals Outlook, Jul 2026",
+      "World Bank, Commodity Markets Outlook, Oct 2026"
+     ]
+    },
+    "episodes": [
+     {
+      "side": "low",
+      "from": "2004-06",
+      "to": "2004-09",
+      "peak": "2004-07",
+      "ratio": 1.0609,
+      "usual": 1.7931,
+      "z": -2.53,
+      "after_12m": 0.3155,
+      "months_to_normal": 13,
+      "settled": true,
+      "story": {
+       "side": "low",
+       "from": "2004-01",
+       "to": "2004-12",
+       "driver": "temporary",
+       "cause": "Zinc was in surplus with large exchange stocks while lead rallied on strong Chinese demand and tight supply.",
+       "ended": "Zinc's 2005-06 rally brought the ratio back to normal within about a year.",
+       "sources": [
+        "World Bank, Global Commodity Markets, 2004-2005"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2006-05",
+      "to": "2006-07",
+      "peak": "2006-06",
+      "ratio": 3.3183,
+      "usual": 1.7871,
+      "z": 2.54,
+      "after_12m": -0.5512,
+      "months_to_normal": 7,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2006-03",
+       "to": "2006-09",
+       "driver": "temporary",
+       "cause": "Zinc hit record highs as exchange stocks ran down and investors piled in.",
+       "ended": "Zinc fell back as new mine supply arrived, and lead surged in 2007; the ratio was back to normal within months.",
+       "sources": [
+        "World Bank, Global Commodity Markets, 2007"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2007-08",
+      "to": "2008-04",
+      "peak": "2007-11",
+      "ratio": 0.7695,
+      "usual": 1.7754,
+      "z": -2.97,
+      "after_12m": 0.1813,
+      "months_to_normal": 123,
+      "settled": true,
+      "story": {
+       "side": "low",
+       "from": "2007-06",
+       "to": "2008-06",
+       "driver": "temporary",
+       "cause": "Lead hit a record in late 2007 after Australia's Magellan mine stopped shipping and China cut lead exports, while zinc slid.",
+       "ended": "The ratio rose about a fifth within a year, but its 1990s level never returned: zinc and lead have traded closer together since.",
+       "sources": [
+        "World Bank, Global Commodity Markets, 2008"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2019-03",
+      "to": "2019-05",
+      "peak": "2019-04",
+      "ratio": 1.5125,
+      "usual": 1.0525,
+      "z": 2.58,
+      "after_12m": -0.2408,
+      "months_to_normal": 4,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2017-06",
+       "to": "2019-06",
+       "driver": "temporary",
+       "cause": "Large zinc mines closed in 2015 (Century, Lisheen) and Glencore cut output, leaving a multi-year shortage of zinc ore and very low exchange stocks.",
+       "ended": "New and restarted mines eased the shortage; each spike unwound within 4 to 18 months.",
+       "sources": [
+        "World Bank, Commodity Markets Outlook, 2017-2019",
+        "International Lead and Zinc Study Group, 2017-2019"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2022-02",
+      "to": "2022-08",
+      "peak": "2022-04",
+      "ratio": 1.832,
+      "usual": 1.1576,
+      "z": 2.81,
+      "after_12m": -0.295,
+      "months_to_normal": 12,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2022-01",
+       "to": "2022-09",
+       "driver": "temporary",
+       "cause": "Europe's energy crisis made power-hungry zinc smelting unprofitable, and smelters such as Nyrstar's Auby cut output.",
+       "ended": "As power prices eased, so did the cuts; the ratio fell about 30% within a year.",
+       "sources": [
+        "World Bank, Commodity Markets Outlook, Oct 2022"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2026-02",
+      "to": "2026-09",
+      "peak": "2026-09",
+      "ratio": 2.1467,
+      "usual": 1.363,
+      "z": 3.2,
+      "after_12m": null,
+      "months_to_normal": null,
+      "settled": false,
+      "story": {
+       "side": "high",
+       "from": "2026-01",
+       "to": null,
+       "driver": "temporary",
+       "cause": "A shortage of zinc ore: the fees smelters charge to process it fell below zero to record lows, while lead stayed well supplied. The World Bank expects zinc to ease from $3,500 a tonne in 2026 to $2,800 in 2028, with lead flat.",
+       "ended": null,
+       "sources": [
+        "Bloomberg, Jun 2026: China's zinc margins crushed as fees plunge to record lows",
+        "IEA, Global Critical Minerals Outlook, Jul 2026",
+        "World Bank, Commodity Markets Outlook, Oct 2026"
+       ]
+      }
+     }
+    ],
+    "tide": "away"
    }
   },
   {
@@ -1048,20 +1558,21 @@
    ],
    "why": "Construction and manufacturing demand on both legs.",
    "source": "india",
-   "sessions": 48,
+   "sessions": 49,
    "data_from": "2026-09-08",
-   "date": "2026-11-16",
+   "date": "2026-11-17",
    "short_history": true,
    "early": true,
-   "ratio": 3.191436,
-   "usual_ratio": 3.465966,
+   "ratio": 3.159198,
+   "usual_ratio": 3.440489,
    "to_usual": {
-    "a": 0.08602,
-    "b": -0.82868
+    "a": 0.08904,
+    "b": -0.58607
    },
-   "beta": 0.0468,
+   "beta": 0.0967,
    "hedge": "regression",
-   "z": -3.237,
+   "z": -3.031,
+   "z_ratio": -2.449,
    "z_recent": [
     1.413,
     1.14,
@@ -1091,13 +1602,15 @@
     -1.96,
     -1.952,
     -1.999,
-    -3.237
+    -3.237,
+    -3.031
    ],
    "stretched": true,
    "rich": "Zinc",
    "cheap": "Copper",
-   "eg_t": 0.622,
-   "eg_crit_5pct": -3.466,
+   "unconfirmed": false,
+   "eg_t": 0.804,
+   "eg_crit_5pct": -3.463,
    "cointegrated": false,
    "half_life": null,
    "replay": {
@@ -1106,8 +1619,8 @@
    },
    "replay_signals": [
     {
-     "entry_date": "2026-10-30",
-     "entry_z": -2.162,
+     "entry_date": "2026-11-03",
+     "entry_z": -2.521,
      "status": "open",
      "exit_date": null,
      "sessions": null,
@@ -1120,6 +1633,94 @@
     "prior_signals": 20,
     "mcx_signals": 0,
     "mcx_avg": null
+   },
+   "long_run": {
+    "source": "IMF monthly prices (FRED)",
+    "data_from": "1992-01",
+    "data_to": "2026-09",
+    "window_months": 120,
+    "ratio": 3.2987,
+    "usual": 2.7988,
+    "low": 1.9832,
+    "high": 4.0498,
+    "z": 0.832,
+    "percentile": 0.708,
+    "extreme": false,
+    "analogues": null,
+    "story": null,
+    "episodes": [
+     {
+      "side": "high",
+      "from": "2008-02",
+      "to": "2008-10",
+      "peak": "2008-07",
+      "ratio": 4.5286,
+      "usual": 2.0877,
+      "z": 3.02,
+      "after_12m": -0.2697,
+      "months_to_normal": 91,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2008-01",
+       "to": "2008-12",
+       "driver": "temporary",
+       "cause": "Copper stayed near records into mid-2008 while zinc had already fallen from its 2006 peak as new supply arrived.",
+       "ended": "The financial crisis hit copper hard and the ratio fell about a quarter within a year, though not to its old level.",
+       "sources": [
+        "World Bank, Global Commodity Markets, 2009"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2017-02",
+      "to": "2017-03",
+      "peak": "2017-02",
+      "ratio": 2.0878,
+      "usual": 3.2274,
+      "z": -2.04,
+      "after_12m": -0.0501,
+      "months_to_normal": 34,
+      "settled": true,
+      "story": {
+       "side": "low",
+       "from": "2017-01",
+       "to": "2018-06",
+       "driver": "temporary",
+       "cause": "The zinc ore shortage after the 2015 mine closures lifted zinc against copper.",
+       "ended": "The ratio returned to normal over two to three years as zinc supply recovered.",
+       "sources": [
+        "World Bank, Commodity Markets Outlook, 2017-2019"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2026-01",
+      "to": "2026-01",
+      "peak": "2026-01",
+      "ratio": 4.0498,
+      "usual": 2.7135,
+      "z": 2.17,
+      "after_12m": null,
+      "months_to_normal": null,
+      "settled": false,
+      "story": {
+       "side": "high",
+       "from": "2026-01",
+       "to": null,
+       "driver": "mixed",
+       "cause": "Copper's record run on mine outages, US tariff plans and demand from grids and data centers; zinc rose too on its own ore shortage.",
+       "ended": null,
+       "sources": [
+        "S&P Global, Copper Market Report, Oct 2026",
+        "World Bank, Commodity Markets Outlook, Oct 2026"
+       ]
+      }
+     }
+    ],
+    "tide": "neutral"
    }
   },
   {
@@ -1131,20 +1732,21 @@
    ],
    "why": "Battery and steel demand against the broad industrial metal.",
    "source": "india",
-   "sessions": 51,
+   "sessions": 52,
    "data_from": "2026-08-28",
-   "date": "2026-11-16",
+   "date": "2026-11-17",
    "short_history": true,
    "early": true,
-   "ratio": 1.179407,
-   "usual_ratio": 1.175565,
+   "ratio": 1.217868,
+   "usual_ratio": 1.186925,
    "to_usual": {
-    "a": -0.00326,
-    "b": 0.00734
+    "a": -0.02541,
+    "b": 0.0717
    },
-   "beta": 0.4461,
+   "beta": 0.3716,
    "hedge": "regression",
-   "z": 0.097,
+   "z": 0.767,
+   "z_ratio": 2.114,
    "z_recent": [
     -1.643,
     -1.73,
@@ -1177,13 +1779,15 @@
     0.101,
     0.258,
     0.084,
-    0.097
+    0.097,
+    0.767
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
-   "eg_t": -1.816,
-   "eg_crit_5pct": -3.458,
+   "unconfirmed": false,
+   "eg_t": -1.766,
+   "eg_crit_5pct": -3.456,
    "cointegrated": false,
    "half_life": 6.6,
    "replay": {
@@ -1210,6 +1814,181 @@
     "prior_signals": 20,
     "mcx_signals": 1,
     "mcx_avg": 0.03622
+   },
+   "long_run": {
+    "source": "IMF monthly prices (FRED)",
+    "data_from": "1992-01",
+    "data_to": "2026-09",
+    "window_months": 120,
+    "ratio": 1.1896,
+    "usual": 1.9994,
+    "low": 1.1279,
+    "high": 3.4626,
+    "z": -2.181,
+    "percentile": 0.017,
+    "extreme": true,
+    "analogues": {
+     "months": 52,
+     "back_3m": 0.592,
+     "median_3m": 0.0162,
+     "back_12m": 0.6,
+     "median_12m": 0.0699
+    },
+    "story": {
+     "side": "low",
+     "from": "2025-06",
+     "to": null,
+     "driver": "lasting",
+     "cause": "Indonesia's fast-growing nickel smelting industry kept the market in surplus while copper rallied on its own shortages. Indonesia's 2026 cut to mining quotas lifted nickel only partly.",
+     "ended": null,
+     "sources": [
+      "Argus, 2026: Indonesia to cut nickel mining quota",
+      "World Bank, Commodity Markets Outlook, Oct 2026"
+     ]
+    },
+    "episodes": [
+     {
+      "side": "high",
+      "from": "2003-09",
+      "to": "2004-01",
+      "peak": "2003-12",
+      "ratio": 6.4419,
+      "usual": 3.5667,
+      "z": 2.43,
+      "after_12m": -0.3194,
+      "months_to_normal": 4,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2003-06",
+       "to": "2004-03",
+       "driver": "temporary",
+       "cause": "Booming stainless steel output, much of it in China, ran nickel stocks down.",
+       "ended": "Nickel fell back within months.",
+       "sources": [
+        "World Bank, Global Commodity Markets, 2004"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2007-01",
+      "to": "2007-05",
+      "peak": "2007-02",
+      "ratio": 7.1838,
+      "usual": 3.9853,
+      "z": 2.43,
+      "after_12m": -0.508,
+      "months_to_normal": 5,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2006-10",
+       "to": "2007-07",
+       "driver": "temporary",
+       "cause": "Nickel hit a record above $50,000 a tonne in May 2007 on low exchange stocks and stainless steel demand.",
+       "ended": "Chinese steelmakers switched to cheaper nickel pig iron and nickel halved within a year.",
+       "sources": [
+        "World Bank, Global Commodity Markets, 2008"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2008-07",
+      "to": "2008-10",
+      "peak": "2008-07",
+      "ratio": 2.3917,
+      "usual": 4.1588,
+      "z": -2.3,
+      "after_12m": 0.2809,
+      "months_to_normal": 6,
+      "settled": true,
+      "story": {
+       "side": "low",
+       "from": "2008-06",
+       "to": "2009-06",
+       "driver": "temporary",
+       "cause": "The financial crisis collapsed stainless steel demand, hitting nickel harder than copper.",
+       "ended": "Back to normal within 6 to 13 months.",
+       "sources": [
+        "World Bank, Global Commodity Markets, 2009"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2017-06",
+      "to": "2017-06",
+      "peak": "2017-06",
+      "ratio": 1.5616,
+      "usual": 2.4437,
+      "z": -2.05,
+      "after_12m": 0.3887,
+      "months_to_normal": 9,
+      "settled": true,
+      "story": {
+       "side": "low",
+       "from": "2017-04",
+       "to": "2017-09",
+       "driver": "temporary",
+       "cause": "Indonesia relaxed its ban on nickel ore exports in January 2017, adding to a surplus.",
+       "ended": "Hopes for battery demand lifted nickel; the ratio rose about 40% within a year.",
+       "sources": [
+        "World Bank, Commodity Markets Outlook, 2017-2018"
+       ]
+      }
+     },
+     {
+      "side": "high",
+      "from": "2022-03",
+      "to": "2023-01",
+      "peak": "2022-03",
+      "ratio": 3.3159,
+      "usual": 2.0948,
+      "z": 3.35,
+      "after_12m": -0.207,
+      "months_to_normal": 18,
+      "settled": true,
+      "story": {
+       "side": "high",
+       "from": "2022-03",
+       "to": "2023-01",
+       "driver": "temporary",
+       "cause": "A short squeeze after Russia's invasion of Ukraine sent nickel above $100,000 a tonne intraday; the LME suspended nickel trading on 8 March 2022.",
+       "ended": "Nickel fell back as Indonesian supply kept growing; the ratio was back to normal in about 18 months.",
+       "sources": [
+        "LME, Mar 2022: nickel trading suspension",
+        "World Bank, Commodity Markets Outlook, Apr 2022"
+       ]
+      }
+     },
+     {
+      "side": "low",
+      "from": "2025-11",
+      "to": "2026-02",
+      "peak": "2025-12",
+      "ratio": 1.2619,
+      "usual": 2.0613,
+      "z": -2.41,
+      "after_12m": null,
+      "months_to_normal": null,
+      "settled": false,
+      "story": {
+       "side": "low",
+       "from": "2025-06",
+       "to": null,
+       "driver": "lasting",
+       "cause": "Indonesia's fast-growing nickel smelting industry kept the market in surplus while copper rallied on its own shortages. Indonesia's 2026 cut to mining quotas lifted nickel only partly.",
+       "ended": null,
+       "sources": [
+        "Argus, 2026: Indonesia to cut nickel mining quota",
+        "World Bank, Commodity Markets Outlook, Oct 2026"
+       ]
+      }
+     }
+    ],
+    "tide": "away"
    }
   },
   {
@@ -1221,22 +2000,22 @@
    ],
    "why": "India's gold price against the landed cost of imported gold: the domestic premium.",
    "source": "parity",
-   "sessions": 97,
+   "sessions": 98,
    "data_from": "2026-06-10",
-   "date": "2026-11-16",
+   "date": "2026-11-17",
    "short_history": true,
    "early": false,
-   "ratio": 1.012629,
-   "usual_ratio": 1.007292,
+   "ratio": 1.007731,
+   "usual_ratio": 1.007273,
    "to_usual": {
-    "a": -0.00527,
-    "b": 0.0053
+    "a": -0.00045,
+    "b": 0.00045
    },
    "beta": 1.0,
    "hedge": "fixed",
-   "z": 0.813,
+   "z": 0.07,
+   "z_ratio": 0.07,
    "z_recent": [
-    -0.471,
     -0.599,
     -0.488,
     -0.209,
@@ -1295,12 +2074,14 @@
     0.09,
     -0.255,
     0.457,
-    0.813
+    0.813,
+    0.07
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
-   "eg_t": -2.972,
+   "unconfirmed": false,
+   "eg_t": -2.981,
    "eg_crit_5pct": -3.4,
    "cointegrated": false,
    "half_life": 6.5,
