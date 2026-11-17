@@ -131,8 +131,13 @@ Two jobs in the data repo keep the base growing toward what Foresea is asked:
   Contents, reference lists and figure tables are skipped. Three gates: every number in a claim
   must be in its passage; a claim that repeats eight words in a row from the passage gets one
   chance to be restated by the model and must then pass both gates again; and a reviewer marks
-  every candidate keep or drop (`sheet`, `decide`) before `publish` writes the source, merges its
-  entities and marks the inbox row read. Work in progress lives in the clone's gitignored
+  every candidate keep or drop (`sheet`, `decide`) before `publish` writes the source and marks
+  the inbox row read. Only entities the base already knows, or that the reviewer's entity map
+  (`entities`, then `publish --entities map.json`) names with a type, reach the graph: the model's
+  vague names ("governments", "costs", "2026") would otherwise make unrelated claims look on topic.
+  First report (2026-11-17): IEA *Sheltering from Oil Shocks*, 52 passages in about 20 minutes,
+  220 candidates, 131 kept; the reviewer caught a reversed share, a wrong year, an invented
+  horizon and many duplicates, so the review gate is not optional. Work in progress lives in the clone's gitignored
   `.kb/reports/<id>/`, so a stopped night resumes where it left off. Reports from publishers the
   watch list does not cover can be queued by hand (`queue file.pdf|URL --id ...`).
 - **Crawler rules:** honest user agent (`ForeseaKnowledgeWatch/1.0`), robots.txt obeyed (RFC 9309:

@@ -339,6 +339,31 @@ class PublishTests(Base):
         self.assertEqual(reports._read_jsonl(self.root / "inbox.jsonl")[0]["status"], "read")
         self.assertEqual(reports.load_job(self.root, JID)["status"], "published")
 
+    def test_only_known_or_mapped_entities_reach_the_graph(self):
+        reports.decide(self.root, JID, rest="keep",
+                       edits={"c002": {"entities": ["Gadgets", "Widgets", "Port Authority", "governments"]}})
+        names = reports.entity_names(self.root, JID)
+        self.assertEqual(names["known"]["Gadgets"], "gadgets")
+        self.assertEqual(names["new"], {"Port Authority": 1, "governments": 1})
+        with self.assertRaisesRegex(reports.ReportError, "neither in the base"):
+            reports.publish(self.root, JID, reviewer="Claude", entity_map={"map": {"Port Authority": "ports"}})
+        reports.publish(self.root, JID, reviewer="Claude", entity_map={
+            "map": {"Port Authority": "ports", "governments": None},
+            "new": {"ports": {"name": "Ports", "type": "infrastructure", "aliases": ["port"]}}})
+        corpus = kb.load(self.root)
+        self.assertEqual(corpus.errors, [])
+        self.assertEqual(corpus.entities["ports"]["type"], "infrastructure")
+        risk = next(c for c in corpus.claims if c["source"] == JID and c["kind"] == "risk")
+        self.assertEqual(risk["entities"], ["gadgets", "ports", "widgets"])
+        self.assertNotIn("governments", corpus.entities)
+        self.assertEqual(reports.load_job(self.root, JID)["unlinked_entities"], [])
+
+    def test_unmapped_new_names_are_left_off_the_graph(self):
+        reports.decide(self.root, JID, rest="keep", edits={"c002": {"entities": ["Gadgets", "costs"]}})
+        reports.publish(self.root, JID, reviewer="Claude")
+        self.assertNotIn("costs", kb.load(self.root).entities)
+        self.assertEqual(reports.load_job(self.root, JID)["unlinked_entities"], ["costs"])
+
     def test_a_correction_must_still_pass_the_gates(self):
         reports.decide(self.root, JID, rest="keep",
                        edits={"c001": {"text": "Acme sees Ruritanian widget demand at 150 million units by 2031."}})

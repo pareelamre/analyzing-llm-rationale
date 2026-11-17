@@ -572,8 +572,64 @@ def decide(root: Path, jid: str, *, keep: Iterable[str] = (), drop: Iterable[str
             "undecided": sum(not r.get("review") for r in rows)}
 
 
+def _lookup(entities: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
+    out = {}
+    for eid, ent in entities.items():
+        for name in [ent.get("name"), *ent.get("aliases", [])]:
+            out[knowledge.normalize(name or "").strip()] = eid
+    return out
+
+
+def entity_names(root: Path, jid: str) -> dict[str, Any]:
+    """The kept candidates' entity names: those the base already knows (name -> id) and the new ones
+    with how often they occur, for the reviewer's entity map."""
+    lookup = _lookup(knowledge.load(root).entities)
+    known: dict[str, str] = {}
+    new: dict[str, int] = {}
+    for row in _read_jsonl(folder(root, jid) / "candidates.jsonl"):
+        if row.get("review") == "drop":
+            continue
+        for name in row.get("entities") or []:
+            eid = lookup.get(knowledge.normalize(name).strip())
+            if eid:
+                known[name] = eid
+            else:
+                new[name] = new.get(name, 0) + 1
+    return {"known": known, "new": dict(sorted(new.items(), key=lambda kv: -kv[1]))}
+
+
+def resolve_entities(names: Iterable[str], entities: dict[str, dict], entity_map: Mapping[str, Any]) -> tuple[list[str], list[str]]:
+    """Entity ids for a claim's names: the base's own entities by name or alias, else the reviewer's
+    map (``{"map": {name: id or null}, "new": {id: {name, type, aliases}}}``). A name the map does not
+    cover is left off the claim (returned second), so the model cannot fill the graph with vague
+    nodes such as "governments" or "costs"; the claim's text stays searchable."""
+    lookup = _lookup(entities)
+    mapped = {knowledge.normalize(k).strip(): v for k, v in (entity_map.get("map") or {}).items()}
+    new = entity_map.get("new") or {}
+    ids, unlinked = [], []
+    for name in names:
+        key = knowledge.normalize(name).strip()
+        eid = lookup.get(key)
+        if eid is None and key in mapped:
+            eid = mapped[key]
+            if eid and eid not in entities:
+                if eid not in new:
+                    raise ReportError(f"entity map sends {name!r} to {eid!r}, which is neither in the base nor in 'new'")
+                spec = new[eid]
+                if not spec.get("name") or not spec.get("type"):
+                    raise ReportError(f"new entity {eid!r} needs a name and a type")
+                entities[eid] = {"id": eid, "name": spec["name"], "type": spec["type"],
+                                 "aliases": list(spec.get("aliases") or [])}
+        if eid:
+            ids.append(eid)
+        elif key not in mapped:
+            unlinked.append(name)
+    return sorted(set(ids)), unlinked
+
+
 def publish(root: Path, jid: str, *, reviewer: str, today: Optional[date] = None,
-            source_extra: Optional[Mapping[str, Any]] = None) -> Path:
+            source_extra: Optional[Mapping[str, Any]] = None,
+            entity_map: Optional[Mapping[str, Any]] = None) -> Path:
     """Write the kept candidates into ``sources/<id>/``; undo everything if the base would break."""
     job = load_job(root, jid)
     if job.get("status") != "review":
@@ -601,14 +657,17 @@ def publish(root: Path, jid: str, *, reviewer: str, today: Optional[date] = None
     corpus = knowledge.load(root)
     if corpus.errors:
         raise ReportError("the base has errors: " + "; ".join(corpus.errors[:3]))
-    entities = dict(corpus.entities)
+    entities = {k: dict(v) for k, v in corpus.entities.items()}
+    entity_map = entity_map or {}
+    unlinked: set[str] = set()
     claims, ids = [], {}
     for n, row in enumerate(kept, 1):
-        ents = knowledge.merge_entities(entities, [str(e) for e in row.get("entities") or []])
+        ents, missing = resolve_entities([str(e) for e in row.get("entities") or []], entities, entity_map)
+        unlinked.update(missing)
         claim = {"id": f"{jid}:c{n:03d}", "source": jid}
         claim.update({k: row[k] for k in ("kind", "text", "metric", "value", "unit", "geo", "horizon", "scenario")
                       if row.get(k) not in (None, "")})
-        claim.update(entities=sorted(set(ents.values())), page=row.get("page"))
+        claim.update(entities=ents, page=row.get("page"))
         if row.get("section"):
             claim["section"] = row["section"]
         claim["chunk"] = row.get("chunk")
@@ -619,9 +678,12 @@ def publish(root: Path, jid: str, *, reviewer: str, today: Optional[date] = None
     for rel in _read_jsonl(where / "candidate_relations.jsonl"):
         if rel.get("claim") and rel["claim"] not in ids:
             continue  # its claim was dropped
-        names = knowledge.merge_entities(entities, [rel["subject"], rel["object"]])
-        relations.append({"subject": names[rel["subject"]], "predicate": rel["predicate"],
-                          "object": names[rel["object"]], "claims": [ids[rel["claim"]]] if rel.get("claim") else []})
+        subject, _ = resolve_entities([rel["subject"]], entities, entity_map)
+        obj, _ = resolve_entities([rel["object"]], entities, entity_map)
+        if not subject or not obj or subject == obj:
+            continue  # a relation needs two linked entities
+        relations.append({"subject": subject[0], "predicate": rel["predicate"], "object": obj[0],
+                          "claims": [ids[rel["claim"]]] if rel.get("claim") else []})
     source = {"id": jid, "title": job["title"], "publisher": job["publisher"], "published": job["published"],
               "kind": "report", "added": (today or date.today()).isoformat(),
               "extracted_by": f"self-hosted Qwen3.5-9B; reviewed by {reviewer}"}
@@ -646,7 +708,8 @@ def publish(root: Path, jid: str, *, reviewer: str, today: Optional[date] = None
         raise
     if job.get("inbox"):
         _mark_inbox(root, job["inbox"], jid)
-    job.update(status="published", published_claims=len(claims), reviewer=reviewer, published_at=_now())
+    job.update(status="published", published_claims=len(claims), reviewer=reviewer, published_at=_now(),
+               unlinked_entities=sorted(unlinked))
     save_job(root, job)
     return target
 

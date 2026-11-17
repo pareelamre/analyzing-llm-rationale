@@ -6,7 +6,8 @@
     python scripts/knowledge_reports.py status
     python scripts/knowledge_reports.py sheet <id>        # candidates beside their passages
     python scripts/knowledge_reports.py decide <id> --drop c003,c007 --rest keep [--edits fixes.json]
-    python scripts/knowledge_reports.py publish <id> --reviewer Claude [--title "..." --summary "..."]
+    python scripts/knowledge_reports.py entities <id>     # names the base knows, and new ones to map
+    python scripts/knowledge_reports.py publish <id> --reviewer Claude --entities map.json [--title "..."]
     python scripts/knowledge_reports.py drop <id> --why "duplicate of ..."
 
 ``run`` (launchd, every 30 minutes) queues new report editions from the watch list's inbox and
@@ -119,9 +120,18 @@ def cmd_publish(args) -> int:
     job = reports.load_job(root, args.id)
     extra = {k: job.get(k) for k in ("licence", "topics", "summary")}
     extra.update({k: getattr(args, k) for k in ("title", "summary", "licence") if getattr(args, k)})
-    target = reports.publish(root, args.id, reviewer=args.reviewer, source_extra=extra)
+    entity_map = json.loads(Path(args.entities).read_text(encoding="utf-8")) if args.entities else None
+    target = reports.publish(root, args.id, reviewer=args.reviewer, source_extra=extra, entity_map=entity_map)
     print(f"published {target.relative_to(root)}")
+    left = reports.load_job(root, args.id).get("unlinked_entities") or []
+    if left:
+        print(f"left off the graph (not in the base or the entity map): {', '.join(left)}")
     print(json.dumps(kb.stats(kb.load(root))))
+    return 0
+
+
+def cmd_entities(args) -> int:
+    print(json.dumps(reports.entity_names(_root(args), args.id), indent=2, ensure_ascii=False))
     return 0
 
 
@@ -162,9 +172,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rest", choices=("keep", "drop"))
     p.add_argument("--edits", help='JSON file: {"c004": {"text": "...", "horizon": "2030"}}')
     p.set_defaults(fn=cmd_decide)
+    p = sub.add_parser("entities", help="entity names in the kept candidates: known ones and new ones")
+    p.add_argument("id")
+    p.set_defaults(fn=cmd_entities)
     p = sub.add_parser("publish")
     p.add_argument("id")
     p.add_argument("--reviewer", required=True)
+    p.add_argument("--entities", help='entity map JSON: {"map": {"name": "id" or null}, "new": {"id": {"name", "type", "aliases"}}}')
     p.add_argument("--title", help="the report's real title, when the watch list only knew its edition key")
     p.add_argument("--summary")
     p.add_argument("--licence")
