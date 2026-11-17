@@ -397,6 +397,17 @@ in, instead of waiting for longer histories.
 - **The fund trades a stretched pair only when that figure is above zero, and
   sizes by it.** Before this, it needed the US backtest alone to be positive, so
   pairs with no US contract could never trade.
+- **A signal needs the plain price ratio to agree (2026-11-17).** The hedged
+  score must pass ±2 and the plain price ratio's own score must pass ±1.5 the
+  same way. On 48-98 sessions the hedge ratio fitted to the copper pairs shrank
+  to 0.05-0.29, so their scores were 87-94% correlated with copper's alone, and
+  three open "pair" signals were one bet on copper. On 1997-2026 FRED oil
+  prices the check kept 84-92% of signals and raised the average per signal on
+  both pairs (Brent/WTI +1.52% to +1.64%, WTI/gas +2.82% to +3.47%). The metal
+  pairs have too little history to test it. Exits are unchanged.
+- **Legs stay equal money.** Sizing them by the hedge ratio did no better on
+  the 1997-2026 oil pairs (Brent/WTI the same; WTI/gas +2.1% against +2.8% per
+  trade), and a hedge ratio near zero would make a copper pair a copper bet.
 
 ## Models
 

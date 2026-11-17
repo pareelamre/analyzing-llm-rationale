@@ -422,13 +422,63 @@ class LedgerTests(unittest.TestCase):
     def test_simulated_trades_pay_the_spread_move_net_of_costs(self):
         trades = cp.simulate(
             [date(2026, 1, d) for d in range(1, 4)], np.log([100.0, 100.0, 100.0]), np.log([1.0, 1.0, 1.0]),
-            [{"i": 1, "date": date(2026, 1, 2), "beta": 1.0, "spread": 0.05, "z": 2.5},
-             {"i": 2, "date": date(2026, 1, 3), "beta": 1.0, "spread": 0.0, "z": 0.1}],
+            [{"i": 1, "date": date(2026, 1, 2), "beta": 1.0, "spread": 0.05, "z": 2.5, "z_ratio": 2.5},
+             {"i": 2, "date": date(2026, 1, 3), "beta": 1.0, "spread": 0.0, "z": 0.1, "z_ratio": 0.1}],
         )
         self.assertEqual(trades[0]["status"], "reverted")
         # Entry spread 0.05, exit spread log(100) - log(1); the trade is short the spread.
         expected = -1 * (np.log(100) - 0.05) / 2 - 2 * cp.COST_PER_SIDE
         self.assertAlmostEqual(trades[0]["spread_return"], expected, places=6)
+
+
+def _loose(n=100, seed=0, drop=0.06):
+    """Two loosely tied prices that fall together on the last session: the hedge shrinks toward zero."""
+    rng = np.random.default_rng(seed)
+    common = np.cumsum(rng.normal(0, 0.004, n))
+    lg = np.log(2400) + common + np.cumsum(rng.normal(0, 0.012, n))
+    ls = np.log(30) + common + np.cumsum(rng.normal(0, 0.012, n))
+    lg[-1] -= drop
+    ls[-1] -= drop
+    return np.exp(lg), np.exp(ls)
+
+
+class RatioCheckTests(unittest.TestCase):
+    def test_a_signal_needs_the_price_ratio_stretched_the_same_way(self):
+        self.assertTrue(cp.confirmed(-2.5, -1.6))
+        self.assertTrue(cp.confirmed(2.0, cp.RATIO_CONFIRM_Z))
+        self.assertFalse(cp.confirmed(-2.5, -1.0))  # the ratio is not stretched enough
+        self.assertFalse(cp.confirmed(-2.5, 2.0))  # the ratio points the other way
+        self.assertFalse(cp.confirmed(-1.9, -3.0))  # the hedged score is not past the line
+
+    def test_both_prices_falling_under_a_shrunk_hedge_is_not_a_signal(self):
+        days = _weekdays(date(2026, 6, 1), 100)
+        gold, silver = _loose()
+        row = cp.track_pair(GOLD_SILVER, _series(days, gold, silver))
+
+        self.assertLess(row["beta"], 0.1)
+        self.assertLess(row["z"], -cp.ENTRY_Z)  # the hedged score is mostly gold's own fall
+        self.assertLess(abs(row["z_ratio"]), cp.RATIO_CONFIRM_Z)
+        self.assertEqual((row["stretched"], row["unconfirmed"], row["rich"]), (False, True, None))
+
+        now = datetime.combine(days[-1] + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+        payload, ledger = cp.run(_series(days, gold, silver), [], now)
+        self.assertEqual([e for e in ledger if e["pair"] == "gold-silver"], [])
+        self.assertEqual(payload["rule"]["ratio_confirm_z"], cp.RATIO_CONFIRM_Z)
+
+    def test_a_shock_to_the_gap_moves_the_ratio_too(self):
+        days = _weekdays(date(2025, 6, 2), 200)
+        gold, silver = _cointegrated(200, shock_at=199)
+        row = cp.track_pair(GOLD_SILVER, _series(days, gold, silver))
+        self.assertGreater(row["z_ratio"], cp.RATIO_CONFIRM_Z)
+        self.assertEqual((row["stretched"], row["unconfirmed"]), (True, False))
+
+    def test_the_replay_skips_a_session_the_ratio_does_not_confirm(self):
+        days = [date(2026, 1, d) for d in range(1, 5)]
+        hist = [{"i": 1, "date": days[1], "beta": 0.2, "spread": 0.05, "z": -2.5, "z_ratio": 0.4},
+                {"i": 2, "date": days[2], "beta": 0.2, "spread": 0.05, "z": -2.6, "z_ratio": -1.7},
+                {"i": 3, "date": days[3], "beta": 0.2, "spread": 0.0, "z": 0.1, "z_ratio": 0.1}]
+        trades = cp.simulate(days, np.log([100.0] * 4), np.log([1.0] * 4), hist)
+        self.assertEqual([t["entry_date"] for t in trades], [days[2].isoformat()])
 
 
 class TickScheduleTests(unittest.TestCase):
