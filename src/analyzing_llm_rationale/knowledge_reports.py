@@ -464,8 +464,26 @@ def unread(root: Path, job: Mapping[str, Any]) -> int:
     return sum(1 for c in _read_jsonl(where / "chunks.jsonl") if worth_reading(c) and c["id"] not in done)
 
 
+def _gist(text: str) -> tuple[frozenset, frozenset]:
+    words = [w for w in knowledge.WORD.findall(str(text).lower()) if w not in knowledge.STOP]
+    return (frozenset(w for w in words if not w[0].isdigit()),
+            frozenset(n.replace(",", "") for n in knowledge.NUMBER.findall(str(text))))
+
+
+def same_claim(a: str, b: str, *, overlap: float = 0.6) -> bool:
+    """Two wordings of one claim: the same numbers and mostly the same words.
+
+    Passages overlap, and the model states a range twice (once per bound), so a report yields
+    many near-copies of a claim.
+    """
+    (wa, na), (wb, nb) = _gist(a), _gist(b)
+    if na != nb or not wa or not wb:
+        return False
+    return len(wa & wb) / len(wa | wb) >= overlap
+
+
 def finish(root: Path, job: dict) -> list[dict]:
-    """Collect the read passages' claims into numbered candidates for review."""
+    """Collect the read passages' claims into numbered candidates for review, without near-copies."""
     where = folder(root, job["id"])
     seen: set[str] = set()
     candidates: list[dict] = []
@@ -477,7 +495,7 @@ def finish(root: Path, job: dict) -> list[dict]:
         local: dict[int, str] = {}
         for i, claim in enumerate(row.get("claims") or []):
             key = knowledge.normalize(claim["text"])
-            if key in seen:
+            if key in seen or any(same_claim(claim["text"], c["text"]) for c in candidates[-40:]):
                 continue
             seen.add(key)
             cid = f"c{len(candidates) + 1:03d}"

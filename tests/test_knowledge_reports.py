@@ -192,6 +192,14 @@ class PassageTests(unittest.TestCase):
         self.assertIsNone(url)
         self.assertEqual(len(options), 2)
 
+    def test_near_copies_of_a_claim_are_one_candidate(self):
+        self.assertTrue(reports.same_claim("Remote workdays could reduce car oil consumption by 2% to 6%.",
+                                           "Three more remote workdays could cut car oil consumption by 2% to 6%."))
+        self.assertFalse(reports.same_claim("Remote workdays could reduce car oil use by 2% to 6%.",
+                                            "Remote workdays could reduce car oil use by 20%."))
+        self.assertFalse(reports.same_claim("Speed limits cut oil use by 1% to 6%.",
+                                            "Public transport cuts national oil use by 1% to 6%."))
+
     def test_the_night_window_wraps_midnight(self):
         self.assertTrue(reports.in_window("23-7", datetime(2026, 11, 17, 23, 30)))
         self.assertTrue(reports.in_window("23-7", datetime(2026, 11, 18, 6, 59)))
