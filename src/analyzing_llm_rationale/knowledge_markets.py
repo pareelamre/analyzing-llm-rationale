@@ -9,8 +9,8 @@ Readers in the same shape as ``knowledge_tables`` (no model; checked before writ
   (COMEX, NYMEX) does not answer our crawler, so positioning comes from the regulator's public
   API, which is US government data.
 * ``shfe-futures``: Shanghai Futures Exchange settlement prices for copper, aluminium, zinc,
-  nickel, gold and silver: the most traded contract and the quarterly delivery months, from the
-  exchange's public daily data. A futures price is what the market pays today for delivery
+  nickel, gold and silver: the most traded contract, December contracts and the farthest month
+  listed, from the exchange's public daily data. A futures price is what the market pays today for delivery
   later, not a forecast; claims say so.
 
 Exchanges checked on 2026-11-17 that refuse the crawler: CME (no answer), ICE data (403), MCX (403),
@@ -160,7 +160,6 @@ SHFE_PRODUCTS = {
     "au_f": ("gold", "CNY/g", "yuan a gram", ["gold"]),
     "ag_f": ("silver", "CNY/kg", "yuan a kilogram", ["silver"]),
 }
-QUARTER_MONTHS = ("03", "06", "09", "12")
 
 
 def _shfe_day(crawler: watch.Crawler, day: date) -> Optional[list[dict]]:
@@ -222,8 +221,10 @@ def _shfe_read(info: Mapping[str, Any], crawler: watch.Crawler, today: date, cor
         if not contracts:
             continue
         active = max(contracts, key=lambda c: c[2])[0]
+        farthest = max(contracts)[0]
         for month, settle, oi in sorted(contracts):
-            if month != active and month[5:] not in QUARTER_MONTHS:
+            # A few points per metal, so one exchange does not crowd a question's evidence.
+            if month not in (active, farthest) and not month.endswith("-12"):
                 continue
             when = datetime.strptime(month, "%Y-%m").strftime("%B %Y")
             price = f"{settle:,.2f}".rstrip("0").rstrip(".") if unit == "CNY/g" else f"{settle:,.0f}"
@@ -239,12 +240,12 @@ def _shfe_read(info: Mapping[str, Any], crawler: watch.Crawler, today: date, cor
               "licence": "Exchange daily data published on its public website.", "kind": "table",
               "series": "shfe-futures", "topics": ["copper", "aluminium", "zinc", "nickel", "gold", "silver", "futures"],
               "summary": "Settlement prices of Shanghai Futures Exchange base and precious metal futures: the most "
-                         "traded contract and the quarterly delivery months.",
+                         "traded contract, December contracts and the farthest month listed.",
               "extracted_by": "knowledge_markets (no model) from the SHFE daily data file", "added": today.isoformat()}
     return tables.Edition(source, claims, None, entities=ENTITIES)
 
 
 READERS = {
     "cftc-cot": tables.Reader(_cot_ident, _cot_read, COT_SCENARIO, 7, keep=1),
-    "shfe-futures": tables.Reader(_shfe_ident, _shfe_read, SHFE_SCENARIO, 18, keep=4),
+    "shfe-futures": tables.Reader(_shfe_ident, _shfe_read, SHFE_SCENARIO, 10, keep=4),
 }

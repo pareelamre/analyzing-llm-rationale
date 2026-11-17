@@ -137,11 +137,11 @@ class ShfeTests(unittest.TestCase):
         sid, info = reader.ident({}, web, self.corpus)
         return sid, reader.read(info, web, TODAY, self.corpus)
 
-    def test_most_traded_and_quarterly_contracts_of_six_metals(self):
+    def test_most_traded_december_and_farthest_contracts_of_six_metals(self):
         sid, edition = self.read(FakeExchange())
         self.assertEqual(sid, "shfe-2026-11-13-futures")
         copper = [c for c in edition.claims if c["metric"] == "SHFE copper futures price"]
-        self.assertEqual([c["horizon"] for c in copper], ["2026-12", "2027-01", "2027-03", "2027-06", "2027-09"])
+        self.assertEqual([c["horizon"] for c in copper], ["2026-12", "2027-01", "2027-09"])
         active = next(c for c in copper if c["horizon"] == "2027-01")
         self.assertIn("the most traded contract", active["text"])
         self.assertEqual((active["kind"], active["unit"], active["geo"]), ("estimate", "CNY/t", "China"))

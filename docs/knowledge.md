@@ -115,7 +115,7 @@ Two jobs in the data repo keep the base growing toward what Foresea is asked:
   silver and copper and NYMEX WTI, Henry Hub, RBOB, ULSD, platinum and palladium (money managers'
   net position, its share of open interest, and the one- and four-week change; only the latest
   week is kept), and Shanghai Futures Exchange settlements for copper, aluminium, zinc, nickel,
-  gold and silver (most traded contract plus quarterly months, as `estimate` claims that say they
+  gold and silver (most traded, December and farthest contracts, as `estimate` claims that say they
   are futures prices, not forecasts; the last four weeks are kept, so the newest price shows with
   the previous ones as "earlier"). CME's own site (COMEX, NYMEX) does not answer the crawler, and
   ICE data, MCX, NSE and LBMA prices refuse it, so COMEX prices are not in the base; LME allows
