@@ -1142,6 +1142,12 @@
     .cpt-record { border-top: 1px solid var(--border); display: grid; font-size: 11.5px; gap: 4px 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 10px 0 0; padding-top: 8px; }
     @media (max-width: 520px) { .cpt-record { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .cpt-early { color: var(--caution); font-size: 11.5px; line-height: 1.4; margin: 2px 0 4px; }
+    .cpt-long { border-top: 1px solid var(--border); font-size: 12px; line-height: 1.45; margin: 10px 0 0; padding-top: 8px; }
+    .cpt-long p { margin: 2px 0 4px; }
+    .cpt-long-head { color: var(--text-dim); font-size: 10.5px; font-weight: 600; letter-spacing: .03em; }
+    .cpt-long details summary { color: var(--text-dim); cursor: pointer; font-size: 11.5px; }
+    .cpt-long ul { list-style: disc; margin: 4px 0 0; padding-left: 16px; }
+    .cpt-long li + li { margin-top: 4px; }
     .cpt-record b { display: block; font-size: 12.5px; }
     .cpt-dim { color: var(--text-dim); }
     .cpt-tip { background: none; border: 0; border-bottom: 1px dotted currentColor; color: inherit; cursor: help; font: inherit; padding: 0; position: relative; }
@@ -7092,6 +7098,43 @@ function _cptPlural(n, word) {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
+function _cptMonth(ym) {
+  const [y, m] = String(ym || '').split('-').map(Number);
+  return y && m ? new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
+}
+
+function _cptOrdinal(n) {
+  const tail = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th');
+  return `${n}${tail}`;
+}
+
+const _CPT_CAUSE = { temporary: 'temporary cause', lasting: 'lasting cause', mixed: 'mixed causes' };
+
+// The pair's place in its long history (pair_history): where the price ratio sits against the
+// last ten years of monthly prices, what drove it there, and the past extremes with their stories.
+function _cptLong(p, legs) {
+  const lr = p.long_run;
+  if (!lr) return '';
+  const years = Math.round((Number(lr.window_months) || 120) / 12);
+  const pct = Math.max(1, Math.min(99, Math.round(Number(lr.percentile) * 100)));
+  const fmt = x => Number(x).toPrecision(4);
+  const side = Number(lr.z) > 0 ? 'high' : 'low';
+  const a = lr.analogues;
+  let text = `The ${legs[0]}/${legs[1]} price ratio sits at the ${_cptOrdinal(pct)} percentile of its last ${years} years (usual ${fmt(lr.usual)}, range ${fmt(lr.low)} to ${fmt(lr.high)}).`;
+  if (a && a.back_12m != null) text += ` After past months this ${side}, it moved back toward usual within a year ${Math.round(a.back_12m * 100)}% of the time.`;
+  if (p.stretched && lr.tide === 'toward') text += ` Today's signal bets on a move toward that ${years}-year average.`;
+  if (p.stretched && lr.tide === 'away') text += ` Today's signal bets on a move away from that ${years}-year average.`;
+  const why = lr.story
+    ? `<p><b>Why now (${escHtml(_CPT_CAUSE[lr.story.driver] || lr.story.driver)}):</b> ${escHtml(lr.story.cause)}</p>` : '';
+  const past = (lr.episodes || []).filter(e => e.story && e.story.ended).slice().reverse();
+  const pastHtml = past.length
+    ? `<details><summary>Past extremes and what drove them (${past.length})</summary><ul>${past.map(e =>
+      `<li><b>${escHtml(_cptMonth(e.peak))}, ratio ${e.side} (${escHtml(_CPT_CAUSE[e.story.driver] || e.story.driver)}):</b> ${escHtml(e.story.cause)} ${escHtml(e.story.ended)}</li>`).join('')}</ul></details>`
+    : '';
+  const tip = `Monthly prices from ${_cptMonth(lr.data_from)} to ${_cptMonth(lr.data_to)} (${lr.source}), with today's ratio carried forward by this pair's daily prices. A pair counts as far out at ±1.5 standard deviations from its ${years}-year average. The stories are Foresea's summaries of public sources.`;
+  return `<div class="cpt-long"><div class="cpt-long-head">${_cptTip('Long run', tip)}</div><p>${escHtml(text)}</p>${why}${pastHtml}</div>`;
+}
+
 // The pair's score over its last sessions. The shaded band is the usual range (inside
 // ±entryZ); the line leaving it is what opens a signal. Only the half the score is in gets
 // a label, and the note names that half first, so the chart never reads as the opposite
@@ -7229,6 +7272,7 @@ function _cptCard(p, ctx) {
     + (p.early ? `<p class="cpt-early">Early read on ${_cptPlural(Number(p.sessions), 'session')}. The usual range uses all of them and firms up as sessions come in (full read at ${ctx.zWindow}).</p>` : '')
     + _cptBack(p, legs, zWindow)
     + _cptSpark(p, entryZ, legs)
+    + _cptLong(p, legs)
     + `<dl class="cpt-facts">${facts}</dl><dl class="cpt-record">${record}</dl></article>`;
 }
 
@@ -7244,6 +7288,14 @@ function _cptSignalTable(events, labels, ctx) {
       + `<td>${Number(e.entry_z) >= 0 ? '+' : '−'}${Math.abs(Number(e.entry_z)).toFixed(2)}</td><td>${escHtml(status(e.status))}${e.exit_date ? ' · ' + escHtml(_cptDay(e.exit_date)) : ''}</td>`
       + `<td>${e.sessions ?? '—'}</td><td>${e.spread_return != null ? _cptPct(e.spread_return) : '—'}</td></tr>`).join('')
     + `</tbody></table></div>`;
+}
+
+// How past extremes ended, by the kind of cause behind them (pair_history.driver_record).
+function _cptRecord(rec) {
+  const t = rec?.temporary, l = rec?.lasting;
+  if (!t?.episodes && !l?.episodes) return '';
+  const part = (r, what) => r?.episodes ? `${what} in ${r.back} of ${r.episodes}` : '';
+  return ` Across these pairs, extremes back to normal within two years: ${[part(t, 'temporary causes (an outage, a storm, a squeeze, a crisis)'), part(l, 'lasting ones (a change in how a commodity is produced or used)')].filter(Boolean).join('; ')}. The stories were written afterwards, so this is context, not a tested rule.`;
 }
 
 function renderCommodityPairs(d) {
@@ -7301,6 +7353,7 @@ function renderCommodityPairs(d) {
       <li><b>Back to usual:</b> how far either commodity would have to move, with the other holding still, to bring the pair back to its usual level. It says nothing about which one will move, or when.</li>
       <li><b>Hedge:</b> how much money goes on each side, so that a move lifting both prices together cancels out and only the gap is left.</li>
       <li><b>Expected:</b> the return per signal the tracker now expects. It starts from the 2011–26 US futures test (counted as ${ctx.priorSignals} signals; zero for pairs with no US contract) and moves toward each pair's own MCX record as its signals close. The fund trades a stretched pair only when this is above zero.</li>
+      <li><b>Long run:</b> where each pair's price ratio sits against the last 10 years of monthly prices, why, and what followed past extremes.${_cptRecord(d.long_run?.driver_record)}</li>
       <li><b>Early read:</b> a pair is read from ${ctx.minSessions} sessions of prices. Until it has ${ctx.zWindow}, its score uses all of them, so it firms up as sessions come in.</li>
       <li><b>A monitor first:</b> over 2011–26 on US futures, the same rule made money on three pairs and lost on three.</li>
     </ol></div>

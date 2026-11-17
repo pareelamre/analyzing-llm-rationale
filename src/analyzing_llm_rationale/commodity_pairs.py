@@ -613,7 +613,18 @@ def update_ledger(ledger: list[dict], rows: list[dict], now: datetime) -> int:
     return added
 
 
-def run(series: dict, ledger: list[dict], now: datetime) -> tuple[dict, list[dict]]:
+def tide(z_short: Optional[float], long_run: Optional[dict]) -> Optional[str]:
+    """Whether betting the 60-session gap closes is also a bet toward the pair's 10-year average."""
+    if z_short is None or not long_run:
+        return None
+    if abs(float(long_run["z"])) < 1.0:
+        return "neutral"
+    return "toward" if (z_short > 0) == (float(long_run["z"]) > 0) else "away"
+
+
+def run(series: dict, ledger: list[dict], now: datetime, *,
+        long_run: Optional[dict] = None) -> tuple[dict, list[dict]]:
+    """``long_run`` is pair_history.contexts(): each pair's place in its long history and its stories."""
     rows = [track_pair(pair, series) for pair in PAIRS]
     update_ledger(ledger, rows, now)
     live = {}
@@ -621,9 +632,12 @@ def run(series: dict, ledger: list[dict], now: datetime) -> tuple[dict, list[dic
         events = [e for e in ledger if e["pair"] == pair["key"]]
         live[pair["key"]] = summarize(events) | {"open": sum(e["status"] == "open" for e in events)}
     public = [{k: v for k, v in row.items() if not k.startswith("_")} for row in rows]
+    long_pairs = (long_run or {}).get("pairs") or {}
     for row in public:
         if row.get("z") is not None:
             row["expected"] = expected_return(row["key"], row.get("replay") or {}, live[row["key"]])
+        if row["key"] in long_pairs:
+            row["long_run"] = {**long_pairs[row["key"]], "tide": tide(row.get("z"), long_pairs[row["key"]])}
     dated = [row["date"] for row in public if row.get("date")]
     payload = {
         "generated_at": now.astimezone(timezone.utc).isoformat(),
@@ -636,6 +650,7 @@ def run(series: dict, ledger: list[dict], now: datetime) -> tuple[dict, list[dic
             "prior_signals": PRIOR_SIGNALS,
         },
         "backtest": BACKTEST,
+        "long_run": {"driver_record": (long_run or {}).get("driver_record") or {}} if long_run else None,
         "pairs": public,
         "track_record": {
             "by_pair": live,
