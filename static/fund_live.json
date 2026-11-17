@@ -9,16 +9,16 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": 55.6694,
-      "event_model": 43.5157,
-      "pairs_model": -7.3428,
-      "put_premium": 29.0476
+      "agent_transfer": 90.0627,
+      "event_model": 44.4136,
+      "pairs_model": -7.5472,
+      "put_premium": 25.9572
     }
   },
   "by_asset_class": {
-    "commodity": 496.8816,
-    "event": 4059.9148,
-    "option": 646.3649
+    "commodity": 496.6772,
+    "event": 4095.206,
+    "option": 643.2745
   },
   "cash_usd": 4918.5287,
   "curve": [
@@ -585,11 +585,24 @@
     {
       "nav_usd": 10121.69,
       "ts": "2026-11-17T06:02:01.006256+00:00"
+    },
+    {
+      "nav_usd": 10153.6863,
+      "ts": "2026-11-17T08:01:33.000675+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [],
+    "passed": [
+      {
+        "instrument": "kalshi:KXAGICO-COMP-27Q4",
+        "reason": "no room under the fund's limits"
+      },
+      {
+        "instrument": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
+        "reason": "no room under the fund's limits"
+      }
+    ],
     "seeded": null,
     "signals": 4,
     "skipped": [
@@ -604,11 +617,11 @@
         "z": -3.237
       }
     ],
-    "traded": false,
-    "window": "11:32 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-17T06:02:01.006256+00:00",
+  "generated_at": "2026-11-17T08:01:33.000675+00:00",
   "guard": {
     "board": 24,
     "checked": 24,
@@ -648,7 +661,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10121.69,
+  "nav_usd": 10153.6863,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -700,15 +713,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 330.95,
+      "mark": 330.35,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -1.803,
+      "pnl_usd": -1.3427,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 250.3092,
+      "value_usd": 250.7695,
       "venue": "mcx"
     },
     {
@@ -721,15 +734,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1279.65,
+      "mark": 1276.2,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -5.5398,
+      "pnl_usd": -6.2045,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 246.5724,
+      "value_usd": 245.9076,
       "venue": "mcx"
     },
     {
@@ -868,15 +881,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.945,
+      "mark": 0.947,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 60.6093,
+      "pnl_usd": 61.5072,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 424.2648,
+      "value_usd": 425.1627,
       "venue": "polymarket"
     },
     {
@@ -910,15 +923,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06699999999999995,
+      "mark": 0.07099999999999995,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 77.3848,
+      "pnl_usd": 111.7781,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 576.0868,
+      "value_usd": 610.4801,
       "venue": "polymarket"
     },
     {
@@ -931,15 +944,15 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2113.844,
+      "mark": 2099.7599999999998,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 10.7566,
+      "pnl_usd": 7.907,
       "quantity": 19.041196356558505,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 427.6896,
+      "value_usd": 424.84,
       "venue": "nse_fo"
     },
     {
@@ -952,15 +965,15 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 719.228,
+      "mark": 718.436,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 18.291,
+      "pnl_usd": 18.0502,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 218.6753,
+      "value_usd": 218.4345,
       "venue": "nse_fo"
     }
   ],
@@ -1018,7 +1031,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 1.217,
+  "return_pct": 1.537,
   "scorecard": {
     "retired_records": [
       {
