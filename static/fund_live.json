@@ -9,16 +9,16 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": 23.6464,
-      "event_model": 59.9275,
-      "pairs_model": -4.0405,
-      "put_premium": 4.9013
+      "agent_transfer": 49.4413,
+      "event_model": 41.0382,
+      "pairs_model": -5.3907,
+      "put_premium": 15.3351
     }
   },
   "by_asset_class": {
-    "commodity": 500.1839,
-    "event": 4044.3036,
-    "option": 622.2186
+    "commodity": 498.8336,
+    "event": 4051.2092,
+    "option": 632.6524
   },
   "cash_usd": 4918.5287,
   "curve": [
@@ -561,6 +561,10 @@
     {
       "nav_usd": 10085.2348,
       "ts": "2026-11-17T02:12:14.934531+00:00"
+    },
+    {
+      "nav_usd": 10101.2239,
+      "ts": "2026-11-17T04:01:07.958079+00:00"
     }
   ],
   "cycle": {
@@ -581,10 +585,10 @@
       }
     ],
     "traded": false,
-    "window": "07:42 IST is outside the trading hours"
+    "window": "09:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-17T02:12:14.934531+00:00",
+  "generated_at": "2026-11-17T04:01:07.958079+00:00",
   "guard": {
     "board": 24,
     "checked": 24,
@@ -601,18 +605,21 @@
     "holiday_list": true,
     "venues": {
       "bse_fo": {
-        "open": false,
-        "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+        "open": true,
+        "why": ""
       },
       "mcx": {
-        "open": false,
-        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+        "open": true,
+        "why": ""
       },
       "nse_fo": {
-        "open": false,
-        "why": "NSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+        "open": true,
+        "why": ""
       }
     }
+  },
+  "knowledge": {
+    "pairs": {}
   },
   "limits": {
     "asset_class": 0.4,
@@ -621,7 +628,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10085.2348,
+  "nav_usd": 10101.2239,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -673,15 +680,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 327.55,
+      "mark": 327.15,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 0.8056,
+      "pnl_usd": 1.1125,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 252.9178,
+      "value_usd": 253.2247,
       "venue": "mcx"
     },
     {
@@ -694,15 +701,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1283.25,
+      "mark": 1274.65,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -4.8461,
+      "pnl_usd": -6.5032,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 247.2661,
+      "value_usd": 245.609,
       "venue": "mcx"
     },
     {
@@ -799,15 +806,15 @@
       "instrument_id": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
       "kind": "binary",
       "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
-      "mark": 0.88,
+      "mark": 0.84,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": -4.2734,
+      "pnl_usd": -21.3669,
       "quantity": 427.3382285629804,
       "side": "NO",
       "underlying": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
-      "value_usd": 376.0576,
+      "value_usd": 358.9641,
       "venue": "kalshi"
     },
     {
@@ -841,15 +848,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.953,
+      "mark": 0.949,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 64.2009,
+      "pnl_usd": 62.4051,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 427.8565,
+      "value_usd": 426.0606,
       "venue": "polymarket"
     },
     {
@@ -883,15 +890,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06399999999999995,
+      "mark": 0.06699999999999995,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 51.5899,
+      "pnl_usd": 77.3848,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 550.2919,
+      "value_usd": 576.0868,
       "venue": "polymarket"
     },
     {
@@ -904,15 +911,15 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2028.6119999999999,
+      "mark": 2062.937,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": -6.4883,
+      "pnl_usd": 0.4567,
       "quantity": 19.041196356558505,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 410.4448,
+      "value_usd": 417.3897,
       "venue": "nse_fo"
     },
     {
@@ -925,15 +932,15 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 696.529,
+      "mark": 708.0039999999999,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 11.3896,
+      "pnl_usd": 14.8784,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 211.7738,
+      "value_usd": 215.2627,
       "venue": "nse_fo"
     }
   ],
@@ -991,7 +998,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 0.852,
+  "return_pct": 1.012,
   "scorecard": {
     "retired_records": [
       {
