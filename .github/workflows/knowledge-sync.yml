@@ -1,0 +1,80 @@
+name: Knowledge base sync
+
+# Copies the private knowledge base (pareelamre/foresea-knowledge) into the private
+# models bucket that Cloud Run mounts at /app/models, so the live /predict server reads
+# it at KNOWLEDGE_DIR=/app/models/knowledge (set in docker.yml).
+#
+# The data never goes into the Docker image: docker.yml also pushes the image to GHCR,
+# and some reports in the base are licensed. For the same reason this log prints only
+# counts, never file contents or validation messages.
+#
+# The server notices changed files within KNOWLEDGE_RESTAT_S (5 minutes), with no
+# redeploy. Run this by hand after adding reports to the base, or wait for the schedule.
+# A base that fails validation is not copied, so the server keeps the last good one.
+
+on:
+  schedule:
+    - cron: "41 */3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: knowledge-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Only ever this prefix: the sync deletes objects under it that the base no longer has,
+  # and the rest of the bucket holds the RAG embedding model.
+  KNOWLEDGE_BUCKET_PATH: gs://brave-drive-471109-d9-models/knowledge
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      # A step's `if` cannot read secrets or its own env, so the job carries this flag.
+      HAS_KNOWLEDGE_TOKEN: ${{ secrets.KNOWLEDGE_REPO_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the knowledge base
+        if: env.HAS_KNOWLEDGE_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: pareelamre/foresea-knowledge
+          token: ${{ secrets.KNOWLEDGE_REPO_TOKEN }}
+          path: knowledge-base
+          persist-credentials: false
+
+      - name: Stage and validate what the server reads
+        run: |
+          if [ ! -f knowledge-base/entities.jsonl ]; then
+            echo "::error title=Knowledge base missing::No KNOWLEDGE_REPO_TOKEN secret, or it cannot read pareelamre/foresea-knowledge."
+            exit 1
+          fi
+          # Only the files the server loads: no git history, local caches or notes.
+          mkdir -p staged
+          cp knowledge-base/entities.jsonl staged/
+          cp -R knowledge-base/sources staged/
+          if ! python3 scripts/knowledge.py --dir staged validate > validate.txt; then
+            echo "::error title=Knowledge base invalid::$(($(wc -l < validate.txt) - 1)) problem(s); run scripts/knowledge.py validate locally. Not synced."
+            exit 1
+          fi
+          echo "Valid: $(tail -n 1 validate.txt)"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Copy it to the models bucket
+        run: |
+          case "$KNOWLEDGE_BUCKET_PATH" in
+            gs://*/knowledge) ;;
+            *) echo "::error::refusing to sync to $KNOWLEDGE_BUCKET_PATH"; exit 1 ;;
+          esac
+          gcloud storage rsync staged "$KNOWLEDGE_BUCKET_PATH" --recursive --checksums-only \
+            --delete-unmatched-destination-objects --no-user-output-enabled
+          echo "Synced $(find staged -type f | wc -l | tr -d ' ') files to $KNOWLEDGE_BUCKET_PATH."

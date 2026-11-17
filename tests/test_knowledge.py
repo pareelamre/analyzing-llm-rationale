@@ -213,6 +213,74 @@ class EvidenceTests(BaseCase):
             self.assertIsNone(kb.shared_index())
 
 
+class SharedIndexTests(BaseCase):
+    """On the live server KNOWLEDGE_DIR is a Cloud Storage mount, so files are re-checked on a timer."""
+
+    def setUp(self):
+        super().setUp()
+        kb._shared.clear()
+
+    def tearDown(self):
+        kb._shared.clear()
+        super().tearDown()
+
+    def _add_source(self, sid="acme-2026-09-gadgets"):
+        folder = self.root / "sources" / sid
+        _write(folder / "source.json", {"id": sid, "title": "Gadget Note", "publisher": "Acme Research",
+                                        "published": "2026-09-01"})
+        _write(folder / "claims.jsonl", [{"id": f"{sid}:c001", "kind": "fact", "page": 1,
+                                          "text": "Gadget output doubled in 2026.", "entities": ["gadgets"]}])
+        _write(folder / "relations.jsonl", [])
+        _write(folder / "chunks.jsonl", [])
+        return folder
+
+    def test_files_are_not_rechecked_inside_the_window(self):
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": str(self.root), "KNOWLEDGE_RESTAT_S": "300"}):
+            first = kb.shared_index()
+            self._add_source()
+            with mock.patch.object(Path, "rglob", side_effect=AssertionError("re-stat inside the window")):
+                self.assertIs(kb.shared_index(), first)
+            self.assertEqual(len(first.corpus.sources), 2)
+
+    def test_a_new_source_is_picked_up_once_the_window_passes(self):
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": str(self.root), "KNOWLEDGE_RESTAT_S": "0"}):
+            first = kb.shared_index()
+            self.assertIs(kb.shared_index(), first)  # nothing changed: no rebuild
+            self._add_source()
+            second = kb.shared_index()
+            self.assertIsNot(second, first)
+            self.assertEqual(len(second.corpus.sources), 3)
+
+    def test_a_removed_file_is_noticed_even_when_the_newest_mtime_is_unchanged(self):
+        folder = self._add_source()
+        for path in self.root.rglob("*.json*"):
+            os.utime(path, (1_700_000_000, 1_700_000_000))
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": str(self.root), "KNOWLEDGE_RESTAT_S": "0"}):
+            first = kb.shared_index()
+            for path in folder.iterdir():
+                path.unlink()
+            folder.rmdir()
+            second = kb.shared_index()
+            self.assertIsNot(second, first)
+            self.assertEqual(len(second.corpus.sources), 2)
+
+    def test_a_bad_window_setting_falls_back_to_five_minutes(self):
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_RESTAT_S": "soon"}):
+            self.assertEqual(kb._restat_seconds(), 300.0)
+
+    def test_forecast_evidence_never_carries_report_passages(self):
+        # /predict evidence is public; report passages are often licensed and stay in the base.
+        passages = [c["text"] for c in self.corpus.chunks]
+        self.assertTrue(passages)
+        with mock.patch.dict(os.environ, {"KNOWLEDGE_DIR": str(self.root)}):
+            from analyzing_llm_rationale import server
+            articles = server._knowledge_articles("Will widget demand pass 110 million units by 2030?")
+        self.assertTrue(articles)
+        for article in articles:
+            for value in article.values():
+                for passage in passages:
+                    self.assertNotIn(passage, str(value))
+
 class AgentFeedTests(BaseCase):
     def test_a_brief_is_compact_cited_and_current(self):
         rows = self.index.brief("widget demand by 2030", k=2)
