@@ -9,15 +9,15 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": 81.4644,
+      "agent_transfer": 90.0627,
       "event_model": 55.6542,
-      "pairs_model": -3.4507,
+      "pairs_model": -3.5016,
       "put_premium": 31.7312
     }
   },
   "by_asset_class": {
-    "commodity": 500.7736,
-    "event": 4097.8482,
+    "commodity": 500.7227,
+    "event": 4106.4465,
     "option": 649.0485
   },
   "cash_usd": 4918.5287,
@@ -621,13 +621,17 @@
     {
       "nav_usd": 10166.199,
       "ts": "2026-11-17T18:01:00.505680+00:00"
+    },
+    {
+      "nav_usd": 10174.7464,
+      "ts": "2026-11-17T19:32:45.207274+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 2,
+    "signals": 0,
     "skipped": [
       {
         "pair": "copper-gold",
@@ -638,24 +642,34 @@
         "pair": "copper-zinc",
         "reason": "stretched at z=-3.24 but its expected return is 0.0% per signal",
         "z": -3.237
+      },
+      {
+        "instrument": "mcx:COPPER",
+        "label": "Copper (MCX COPPER)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:ALUMINI",
+        "label": "Aluminium (MCX ALUMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
-    "traded": false,
-    "window": "23:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-17T18:01:00.505680+00:00",
+  "generated_at": "2026-11-17T19:32:45.207274+00:00",
   "guard": {
     "board": 30,
-    "checked": 0,
+    "checked": 30,
     "checker": "Open-Jev 2B (Qwen3.5-2B base)",
     "days_recorded": 9,
     "dropped": [],
     "flags": [],
     "kind": "checker",
-    "markets": 32,
+    "markets": 66,
     "mode": "live",
-    "unchecked": 30
+    "unchecked": 0
   },
   "hours": {
     "holiday_list": true,
@@ -665,8 +679,8 @@
         "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
       },
       "mcx": {
-        "open": true,
-        "why": ""
+        "open": false,
+        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       },
       "nse_fo": {
         "open": false,
@@ -846,7 +860,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10166.199,
+  "nav_usd": 10174.7464,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -898,15 +912,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 325.7,
+      "mark": 325.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 2.2381,
+      "pnl_usd": 2.7784,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 254.3503,
+      "value_usd": 254.8906,
       "venue": "mcx"
     },
     {
@@ -919,15 +933,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1279.05,
+      "mark": 1276.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -5.6889,
+      "pnl_usd": -6.28,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 246.4233,
+      "value_usd": 245.8321,
       "venue": "mcx"
     },
     {
@@ -1108,15 +1122,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06999999999999995,
+      "mark": 0.07099999999999995,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 103.1798,
+      "pnl_usd": 111.7781,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 601.8818,
+      "value_usd": 610.4801,
       "venue": "polymarket"
     },
     {
@@ -1216,7 +1230,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 1.662,
+  "return_pct": 1.747,
   "scorecard": {
     "retired_records": [
       {
