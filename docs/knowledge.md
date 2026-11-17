@@ -96,6 +96,18 @@ Two jobs in the data repo keep the base growing toward what Foresea is asked:
   how to spot a new edition on each listing page. New editions go to `inbox.jsonl` and their files
   are downloaded for reading. The first check of a publisher is a baseline, so adding one never
   floods the inbox.
+- **Table readers** (`scripts/knowledge_tables.py`, daily after the watch): for publishers whose
+  forecasts are a table, a reader turns the current edition into claims with no model involved:
+  EIA's Short-Term Energy Outlook (Brent, WTI, Henry Hub, US gasoline and diesel, power prices,
+  US and world oil and gas output; yearly averages plus December values), the Fed's Summary of
+  Economic Projections (FOMC medians, with the previous projection beside each), ECB staff
+  projections, and the IMF World Economic Outlook for 13 economies (DataMapper API). Each reader
+  uses one scenario name across editions, so a new edition supersedes the last on the same metric
+  and year while other publishers stay beside it. Nothing is written unless enough values were
+  found, each is in a plausible range, and none moved more than 60% (8 points for rates) from the
+  publisher's previous edition; values the publisher already stated in the base are skipped. A
+  failed reader is a run warning and leaves the base untouched. The fund's crude/natural-gas pair
+  view now comes from the monthly EIA forecast.
 - **Crawler rules:** honest user agent (`ForeseaKnowledgeWatch/1.0`), robots.txt obeyed (RFC 9309:
   an unavailable robots.txt means no rules, a 401/403 means the site refuses us), 1.5 s between
   requests to a host, at most five new editions per source per run. A site that blocks the
