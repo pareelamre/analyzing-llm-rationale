@@ -7,7 +7,9 @@ Each run:
      closes and 11:00 IST gold (Upstox) and gold, platinum and rupee snapshots (fawazahmed0
      currency API) after the last stored day (no account or token for any of them),
   3. advances open signals through new sessions and opens signals on the newest session,
-  4. writes the public payload served at ``GET /markets/commodity-pairs``.
+  4. places each pair in its long history (pair_history: IMF monthly metals and FRED oil and
+     gas from FRED) with the stories in data/pair_episodes.json; a failed fetch leaves it out,
+  5. writes the public payload served at ``GET /markets/commodity-pairs``.
 
 Outputs (committed back to the repo by the workflow):
   - ``data/commodity_prices.jsonl``: MCX front-month prices and the snapshot rows,
@@ -29,6 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import commodity_pairs as cp  # noqa: E402
+from analyzing_llm_rationale import pair_history  # noqa: E402
 
 logger = logging.getLogger("commodity_pairs_tick")
 LEDGER = ROOT / "data" / "commodity_pairs_ledger.jsonl"
@@ -80,7 +83,13 @@ def main(argv: list[str] | None = None) -> int:
     stored += new_prices
     ledger = _read_jsonl(args.ledger)
     before = sum(e["status"] == "open" for e in ledger), len(ledger)
-    payload, ledger = cp.run(cp.build_series(stored, fred), ledger, now)
+    series = cp.build_series(stored, fred)
+    try:
+        long_run = pair_history.contexts(series, pair_history.fetch_monthly(today))
+    except Exception as exc:  # aqg: top-level boundary -- the long view is optional context
+        logger.warning("long-run context unavailable (%s: %s)", type(exc).__name__, exc)
+        long_run = None
+    payload, ledger = cp.run(series, ledger, now, long_run=long_run)
     _write_jsonl(args.prices, stored)
     _write_jsonl(args.ledger, ledger)
     args.payload.parent.mkdir(parents=True, exist_ok=True)

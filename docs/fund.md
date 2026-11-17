@@ -1680,6 +1680,45 @@ At 13:30 IST it also trades NSE options and MCX pairs at that session's prices.
 Pair signals still come from the last daily close, so a signal from one close
 now fills at the next session's live price, not at that close.
 
+## Long-run context on pairs (owner, 2026-11-17)
+
+The owner asked for context, including the story behind each move, on the extremes seen in each
+pair's relative value. `pair_history` adds a long view to the tracker for the six pairs with a
+long price history:
+- copper/aluminium, zinc/lead, copper/zinc and nickel/copper, from IMF monthly prices since 1992;
+- Brent/WTI and WTI/natural gas, from FRED daily prices since 1997, averaged by month.
+
+The gold, silver and platinum pairs have no free long history yet.
+
+- **Position.** Each pair's ratio is placed against its last 10 years: a z-score and a
+  percentile. Today's value is the last month carried forward by the pair's own daily move.
+- **Analogues.** Over 1992-2026, months at least 1.5 standard deviations from the 10-year
+  average moved back toward it within 3-12 months 60% of the time across the six pairs, against
+  52-56% for all months. This held both before and after 2015. Over one month (the length of a
+  pair trade) the edge is small: 54% against 52%.
+- **Short-term trades with the long view.** On the oil pairs (1997-2026), short-term signals
+  that also pointed back toward the 5-year average averaged:
+  - Brent/WTI: +1.9% per trade, against +1.0% for the rest;
+  - WTI/gas: +10.2%, against +1.0%.
+
+  The few signals that pointed away from it lost.
+- **Stories.** `data/pair_episodes.json` holds the cause and outcome of every long-run extreme
+  (2 or more standard deviations), in Foresea's words from public sources. Each cause is tagged
+  temporary (an outage, a storm, a squeeze, a crisis, a bottleneck) or lasting (a change in how a
+  commodity is produced or used). Of the episodes that have played out, temporary causes were
+  back to normal within two years in 18 of 21; lasting ones (copper/aluminium 2004-07, the shale
+  gas era) in 0 of 2. The stories were written afterwards, so this is context, not a tested
+  rule. A new extreme with no story shows as one, so it can be added.
+- **Use.** Every fund pair trade carries a "long-run context" fact. It gives the percentile,
+  whether the trade bets toward or away from the 10-year average, today's cause and how past
+  causes of that kind ended. It is evidence only, like the knowledge base view; sizes do not
+  change until it is scored on closed trades.
+- **On 2026-11-17:**
+  - zinc/lead sat at the 99th percentile with a temporary cause (a zinc ore shortage);
+  - copper/aluminium sat at the 98th, with mixed causes, and the open long-copper trade bets
+    away from the average; copper/aluminium extremes have tended to keep going;
+  - nickel/copper sat at the 1st, with a lasting cause (Indonesian supply).
+
 ## Knowledge base view on pairs (owner, 2026-11-17)
 
 The owner asked for Foresea's knowledge base to reach the fund. Each commodity pair now carries

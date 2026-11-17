@@ -252,6 +252,9 @@ def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[st
         if row.get("z_ratio") is not None:
             facts.append(_fact("price ratio z-score", f"{float(row['z_ratio']):.2f}",
                                f"pairs tracker, data through {row.get('date')}"))
+        long_view = _long_run_fact(row.get("long_run"), (tracker.get("long_run") or {}).get("driver_record") or {})
+        if long_view:
+            facts.append(long_view)
         if record:
             facts.append(_fact("US backtest win rate", _pct(float(record.get("win_rate") or 0.0)), "pairs backtest"))
         facts.append(_fact("hedge ratio", f"{beta:.2f}", "pairs tracker"))
@@ -261,6 +264,35 @@ def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[st
             signals.append(Signal(analyst=analyst, instrument=dict(pair[leg]), side=side, price=0.0,
                                   edge=edge, trust=trust, facts=facts, pair_key=pair["key"]))
     return signals, skipped
+
+
+def _ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def _long_run_fact(long_run: Optional[Mapping[str, Any]], record: Mapping[str, Mapping[str, int]]
+                   ) -> Optional[dict[str, str]]:
+    """The pair's place in its 10-year history and the story behind it (pair_history): evidence only."""
+    if not long_run:
+        return None
+    pct = _ordinal(max(1, min(99, round(float(long_run["percentile"]) * 100))))
+    parts = [f"price ratio at the {pct} percentile of the last {int(long_run['window_months']) // 12} years"]
+    direction = {"toward": "toward", "away": "away from"}.get(long_run.get("tide") or "")
+    if direction:
+        parts.append(f"this trade bets on a move {direction} that 10-year average")
+    story = long_run.get("story")
+    if story:
+        parts.append(f"cause ({story['driver']}): {story['cause'].split('. ')[0].rstrip('.')}")
+        kinds = ("temporary", "lasting") if story["driver"] == "mixed" else (story["driver"],)
+        tallies = [f"{k} causes {record[k]['back']} of {record[k]['episodes']}" for k in kinds
+                   if (record.get(k) or {}).get("episodes")]
+        if tallies:
+            parts.append("past extremes across the pairs back to normal within two years: " + ", ".join(tallies))
+    analog = long_run.get("analogues") or {}
+    if analog.get("back_12m") is not None:
+        parts.append(f"after past months this far out it moved back toward usual within 12 months "
+                     f"{analog['back_12m'] * 100:.0f}% of the time")
+    return _fact("long-run context", "; ".join(parts), f"pairs tracker long view ({long_run.get('source')})")
 
 
 def _attribution(signals: Sequence[Signal]) -> dict[str, float]:
