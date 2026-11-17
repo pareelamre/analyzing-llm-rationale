@@ -33,7 +33,7 @@ import subprocess
 import time
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
+from typing import Any, Callable, Iterable, Mapping, Optional
 from urllib.parse import urljoin
 
 from . import knowledge

@@ -222,7 +222,7 @@ def _shfe_read(info: Mapping[str, Any], crawler: watch.Crawler, today: date, cor
             continue
         active = max(contracts, key=lambda c: c[2])[0]
         farthest = max(contracts)[0]
-        for month, settle, oi in sorted(contracts):
+        for month, settle, _oi in sorted(contracts):
             # A few points per metal, so one exchange does not crowd a question's evidence.
             if month not in (active, farthest) and not month.endswith("-12"):
                 continue

@@ -26,8 +26,8 @@ import io
 import json
 import re
 import shutil
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path

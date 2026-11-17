@@ -11,7 +11,6 @@ import io
 import json
 import sys
 import tempfile
-import time
 import unittest
 import unittest.mock
 from datetime import datetime
