@@ -30,6 +30,7 @@ import math
 import os
 import re
 import sqlite3
+import time
 from array import array
 from dataclasses import dataclass, field
 from datetime import date
@@ -677,21 +678,35 @@ def default_embedder() -> Optional[Embedder]:
 _shared: dict[str, Any] = {}
 
 
+def _restat_seconds() -> float:
+    try:
+        return max(0.0, float(os.environ.get("KNOWLEDGE_RESTAT_S", "300")))
+    except ValueError:
+        return 300.0
+
+
 def shared_index() -> Optional[Index]:
     """The server's index over ``KNOWLEDGE_DIR`` (lexical, graph and horizon only, no cold start).
 
-    Rebuilt when a file in the directory changes; None when no base is configured or it has errors.
+    Rebuilt when a file in the directory is added, removed or changed; None when no base is
+    configured or it has errors. On the live server the directory is a Cloud Storage mount, where
+    every stat is a network call, so the files are looked at again at most every
+    ``KNOWLEDGE_RESTAT_S`` seconds (default 300) rather than on every request.
     """
     root = default_dir()
     if root is None:
         return None
-    stamp = max((p.stat().st_mtime for p in root.rglob("*.json*")), default=0.0)
-    cached = _shared.get("index")
-    if cached is not None and _shared.get("key") == (str(root), stamp):
-        return cached
+    now = time.monotonic()
+    if _shared.get("root") == str(root) and now - _shared.get("checked", float("-inf")) < _restat_seconds():
+        return _shared.get("index")
+    files = [p.stat().st_mtime for p in root.rglob("*.json*")]
+    key = (str(root), max(files, default=0.0), len(files))
+    if "index" in _shared and _shared.get("key") == key:
+        _shared.update(root=str(root), checked=now)
+        return _shared["index"]
     corpus = load(root)
     index = None if corpus.errors else Index(corpus)
-    _shared.update(index=index, key=(str(root), stamp))
+    _shared.update(index=index, key=key, root=str(root), checked=now)
     return index
 
 
