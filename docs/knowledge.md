@@ -22,7 +22,9 @@ forecast on a long-horizon question can draw on what serious sources project (ow
 - **CI access (owner's one-time step):** the agent tick and the board/fund publish jobs check the
   data repo out into `knowledge-base/` when the repo secret `KNOWLEDGE_REPO_TOKEN` exists: a
   fine-grained GitHub token with read-only Contents access to `pareelamre/foresea-knowledge`.
-  Without it the checkout is skipped and both jobs run as before.
+  Without it the checkout is skipped and both jobs run as before. A missing secret or a failed
+  checkout (expired token, no access to the repo) puts a "Knowledge base missing" warning on the
+  run page; the job itself still goes on without the base.
 
 ## What a claim is
 

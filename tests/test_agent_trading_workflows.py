@@ -211,5 +211,56 @@ class TrackRecordForecastWorkflowTests(unittest.TestCase):
         self.assertNotIn('lane: "', text)
 
 
+
+class KnowledgeBaseCheckoutWarningTests(unittest.TestCase):
+    """The knowledge checkout uses continue-on-error, so a token without
+    access to the private repo left the step green and the run silently had
+    no knowledge base. Both jobs must say so on the run page."""
+
+    def _steps(self, path):
+        import yaml
+
+        parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
+        job = "publish" if path == _BOARD_PUBLISH_PATH else "trade"
+        return parsed["jobs"][job]["steps"]
+
+    def _pair(self, path):
+        steps = self._steps(path)
+        names = [s.get("name") for s in steps]
+        checkout = steps[names.index("Check out the knowledge base")]
+        warn = steps[names.index("Warn if the knowledge base is missing")]
+        self.assertEqual(names.index("Warn if the knowledge base is missing"),
+                         names.index("Check out the knowledge base") + 1)
+        return checkout, warn
+
+    def test_both_jobs_warn_after_the_checkout(self):
+        for path in (_BOARD_PUBLISH_PATH, _REUSABLE_PATH):
+            with self.subTest(path=path.name):
+                checkout, warn = self._pair(path)
+                self.assertEqual(checkout["id"], "knowledge")
+                self.assertTrue(checkout["continue-on-error"])
+                self.assertEqual(warn["if"], "steps.knowledge.outcome != 'success'")
+                self.assertEqual(warn["env"]["KNOWLEDGE_OUTCOME"],
+                                 "${{ steps.knowledge.outcome }}")
+                self.assertIn("::warning title=Knowledge base missing::", warn["run"])
+
+    def test_warning_text_names_the_cause(self):
+        import subprocess
+        import tempfile
+
+        _, warn = self._pair(_BOARD_PUBLISH_PATH)
+        for outcome, expect in (("failure", "could not read pareelamre/foresea-knowledge"),
+                                ("skipped", "No KNOWLEDGE_REPO_TOKEN secret")):
+            with self.subTest(outcome=outcome), tempfile.NamedTemporaryFile("r") as summary:
+                out = subprocess.run(
+                    ["bash", "-e", "-c", warn["run"]], capture_output=True, text=True, check=True,
+                    env={"KNOWLEDGE_OUTCOME": outcome, "GITHUB_STEP_SUMMARY": summary.name,
+                         "PATH": "/usr/bin:/bin"}).stdout
+                self.assertTrue(out.startswith("::warning title=Knowledge base missing::"))
+                self.assertIn(expect, out)
+                text = summary.read()
+                self.assertIn("### Knowledge base missing", text)
+                self.assertIn(expect, text)
+
 if __name__ == "__main__":
     unittest.main()
