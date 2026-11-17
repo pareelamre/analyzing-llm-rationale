@@ -219,8 +219,36 @@ def years(text: str) -> list[int]:
     return sorted({int(y) for y in YEAR.findall(str(text))})
 
 
+#: Words that give a forecast question its form ("by December 31", "reach", "before"), not its topic.
+QUESTION_FORM = frozenset("""january february march april june july august september october november
+december jan feb mar apr jun jul aug sep sept oct nov dec end reach reaches before after until during
+exceed exceeds above below least""".split())
+
+
+#: Words too generic to make a claim on-topic for a question on their own.
+TOPIC_FILLER = QUESTION_FORM | frozenset("""year years month months day days next last than price prices
+between hit hits new announce announced release released win wins any all one two three first second
+out market markets percent per cent total much many thousand million billion trillion""".split())
+#: Entity types too broad to make a claim on-topic: "Germany" in a question about its chancellor
+#: and a claim about German grid queues share a country, not a subject.
+BROAD_TYPES = frozenset({"country", "region"})
+
+
+def topical_word(word: str) -> bool:
+    return len(word) > 2 and word not in TOPIC_FILLER and not word.replace(".", "").isdigit()
+
+
+def _stem(word: str) -> str:
+    return word[:-1] if len(word) > 4 and word.endswith("s") else word
+
+
 def _fts_query(text: str) -> str:
-    return " OR ".join(f'"{t}"' for t in terms(text)[:32])
+    # Years and other bare numbers stay out of the lexical list: the horizon list already matches
+    # years, and "$130,000" is not a topic. Counting them here let any claim about the asked year
+    # look like a second, independent match, so "Will Bitcoin reach $130,000 by December 31, 2026?"
+    # came back with World Bank metal prices as agreed evidence.
+    words = [t for t in terms(text) if t not in QUESTION_FORM and not t.replace(".", "").isdigit()]
+    return " OR ".join(f'"{t}"' for t in words[:32])
 
 
 def _unit(vec: Sequence[float]) -> list[float]:
@@ -276,6 +304,10 @@ class Index:
             if key is not None:
                 self._by_key.setdefault(key, []).append(i)
         self._aliases = self._alias_table()
+        self._broad = {eid for eid, ent in corpus.entities.items() if ent.get("type") in BROAD_TYPES}
+        self._place_words = {w for eid in self._broad
+                             for name in [corpus.entities[eid].get("name") or eid, *corpus.entities[eid].get("aliases", [])]
+                             for w in terms(name)}
         self._entity_claims: dict[str, list[int]] = {}
         for i, claim in enumerate(self.claims):
             for eid in claim.get("entities") or []:
@@ -510,6 +542,23 @@ class Index:
         best = out[0]["score"] if out else 0.0
         return [g for g in out if g["score"] >= TIMELINE_FLOOR * best]
 
+    def on_topic(self, question: str, claim: dict) -> bool:
+        """Whether a claim is about what the question asks: a shared topical entity (not a country
+        or region) or a shared topic word in the claim's text or metric."""
+        topical = {e for e in self.link(question) if e not in self._broad}
+        if topical & set(claim.get("entities") or []):
+            return True
+        words = {_stem(w) for w in terms(question) if topical_word(w) and w not in self._place_words}
+        return bool(words & {_stem(w) for w in terms(f"{claim.get('text', '')} {claim.get('metric') or ''}")})
+
+    def agreed(self, question: str, *, as_of: Optional[date] = None, min_support: int = 2,
+               k: int = 24) -> list[Hit]:
+        """Current claims at least ``min_support`` retrievers agree on and that are on the question's
+        topic. Agreement alone let a shared year plus one shared word pass (US growth figures for a
+        question about Iran's head of state), so the forecast and agent paths use this."""
+        return [h for h in self.search(question, as_of=as_of, k=k)
+                if h.support >= min_support and not h.superseded and self.on_topic(question, h.claim)]
+
     def evidence_articles(self, question: str, *, as_of: Optional[date] = None, k: int = 2,
                           per_source: int = 4, min_support: int = 2) -> list[dict]:
         """The base's best claims for a forecast, one article-shaped dict per source.
@@ -518,7 +567,7 @@ class Index:
         merely shares a word with a report gets nothing. Claims are our own words with the page
         they come from; source passages never leave the base.
         """
-        hits = [h for h in self.search(question, as_of=as_of, k=24) if h.support >= min_support and not h.superseded]
+        hits = self.agreed(question, as_of=as_of, min_support=min_support)
         by_source: dict[str, list[Hit]] = {}
         for hit in hits:
             by_source.setdefault(hit.claim.get("source"), []).append(hit)
@@ -551,9 +600,7 @@ class Index:
               min_support: int = 2) -> list[dict]:
         """A compact list of the base's best current claims for an agent's research packet."""
         out = []
-        for hit in self.search(question, as_of=as_of, k=24):
-            if hit.support < min_support or hit.superseded:
-                continue
+        for hit in self.agreed(question, as_of=as_of, min_support=min_support):
             row = {"claim": hit.claim["text"], "kind": hit.claim.get("kind"), "source": hit.cite(),
                    "published": hit.source.get("published")}
             if hit.claim.get("horizon"):

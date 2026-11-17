@@ -278,6 +278,39 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(entities["gadget_co"]["type"], "concept")
 
 
+class TopicTests(BaseCase):
+    """Agreement must mean two retrievers found the question's subject, not just its year."""
+
+    def test_years_numbers_and_question_form_stay_out_of_the_lexical_query(self):
+        self.assertEqual(kb._fts_query("Will Bitcoin reach $130,000 by December 31, 2026?"), '"bitcoin"')
+
+    def test_a_shared_year_and_size_word_are_not_agreement(self):
+        # Before: "2030" and "million" matched the widget claim lexically and the horizon list
+        # matched its year, so a question about a painting got widget forecasts as evidence.
+        question = "Will a painting sell for $120 million in 2030?"
+        self.assertEqual(self.index.brief(question, as_of=date(2026, 11, 1)), [])
+        self.assertEqual(self.index.evidence_articles(question, as_of=date(2026, 11, 1)), [])
+
+    def test_a_shared_country_alone_is_not_on_topic(self):
+        question = "Will Ruritania's prime minister resign in 2027?"
+        loose = [h for h in self.index.search(question, as_of=date(2026, 11, 1), k=24) if h.support >= 2]
+        self.assertTrue(loose, "the fixture should tempt plain agreement")
+        self.assertEqual(self.index.agreed(question, as_of=date(2026, 11, 1)), [])
+
+    def test_a_question_on_the_subject_keeps_its_claims(self):
+        rows = self.index.brief("Will widget demand pass 110 million units by 2030?", as_of=date(2026, 11, 1))
+        self.assertTrue(rows)
+        self.assertIn("widget", rows[0]["claim"])
+        tax = self.index.agreed("Will Ruritania tax gadget imports in 2027?", as_of=date(2026, 11, 1))
+        self.assertIn(f"{NEW}:c002", [h.claim["id"] for h in tax])
+
+    def test_on_topic_uses_topical_entities_and_words(self):
+        claim = {"text": "Gadget prices fell sharply.", "entities": ["gadgets"]}
+        self.assertTrue(self.index.on_topic("Will gadget output double?", claim))
+        self.assertFalse(self.index.on_topic("Will Ruritania hold elections?",
+                                             {"text": "Ruritania built factories.", "entities": ["ruritania"]}))
+
+
 class CliTests(unittest.TestCase):
     def test_add_validate_and_search_round_trip(self):
         import knowledge as cli

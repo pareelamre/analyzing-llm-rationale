@@ -54,6 +54,11 @@ Then:
   `timeline` command lists every revision.
 - **Agreement:** forecasts only get claims that at least two retrievers agree on, so a question
   that merely shares a word with a report gets nothing.
+- **On topic:** an agreed claim must also share the question's subject: a topical entity (a
+  commodity, technology, policy or event, not a country or region) or a topic word. Years, bare
+  numbers and question words ("reach", "by December 31") never count as a lexical match, since the
+  horizon list already covers years. Before this, "Will Bitcoin reach $130,000 by December 31,
+  2026?" got four World Bank metal forecasts.
 
 ## Adding a report
 
@@ -65,3 +70,23 @@ python scripts/knowledge.py validate
 
 `--llm` extracts claims passage by passage with the self-hosted model and drops any claim whose
 numbers are not in its passage. Review, then commit to the data repo, one report per commit.
+
+## Growing the base (owner, 2026-11-17)
+
+Two jobs in the data repo keep the base growing toward what Foresea is asked:
+
+- **Gap scan** (`scripts/knowledge_gaps.py`, weekly): asks the base about every open
+  long-horizon question (track-record store and Edge board, closing in 30+ days, sports and
+  entertainment left out) and every fund commodity pair, and writes `gaps/latest.md` with what
+  it covers, what it misses, and where plain agreement would have passed off-topic claims.
+  `gaps/history.jsonl` tracks coverage over time.
+- **Watch list** (`scripts/knowledge_watch.py`, daily): `watchlist.json` in the data repo names
+  the publishers (EIA, USDA, World Bank, IMF, Fed, ECB, IEA, RBI, Stanford AI Index, Epoch AI) and
+  how to spot a new edition on each listing page. New editions go to `inbox.jsonl` and their files
+  are downloaded for reading. The first check of a publisher is a baseline, so adding one never
+  floods the inbox.
+- **Crawler rules:** honest user agent (`ForeseaKnowledgeWatch/1.0`), robots.txt obeyed (RFC 9309:
+  an unavailable robots.txt means no rules, a 401/403 means the site refuses us), 1.5 s between
+  requests to a host, at most five new editions per source per run. A site that blocks the
+  crawler is reported, never worked around (USDA's main site, CBO, OPEC and OECD did on
+  2026-11-17; USDA's report archive at esmis.nal.usda.gov allows it).
