@@ -16,12 +16,15 @@ forecast on a long-horizon question can draw on what serious sources project (ow
   `KNOWLEDGE_EVIDENCE=0` turns it off. Without `KNOWLEDGE_DIR` nothing changes. The articles carry
   only our own-words claims and page numbers, never report passages.
 - **Live server:** `knowledge-sync.yml` (every 3 hours, or run it by hand after adding reports)
-  validates the base and copies `entities.jsonl` + `sources/` into the private models bucket
-  (`gs://brave-drive-471109-d9-models/knowledge`), which Cloud Run mounts at `/app/models`;
-  `docker.yml` sets `KNOWLEDGE_DIR=/app/models/knowledge`. The data never goes into the Docker
-  image (it is also pushed to GHCR). The server looks for changed files at most every
-  `KNOWLEDGE_RESTAT_S` seconds (default 300), so new reports go live without a redeploy. A base
-  that fails validation is not copied; the server keeps the last good one.
+  validates the base, packs `entities.jsonl` + `sources/` into one archive and uploads it to the
+  private Cloudflare R2 state bucket (`knowledge/knowledge.tar.gz`, via
+  `scripts/knowledge_r2_sync.py`), then reads it back with the server's read-only key. `docker.yml`
+  gives Cloud Run that read-only key as `KNOWLEDGE_R2_*`; the server downloads the archive into a
+  temp folder and checks its ETag at most every `KNOWLEDGE_RESTAT_S` seconds (default 300), so new
+  reports go live without a redeploy. If a fetch fails or a new copy has errors, the last good
+  index keeps serving. The data never goes into the Docker image (it is also pushed to GHCR) or
+  into Google Cloud storage (owner, 2026-11-17: no paid Google services for this). A local
+  `KNOWLEDGE_DIR` that exists takes precedence over R2.
 - **Edge board agent:** each market's research packet carries up to four current, cited claims
   (`knowledge_base`) that at least two retrievers agree on (`agent_research._market_packet`).
 - **Fund:** every commodity pair trade carries the newest report's forecast-implied direction for

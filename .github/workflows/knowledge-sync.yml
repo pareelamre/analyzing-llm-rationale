@@ -1,16 +1,18 @@
 name: Knowledge base sync
 
-# Copies the private knowledge base (pareelamre/foresea-knowledge) into the private
-# models bucket that Cloud Run mounts at /app/models, so the live /predict server reads
-# it at KNOWLEDGE_DIR=/app/models/knowledge (set in docker.yml).
+# Copies the private knowledge base (pareelamre/foresea-knowledge) to Foresea's private
+# Cloudflare R2 state bucket as one archive, knowledge/knowledge.tar.gz. The live /predict
+# server (Cloud Run) downloads it with its read-only R2 key (KNOWLEDGE_R2_* in docker.yml)
+# and fetches it again only when it changes. R2 has no egress fees and a free tier that
+# covers this; no Google Cloud storage is used (owner, 2026-11-17).
 #
 # The data never goes into the Docker image: docker.yml also pushes the image to GHCR,
 # and some reports in the base are licensed. For the same reason this log prints only
 # counts, never file contents or validation messages.
 #
-# The server notices changed files within KNOWLEDGE_RESTAT_S (5 minutes), with no
-# redeploy. Run this by hand after adding reports to the base, or wait for the schedule.
-# A base that fails validation is not copied, so the server keeps the last good one.
+# The server looks for a new archive at most every KNOWLEDGE_RESTAT_S (5 minutes), with
+# no redeploy. Run this by hand after adding reports to the base, or wait for the schedule.
+# A base that fails validation is not uploaded, so the server keeps the last good one.
 
 on:
   schedule:
@@ -25,9 +27,8 @@ permissions:
   contents: read
 
 env:
-  # Only ever this prefix: the sync deletes objects under it that the base no longer has,
-  # and the rest of the bucket holds the RAG embedding model.
-  KNOWLEDGE_BUCKET_PATH: gs://brave-drive-471109-d9-models/knowledge
+  R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL }}
+  R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
 
 jobs:
   sync:
@@ -63,18 +64,17 @@ jobs:
           fi
           echo "Valid: $(tail -n 1 validate.txt)"
 
-      - uses: google-github-actions/auth@v2
+      - uses: actions/setup-python@v5
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          python-version: "3.11"
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - name: Install the R2 client
+        run: pip install --quiet boto3==1.43.108
 
-      - name: Copy it to the models bucket
-        run: |
-          case "$KNOWLEDGE_BUCKET_PATH" in
-            gs://*/knowledge) ;;
-            *) echo "::error::refusing to sync to $KNOWLEDGE_BUCKET_PATH"; exit 1 ;;
-          esac
-          gcloud storage rsync staged "$KNOWLEDGE_BUCKET_PATH" --recursive --checksums-only \
-            --delete-unmatched-destination-objects --no-user-output-enabled
-          echo "Synced $(find staged -type f | wc -l | tr -d ' ') files to $KNOWLEDGE_BUCKET_PATH."
+      - name: Copy it to R2
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_RUNTIME_ACCESS_KEY_ID: ${{ secrets.R2_RUNTIME_ACCESS_KEY_ID }}
+          R2_RUNTIME_SECRET_ACCESS_KEY: ${{ secrets.R2_RUNTIME_SECRET_ACCESS_KEY }}
+        run: python scripts/knowledge_r2_sync.py staged

@@ -25,11 +25,17 @@ never sees a report published after its forecast.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import logging
 import math
 import os
 import re
+import shutil
 import sqlite3
+import tarfile
+import tempfile
+import threading
 import time
 from array import array
 from dataclasses import dataclass, field
@@ -676,6 +682,12 @@ def default_embedder() -> Optional[Embedder]:
 
 
 _shared: dict[str, Any] = {}
+_refresh = threading.Lock()
+logger = logging.getLogger(__name__)
+
+# The live server's copy of the base: a private Cloudflare R2 object written by knowledge-sync.yml.
+REMOTE_KEY = "knowledge/knowledge.tar.gz"
+_REMOTE_MAX_BYTES = 64 * 1024 * 1024
 
 
 def _restat_seconds() -> float:
@@ -685,29 +697,108 @@ def _restat_seconds() -> float:
         return 300.0
 
 
-def shared_index() -> Optional[Index]:
-    """The server's index over ``KNOWLEDGE_DIR`` (lexical, graph and horizon only, no cold start).
+def remote_config() -> Optional[dict[str, str]]:
+    """``KNOWLEDGE_R2_*`` settings for the private R2 copy, or None unless all four are set."""
+    cfg = {name: os.environ.get(f"KNOWLEDGE_R2_{name.upper()}", "").strip()
+           for name in ("endpoint_url", "bucket", "access_key_id", "secret_access_key")}
+    if not all(cfg.values()):
+        return None
+    cfg["key"] = os.environ.get("KNOWLEDGE_R2_KEY", "").strip() or REMOTE_KEY
+    return cfg
 
-    Rebuilt when a file in the directory is added, removed or changed; None when no base is
-    configured or it has errors. On the live server the directory is a Cloud Storage mount, where
-    every stat is a network call, so the files are looked at again at most every
-    ``KNOWLEDGE_RESTAT_S`` seconds (default 300) rather than on every request.
+
+def _remote_client(cfg: dict[str, str]):
+    import boto3
+    from botocore.config import Config
+    return boto3.client("s3", endpoint_url=cfg["endpoint_url"], region_name="auto",
+                        aws_access_key_id=cfg["access_key_id"], aws_secret_access_key=cfg["secret_access_key"],
+                        config=Config(connect_timeout=5, read_timeout=30, retries={"max_attempts": 2}))
+
+
+def unpack(data: bytes, dest: Path) -> None:
+    """Extract a knowledge archive into ``dest``, refusing links, absolute paths and ``..``."""
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+        members = tar.getmembers()
+        for member in members:
+            name = Path(member.name)
+            if name.is_absolute() or ".." in name.parts or not (member.isfile() or member.isdir()):
+                raise ValueError(f"unsafe member in knowledge archive: {member.name!r}")
+        if hasattr(tarfile, "data_filter"):
+            tar.extractall(dest, members=members, filter="data")
+        else:  # pragma: no cover - Python without extraction filters
+            tar.extractall(dest, members=members)
+
+
+def fetch_remote(cfg: dict[str, str], *, client=None) -> Path:
+    """The local copy of the R2 archive, downloaded again only when its ETag changes."""
+    client = client or _remote_client(cfg)
+    head = client.head_object(Bucket=cfg["bucket"], Key=cfg["key"])
+    etag = str(head.get("ETag") or "")
+    current = _shared.get("remote_dir")
+    if current and etag and _shared.get("remote_etag") == etag and Path(current).is_dir():
+        return Path(current)
+    if int(head.get("ContentLength") or 0) > _REMOTE_MAX_BYTES:
+        raise ValueError("knowledge archive is larger than expected")
+    body = client.get_object(Bucket=cfg["bucket"], Key=cfg["key"], IfMatch=etag)["Body"].read(_REMOTE_MAX_BYTES + 1)
+    if len(body) > _REMOTE_MAX_BYTES:
+        raise ValueError("knowledge archive is larger than expected")
+    cache = Path(os.environ.get("KNOWLEDGE_CACHE_DIR") or Path(tempfile.gettempdir()) / "foresea-knowledge")
+    cache.mkdir(parents=True, exist_ok=True)
+    dest = Path(tempfile.mkdtemp(prefix="base-", dir=cache))
+    try:
+        unpack(body, dest)
+    except Exception:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise
+    _shared.update(remote_dir=str(dest), remote_etag=etag)
+    if current and current != str(dest):
+        shutil.rmtree(current, ignore_errors=True)
+    return dest
+
+
+def shared_index() -> Optional[Index]:
+    """The server's index (lexical, graph and horizon only, no cold start).
+
+    The base is ``KNOWLEDGE_DIR`` when that folder exists, else the private R2 copy named by
+    ``KNOWLEDGE_R2_*`` (the live server). Rebuilt when a file is added, removed or changed;
+    None when no base is configured or it has errors. The source is looked at again at most
+    every ``KNOWLEDGE_RESTAT_S`` seconds (default 300) rather than on every request. If the R2
+    copy cannot be fetched, or a new one has errors, the last good index keeps serving.
     """
     root = default_dir()
-    if root is None:
+    remote = remote_config() if root is None else None
+    if root is None and remote is None:
         return None
+    source = str(root) if root is not None else f"r2://{remote['bucket']}/{remote['key']}"
     now = time.monotonic()
-    if _shared.get("root") == str(root) and now - _shared.get("checked", float("-inf")) < _restat_seconds():
+    same = _shared.get("source") == source
+    if same and now - _shared.get("checked", float("-inf")) < _restat_seconds():
         return _shared.get("index")
-    files = [p.stat().st_mtime for p in root.rglob("*.json*")]
-    key = (str(root), max(files, default=0.0), len(files))
-    if "index" in _shared and _shared.get("key") == key:
-        _shared.update(root=str(root), checked=now)
-        return _shared["index"]
-    corpus = load(root)
-    index = None if corpus.errors else Index(corpus)
-    _shared.update(index=index, key=key, root=str(root), checked=now)
-    return index
+    if not _refresh.acquire(blocking=False):  # another request is refreshing: answer from what we have
+        return _shared.get("index") if same else None
+    try:
+        previous = _shared.get("index") if same else None
+        _shared.update(source=source, checked=now, index=previous)
+        if remote is not None:
+            try:
+                root = fetch_remote(remote)
+            except Exception:  # the base is optional context; keep serving the last good copy
+                logger.warning("knowledge base: could not refresh the R2 copy", exc_info=True)
+                return previous
+        files = [p.stat().st_mtime for p in root.rglob("*.json*")]
+        key = (str(root), max(files, default=0.0), len(files))
+        if _shared.get("key") == key:
+            return previous
+        corpus = load(root)
+        if corpus.errors and remote is not None and previous is not None:
+            logger.warning("knowledge base: the new R2 copy has %d problems; keeping the last good one",
+                           len(corpus.errors))
+            return previous
+        index = None if corpus.errors else Index(corpus)
+        _shared.update(index=index, key=key)
+        return index
+    finally:
+        _refresh.release()
 
 
 # --------------------------------------------------------------------------------------------
