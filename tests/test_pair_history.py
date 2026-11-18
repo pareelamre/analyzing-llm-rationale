@@ -146,7 +146,11 @@ class TrackerAndFundTests(unittest.TestCase):
     def test_the_tracker_attaches_the_long_view_and_which_way_a_bet_points(self):
         self.assertEqual(cp.tide(2.5, {"z": 1.8}), "toward")
         self.assertEqual(cp.tide(-2.5, {"z": 1.8}), "away")
-        self.assertEqual(cp.tide(-2.5, {"z": 0.4}), "neutral")
+        # Every trade is labelled (TIDE_Z 0, picked on 2007-2016 alone): copper/zinc on 2026-11-18,
+        # cheap at z -3.0 over 60 sessions but 0.83 above its 10-year average, bets away.
+        self.assertEqual(cp.tide(-3.0, {"z": 0.83}), "away")
+        self.assertEqual(cp.tide(2.5, {"z": 0.4}), "toward")
+        self.assertEqual(cp.tide(-2.5, {"z": 0.0}), "neutral")
         self.assertIsNone(cp.tide(None, {"z": 1.8}))
 
         # Silver a random walk; gold tied to it, with a late jump that makes gold rich.
@@ -166,8 +170,26 @@ class TrackerAndFundTests(unittest.TestCase):
         self.assertGreater(row["z"], cp.ENTRY_Z)
         self.assertEqual(row["long_run"]["tide"], "toward")  # gold rich now and over ten years
         self.assertEqual(payload["long_run"]["driver_record"]["temporary"]["back"], 8)
+        label = payload["long_run"]["tide"]
+        self.assertEqual(label["away_size"], cp.TIDE_AWAY_SIZE)
+        self.assertGreater(label["backtest"]["toward"]["avg_return"], label["backtest"]["away"]["avg_return"])
+        self.assertEqual(set(label["live"]), {"toward", "away"})
         bare, _ = cp.run(series, [], now)
         self.assertIsNone(bare["long_run"])
+
+    def test_a_new_live_signal_keeps_its_label_and_the_label_is_scored_when_signals_close(self):
+        row = {"key": "gold-silver", "_hist": [{"date": date(2026, 3, 9), "i": 0, "z": 2.4, "z_ratio": 2.0,
+                                                "beta": 1.0, "spread": 0.3}],
+               "_la": np.array([0.0]), "_lb": np.array([0.0]), "_days": [date(2026, 3, 9)]}
+        ledger: list[dict] = []
+        cp.update_ledger(ledger, [row], datetime(2026, 3, 9, tzinfo=timezone.utc), tides={"gold-silver": "away"})
+        self.assertEqual(ledger[0]["tide"], "away")
+        unlabelled: list[dict] = []
+        cp.update_ledger(unlabelled, [row], datetime(2026, 3, 9, tzinfo=timezone.utc))
+        self.assertNotIn("tide", unlabelled[0])
+        closed = [{**ledger[0], "status": "reverted", "spread_return": 0.01},
+                  {**ledger[0], "tide": "toward", "status": "timed_out", "spread_return": -0.02}]
+        self.assertEqual(cp.summarize([e for e in closed if e.get("tide") == "away"])["win_rate"], 1.0)
 
     def test_a_fund_pair_trade_carries_the_long_view_as_a_fact(self):
         fact = orch._long_run_fact({**self.LONG["pairs"]["gold-silver"], "tide": "away"},
