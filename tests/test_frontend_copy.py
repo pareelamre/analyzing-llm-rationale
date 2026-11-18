@@ -687,11 +687,27 @@ function escHtml(s) {
         for name, index in self._both().items():
             with self.subTest(file=name):
                 render = index.split("function renderIndexForecast(", 1)[1].split("\nfunction ", 1)[0]
+                # The track record table is drawn by its own function, so the index picker can redraw it.
+                render += index.split("function _ixfRecordTable(", 1)[1].split("\nfunction ", 1)[0]
                 for label in ("Close", "80% range", "Median", "Higher", "Chance of closing above", "Scored",
                               "In 80% range", "In 90% range", "vs EWMA", "Backtest 80%", "Backtest vs EWMA", "late"):
                     self.assertIn(f"_cptTip('{label}'", render)
                 # The "late" badge used a title attribute, which touch screens never show.
                 self.assertNotIn("title=", render)
+
+    def test_index_track_record_reads_per_index_from_a_labelled_picker(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                table = index.split("function _ixfRecordTable(", 1)[1].split("\nfunction ", 1)[0]
+                self.assertIn('<label for="ixfRecordPick">', table)
+                self.assertIn('<select id="ixfRecordPick"', table)
+                self.assertIn("All ten indices", table)
+                self.assertIn("d.track_record?.by_index", table)
+                self.assertIn("d.backtest?.by_index", table)
+                # Only the record redraws, so the picker keeps focus; the choice survives reloads.
+                setter = index.split("function _ixfSetRecordIndex(", 1)[1].split("\nfunction ", 1)[0]
+                self.assertIn("getElementById('ixfRecord')", setter)
+                self.assertIn("localStorage.setItem('ixfRecordIndex'", setter)
 
     def test_commodity_pairs_cards_explain_empty_live_signals_and_the_way_back_to_usual(self):
         for name, index in self._both().items():

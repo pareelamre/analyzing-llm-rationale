@@ -135,6 +135,22 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(summary[1]["n"], 1)
         self.assertEqual(summary[21]["n"], 0)
         self.assertEqual(len(payload["track_record"]["recent"]), 2)
+        # The board's index picker: the same record for each index alone, every index listed.
+        by_index = payload["track_record"]["by_index"]
+        self.assertEqual(list(by_index), [name for name, _ in ixf.INDICES])
+        self.assertEqual(by_index["Nifty 50"], payload["track_record"]["by_horizon"])
+        self.assertEqual([row["n"] for row in by_index["Nifty Bank"]], [0, 0, 0])
+
+    def test_the_published_backtest_has_every_index_and_its_parts_add_up(self):
+        bt = ixf.BACKTEST
+        self.assertEqual(list(bt["by_index"]), [name for name, _ in ixf.INDICES])
+        for i, total in enumerate(bt["by_horizon"]):
+            parts = [rows[i] for rows in bt["by_index"].values()]
+            self.assertTrue(all(row["h"] == total["h"] for row in parts))
+            self.assertEqual(sum(row["n"] for row in parts), total["n"])
+            weighted = sum(row["n"] * row["coverage_80"] for row in parts) / total["n"]
+            self.assertAlmostEqual(weighted, total["coverage_80"], delta=0.001)
+        self.assertEqual(bt["first"]["Nifty Midcap Select"][:4], "2024")
 
     def test_a_forecast_built_after_the_next_open_is_kept_out_of_the_ledger(self):
         closes = _series(n=1100)

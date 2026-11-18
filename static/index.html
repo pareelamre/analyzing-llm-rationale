@@ -1111,6 +1111,8 @@
     .eb-view-tab.active { background: var(--ink); color: #fff; }
     .eb-view-tab:not(.active):hover { background: var(--paper); color: var(--text); }
     .ixf-scroll { overflow-x: auto; }
+    .ixf-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-dim); }
+    .ixf-pick .variant-select { width: auto; max-width: 100%; padding: 6px 12px; }
     .ixf-levels { display: flex; flex-wrap: wrap; gap: 4px; min-width: 300px; }
     .ixf-level { background: var(--paper); border-radius: 4px; font-size: 11.5px; padding: 1px 6px; white-space: nowrap; }
     .ixf-late { color: var(--text-dim); font-size: 10px; font-weight: 600; margin-left: 4px; text-transform: uppercase; }
@@ -6920,6 +6922,59 @@ function _ixfSetHorizon(h) {
   if (_ixfData) renderIndexForecast(_ixfData);
 }
 
+// The track record reads for all ten indices together or for one index (the picker above it).
+// Remembered per browser; an index the payload no longer lists falls back to all of them.
+let _ixfRecordIndex = (() => { try { return localStorage.getItem('ixfRecordIndex') || ''; } catch (_) { return ''; } })();
+
+function _ixfSetRecordIndex(name) {
+  _ixfRecordIndex = name || '';
+  try { localStorage.setItem('ixfRecordIndex', _ixfRecordIndex); } catch (_) { /* storage blocked */ }
+  const box = document.getElementById('ixfRecord');
+  if (box && _ixfData) box.innerHTML = _ixfRecordTable(_ixfData);
+}
+
+function _ixfRecordTable(d) {
+  const names = (d.indices || []).map(ix => ix.name).filter(Boolean);
+  const name = names.includes(_ixfRecordIndex) ? _ixfRecordIndex : '';
+  const testYears = String(d.backtest?.window || '2016-2026').replace('-', '–');
+  const recordHead = `<tr><th>Horizon</th>`
+    + `<th>${_cptTip('Scored', 'Forecasts whose target close has happened. Each index gets one forecast per horizon each trading day, recorded only between a close and the next open.')}</th>`
+    + `<th>${_cptTip('In 80% range', 'How often the actual close landed inside the 80% range. Near 80% is right: much lower means the ranges are too narrow, much higher too wide.')}</th>`
+    + `<th>${_cptTip('In 90% range', 'The same check for a wider 90% range (not shown above), so near 90% is right.')}</th>`
+    + `<th>${_cptTip('vs EWMA', 'How much better the forecast scored than a plain baseline: a bell curve sized by recent volatility (EWMA). The score is quantile loss, which rewards ranges that are both right and tight. Above 0 beats the baseline.')}</th>`
+    + `<th>${_cptTip('Backtest 80%', `The same 80% check over the ${testYears} test, which forecast every fifth session using only the data available at the time.`)}</th>`
+    + `<th>${_cptTip('Backtest vs EWMA', `The comparison with the plain baseline over the same ${testYears} test.`)}</th></tr>`;
+  const liveRows = name ? (d.track_record?.by_index || {})[name] : d.track_record?.by_horizon;
+  const backRows = name ? (d.backtest?.by_index || {})[name] : d.backtest?.by_horizon;
+  const live = Object.fromEntries((liveRows || []).map(r => [r.h, r]));
+  const back = Object.fromEntries((backRows || []).map(r => [r.h, r]));
+  const skill = s => (s == null ? '—' : `${s >= 0 ? '+' : ''}${(s * 100).toFixed(1)}%`);
+  const cov = c => (c == null ? '—' : (c * 100).toFixed(1) + '%');
+  const rows = [1, 5, 21].map(x => {
+    const l = live[x] || {}, b = back[x] || {};
+    const liveCells = l.n
+      ? `<td>${l.n}</td><td>${cov(l.coverage_80)}</td><td>${cov(l.coverage_90)}</td><td>${skill(l.skill_vs_baseline)}</td>`
+      : `<td>0</td><td colspan="3" style="color:var(--text-dim)">scores once the first targets close</td>`;
+    return `<tr class="eb-row"><td><b>${_IXF_HORIZON_LABEL[x]}</b></td>${liveCells}`
+      + `<td>${cov(b.coverage_80)}</td><td>${skill(b.skill_vs_baseline)}</td></tr>`;
+  }).join('');
+  const options = [`<option value="">All ten indices</option>`]
+    .concat(names.map(n => `<option value="${escHtml(n)}"${n === name ? ' selected' : ''}>${escHtml(n)}</option>`)).join('');
+  const notes = [];
+  const first = name ? (d.backtest?.first || {})[name] : null;
+  if (first && first.slice(0, 4) > testYears.slice(0, 4)) {
+    notes.push(`${escHtml(name)}'s backtest starts in ${escHtml(first.slice(0, 4))}: the model needs about two years of an index's closes first.`);
+  }
+  if (name) {
+    const n1 = (live[1] || {}).n || 0;
+    notes.push(`One index has few live forecasts scored${n1 ? ` (${n1} next-session so far)` : ''}, so its live percentages swing a lot; the backtest is the steadier guide.`);
+  }
+  return `<div class="ixf-pick"><label for="ixfRecordPick">Show the record for</label>`
+    + `<select id="ixfRecordPick" class="variant-select" onchange="_ixfSetRecordIndex(this.value)">${options}</select></div>`
+    + `<div class="ixf-scroll"><table class="eb-table"><thead>${recordHead}</thead><tbody>${rows}</tbody></table></div>`
+    + (notes.length ? `<p class="text-xs" style="color:var(--text-dim);margin:8px 0 0">${notes.join(' ')}</p>` : '');
+}
+
 async function loadIndexForecastSection() {
   if (!document.getElementById('eb-indices-section')) return;
   if (_ixfData) renderIndexForecast(_ixfData);
@@ -6974,25 +7029,6 @@ function renderIndexForecast(d) {
     + `<th>${_cptTip('Median', `The middle of the forecast: an even chance the index closes above or below it on ${when}.`)}</th>`
     + `<th>${_cptTip('Higher', `The chance the index closes above its ${from} close on ${when}. It mostly reflects the index's long-run upward drift: in the ${testYears} test no model called up or down better than that.`)}</th>`
     + `<th>${_cptTip('Chance of closing above', `The chance the index closes above each round level on ${when}. The levels are about half a typical move apart, so most fall inside the range.`)}</th></tr>`;
-  const recordHead = `<tr><th>Horizon</th>`
-    + `<th>${_cptTip('Scored', 'Forecasts whose target close has happened. Each index gets one forecast per horizon each trading day, recorded only between a close and the next open.')}</th>`
-    + `<th>${_cptTip('In 80% range', 'How often the actual close landed inside the 80% range. Near 80% is right: much lower means the ranges are too narrow, much higher too wide.')}</th>`
-    + `<th>${_cptTip('In 90% range', 'The same check for a wider 90% range (not shown above), so near 90% is right.')}</th>`
-    + `<th>${_cptTip('vs EWMA', 'How much better the forecast scored than a plain baseline: a bell curve sized by recent volatility (EWMA). The score is quantile loss, which rewards ranges that are both right and tight. Above 0 beats the baseline.')}</th>`
-    + `<th>${_cptTip('Backtest 80%', `The same 80% check over the ${testYears} test, which forecast every fifth session using only the data available at the time.`)}</th>`
-    + `<th>${_cptTip('Backtest vs EWMA', `The comparison with the plain baseline over the same ${testYears} test.`)}</th></tr>`;
-  const live = Object.fromEntries((d.track_record?.by_horizon || []).map(r => [r.h, r]));
-  const back = Object.fromEntries((d.backtest?.by_horizon || []).map(r => [r.h, r]));
-  const skill = s => (s == null ? '—' : `${s >= 0 ? '+' : ''}${(s * 100).toFixed(1)}%`);
-  const cov = c => (c == null ? '—' : (c * 100).toFixed(1) + '%');
-  const record = [1, 5, 21].map(x => {
-    const l = live[x] || {}, b = back[x] || {};
-    const liveCells = l.n
-      ? `<td>${l.n}</td><td>${cov(l.coverage_80)}</td><td>${cov(l.coverage_90)}</td><td>${skill(l.skill_vs_baseline)}</td>`
-      : `<td>0</td><td colspan="3" style="color:var(--text-dim)">scores once the first targets close</td>`;
-    return `<tr class="eb-row"><td><b>${_IXF_HORIZON_LABEL[x]}</b></td>${liveCells}`
-      + `<td>${cov(b.coverage_80)}</td><td>${skill(b.skill_vs_baseline)}</td></tr>`;
-  }).join('');
   const updated = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   const stale = d.freshness?.stale
     ? `<p class="text-xs" style="color:#b45309;margin:6px 0 0">These forecasts have not been refreshed for over four days.</p>` : '';
@@ -7001,7 +7037,7 @@ function renderIndexForecast(d) {
     ${tabs}
     <div class="ixf-scroll"><table class="eb-table" style="margin-top:12px"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
     <h4 class="eb-h">Track record: does the price land inside the range as often as it should?</h4>
-    <div class="ixf-scroll"><table class="eb-table"><thead>${recordHead}</thead><tbody>${record}</tbody></table></div>
+    <div id="ixfRecord">${_ixfRecordTable(d)}</div>
     <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Model: volatility from fast and slow EWMAs and India VIX, refit daily on ${typeof d.model?.training_sessions === 'number' ? escHtml(String(d.model.training_sessions)) + ' sessions' : 'the last 750 sessions for the 1-day range and every session since India VIX began in 2009 for the longer two'}, with fat tails taken from past errors (its own at 1 and 5 days; all ten indices' together for the month-ahead range, which a backtest scored better). "vs EWMA" compares quantile loss with a plain EWMA normal forecast. Data: ${escHtml(d.source || 'Upstox')}. Research forecasts, not investment advice.</p>`;
 }
 

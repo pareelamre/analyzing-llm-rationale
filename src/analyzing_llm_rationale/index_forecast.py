@@ -77,18 +77,74 @@ TRAINING_SESSIONS: dict[int, Optional[int]] = {1: 750, 5: None, 21: None}
 #: 2021-26) and Brier on the round levels, in both halves. At 1 and 5 sessions it did worse.
 POOLED_SHAPE_HORIZONS = (21,)
 
-#: This module walked forward over Upstox closes of the ten indices (Midcap Select from 2024,
-#: once two years past its 2022 launch): a forecast every fifth Nifty 50 session from 2016, each
-#: index fit on its history through that day and the 21-session shape pooled as run() does,
-#: scored like the live ledger.
+#: Walk-forward over Upstox closes of the ten indices (Midcap Select from 2024, once two years
+#: past its 2022 launch): a forecast every fifth Nifty 50 session from 2016, each index fit on its
+#: history through that day and the 21-session shape pooled as run() does, scored like the live
+#: ledger. scripts/index_forecast_backtest.py reproduces it; rebuilt 2026-11-18 to add the per-index
+#: rows (totals within 0.6 points of the first run, which ended two forecast dates earlier).
 BACKTEST = {
     "window": "2016-2026",
     "indices": 10,
     "by_horizon": [
-        {"h": 1, "n": 4943, "coverage_50": 0.500, "coverage_80": 0.798, "coverage_90": 0.901, "skill_vs_baseline": 0.004},
-        {"h": 5, "n": 4933, "coverage_50": 0.494, "coverage_80": 0.787, "coverage_90": 0.887, "skill_vs_baseline": 0.012},
-        {"h": 21, "n": 4903, "coverage_50": 0.505, "coverage_80": 0.804, "coverage_90": 0.890, "skill_vs_baseline": 0.025},
+        {"h": 1, "n": 4962, "coverage_50": 0.502, "coverage_80": 0.797, "coverage_90": 0.898, "skill_vs_baseline": 0.009},
+        {"h": 5, "n": 4952, "coverage_50": 0.485, "coverage_80": 0.781, "coverage_90": 0.889, "skill_vs_baseline": 0.013},
+        {"h": 21, "n": 4922, "coverage_50": 0.496, "coverage_80": 0.798, "coverage_90": 0.889, "skill_vs_baseline": 0.025},
     ],
+    # The same walk-forward scored for each index alone (the board's index picker).
+    "by_index": {
+        "Nifty 50": [
+            {"h": 1, "n": 537, "coverage_50": 0.505, "coverage_80": 0.799, "coverage_90": 0.899, "skill_vs_baseline": 0.014},
+            {"h": 5, "n": 536, "coverage_50": 0.498, "coverage_80": 0.789, "coverage_90": 0.890, "skill_vs_baseline": 0.029},
+            {"h": 21, "n": 533, "coverage_50": 0.557, "coverage_80": 0.871, "coverage_90": 0.942, "skill_vs_baseline": 0.035},
+        ],
+        "Nifty Bank": [
+            {"h": 1, "n": 537, "coverage_50": 0.523, "coverage_80": 0.821, "coverage_90": 0.916, "skill_vs_baseline": 0.014},
+            {"h": 5, "n": 536, "coverage_50": 0.535, "coverage_80": 0.830, "coverage_90": 0.920, "skill_vs_baseline": 0.024},
+            {"h": 21, "n": 533, "coverage_50": 0.490, "coverage_80": 0.822, "coverage_90": 0.908, "skill_vs_baseline": 0.044},
+        ],
+        "Nifty Financial Services": [
+            {"h": 1, "n": 537, "coverage_50": 0.508, "coverage_80": 0.816, "coverage_90": 0.901, "skill_vs_baseline": 0.013},
+            {"h": 5, "n": 536, "coverage_50": 0.515, "coverage_80": 0.817, "coverage_90": 0.918, "skill_vs_baseline": 0.029},
+            {"h": 21, "n": 533, "coverage_50": 0.572, "coverage_80": 0.882, "coverage_90": 0.940, "skill_vs_baseline": 0.039},
+        ],
+        "Nifty Midcap Select": [
+            {"h": 1, "n": 129, "coverage_50": 0.550, "coverage_80": 0.791, "coverage_90": 0.876, "skill_vs_baseline": 0.049},
+            {"h": 5, "n": 128, "coverage_50": 0.445, "coverage_80": 0.766, "coverage_90": 0.836, "skill_vs_baseline": -0.009},
+            {"h": 21, "n": 125, "coverage_50": 0.432, "coverage_80": 0.720, "coverage_90": 0.864, "skill_vs_baseline": 0.038},
+        ],
+        "Nifty Next 50": [
+            {"h": 1, "n": 537, "coverage_50": 0.488, "coverage_80": 0.797, "coverage_90": 0.896, "skill_vs_baseline": 0.011},
+            {"h": 5, "n": 536, "coverage_50": 0.494, "coverage_80": 0.770, "coverage_90": 0.881, "skill_vs_baseline": 0.010},
+            {"h": 21, "n": 533, "coverage_50": 0.585, "coverage_80": 0.865, "coverage_90": 0.946, "skill_vs_baseline": 0.014},
+        ],
+        "Nifty IT": [
+            {"h": 1, "n": 537, "coverage_50": 0.453, "coverage_80": 0.775, "coverage_90": 0.881, "skill_vs_baseline": 0.002},
+            {"h": 5, "n": 536, "coverage_50": 0.444, "coverage_80": 0.752, "coverage_90": 0.864, "skill_vs_baseline": 0.009},
+            {"h": 21, "n": 533, "coverage_50": 0.478, "coverage_80": 0.745, "coverage_90": 0.865, "skill_vs_baseline": 0.035},
+        ],
+        "Nifty Auto": [
+            {"h": 1, "n": 537, "coverage_50": 0.505, "coverage_80": 0.793, "coverage_90": 0.894, "skill_vs_baseline": 0.007},
+            {"h": 5, "n": 536, "coverage_50": 0.446, "coverage_80": 0.744, "coverage_90": 0.864, "skill_vs_baseline": 0.020},
+            {"h": 21, "n": 533, "coverage_50": 0.478, "coverage_80": 0.809, "coverage_90": 0.891, "skill_vs_baseline": 0.038},
+        ],
+        "Nifty Pharma": [
+            {"h": 1, "n": 537, "coverage_50": 0.529, "coverage_80": 0.791, "coverage_90": 0.898, "skill_vs_baseline": -0.003},
+            {"h": 5, "n": 536, "coverage_50": 0.476, "coverage_80": 0.780, "coverage_90": 0.895, "skill_vs_baseline": -0.007},
+            {"h": 21, "n": 533, "coverage_50": 0.473, "coverage_80": 0.769, "coverage_90": 0.865, "skill_vs_baseline": 0.003},
+        ],
+        "Nifty FMCG": [
+            {"h": 1, "n": 537, "coverage_50": 0.473, "coverage_80": 0.776, "coverage_90": 0.894, "skill_vs_baseline": 0.002},
+            {"h": 5, "n": 536, "coverage_50": 0.478, "coverage_80": 0.800, "coverage_90": 0.899, "skill_vs_baseline": 0.007},
+            {"h": 21, "n": 533, "coverage_50": 0.338, "coverage_80": 0.632, "coverage_90": 0.743, "skill_vs_baseline": -0.031},
+        ],
+        "Nifty Metal": [
+            {"h": 1, "n": 537, "coverage_50": 0.520, "coverage_80": 0.810, "coverage_90": 0.911, "skill_vs_baseline": 0.010},
+            {"h": 5, "n": 536, "coverage_50": 0.485, "coverage_80": 0.754, "coverage_90": 0.884, "skill_vs_baseline": 0.006},
+            {"h": 21, "n": 533, "coverage_50": 0.508, "coverage_80": 0.805, "coverage_90": 0.908, "skill_vs_baseline": 0.026},
+        ],
+    },
+    #: First forecast date per index: Midcap Select needs two years of closes after its 2022 launch.
+    "first": {"Nifty 50": "2016-01-01", "Nifty Bank": "2016-01-01", "Nifty Financial Services": "2016-01-01", "Nifty Midcap Select": "2024-04-08", "Nifty Next 50": "2016-01-01", "Nifty IT": "2016-01-01", "Nifty Auto": "2016-01-01", "Nifty Pharma": "2016-01-01", "Nifty FMCG": "2016-01-01", "Nifty Metal": "2016-01-01"},
     "direction": "Up/down calls from momentum, trend, volatility and VIX features had no skill (AUC 0.47-0.52).",
 }
 
@@ -434,6 +490,8 @@ def run(data: dict[str, Any], ledger: list[dict], now: datetime) -> tuple[dict, 
         "indices": forecasts,
         "track_record": {
             "by_horizon": summarize_ledger(ledger),
+            # The same record for each index alone, for the board's index picker.
+            "by_index": {name: summarize_ledger([row for row in ledger if row["name"] == name]) for name, _ in INDICES},
             "first_forecast": min((row["as_of"] for row in ledger), default=None),
             "pending": sum(1 for row in ledger if row.get("realized") is None),
             "recent": [
