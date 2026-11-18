@@ -42,6 +42,11 @@ dependencies = [
 dev = [
   "ruff>=0.11.0",
 ]
+# The night report reader (scripts/knowledge_reports.py): pypdfium2 reads pages pypdf cannot.
+reports = [
+  "pypdf>=5.0.0",
+  "pypdfium2>=4.30",
+]
 analysis = [
   "matplotlib>=3.8.0",
   "numpy>=1.26.0",

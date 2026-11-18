@@ -980,8 +980,29 @@ def slug(text: str) -> str:
 
 
 def pdf_pages(path: Path) -> list[str]:
+    """Each page's text. A page pypdf cannot parse is read with pypdfium2 when it is installed, else
+    left empty, so one bad page never stops a report. (pypdf 6.21 raises on 33 of the 57 pages of the
+    2026 AI Index's technical chapter: chart pages whose fonts carry two font files.)"""
     from pypdf import PdfReader
-    return [page.extract_text() or "" for page in PdfReader(str(path)).pages]
+    pages: list[str] = []
+    fallback: Optional[Callable[[int], str]] = None
+    for i, page in enumerate(PdfReader(str(path)).pages):
+        try:
+            pages.append(page.extract_text() or "")
+        except Exception:  # aqg: per-page boundary -- pypdf's font parsing fails on some pages
+            if fallback is None:
+                fallback = _pdfium_reader(path)
+            pages.append(fallback(i))
+    return pages
+
+
+def _pdfium_reader(path: Path) -> Callable[[int], str]:
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return lambda i: ""
+    doc = pdfium.PdfDocument(str(path))
+    return lambda i: doc[i].get_textpage().get_text_range() or ""
 
 
 def split_pages(text: str) -> list[str]:

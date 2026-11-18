@@ -690,3 +690,58 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PdfPageTests(unittest.TestCase):
+    """pdf_pages: a page pypdf cannot parse falls back to pypdfium2, or reads empty without it."""
+
+    class _Page:
+        def __init__(self, text):
+            self.text = text
+
+        def extract_text(self):
+            if self.text is None:
+                raise ValueError("More than one /FontFile found")
+            return self.text
+
+    def _reader(self, texts):
+        pages = [self._Page(t) for t in texts]
+        return mock.Mock(return_value=mock.Mock(pages=pages))
+
+    def _pdfium(self, texts):
+        class TextPage:
+            def __init__(self, text):
+                self.text = text
+
+            def get_text_range(self):
+                return self.text
+
+        class Page:
+            def __init__(self, text):
+                self.text = text
+
+            def get_textpage(self):
+                return TextPage(self.text)
+
+        module = mock.Mock()
+        module.PdfDocument.return_value = [Page(t) for t in texts]
+        return module
+
+    def test_a_bad_page_is_read_with_pypdfium2(self):
+        reader = self._reader(["first", None, "third"])
+        fake = self._pdfium(["(pdfium 1)", "second from pdfium", "(pdfium 3)"])
+        with mock.patch("pypdf.PdfReader", reader), mock.patch.dict(sys.modules, {"pypdfium2": fake}):
+            self.assertEqual(kb.pdf_pages(Path("report.pdf")), ["first", "second from pdfium", "third"])
+        fake.PdfDocument.assert_called_once_with("report.pdf")
+
+    def test_without_pypdfium2_a_bad_page_reads_empty_and_the_rest_survive(self):
+        reader = self._reader([None, "second", None])
+        with mock.patch("pypdf.PdfReader", reader), mock.patch.dict(sys.modules, {"pypdfium2": None}):
+            self.assertEqual(kb.pdf_pages(Path("report.pdf")), ["", "second", ""])
+
+    def test_good_pages_never_open_pypdfium2(self):
+        fake = self._pdfium([])
+        with mock.patch("pypdf.PdfReader", self._reader(["a", "b"])), \
+                mock.patch.dict(sys.modules, {"pypdfium2": fake}):
+            self.assertEqual(kb.pdf_pages(Path("report.pdf")), ["a", "b"])
+        fake.PdfDocument.assert_not_called()
