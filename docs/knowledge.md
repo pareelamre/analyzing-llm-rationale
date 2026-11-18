@@ -70,6 +70,14 @@ Then:
   numbers and question words ("reach", "by December 31") never count as a lexical match, since the
   horizon list already covers years. Before this, "Will Bitcoin reach $130,000 by December 31,
   2026?" got four World Bank metal forecasts.
+- **Rate decisions:** "Will the Fed cut rates in December 2026?" names the Fed, not the federal
+  funds rate. When a question names a bank and asks about its rates ("cut rates", "raise interest
+  rates", "rate hike", "rates unchanged", "25 bps"), the bank's own policy rate joins its entities,
+  and that rate's current claims lead, the asked year first. The base says which rate a bank sets
+  through a `sets` relation (`rbi sets repo_rate`) or a rate alias built on the bank's name
+  ("Fed rates" on the federal funds rate). In such a question "rate", "cut" and the like are not
+  topic words, so one bank's rate path is never evidence for another's. Before this, the FOMC's
+  unemployment projections led and the 2026 federal funds rate came eighth.
 
 ## Adding a report
 

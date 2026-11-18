@@ -241,12 +241,46 @@ out market markets percent per cent total much many thousand million billion tri
 BROAD_TYPES = frozenset({"country", "region"})
 
 
+#: A word right before "rate(s)" that makes it a bank's policy rate: "cut rates", "interest rates".
+#: "unemployment rate" and "exchange rate" stay out, and so does a bare "cut rates" with no bank.
+RATE_LEAD = frozenset("""cut cuts cutting raise raises raising hike hikes hiking hold holds holding keep keeps
+lower lowers lowering decrease decreases decreasing increase increases increasing reduce reduces reducing
+change changes changing leave leaves maintain maintains pause pauses interest policy key benchmark deposit
+its""".split())
+#: A word right after "rate(s)": "rate cut", "rates unchanged".
+RATE_TAIL = frozenset("""cut cuts hike hikes increase increases decrease decreases decision decisions path
+move moves change changes pause hold unchanged steady""".split())
+#: Moves that, with basis points ("25 bps"), name a rate decision without the word "rate".
+RATE_MOVE = frozenset("""cut cuts hike hikes raise raises lower lowers increase increases decrease decreases
+reduce reduces""".split())
+#: Relation predicates that tie a bank to the rate it sets ("rbi sets repo_rate").
+SETS = frozenset({"sets", "set", "controls"})
+RATE_WORDS = frozenset({"rate", "rates"})
+
+
+def asks_policy_rate(text: str, bank_words: Iterable[str] = ()) -> bool:
+    """Whether a question asks about a policy-rate decision: "cut rates", "raise interest rates",
+    "rate hike", "rates unchanged", "25 bps", or "<bank> rates" for the words in ``bank_words``."""
+    words = [w for w in WORD.findall(str(text).lower()) if w != "s"]  # "Fed's rates" reads as "Fed rates"
+    leads = RATE_LEAD | {w.lower() for w in bank_words}
+    for j, word in enumerate(words):
+        if word in RATE_WORDS and ((j and words[j - 1] in leads) or (j + 1 < len(words) and words[j + 1] in RATE_TAIL)):
+            return True
+    bps = any(re.fullmatch(r"\d*bps", w) for w in words) or \
+        any(a == "basis" and b.startswith("point") for a, b in zip(words, words[1:]))
+    return bps and any(w in RATE_MOVE for w in words)
+
+
 def topical_word(word: str) -> bool:
     return len(word) > 2 and word not in TOPIC_FILLER and not word.replace(".", "").isdigit()
 
 
 def _stem(word: str) -> str:
     return word[:-1] if len(word) > 4 and word.endswith("s") else word
+
+
+#: The words of a rate-decision question that give its form, not its topic (stemmed).
+RATE_FORM = frozenset(_stem(w) for w in RATE_WORDS | RATE_LEAD | RATE_TAIL | RATE_MOVE | {"bps", "basis", "points"})
 
 
 def _fts_query(text: str) -> str:
@@ -332,6 +366,8 @@ class Index:
                 for eid in (a, b):
                     if eid and i not in self._entity_claims.setdefault(eid, []):
                         self._entity_claims[eid].append(i)
+        self._rates_of = self._policy_rates()
+        self._rate_ids = {r for rates in self._rates_of.values() for r in rates}
         self._build_fts()
         self._claim_vecs: list[list[float]] = []
         self._chunk_vecs: list[list[float]] = []
@@ -351,6 +387,32 @@ class Index:
                 if norm:
                     table.append((f" {norm} ", eid))
         return sorted(set(table), key=lambda t: -len(t[0]))
+
+    def _names(self, eid: str) -> list[str]:
+        ent = self.corpus.entities.get(eid, {})
+        return [n for n in (normalize(x or "").strip() for x in [ent.get("name"), *ent.get("aliases", [])]) if n]
+
+    def _policy_rates(self) -> dict[str, set[str]]:
+        """Bank -> the rates it sets, from the base itself: a ``sets`` relation ("rbi sets repo_rate")
+        or a rate alias built on the bank's own name ("Fed rates" for the Federal Reserve)."""
+        entities = self.corpus.entities
+        rates = {eid for eid in entities if any(n.split()[-1] in RATE_WORDS for n in self._names(eid))}
+        owners: dict[str, set[str]] = {}
+        for eid in entities:
+            for name in self._names(eid):
+                owners.setdefault(name, set()).add(eid)
+        out: dict[str, set[str]] = {}
+        for rel in self.corpus.relations:
+            bank, rate = rel.get("subject"), rel.get("object")
+            if rel.get("predicate") in SETS and rate in rates and bank in entities and bank not in self._broad:
+                out.setdefault(bank, set()).add(rate)
+        for rate in rates:
+            for name in self._names(rate):
+                head = name.rsplit(" ", 1)[0] if " " in name else ""
+                bank = owners.get(head, set())
+                if len(bank) == 1 and rate not in bank and entities[next(iter(bank))].get("type") == "organization":
+                    out.setdefault(next(iter(bank)), set()).add(rate)
+        return out
 
     def _claim_text(self, claim: dict) -> str:
         names = [self.corpus.entities.get(e, {}).get("name", e) for e in claim.get("entities") or []]
@@ -388,6 +450,35 @@ class Index:
                     found.append(eid)
                 padded = padded.replace(alias, " ")
         return found
+
+    def topics(self, text: str) -> list[str]:
+        """``link``, plus a named bank's policy rate when the text asks about its rate decision.
+
+        "Will the Fed cut rates?" names the Fed but not the federal funds rate; without the rate its
+        lexical match on "rate" pulled FOMC unemployment-rate projections ahead of the rate path.
+        Only the named bank's own rate joins, so an RBI question never brings in the Fed's.
+        """
+        found = self.link(text)
+        banks = [e for e in found if e in self._rates_of]
+        if banks and self._asks_rate(text, found):
+            found += [r for b in banks for r in sorted(self._rates_of[b]) if r not in found]
+        return found
+
+    def _asks_rate(self, text: str, linked: Sequence[str]) -> bool:
+        """``asks_policy_rate``, counting "<named bank> rates" ("RBI rates") as a rate question too."""
+        banks = [e for e in linked if e in self._rates_of
+                 or self.corpus.entities.get(e, {}).get("type") == "organization"]
+        return asks_policy_rate(text, {n.split()[-1] for e in banks for n in self._names(e)})
+
+    def _rate_gap(self, i: int, asked: list[int]) -> float:
+        """Years between a claim and the nearest asked year; a dated fact counts from its publication."""
+        claim = self.claims[i]
+        when = parse_when(claim.get("horizon"))
+        if when is None and claim.get("kind") not in NUMERIC_KINDS:
+            when = parse_when(self._published[i])
+        if not asked:
+            return 0.0
+        return float(min(abs(when.year - y) for y in asked)) if when else math.inf
 
     def _visible(self, i: int, as_of: Optional[date], kinds: Optional[Sequence[str]]) -> bool:
         claim = self.claims[i]
@@ -467,8 +558,13 @@ class Index:
 
     def search(self, question: str, *, as_of: Optional[date] = None, k: int = 8,
                kinds: Optional[Sequence[str]] = None, rerank: Optional[Reranker] = None) -> list[Hit]:
-        """Claims for a question, best first, fused across lexical, dense, graph and horizon lists."""
-        entities = self.link(question)
+        """Claims for a question, best first, fused across lexical, dense, graph and horizon lists.
+
+        When the question is about a bank's policy rate, that rate's current claims lead, the
+        asked year first: for "Will the Fed cut rates in December 2026?" the FOMC's 2026 rate path.
+        """
+        entities = self.topics(question)
+        rates = {e for e in entities if e in self._rate_ids}
         lists = {
             "lexical": self._lexical(question),
             "dense": self._dense(question, self._claim_vecs),
@@ -490,6 +586,12 @@ class Index:
         for i in superseded:
             scores[i] *= 0.5
         order = sorted(scores, key=lambda i: (-scores[i], _desc(self._published[i]), i))
+        if rates:
+            asked = years(question)
+            lead = [i for i in order if i not in superseded and rates & set(self.claims[i].get("entities") or [])]
+            lead.sort(key=lambda i: self._rate_gap(i, asked))  # stable: fused order within a year
+            first = set(lead)
+            order = lead + [i for i in order if i not in first]
         if rerank is not None and order:
             head = order[: max(k * 2, 10)]
             try:
@@ -551,11 +653,17 @@ class Index:
 
     def on_topic(self, question: str, claim: dict) -> bool:
         """Whether a claim is about what the question asks: a shared topical entity (not a country
-        or region) or a shared topic word in the claim's text or metric."""
-        topical = {e for e in self.link(question) if e not in self._broad}
+        or region) or a shared topic word in the claim's text or metric.
+
+        In a rate-decision question ("Will the ECB raise rates?") "rate", "raise" and the like are
+        its form: on their own they made the Fed's or the RBI's rate path look on-topic."""
+        linked = self.topics(question)
+        topical = {e for e in linked if e not in self._broad}
         if topical & set(claim.get("entities") or []):
             return True
         words = {_stem(w) for w in terms(question) if topical_word(w) and w not in self._place_words}
+        if self._asks_rate(question, linked):
+            words -= RATE_FORM
         return bool(words & {_stem(w) for w in terms(f"{claim.get('text', '')} {claim.get('metric') or ''}")})
 
     def agreed(self, question: str, *, as_of: Optional[date] = None, min_support: int = 2,
