@@ -503,6 +503,139 @@ class TopicTests(BaseCase):
                                              {"text": "Ruritania built factories.", "entities": ["ruritania"]}))
 
 
+def make_rate_base(root: Path) -> Path:
+    """Made-up central banks: the Bank of Ruritania's rate is tied by an alias ("BoR rates"), the
+    Fenwick Monetary Authority's by a ``sets`` relation, and Freedonia's bank has no rate at all."""
+    _write(root / "entities.jsonl", [
+        {"id": "bor", "name": "Bank of Ruritania", "type": "organization", "aliases": ["BoR"]},
+        {"id": "base_rate", "name": "Ruritanian base rate", "type": "metric",
+         "aliases": ["base rate", "BoR rate", "BoR rates"]},
+        {"id": "fma", "name": "Fenwick Monetary Authority", "type": "organization", "aliases": ["FMA"]},
+        {"id": "crown_rate", "name": "Crown lending rate", "type": "metric", "aliases": ["crown rate"]},
+        {"id": "freedonia_cb", "name": "Freedonian central bank", "type": "organization", "aliases": []},
+        {"id": "unemployment", "name": "Unemployment", "type": "metric", "aliases": ["unemployment rate"]},
+        {"id": "inflation", "name": "Inflation", "type": "metric", "aliases": ["consumer prices"]},
+        {"id": "ruritania", "name": "Ruritania", "type": "country", "aliases": []},
+    ])
+
+    def source(sid, published, claims, relations=()):
+        folder = root / "sources" / sid
+        _write(folder / "source.json", {"id": sid, "title": "Projections", "publisher": sid.split("-")[0].upper(),
+                                        "published": published})
+        _write(folder / "claims.jsonl", claims)
+        _write(folder / "relations.jsonl", list(relations))
+
+    def bor(sid, n, metric, value, horizon, text, entity, kind="projection"):
+        claim = {"id": f"{sid}:c{n:03d}", "kind": kind, "text": text, "entities": ["bor", entity, "ruritania"],
+                 "metric": metric, "value": value, "unit": "%", "geo": "Ruritania"}
+        return {**claim, "horizon": horizon} if horizon else claim
+
+    sep = "bor-2026-09-outlook"
+    # Unemployment comes first, as in the Fed's table, so the graph list alone would lead with it.
+    claims = [bor(sep, n, "unemployment rate (Q4)", v, y, f"The BoR's September projections have an unemployment "
+                  f"rate of {v}% in {y}.", "unemployment") for n, (y, v) in enumerate((("2026", 5.1), ("2027", 5.3),
+                                                                                       ("2028", 5.2)), 1)]
+    claims += [bor(sep, n, "base rate (year-end)", v, y, f"The BoR's September projections have the base rate at "
+                   f"{v}% at the end of {y}.", "base_rate") for n, (y, v) in enumerate((("2026", 4.5), ("2027", 4.0),
+                                                                                         ("2028", 3.5)), 4)]
+    claims.append(bor(sep, 7, "base rate (longer run)", 3.0, None, "The BoR's September projections put the "
+                      "longer-run base rate at 3.0%.", "base_rate", kind="estimate"))
+    claims.append(bor(sep, 8, "inflation", 2.6, "2027", "The BoR's September projections have inflation at "
+                      "2.6% in 2027.", "inflation"))
+    source(sep, "2026-09-20", claims)
+    old = "bor-2026-06-outlook"
+    source(old, "2026-06-20", [bor(old, 1, "base rate (year-end)", 4.25, "2027", "The BoR's June projections had "
+                                   "the base rate at 4.25% at the end of 2027.", "base_rate")])
+    fma = "fma-2026-10-statement"
+    source(fma, "2026-10-05", [
+        {"id": f"{fma}:c001", "kind": "fact", "text": "The FMA kept the crown rate at 6.0% in October 2026.",
+         "entities": ["fma", "crown_rate"]},
+        {"id": f"{fma}:c002", "kind": "projection", "text": "The FMA projects inflation of 3.2% in 2027.",
+         "entities": ["fma", "inflation"], "metric": "inflation", "value": 3.2, "unit": "%", "geo": "Grand Fenwick",
+         "horizon": "2027"},
+    ], [{"subject": "fma", "predicate": "sets", "object": "crown_rate", "claims": [f"{fma}:c001"]}])
+    fr = "fr-2026-09-projections"
+    source(fr, "2026-09-15", [{"id": f"{fr}:c001", "kind": "projection", "entities": ["freedonia_cb", "inflation"],
+                               "text": "Freedonian central bank staff see inflation of 2.1% in 2027.",
+                               "metric": "inflation", "value": 2.1, "unit": "%", "geo": "Freedonia",
+                               "horizon": "2027"}])
+    return root
+
+
+class PolicyRateTests(unittest.TestCase):
+    """"Will the Fed cut rates?" names the bank, not its rate; the rate path must still lead."""
+
+    AS_OF = date(2026, 11, 18)
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.corpus = kb.load(make_rate_base(Path(self.tmp.name)))
+        self.assertEqual(self.corpus.errors, [])
+        self.index = kb.Index(self.corpus)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _ids(self, question):
+        return [h.claim["id"] for h in self.index.agreed(question, as_of=self.AS_OF)]
+
+    def test_a_rate_question_brings_in_only_the_named_banks_rate(self):
+        self.assertEqual(self.index.topics("Will the BoR cut rates in December 2027?"), ["bor", "base_rate"])
+        self.assertEqual(self.index.topics("Will the FMA raise interest rates in 2027?"), ["fma", "crown_rate"])
+        both = self.index.topics("Will the FMA hike rates before the BoR does?")
+        self.assertEqual(sorted(both), ["base_rate", "bor", "crown_rate", "fma"])
+
+    def test_the_rate_path_leads_with_the_asked_year_first(self):
+        ids = self._ids("Will the BoR cut rates in December 2027?")
+        sep = "bor-2026-09-outlook"
+        self.assertEqual(ids[:4], [f"{sep}:c005", f"{sep}:c004", f"{sep}:c006", f"{sep}:c007"])
+        self.assertIn(f"{sep}:c001", ids[4:])  # unemployment stays as context, after the rate path
+        self.assertNotIn("bor-2026-06-outlook:c001", ids)  # the June path is history
+        self.assertEqual(self._ids("Will the BoR hold rates steady in 2026?")[0], f"{sep}:c004")
+        self.assertEqual(self._ids("Will the BoR lower its key rate by 25 bps in 2028?")[0], f"{sep}:c006")
+
+    def test_before_the_fix_unemployment_led(self):
+        plain = kb.Index(self.corpus)
+        plain._rates_of, plain._rate_ids = {}, set()
+        hits = plain.agreed("Will the BoR cut rates in December 2027?", as_of=self.AS_OF)
+        self.assertEqual(hits[0].claim["metric"], "unemployment rate (Q4)")
+
+    def test_a_sets_relation_ties_a_bank_to_its_rate(self):
+        ids = self._ids("Will the FMA raise interest rates in 2027?")
+        self.assertEqual(ids[0], "fma-2026-10-statement:c001")
+        self.assertNotIn("bor-2026-09-outlook:c005", ids)
+
+    def test_a_bank_without_a_rate_and_a_bare_cut_rates_link_nothing_extra(self):
+        question = "Will the Freedonian central bank raise rates in 2027?"
+        self.assertEqual(self.index.topics(question), ["freedonia_cb"])
+        self.assertEqual(self._ids(question), ["fr-2026-09-projections:c001"])
+        self.assertEqual(self.index.topics("Will central banks cut rates in 2027?"), [])
+        self.assertEqual(self.index.topics("Will Ruritania cut rates in 2027?"), ["ruritania"])
+
+    def test_questions_without_a_rate_decision_are_unchanged(self):
+        plain = kb.Index(self.corpus)
+        plain._rates_of, plain._rate_ids = {}, set()
+        for question in ("Will the BoR's unemployment rate projection for 2027 go above 5%?",
+                         "Will the BoR publish new projections in 2027?",
+                         "Will FMA inflation exceed 3% in 2027?"):
+            with self.subTest(question=question):
+                self.assertFalse(self.index._asks_rate(question, self.index.link(question)))
+                self.assertEqual(self.index.topics(question), self.index.link(question))
+                self.assertEqual([h.claim["id"] for h in self.index.search(question, as_of=self.AS_OF)],
+                                 [h.claim["id"] for h in plain.search(question, as_of=self.AS_OF)])
+
+    def test_what_counts_as_a_rate_decision(self):
+        for text in ("Will the Fed cut rates?", "Will the ECB raise interest rates?", "A Fed rate cut in December?",
+                     "Will the RBI keep rates unchanged?", "Will the Fed's rates stay put?",
+                     "Fed decreases rates by 25 bps?", "Will the FOMC hike by 50 basis points?"):
+            with self.subTest(text=text):
+                self.assertTrue(kb.asks_policy_rate(text, {"fed"}))
+        for text in ("Will the unemployment rate pass 5%?", "Will the rupee exchange rate fall?",
+                     "Will Bitcoin's hash rate double?", "Will the Fed publish projections?", "Will BP cut jobs?"):
+            with self.subTest(text=text):
+                self.assertFalse(kb.asks_policy_rate(text, {"fed"}))
+
+
 class CliTests(unittest.TestCase):
     def test_add_validate_and_search_round_trip(self):
         import knowledge as cli
