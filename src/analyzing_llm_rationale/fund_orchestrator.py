@@ -252,9 +252,19 @@ def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[st
         if row.get("z_ratio") is not None:
             facts.append(_fact("price ratio z-score", f"{float(row['z_ratio']):.2f}",
                                f"pairs tracker, data through {row.get('date')}"))
-        long_view = _long_run_fact(row.get("long_run"), (tracker.get("long_run") or {}).get("driver_record") or {})
+        tracker_long = tracker.get("long_run") or {}
+        long_view = _long_run_fact(row.get("long_run"), tracker_long.get("driver_record") or {})
         if long_view:
             facts.append(long_view)
+        # The long-run label sizes the trade: a bet away from the 10-year average is taken smaller
+        # (commodity_pairs.TIDE_AWAY_SIZE, tested in scripts/pair_tide_backtest.py), and its record,
+        # tested and live, rides along so the label's credibility is visible on every trade.
+        label_info = tracker_long.get("tide") or {}
+        label = (row.get("long_run") or {}).get("tide")
+        size = float(label_info.get("away_size") or 1.0) if label == "away" else 1.0
+        label_fact = _tide_fact(label, label_info, size)
+        if label_fact:
+            facts.append(label_fact)
         if record:
             facts.append(_fact("US backtest win rate", _pct(float(record.get("win_rate") or 0.0)), "pairs backtest"))
         facts.append(_fact("hedge ratio", f"{beta:.2f}", "pairs tracker"))
@@ -262,8 +272,34 @@ def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[st
         # pairs, sizing by it did no better (2026-11-17), and on a short history it can be near zero.
         for leg, side in (("a", a_side), ("b", b_side)):
             signals.append(Signal(analyst=analyst, instrument=dict(pair[leg]), side=side, price=0.0,
-                                  edge=edge, trust=trust, facts=facts, pair_key=pair["key"]))
+                                  edge=edge, trust=trust * size, facts=facts, pair_key=pair["key"]))
     return signals, skipped
+
+
+def _tide_fact(label: Optional[str], info: Mapping[str, Any], size: float) -> Optional[dict[str, str]]:
+    """How trades with this long-run label have done: the tested record and the live one."""
+    if label not in ("toward", "away") or not info.get("backtest"):
+        return None
+    bt = info["backtest"]
+
+    def rec(r: Mapping[str, Any]) -> str:
+        return f"{float(r['avg_return']) * 100:+.1f}% a trade, won {float(r['win_rate']) * 100:.0f}% (n={int(r['closed'])})"
+
+    parts = [f"{'half' if size < 1 else 'full'} size: bets {'away from' if label == 'away' else 'toward'} "
+             "the 10-year average",
+             f"on {bt['sample']}: away {rec(bt['away'])}; toward {rec(bt['toward'])}"]
+    unseen = bt.get("unseen") or {}
+    if unseen and label == "away":
+        dd = unseen["worst_drawdown"]
+        parts.append(f"on unseen {unseen['years']}, half-sizing away trades cut the worst drawdown from "
+                     f"{dd[0] * 100:.0f}% to {dd[1] * 100:.0f}%")
+    live = info.get("live") or {}
+    closed = {k: v for k, v in live.items() if (v or {}).get("closed")}
+    if closed:
+        parts.append("live MCX so far: " + "; ".join(f"{k} {rec(v)}" for k, v in sorted(closed.items())))
+    else:
+        parts.append("no live trades with this label closed yet")
+    return _fact("long-run label record", "; ".join(parts), "pairs tracker (scripts/pair_tide_backtest.py)")
 
 
 def _ordinal(n: int) -> str:

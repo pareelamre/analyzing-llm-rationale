@@ -93,6 +93,33 @@ class PairSignalTests(unittest.TestCase):
         self.assertEqual(facts["price ratio z-score"], "-1.80")
         self.assertEqual(facts["entry rule"], "|z| >= 2.0, price ratio |z| >= 1.5 the same way")
 
+    def test_a_trade_against_the_long_run_average_is_half_size_and_carries_the_label_record(self):
+        label = {"away_size": 0.5,
+                 "backtest": {"sample": "2007-2026 oil and gas pairs, this rule",
+                              "toward": {"closed": 173, "avg_return": 0.0325, "win_rate": 0.798},
+                              "away": {"closed": 52, "avg_return": -0.0126, "win_rate": 0.538},
+                              "unseen": {"years": "2017-2026", "worst_drawdown": [0.432, 0.229]}},
+                 "live": {"toward": {"signals": 0, "closed": 0},
+                          "away": {"signals": 2, "closed": 2, "avg_return": 0.004, "win_rate": 0.5}}}
+        long_view = {"z": 0.83, "percentile": 0.71, "window_months": 120, "source": "made up"}
+
+        def run(tide):
+            row = {**TRACKER["pairs"][0], "long_run": {**long_view, "tide": tide}}
+            tracker = {**TRACKER, "pairs": [row], "long_run": {"driver_record": {}, "tide": label}}
+            return orch.pair_signals(tracker, UNIVERSE_PAIRS[:1], trust=0.25)[0]
+
+        away, toward = run("away"), run("toward")
+        self.assertEqual({s.trust for s in away}, {0.125})
+        self.assertEqual({s.trust for s in toward}, {0.25})
+        fact = {f["label"]: f["value"] for f in away[0].facts}["long-run label record"]
+        self.assertIn("half size: bets away from the 10-year average", fact)
+        self.assertIn("away -1.3% a trade, won 54% (n=52); toward +3.2% a trade, won 80% (n=173)", fact)
+        self.assertIn("cut the worst drawdown from 43% to 23%", fact)
+        self.assertIn("live MCX so far: away +0.4% a trade, won 50% (n=2)", fact)
+        self.assertIn("full size: bets toward", {f["label"]: f["value"] for f in toward[0].facts}["long-run label record"])
+        # A tracker from before the label record changes nothing.
+        self.assertEqual({s.trust for s in orch.pair_signals(TRACKER, UNIVERSE_PAIRS[:1], trust=0.25)[0]}, {0.25})
+
     def test_only_pairs_with_a_profitable_backtest_trade_and_skips_say_why(self):
         signals, skipped = orch.pair_signals(TRACKER, UNIVERSE_PAIRS)
         self.assertEqual({(s.instrument["id"], s.side) for s in signals},

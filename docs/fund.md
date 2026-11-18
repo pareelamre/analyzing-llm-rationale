@@ -1711,8 +1711,25 @@ The gold, silver and platinum pairs have no free long history yet.
   rule. A new extreme with no story shows as one, so it can be added.
 - **Use.** Every fund pair trade carries a "long-run context" fact. It gives the percentile,
   whether the trade bets toward or away from the 10-year average, today's cause and how past
-  causes of that kind ended. It is evidence only, like the knowledge base view; sizes do not
-  change until it is scored on closed trades.
+  causes of that kind ended.
+- **The toward/away label sizes trades (2026-11-18).** `scripts/pair_tide_backtest.py` replays
+  the live rule on FRED oil and gas and tags each trade with its 10-year position on the entry
+  day (no look-ahead):
+  - 2007-2026, 225 trades: away trades lost 1.3% a trade and won 54% (n=52); toward trades
+    made 3.3% and won 80% (n=173). Gap 4.5 points a trade, 95% range 2.0 to 7.3.
+  - Toward beat away in all 8 slices: two pairs, two halves, cut-offs 0 and 0.5.
+  - The cut-off picked on 2007-2016 alone was 0 (label every trade), so `TIDE_Z` is 0. The 0.5
+    first proposed showed no gain on 2017-2026 and was dropped.
+  - On unseen 2017-2026, most away trades were still small winners; one (WTI/gas, March 2020,
+    -41%) made the drawdown. So away trades are half size (`TIDE_AWAY_SIZE`), not skipped:
+    worst drawdown 43% to 23%, Sharpe 1.09 to 1.12, total return 2% lower.
+  - IMF monthly metals (a rougher proxy) agree in direction at cut-off 0 (away won 26%, toward
+    38%) but the gap there is within chance.
+  - Each trade's fund facts carry the label's record: the tested one, and the live MCX record,
+    since the tracker stores the label on every new signal and scores it as signals close.
+  - First case: copper/zinc on 2026-11-18 was cheap at z -3.0 over 60 sessions but at the 71st
+    percentile of 10 years, falling from a 4.05 record in January, so the trade bets away. The
+    fund already skipped it (expected return 0.0%).
 - **On 2026-11-17:**
   - zinc/lead sat at the 99th percentile with a temporary cause (a zinc ore shortage);
   - copper/aluminium sat at the 98th, with mixed causes, and the open long-copper trade bets

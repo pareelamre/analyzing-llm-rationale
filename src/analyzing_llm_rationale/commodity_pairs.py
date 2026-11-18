@@ -33,7 +33,7 @@ import gzip
 import json
 import math
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 from urllib.parse import quote
 
 import numpy as np
@@ -76,6 +76,24 @@ EXIT_Z = 0.5
 RATIO_CONFIRM_Z = 1.5
 MAX_HOLD = 20
 COST_PER_SIDE = 0.001
+#: Every signal is labelled by whether it bets the price ratio moves toward its 10-year average or
+#: further away (``tide``), once the ratio is more than TIDE_Z from that average. Replaying this rule on
+#: FRED oil and gas (scripts/pair_tide_backtest.py, 2026-11-18): the cut-off picked on 2007-2016
+#: alone was 0 (label every trade), and away trades did worse in all 8 slices (two pairs, two halves,
+#: two cut-offs). Away trades are taken at TIDE_AWAY_SIZE of the usual size, not skipped: on the
+#: unseen 2017-2026 half most were still small winners, and halving them cut the worst drawdown
+#: about in half for the same Sharpe ratio. TIDE_RECORD is what that run found; the tracker also keeps
+#: the live record of each label on closed MCX signals.
+TIDE_Z = 0.0
+TIDE_AWAY_SIZE = 0.5
+TIDE_RECORD: dict[str, Any] = {
+    "sample": "2007-2026 oil and gas pairs, this rule",
+    "toward": {"closed": 173, "avg_return": 0.0325, "win_rate": 0.798},
+    "away": {"closed": 52, "avg_return": -0.0126, "win_rate": 0.538},
+    "gap_95": [0.0203, 0.0732],
+    "unseen": {"years": "2017-2026", "sharpe": [1.09, 1.12], "worst_drawdown": [0.432, 0.229],
+               "total_return": [4.567, 4.476]},
+}
 #: The first session the live tracker evaluated. Signals before it come only from the replay.
 LIVE_SINCE = date(2026, 11, 6)
 #: A pair's expected return per signal blends the US backtest, counted as this many signals,
@@ -571,8 +589,13 @@ def track_pair(pair: dict[str, str], series: dict) -> Optional[dict[str, Any]]:
     }
 
 
-def update_ledger(ledger: list[dict], rows: list[dict], now: datetime) -> int:
-    """Advance open live signals through new sessions, then open new ones on the newest session."""
+def update_ledger(ledger: list[dict], rows: list[dict], now: datetime, *,
+                  tides: Optional[Mapping[str, Optional[str]]] = None) -> int:
+    """Advance open live signals through new sessions, then open new ones on the newest session.
+
+    ``tides`` is each pair's long-run label today; a new signal keeps it, so the label's own
+    record can be scored as signals close.
+    """
     added = 0
     by_key = {row["key"]: row for row in rows if "_hist" in row}
     for event in ledger:
@@ -608,6 +631,7 @@ def update_ledger(ledger: list[dict], rows: list[dict], now: datetime) -> int:
             "pair": key, "entry_date": last["date"].isoformat(), "issued_at": now.isoformat(),
             "entry_z": round(last["z"], 3), "beta": round(last["beta"], 6), "entry_spread": round(last["spread"], 8),
             "side": -1 if last["z"] > 0 else 1, "status": "open",
+            **({"tide": tides[key]} if (tides or {}).get(key) else {}),
         })
         added += 1
     return added
@@ -617,7 +641,7 @@ def tide(z_short: Optional[float], long_run: Optional[dict]) -> Optional[str]:
     """Whether betting the 60-session gap closes is also a bet toward the pair's 10-year average."""
     if z_short is None or not long_run:
         return None
-    if abs(float(long_run["z"])) < 1.0:
+    if abs(float(long_run["z"])) <= TIDE_Z:
         return "neutral"
     return "toward" if (z_short > 0) == (float(long_run["z"]) > 0) else "away"
 
@@ -626,13 +650,14 @@ def run(series: dict, ledger: list[dict], now: datetime, *,
         long_run: Optional[dict] = None) -> tuple[dict, list[dict]]:
     """``long_run`` is pair_history.contexts(): each pair's place in its long history and its stories."""
     rows = [track_pair(pair, series) for pair in PAIRS]
-    update_ledger(ledger, rows, now)
+    long_pairs = (long_run or {}).get("pairs") or {}
+    tides = {row["key"]: tide(row.get("z"), long_pairs[row["key"]]) for row in rows if row["key"] in long_pairs}
+    update_ledger(ledger, rows, now, tides=tides)
     live = {}
     for pair in PAIRS:
         events = [e for e in ledger if e["pair"] == pair["key"]]
         live[pair["key"]] = summarize(events) | {"open": sum(e["status"] == "open" for e in events)}
     public = [{k: v for k, v in row.items() if not k.startswith("_")} for row in rows]
-    long_pairs = (long_run or {}).get("pairs") or {}
     for row in public:
         if row.get("z") is not None:
             row["expected"] = expected_return(row["key"], row.get("replay") or {}, live[row["key"]])
@@ -645,12 +670,16 @@ def run(series: dict, ledger: list[dict], now: datetime, *,
         "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee)",
         "rule": {
             "hedge_window": HEDGE_WINDOW, "z_window": Z_WINDOW, "entry_z": ENTRY_Z, "exit_z": EXIT_Z,
-            "ratio_confirm_z": RATIO_CONFIRM_Z,
+            "ratio_confirm_z": RATIO_CONFIRM_Z, "tide_z": TIDE_Z,
             "max_hold": MAX_HOLD, "cost_per_side": COST_PER_SIDE, "min_sessions": MIN_SESSIONS,
             "prior_signals": PRIOR_SIGNALS,
         },
         "backtest": BACKTEST,
-        "long_run": {"driver_record": (long_run or {}).get("driver_record") or {}} if long_run else None,
+        "long_run": {
+            "driver_record": (long_run or {}).get("driver_record") or {},
+            "tide": {"away_size": TIDE_AWAY_SIZE, "backtest": TIDE_RECORD,
+                     "live": {k: summarize([e for e in ledger if e.get("tide") == k]) for k in ("toward", "away")}},
+        } if long_run else None,
         "pairs": public,
         "track_record": {
             "by_pair": live,
