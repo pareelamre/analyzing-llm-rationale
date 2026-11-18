@@ -904,6 +904,23 @@ def chunk_pages(source_id: str, pages: Sequence[str], *, size: int = 1400, overl
     return chunks
 
 
+#: A claim that repeats this many consecutive words of its passage is copied, not our own words.
+COPY_WORDS = 8
+
+
+def copied(text: str, passage: str, *, n: int = COPY_WORDS) -> bool:
+    """Whether ``text`` repeats a run of ``n`` consecutive words from ``passage``.
+
+    Reports are often licensed: the base keeps claims in our own words, never their sentences.
+    """
+    said = WORD.findall(str(text).lower())
+    source = WORD.findall(str(passage).lower())
+    if len(said) < n or len(source) < n:
+        return False
+    runs = {tuple(source[i:i + n]) for i in range(len(source) - n + 1)}
+    return any(tuple(said[i:i + n]) in runs for i in range(len(said) - n + 1))
+
+
 def grounded(claim: dict, passage: str) -> bool:
     """Every number a claim states must appear in the passage it came from."""
     seen = {n.replace(",", "") for n in NUMBER.findall(passage)}
@@ -922,17 +939,22 @@ EXTRACT_PROMPT = """You turn a passage of a report into atomic claims for a fore
 Report: {title} ({publisher}, published {published}). Section: {section}. Page {page}.
 
 Rules:
-- Write each claim as one plain sentence in your own words; do not copy sentences.
+- At most 6 claims: the ones most useful for forecasting (numbers, forecasts, policies, risks, causes).
+  Skip statements about the publisher itself (its mission, members, work programme) and the report's
+  own structure. No claims at all is a fine answer.
+- Write each claim as one short plain sentence in your own words: never reuse more than five words in a row
+  from the passage.
 - Only claims the passage states. Every number you write must appear in the passage.
 - kind is one of: projection (a number for a future year), estimate, fact, policy, finding, risk.
-- For numbers give metric, value (a number), unit, geo and horizon (the year, YYYY).
+- For a number give metric, value (a number), unit, geo and horizon (the year, YYYY); leave out fields
+  that do not apply.
 - entities: the organisations, places, technologies, commodities and policies the claim is about.
 - relations: links between entities the passage states, as subject, predicate (snake_case verb), object.
 
-Reply with JSON only:
-{{"claims": [{{"kind": "...", "text": "...", "entities": ["..."], "metric": null, "value": null,
-  "unit": null, "geo": null, "horizon": null, "scenario": null}}],
- "relations": [{{"subject": "...", "predicate": "...", "object": "...", "claim": 0}}]}}
+Reply with compact JSON on one line, nothing else, for example:
+{{"claims": [{{"kind": "risk", "text": "...", "entities": ["..."]}}, {{"kind": "projection", "text": "...",
+"entities": ["..."], "metric": "...", "value": 0, "unit": "...", "geo": "...", "horizon": "2030"}}],
+"relations": [{{"subject": "...", "predicate": "...", "object": "...", "claim": 0}}]}}
 
 Passage:
 {text}"""
@@ -958,15 +980,57 @@ def _first_json(text: str) -> Optional[dict]:
     return None
 
 
-def extract(chunk: dict, source: dict, call: Callable[[str], str]) -> tuple[list[dict], list[dict]]:
-    """Claims and relations an LLM finds in one chunk, keeping only claims grounded in it.
+def _salvage(text: str) -> Optional[dict]:
+    """The complete claims of an answer cut off part way (it hit the token limit)."""
+    start = str(text).find('"claims"')
+    open_at = text.find("[", start) if start != -1 else -1
+    if open_at == -1:
+        return None
+    claims, depth, began, in_str, esc = [], 0, None, False, False
+    for j in range(open_at + 1, len(text)):
+        ch = text[j]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                began = j
+            depth += 1
+        elif ch == "}" and depth:
+            depth -= 1
+            if depth == 0 and began is not None:
+                try:
+                    claims.append(json.loads(text[began:j + 1]))
+                except json.JSONDecodeError:
+                    pass
+                began = None
+        elif ch == "]" and depth == 0:
+            break
+    return {"claims": claims} if claims else None
 
-    Entities come back as names; ``merge_entities`` turns them into ids.
+
+def extract(chunk: dict, source: dict, call: Callable[[str], str], *,
+            rejected: Optional[list] = None) -> tuple[list[dict], list[dict]]:
+    """Claims and relations an LLM finds in one chunk, keeping only claims grounded in it and
+    written in our own words.
+
+    Entities come back as names; ``merge_entities`` turns them into ids. Claims a gate drops go to
+    ``rejected`` (when given) with the reason.
     """
     prompt = EXTRACT_PROMPT.format(title=source.get("title"), publisher=source.get("publisher"),
                                    published=source.get("published"), section=chunk.get("section") or "-",
                                    page=chunk.get("page"), text=chunk.get("text"))
-    parsed = _first_json(call(prompt)) or {}
+    reply = call(prompt)
+    parsed = _first_json(reply)
+    if not parsed or "claims" not in parsed:
+        parsed = _salvage(re.sub(r"<think>.*?</think>", "", str(reply), flags=re.S)) or {}
     claims, kept = [], {}
     for n, raw in enumerate(parsed.get("claims") or []):
         if not isinstance(raw, dict) or raw.get("kind") not in KINDS or not str(raw.get("text") or "").strip():
@@ -984,10 +1048,15 @@ def extract(chunk: dict, source: dict, call: Callable[[str], str]) -> tuple[list
             claim["horizon"] = str(claim["horizon"])[:10]
             if parse_when(claim["horizon"]) is None:
                 claim.pop("horizon")
-        if not grounded(claim, str(chunk.get("text") or "")):
-            continue
+        passage = str(chunk.get("text") or "")
+        why = ("a number is not in the passage" if not grounded(claim, passage)
+               else "copies the passage" if copied(claim["text"], passage) else None)
         claim["entities"] = [str(e) for e in raw.get("entities") or [] if str(e).strip()]
         claim.update(page=chunk.get("page"), section=chunk.get("section") or None, chunk=chunk.get("id"))
+        if why:
+            if rejected is not None:
+                rejected.append({"text": claim["text"], "why": why, "claim": claim})
+            continue
         kept[n] = len(claims)
         claims.append(claim)
     relations = []
@@ -999,6 +1068,32 @@ def extract(chunk: dict, source: dict, call: Callable[[str], str]) -> tuple[list
             rel["claim_index"] = kept[raw["claim"]]
         relations.append(rel)
     return claims, relations
+
+
+REPHRASE_PROMPT = """Rewrite each statement below as one short sentence in your own words.
+Keep every number, date and name exactly as given. Never reuse more than five words in a row from the
+statement as written.
+
+Reply with JSON only, one rewrite per statement in the same order:
+{{"rewrites": ["...", "..."]}}
+
+Statements:
+{items}"""
+
+
+def rephrase(copies: Sequence[dict], passage: str, call: Callable[[str], str]) -> list[dict]:
+    """Ask the model to restate claims that copied their passage; keep rewrites that pass both gates."""
+    if not copies:
+        return []
+    items = "\n".join(f"{n}. {c['text']}" for n, c in enumerate(copies, 1))
+    rewrites = (_first_json(call(REPHRASE_PROMPT.format(items=items))) or {}).get("rewrites") or []
+    kept = []
+    for claim, text in zip(copies, rewrites):
+        text = str(text or "").strip()
+        new = {**claim, "text": text}
+        if text and grounded(new, passage) and not copied(text, passage) and not copied(text, claim["text"]):
+            kept.append({**new, "rephrased": True})
+    return kept
 
 
 def merge_entities(entities: dict[str, dict], names: Iterable[str]) -> dict[str, str]:

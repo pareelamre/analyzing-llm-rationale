@@ -20,9 +20,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from test_knowledge import _sync_script, make_base  # noqa: E402
-
 from analyzing_llm_rationale import knowledge as kb  # noqa: E402
+from test_knowledge import _sync_script, make_base  # noqa: E402
 
 _ROOT = Path(__file__).resolve().parents[1]
 _SYNC = _ROOT / ".github" / "workflows" / "knowledge-sync.yml"

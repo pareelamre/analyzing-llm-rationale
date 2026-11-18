@@ -1,8 +1,9 @@
 """Read publishers' current forecast tables into the knowledge base (no model involved).
 
 For each reader in src/analyzing_llm_rationale/knowledge_tables.py (EIA STEO, Fed projections,
-ECB projections, IMF WEO), finds the current edition from the watch list, skips it when the base
-already has it, and otherwise writes a new source folder after the plausibility checks pass.
+ECB projections, IMF WEO) and knowledge_markets.py (CFTC positioning on COMEX and NYMEX, Shanghai
+futures), finds the current edition, skips it when the base already has it, and otherwise writes
+a new source folder after the plausibility checks pass.
 
     python scripts/knowledge_tables.py [--kb DIR] [--only eia-steo ...] [--dry-run]
 
@@ -19,14 +20,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale import knowledge as kb  # noqa: E402
+from analyzing_llm_rationale import knowledge_markets as markets  # noqa: E402
 from analyzing_llm_rationale import knowledge_tables as tables  # noqa: E402
 from analyzing_llm_rationale import knowledge_watch as watch  # noqa: E402
+
+
+READERS = {**tables.READERS, **markets.READERS}
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--kb", help="knowledge repo clone (default: KNOWLEDGE_DIR or ../foresea-knowledge)")
-    parser.add_argument("--only", nargs="*", default=[], help=f"readers to run: {', '.join(tables.READERS)}")
+    parser.add_argument("--only", nargs="*", default=[], help=f"readers to run: {', '.join(READERS)}")
     parser.add_argument("--dry-run", action="store_true", help="read and check, but write nothing")
     args = parser.parse_args(argv)
 
@@ -35,7 +40,8 @@ def main(argv=None) -> int:
         sys.exit("No knowledge base: pass --kb or set KNOWLEDGE_DIR.")
     today = datetime.now(timezone.utc).date()
     try:
-        results = tables.update(root, watch.Crawler(), today=today, only=args.only, dry_run=args.dry_run)
+        results = tables.update(root, watch.Crawler(), today=today, only=args.only, dry_run=args.dry_run,
+                                readers=READERS)
     except tables.TableError as exc:
         print(f"knowledge tables: {exc}", file=sys.stderr)
         return 1

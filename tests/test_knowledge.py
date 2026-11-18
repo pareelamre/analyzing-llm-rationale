@@ -443,6 +443,30 @@ class IngestTests(unittest.TestCase):
         self.assertFalse(kb.grounded({"text": "Demand hits 2,500 TWh in 2035."}, passage))
         self.assertTrue(kb.grounded({"text": "About 7% by 2035.", "value": 7.0}, passage))
 
+    def test_a_claim_that_repeats_eight_words_of_its_passage_is_copied(self):
+        passage = ("Global data centre electricity consumption is set to more than double over the next five "
+                   "years, according to the base case.")
+        self.assertTrue(kb.copied("Data centre electricity consumption is set to more than double by 2030.", passage))
+        self.assertFalse(kb.copied("Data centres will use over twice as much power within five years.", passage))
+        self.assertFalse(kb.copied("Short.", passage))
+        chunk = {"id": "s:p1:1", "page": 1, "text": passage}
+        reply = ('{"claims": [{"kind": "projection", "text": "Global data centre electricity consumption is set '
+                 'to more than double over the next five years."}, {"kind": "projection", "text": "Data centres '
+                 'will use over twice as much power within five years."}]}')
+        rejected: list = []
+        claims, _ = kb.extract(chunk, {}, lambda prompt: reply, rejected=rejected)
+        self.assertEqual([c["text"] for c in claims], ["Data centres will use over twice as much power within five years."])
+        self.assertEqual(rejected[0]["why"], "copies the passage")
+        # A copied claim gets one chance to be restated; the rewrite must pass both gates.
+        copies = [r["claim"] for r in rejected]
+        good = kb.rephrase(copies, passage, lambda p: '{"rewrites": ["Within five years data centres may use '
+                                                      'twice the power they do now."]}')
+        self.assertEqual(good[0]["text"], "Within five years data centres may use twice the power they do now.")
+        self.assertTrue(good[0]["rephrased"])
+        self.assertEqual(kb.rephrase(copies, passage, lambda p: '{"rewrites": ["Global data centre electricity '
+                                                                 'consumption is set to more than double soon."]}'), [])
+        self.assertEqual(kb.rephrase(copies, passage, lambda p: '{"rewrites": ["Usage hits 9 TWh in 5 years."]}'), [])
+
     def test_extraction_drops_invented_numbers_and_links_relations(self):
         chunk = {"id": "s:p4:1", "page": 4, "section": "2. Demand",
                  "text": "Widget demand reaches 120 million units in 2030, led by Ruritania."}
@@ -461,6 +485,12 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(relations, [{"subject": "Ruritania", "predicate": "leads_demand_for", "object": "Widgets",
                                       "claim_index": 0}])
         self.assertEqual(kb.extract(chunk, {}, lambda prompt: "no json here"), ([], []))
+        # An answer cut off by the token limit keeps its complete claims.
+        cut = ('{"claims": [{"kind": "projection", "text": "Widget demand reaches 120 million units by 2030.", '
+               '"entities": ["Widgets"]}, {"kind": "fact", "text": "Ruritania leads {demand}", "entities": ["Rur')
+        claims, relations = kb.extract(chunk, {}, lambda prompt: cut)
+        self.assertEqual([c["text"] for c in claims], ["Widget demand reaches 120 million units by 2030."])
+        self.assertEqual(relations, [])
 
     def test_entity_names_map_to_existing_ids_or_new_ones(self):
         entities = {"widgets": {"id": "widgets", "name": "Widgets", "aliases": ["widget"]}}

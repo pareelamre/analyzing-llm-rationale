@@ -80,7 +80,9 @@ python scripts/knowledge.py validate
 ```
 
 `--llm` extracts claims passage by passage with the self-hosted model and drops any claim whose
-numbers are not in its passage. Review, then commit to the data repo, one report per commit.
+numbers are not in its passage or that repeats eight words in a row from it (reports are often
+licensed; the base keeps our own words). Review, then commit to the data repo, one report per
+commit. For anything longer than a few pages, queue it for the night reader instead (below).
 
 ## Growing the base (owner, 2026-11-17)
 
@@ -108,6 +110,36 @@ Two jobs in the data repo keep the base growing toward what Foresea is asked:
   publisher's previous edition; values the publisher already stated in the base are skipped. A
   failed reader is a run warning and leaves the base untouched. The fund's crude/natural-gas pair
   view now comes from the monthly EIA forecast.
+- **Exchanges** (`knowledge_markets.py`, run by the same daily step, owner 2026-11-17: "add
+  comex, and use exchanges as well"): the CFTC's weekly Commitments of Traders for COMEX gold,
+  silver and copper and NYMEX WTI, Henry Hub, RBOB, ULSD, platinum and palladium (money managers'
+  net position, its share of open interest, and the one- and four-week change; only the latest
+  week is kept), and Shanghai Futures Exchange settlements for copper, aluminium, zinc, nickel,
+  gold and silver (most traded, December and farthest contracts, as `estimate` claims that say they
+  are futures prices, not forecasts; the last four weeks are kept, so the newest price shows with
+  the previous ones as "earlier"). CME's own site (COMEX, NYMEX) does not answer the crawler, and
+  ICE data, MCX, NSE and LBMA prices refuse it, so COMEX prices are not in the base; LME allows
+  crawling but its prices are licensed, so it is left out.
+- **Reading reports** (`scripts/knowledge_reports.py`, phase 4): on the Mac, launchd
+  (`com.foresea.knowledge-reports`, every 30 minutes) queues new `kind: report` editions from the
+  inbox, downloads the PDF (finding it on the edition page when the watch list has no file
+  pattern) and reads it passage by passage with the on-device model, 23:00 to 07:00 local time,
+  on AC power. The model belongs to the live site first: a passage starts only when no live
+  request is in flight (connections into Caddy's port 8090) and none finished in the last two
+  minutes (Caddy's access log), and a passage being read is dropped mid-answer the moment a live
+  request arrives (the server stops work for a client that hangs up), to be read again later.
+  Contents, reference lists and figure tables are skipped. Three gates: every number in a claim
+  must be in its passage; a claim that repeats eight words in a row from the passage gets one
+  chance to be restated by the model and must then pass both gates again; and a reviewer marks
+  every candidate keep or drop (`sheet`, `decide`) before `publish` writes the source and marks
+  the inbox row read. Only entities the base already knows, or that the reviewer's entity map
+  (`entities`, then `publish --entities map.json`) names with a type, reach the graph: the model's
+  vague names ("governments", "costs", "2026") would otherwise make unrelated claims look on topic.
+  First report (2026-11-17): IEA *Sheltering from Oil Shocks*, 52 passages in about 20 minutes,
+  220 candidates, 131 kept; the reviewer caught a reversed share, a wrong year, an invented
+  horizon and many duplicates, so the review gate is not optional. Work in progress lives in the clone's gitignored
+  `.kb/reports/<id>/`, so a stopped night resumes where it left off. Reports from publishers the
+  watch list does not cover can be queued by hand (`queue file.pdf|URL --id ...`).
 - **Crawler rules:** honest user agent (`ForeseaKnowledgeWatch/1.0`), robots.txt obeyed (RFC 9309:
   an unavailable robots.txt means no rules, a 401/403 means the site refuses us), 1.5 s between
   requests to a host, at most five new editions per source per run. A site that blocks the

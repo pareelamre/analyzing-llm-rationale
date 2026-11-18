@@ -23,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from analyzing_llm_rationale import fund_knowledge  # noqa: E402
 from analyzing_llm_rationale import knowledge as kb  # noqa: E402
 from analyzing_llm_rationale import knowledge_tables as tables  # noqa: E402
-from analyzing_llm_rationale import knowledge_watch as watch  # noqa: E402
 from test_knowledge import _write  # noqa: E402
 from test_knowledge_watch import crawler  # noqa: E402
 
