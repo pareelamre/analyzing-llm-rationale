@@ -15,12 +15,15 @@ numbers in front of the forecasts or the fund.
 Readers (all standard library, so the scheduled job installs nothing):
   eia-steo         EIA Short-Term Energy Outlook, from STEO_m.xlsx (monthly)
   fed-sep          Federal Reserve Summary of Economic Projections, web table (quarterly)
-  ecb-projections  ECB staff projections, the comparison table on the projections page (quarterly)
+  ecb-projections  ECB staff projections, the comparison table on the projections page, plus the
+                   three-month EURIBOR path from its technical assumptions (quarterly)
+  ecb-rates        ECB deposit facility rate changes, from the ECB Data Portal API (each decision)
   imf-weo          IMF World Economic Outlook, from the IMF DataMapper API (twice a year)
 """
 from __future__ import annotations
 
 import calendar
+import csv
 import html
 import io
 import json
@@ -59,6 +62,10 @@ ENTITIES = {
                            "aliases": ["fed funds rate", "fed funds", "Fed rate", "Fed rates", "US interest rates"]},
     "unemployment": {"name": "Unemployment", "type": "metric", "aliases": ["unemployment rate", "jobless rate"]},
     "ecb": {"name": "European Central Bank", "type": "organization", "aliases": ["ECB"]},
+    # "ECB rate(s)" ties it to the ECB, so "Will the ECB cut rates?" leads with it (knowledge.Index._policy_rates).
+    "ecb_deposit_rate": {"name": "ECB deposit facility rate", "type": "metric",
+                         "aliases": ["deposit facility rate", "ECB deposit rate", "ECB rate", "ECB rates",
+                                     "ECB interest rates", "euro area interest rates"]},
     "gasoline": {"name": "Gasoline", "type": "commodity",
                  "aliases": ["gasoline price", "gasoline prices", "petrol", "pump prices"]},
 }
@@ -71,6 +78,8 @@ BOUNDS = {"$/bbl": (5, 400), "$/mmbtu": (0.3, 60), "$/gal": (0.5, 15), "cents/kW
 #: How far a value may move from the publisher's previous edition before a person must look.
 MAX_MOVE_REL = 0.6
 MAX_MOVE_PP = 8.0
+#: Plausible euro short-term interest rates, in percent; tighter than the "%" bounds above.
+RATE_BOUNDS = (-2.0, 15.0)
 UNIT_WORDS = {"$/bbl": "a barrel", "$/mmbtu": "per million Btu", "$/gal": "a gallon"}
 
 
@@ -107,9 +116,10 @@ def _round(value: float, unit: str) -> float:
 
 def _claim(sid: str, n: int, *, text: str, metric: str, value: float, unit: str, geo: str,
            horizon: Optional[str], scenario: str, entities: Sequence[str], section: str,
-           kind: str = "projection") -> dict:
+           kind: str = "projection", digits: Optional[int] = None) -> dict:
+    value = round(value, digits) if digits is not None else _round(value, unit)
     claim = {"id": f"{sid}:c{n:03d}", "kind": kind, "section": section, "text": text,
-             "entities": list(entities), "metric": metric, "value": _round(value, unit), "unit": unit,
+             "entities": list(entities), "metric": metric, "value": value, "unit": unit,
              "geo": geo, "scenario": scenario}
     if horizon:
         claim["horizon"] = horizon
@@ -401,7 +411,8 @@ def _ecb_read(info: Mapping[str, Any], crawler: watch.Crawler, today: date, corp
     meta = re.search(r'article:published_time"\s+content="(\d{4}-\d{2}-\d{2})', page)
     stated = knowledge.parse_when(meta.group(1)) if meta else None
     published = stated if stated and (stated.year, stated.month) == (year, month) else _month_end(year, month)
-    table = next((t for t in html_tables(page)
+    page_tables = html_tables(page)
+    table = next((t for t in page_tables
                   if any(r and re.match(r"(ECB|Eurosystem) staff projections", r[0]) for r in t)), None)
     if table is None:
         raise TableError("no comparison table with an ECB staff projections row")
@@ -427,14 +438,132 @@ def _ecb_read(info: Mapping[str, Any], crawler: watch.Crawler, today: date, corp
                 scenario=ECB_SCENARIO, entities=["ecb", "euro_area", *entities],
                 section="Comparison with other forecasts",
                 text=f"ECB staff projections ({month_label}) see euro area {phrase} of {value:.1f}% in {horizon}."))
+    claims += _ecb_euribor(page_tables, sid, len(claims), year, month_label)
     source = {"id": sid, "title": f"ECB staff macroeconomic projections for the euro area ({month_label})",
               "publisher": "ECB", "published": published.isoformat(), "url": info["url"],
               "licence": "ECB: reuse allowed with the source credited.", "kind": "table",
-              "topics": ["euro area inflation", "euro area GDP growth", "ECB"],
+              "topics": ["euro area inflation", "euro area GDP growth", "ECB", "euro area interest rates"],
               "summary": "ECB staff baseline projections for euro area real GDP growth, HICP inflation and HICP "
-                         "inflation excluding energy and food, from the projections' comparison table.",
+                         "inflation excluding energy and food, from the projections' comparison table, and the "
+                         "market-based three-month EURIBOR path the projections assume.",
               "extracted_by": "knowledge_tables (no model) from the projections web page", "added": today.isoformat()}
     return Edition(source, claims, info["key"])
+
+
+ECB_EURIBOR = "Three-month EURIBOR"
+
+
+def _ecb_euribor(page_tables: list[list[list[str]]], sid: str, n: int, year: int, month_label: str) -> list[dict]:
+    """The three-month EURIBOR the projections assume, one claim a year from the projection year on.
+
+    The ECB has no published path for its own rates; this market-based assumption is the nearest
+    public one, so its claims carry the deposit facility rate's entity and lead rate questions.
+    """
+    table = next((t for t in page_tables if any(r and r[0].startswith(ECB_EURIBOR) for r in t)), None)
+    if table is None:
+        raise TableError("no technical assumptions table with a three-month EURIBOR row")
+    header = " ".join(table[0])
+    if month_label not in header:
+        raise TableError(f"the technical assumptions table is not the {month_label} edition")
+    prior = re.search(rf"Revisions vs ((?:{MONTHS}) \d{{4}})", header)
+    cols = next(([c for c in r if c] for r in table
+                 if r and all(re.fullmatch(r"\d{4}", c) for c in r if c) and len([c for c in r if c]) >= 3), [])
+    row = next(r for r in table if r and r[0].startswith(ECB_EURIBOR))
+    values = [_num(c) for c in row[1:]]
+    if not cols or len(values) != len(cols):
+        raise TableError(f"the EURIBOR row changed shape ({len(cols)} years, {len(values)} values)")
+    run = 1  # this edition's years come first, then the revisions' years start over
+    while run < len(cols) and int(cols[run]) > int(cols[run - 1]):
+        run += 1
+    revised = dict(zip(cols[run:], values[run:]))
+    claims: list[dict] = []
+    for horizon, value in zip(cols[:run], values[:run]):
+        if value is None or int(horizon) < year:
+            continue
+        if not RATE_BOUNDS[0] <= value <= RATE_BOUNDS[1]:
+            raise TableError(f"three-month EURIBOR {horizon} = {value}% is outside {RATE_BOUNDS[0]}..{RATE_BOUNDS[1]}")
+        change = revised.get(horizon) if prior else None
+        note = "" if change is None else (
+            f", unchanged from the {prior.group(1)} projections" if abs(change) < 0.05 else
+            f", {abs(change):.1f} points {'higher' if change > 0 else 'lower'} than in the {prior.group(1)} projections")
+        claims.append(_claim(
+            sid, n + len(claims) + 1, metric="three-month EURIBOR (market-based assumption)", value=value, unit="%",
+            geo="euro area", horizon=horizon, scenario=ECB_SCENARIO, entities=["ecb", "euro_area", "ecb_deposit_rate"],
+            section="Technical assumptions",
+            text=f"ECB staff projections ({month_label}) assume, from market pricing, a three-month EURIBOR "
+                 f"averaging {value:.1f}% in {horizon}{note}; it moves with the ECB's deposit facility rate."))
+    if not claims:
+        raise TableError(f"the EURIBOR row has no values from {year} on")
+    return claims
+
+
+# --------------------------------------------------------------------------------------------
+# ECB key interest rates (deposit facility rate)
+# --------------------------------------------------------------------------------------------
+
+ECB_DFR_SERIES = "FM.B.U2.EUR.4F.KR.DFR.LEV"
+ECB_DFR_API = "https://data-api.ecb.europa.eu/service/data/FM/B.U2.EUR.4F.KR.DFR.LEV?format=csvdata&startPeriod=1999-01-01"
+ECB_DFR_PAGE = "https://data.ecb.europa.eu/data/datasets/FM/FM.B.U2.EUR.4F.KR.DFR.LEV"
+DFR_SCENARIO = "ECB key interest rates"
+#: Changes from the latest one's year and the two before it are written as claims.
+DFR_YEARS = 3
+#: The ECB has never moved its rates more than 0.75 points at once.
+DFR_STEP_MAX = 1.0
+
+
+def _dfr_ident(entry: Mapping[str, Any], crawler: watch.Crawler, corpus: knowledge.Corpus):
+    """The edition is the latest change: the series lists only the dates the rate changed on."""
+    rows = list(csv.DictReader(io.StringIO(_fetch(crawler, ECB_DFR_API).text())))
+    changes = []
+    for r in rows:
+        when, value = knowledge.parse_when(r.get("TIME_PERIOD")), _num(r.get("OBS_VALUE"))
+        if r.get("KEY") != ECB_DFR_SERIES or when is None or value is None:
+            raise TableError(f"unexpected row in the ECB deposit facility rate series: "
+                             f"{r.get('KEY')} {r.get('TIME_PERIOD')} {r.get('OBS_VALUE')}")
+        changes.append((when, value))
+    if not changes:
+        raise TableError("the ECB Data Portal returned no deposit facility rate changes")
+    changes.sort()
+    for when, value in changes:
+        if not RATE_BOUNDS[0] <= value <= RATE_BOUNDS[1]:
+            raise TableError(f"deposit facility rate {value}% on {when} is outside {RATE_BOUNDS[0]}..{RATE_BOUNDS[1]}")
+    for (_, a), (when, b) in zip(changes, changes[1:]):
+        if abs(b - a) > DFR_STEP_MAX:
+            raise TableError(f"deposit facility rate moved from {a}% to {b}% on {when}: more than {DFR_STEP_MAX} points")
+    latest = changes[-1][0]
+    return f"ecb-{latest:%Y-%m}-deposit-rate", {"changes": changes, "key": latest.isoformat()}
+
+
+def _dfr_read(info: Mapping[str, Any], crawler: watch.Crawler, today: date, corpus: knowledge.Corpus) -> Edition:
+    changes: list[tuple[date, float]] = info["changes"]
+    latest = changes[-1][0]
+    sid = f"ecb-{latest:%Y-%m}-deposit-rate"
+    claims: list[dict] = []
+    for k, (when, value) in enumerate(changes):
+        before = changes[k - 1][1] if k else None
+        if when.year <= latest.year - DFR_YEARS or (before is not None and abs(value - before) < 0.005):
+            continue
+        day = f"{when.day} {calendar.month_name[when.month]} {when.year}"
+        if before is None:
+            text = f"The ECB's deposit facility rate was set at {value:.2f}%, effective {day}."
+        else:
+            move = "raised" if value > before else "cut"
+            text = (f"The ECB {move} its deposit facility rate, the rate it steers policy with, by "
+                    f"{abs(value - before) * 100:.0f} basis points, from {before:.2f}% to {value:.2f}%, effective {day}.")
+        claims.append(_claim(
+            sid, len(claims) + 1, kind="fact", metric="ECB deposit facility rate", value=value, unit="%", digits=2,
+            geo="euro area", horizon=when.isoformat(), scenario=DFR_SCENARIO,
+            entities=["ecb", "euro_area", "ecb_deposit_rate"], section="Key ECB interest rates", text=text))
+    month_label = f"{calendar.month_name[latest.month]} {latest.year}"
+    # Published on the day the latest change took effect: never before the rate was in force.
+    source = {"id": sid, "title": f"ECB deposit facility rate changes (to {month_label})", "publisher": "ECB",
+              "published": latest.isoformat(), "url": ECB_DFR_PAGE,
+              "licence": "ECB: reuse allowed with the source credited.", "kind": "table",
+              "topics": ["ECB interest rates", "ECB deposit facility rate", "euro area monetary policy"],
+              "summary": f"Every change to the ECB's deposit facility rate from {latest.year - DFR_YEARS + 1} to "
+                         f"{month_label}, with the date each took effect, from the ECB Data Portal.",
+              "extracted_by": "knowledge_tables (no model) from the ECB Data Portal API", "added": today.isoformat()}
+    return Edition(source, claims, None)
 
 
 # --------------------------------------------------------------------------------------------
@@ -529,6 +658,7 @@ READERS = {
     "eia-steo": Reader(_steo_ident, _steo_read, STEO_SCENARIO, 16),
     "fed-sep": Reader(_fed_ident, _fed_read, FED_SCENARIO, 12),
     "ecb-projections": Reader(_ecb_ident, _ecb_read, ECB_SCENARIO, 6),
+    "ecb-rates": Reader(_dfr_ident, _dfr_read, DFR_SCENARIO, 1),
     "imf-weo": Reader(_imf_ident, _imf_read, IMF_SCENARIO, 60),
 }
 
