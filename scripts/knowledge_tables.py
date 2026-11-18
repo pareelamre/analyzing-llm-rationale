@@ -1,9 +1,9 @@
 """Read publishers' current forecast tables into the knowledge base (no model involved).
 
 For each reader in src/analyzing_llm_rationale/knowledge_tables.py (EIA STEO, Fed projections,
-ECB projections, IMF WEO) and knowledge_markets.py (CFTC positioning on COMEX and NYMEX, Shanghai
-futures), finds the current edition, skips it when the base already has it, and otherwise writes
-a new source folder after the plausibility checks pass.
+ECB projections, ECB deposit rate, IMF WEO) and knowledge_markets.py (CFTC positioning on COMEX and
+NYMEX, Shanghai futures), finds the current edition, skips it when the base already has it, and
+otherwise writes a new source folder after the plausibility checks pass.
 
     python scripts/knowledge_tables.py [--kb DIR] [--only eia-steo ...] [--dry-run]
 

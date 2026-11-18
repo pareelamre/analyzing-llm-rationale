@@ -102,13 +102,35 @@ def fed_page(funds=("4.1", "3.6", "3.1", "3.0", "3.0")) -> str:
     return f"<html><table>{body}</table></html>"
 
 
-def ecb_page(published="2026-09-10", row=("0.9", "1.4", "1.5", "3.0", "2.5", "2.1", "2.5", "2.6", "2.3")) -> str:
-    rows = [["", "Date of release", "GDP growth", "HICP inflation", "HICP inflation excluding energy and food"],
-            ["2026", "2027", "2028"] * 3, ["ECB staff projections", "September 2026", *row],
-            ["European Commission", "May 2026", *["1.0"] * 9]]
-    body = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
+def _table(rows) -> str:
+    return "<table>" + "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows) + "</table>"
+
+
+#: Made-up three-month EURIBOR assumptions: 2025..2028, then revisions for 2026..2028.
+EURIBOR = ("1.9", "2.6", "3.4", "3.1", "0.0", "0.3", "-0.2")
+
+
+def ecb_page(published="2026-09-10", row=("0.9", "1.4", "1.5", "3.0", "2.5", "2.1", "2.5", "2.6", "2.3"),
+             euribor=EURIBOR, edition="September 2026") -> str:
+    comparison = [["", "Date of release", "GDP growth", "HICP inflation", "HICP inflation excluding energy and food"],
+                  ["2026", "2027", "2028"] * 3, ["ECB staff projections", "September 2026", *row],
+                  ["European Commission", "May 2026", *["1.0"] * 9]]
+    assumptions = [["", edition, "Revisions vs June 2026"], ["2025", "2026", "2027", "2028", "2026", "2027", "2028"],
+                   ["Oil price (USD/barrel)", *["70.0"] * 4, *["1.0"] * 3],
+                   ["Three-month EURIBOR (percentage per annum)", *euribor]]
     meta = f'<meta property="article:published_time"  content="{published}">' if published else ""
-    return f"<html><head>{meta}</head><p>On 7 September 2026 Eurostat said...</p><table>{body}</table></html>"
+    return (f"<html><head>{meta}</head><p>On 7 September 2026 Eurostat said...</p>"
+            f"{_table(assumptions) if euribor else ''}{_table(comparison)}</html>")
+
+
+#: Made-up deposit facility rate changes, as the ECB Data Portal lists them (dates of changes only).
+DFR = [("2022-07-06", "0.4"), ("2024-02-07", "0.65"), ("2025-05-14", "0.4"), ("2026-03-04", "0.9"), ("2026-10-07", "1.15")]
+
+
+def dfr_csv(changes=DFR, key=tables.ECB_DFR_SERIES) -> tuple[str, str]:
+    lines = ["KEY,FREQ,TIME_PERIOD,OBS_VALUE,TITLE"]
+    lines += [f'{key},B,{d},{v},"Deposit facility - date of changes (raw data) - Level"' for d, v in changes]
+    return "\n".join(lines) + "\n", "text/csv"
 
 
 def imf_api(edition="October 2026") -> dict:
@@ -134,7 +156,7 @@ STATE = {
 
 def web(**over) -> dict:
     pages = {tables.STEO_XLSX: (steo_book(), "application/vnd.openxmlformats"), FED_URL: fed_page(), ECB_URL: ecb_page(),
-             **imf_api()}
+             tables.ECB_DFR_API: dfr_csv(), **imf_api()}
     pages.update(over)
     return pages
 
@@ -164,7 +186,7 @@ class ReaderTests(unittest.TestCase):
     def _read(self, rid, pages=None):
         c, _ = crawler(pages or web())
         reader = tables.READERS[rid]
-        sid, info = reader.ident(STATE[rid], c, self.corpus)
+        sid, info = reader.ident(STATE.get(rid, {}), c, self.corpus)
         return sid, reader.read(info, c, TODAY, self.corpus)
 
     def test_the_spreadsheet_reader_needs_no_library(self):
@@ -206,16 +228,56 @@ class ReaderTests(unittest.TestCase):
     def test_ecb_reads_its_own_row_and_the_page_date(self):
         sid, ed = self._read("ecb-projections")
         self.assertEqual((sid, ed.source["published"]), ("ecb-2026-09-projections", "2026-09-10"))
-        self.assertEqual([c["value"] for c in ed.claims], [0.9, 1.4, 1.5, 3.0, 2.5, 2.1, 2.5, 2.6, 2.3])
+        macro = [c for c in ed.claims if c["section"] == "Comparison with other forecasts"]
+        self.assertEqual([c["value"] for c in macro], [0.9, 1.4, 1.5, 3.0, 2.5, 2.1, 2.5, 2.6, 2.3])
         self.assertEqual({c["geo"] for c in ed.claims}, {"euro area"})
         _, undated = self._read("ecb-projections", web(**{ECB_URL: ecb_page(published=None)}))
         self.assertEqual(undated.source["published"], "2026-09-30")  # never early
+
+    def test_ecb_reads_the_euribor_path_from_the_projection_year_on(self):
+        _, ed = self._read("ecb-projections")
+        path = [c for c in ed.claims if c["metric"].startswith("three-month EURIBOR")]
+        self.assertEqual([(c["horizon"], c["value"]) for c in path], [("2026", 2.6), ("2027", 3.4), ("2028", 3.1)])
+        self.assertEqual({c["kind"] for c in path}, {"projection"})
+        self.assertTrue(all("ecb_deposit_rate" in c["entities"] for c in path))
+        self.assertIn("unchanged from the June 2026 projections", path[0]["text"])
+        self.assertIn("averaging 3.4% in 2027, 0.3 points higher than in the June 2026", path[1]["text"])
+        self.assertIn("0.2 points lower", path[2]["text"])
+        self.assertEqual([c["id"] for c in ed.claims], [f"ecb-2026-09-projections:c{n:03d}" for n in range(1, 13)])
 
     def test_ecb_refuses_a_changed_table(self):
         with self.assertRaisesRegex(tables.TableError, "changed shape"):
             self._read("ecb-projections", web(**{ECB_URL: ecb_page(row=("0.9", "1.4"))}))
         with self.assertRaisesRegex(tables.TableError, "no comparison table"):
             self._read("ecb-projections", web(**{ECB_URL: "<html><table><tr><td>x</td></tr></table></html>"}))
+        with self.assertRaisesRegex(tables.TableError, "no technical assumptions table"):
+            self._read("ecb-projections", web(**{ECB_URL: ecb_page(euribor=())}))
+        with self.assertRaisesRegex(tables.TableError, "EURIBOR row changed shape"):
+            self._read("ecb-projections", web(**{ECB_URL: ecb_page(euribor=EURIBOR[:5])}))
+        with self.assertRaisesRegex(tables.TableError, "not the September 2026 edition"):
+            self._read("ecb-projections", web(**{ECB_URL: ecb_page(edition="June 2026")}))
+        with self.assertRaisesRegex(tables.TableError, "outside"):
+            self._read("ecb-projections", web(**{ECB_URL: ecb_page(euribor=("1.9", "2.6", "34", "3.1", "0", "0", "0"))}))
+
+    def test_ecb_rates_are_the_recent_changes_dated_when_they_took_effect(self):
+        sid, ed = self._read("ecb-rates")
+        self.assertEqual((sid, ed.source["published"]), ("ecb-2026-10-deposit-rate", "2026-10-07"))
+        self.assertEqual([(c["horizon"], c["value"]) for c in ed.claims],
+                         [("2024-02-07", 0.65), ("2025-05-14", 0.4), ("2026-03-04", 0.9), ("2026-10-07", 1.15)])
+        self.assertEqual({(c["kind"], c["unit"], c["metric"]) for c in ed.claims}, {("fact", "%", "ECB deposit facility rate")})
+        self.assertEqual(ed.claims[1]["text"], "The ECB cut its deposit facility rate, the rate it steers policy with, "
+                                               "by 25 basis points, from 0.65% to 0.40%, effective 14 May 2025.")
+        self.assertIn("raised its deposit facility rate, the rate it steers policy with, by 50 basis points, "
+                      "from 0.40% to 0.90%", ed.claims[2]["text"])
+
+    def test_ecb_rates_refuse_an_odd_series(self):
+        for changes, key, why in ((DFR + [("2026-12-02", "3.15")], tables.ECB_DFR_SERIES, "more than"),
+                                  (DFR, "FM.B.U2.EUR.4F.KR.MRR_FR.LEV", "unexpected row"),
+                                  ([("2026-01-07", "x")], tables.ECB_DFR_SERIES, "unexpected row"),
+                                  ([("2026-01-07", "40")], tables.ECB_DFR_SERIES, "outside"),
+                                  ([], tables.ECB_DFR_SERIES, "no deposit facility rate changes")):
+            with self.subTest(why=why), self.assertRaisesRegex(tables.TableError, why):
+                self._read("ecb-rates", web(**{tables.ECB_DFR_API: dfr_csv(changes, key)}))
 
     def test_imf_reads_the_edition_from_the_api_and_notes_india_fiscal_years(self):
         sid, ed = self._read("imf-weo")
@@ -282,10 +344,12 @@ class UpdateTests(unittest.TestCase):
         c, _ = crawler(web())
         results = tables.update(self.root, c, today=TODAY)
         self.assertEqual({r["reader"]: r["status"] for r in results},
-                         {"eia-steo": "added", "fed-sep": "added", "ecb-projections": "added", "imf-weo": "added"})
+                         {"eia-steo": "added", "fed-sep": "added", "ecb-projections": "added", "ecb-rates": "added",
+                          "imf-weo": "added"})
         corpus = kb.load(self.root)
         self.assertEqual(corpus.errors, [])
         self.assertIn("federal_funds_rate", corpus.entities)
+        self.assertIn("ecb_deposit_rate", corpus.entities)
         inbox = json.loads((self.root / "inbox.jsonl").read_text().splitlines()[0])
         self.assertEqual((inbox["status"], inbox["kb_source"]), ("read", "fed-2026-09-sep"))
         c, _ = crawler(web())
@@ -311,6 +375,40 @@ class UpdateTests(unittest.TestCase):
                 tables.write(self.root, edition)
         self.assertFalse((self.root / "sources" / "fed-2026-09-sep").exists())
         self.assertEqual((self.root / "entities.jsonl").read_text(), before)
+
+    def test_a_new_rate_decision_adds_only_itself(self):
+        c, _ = crawler(web())
+        tables.update(self.root, c, today=TODAY, only=["ecb-rates"])
+        c, _ = crawler(web(**{tables.ECB_DFR_API: dfr_csv(DFR + [("2026-12-09", "1.4")])}))
+        result = tables.update(self.root, c, today=TODAY, only=["ecb-rates"])[0]
+        self.assertEqual((result["status"], result["source"], result["claims"]), ("added", "ecb-2026-12-deposit-rate", 1))
+        c, _ = crawler(web(**{tables.ECB_DFR_API: dfr_csv(DFR + [("2026-12-09", "1.4")])}))
+        self.assertEqual(tables.update(self.root, c, today=TODAY, only=["ecb-rates"])[0]["status"], "current")
+
+    def test_an_ecb_rate_question_leads_with_the_ecb_rate_the_asked_year_first(self):
+        c, _ = crawler(web())
+        tables.update(self.root, c, today=TODAY)
+        index = kb.Index(kb.load(self.root))
+        self.assertEqual(index.topics("Will the ECB cut rates in 2027?"), ["ecb", "ecb_deposit_rate"])
+        hits = index.agreed("Will the ECB cut rates in 2027?", as_of=TODAY)
+        self.assertTrue(hits)
+        first = hits[0].claim
+        self.assertEqual((first["metric"], first["horizon"]), ("three-month EURIBOR (market-based assumption)", "2027"))
+        lead = [h.claim for h in hits if "ecb_deposit_rate" in h.claim["entities"]]
+        self.assertEqual([h.claim for h in hits[:len(lead)]], lead)  # the rate's claims come first
+        # Next, a year away: the 2026 decisions, newest first, then the 2026 and 2028 assumptions.
+        self.assertEqual([c["id"] for c in lead[1:5]],
+                         ["ecb-2026-10-deposit-rate:c004", "ecb-2026-10-deposit-rate:c003",
+                          "ecb-2026-09-projections:c010", "ecb-2026-09-projections:c012"])
+        # With no year asked, the latest decision leads.
+        now = index.agreed("Will the ECB cut rates at its next meeting?", as_of=TODAY)
+        self.assertEqual([h.claim["id"] for h in now[:2]], ["ecb-2026-10-deposit-rate:c004", "ecb-2026-10-deposit-rate:c003"])
+        for hit in hits:
+            self.assertFalse({"federal_funds_rate", "federal_reserve"} & set(hit.claim["entities"]), hit.claim["text"])
+        # A Fed question gets the Fed's path, never the ECB's.
+        fed = index.agreed("Will the Fed cut rates in 2027?", as_of=TODAY)
+        self.assertTrue(fed and "federal_funds_rate" in fed[0].claim["entities"])
+        self.assertFalse(any("ecb_deposit_rate" in h.claim["entities"] for h in fed))
 
     def test_the_fund_reads_the_newest_energy_forecast(self):
         c, _ = crawler(web())

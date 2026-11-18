@@ -480,6 +480,17 @@ class Index:
             return 0.0
         return float(min(abs(when.year - y) for y in asked)) if when else math.inf
 
+    def _rate_recency(self, i: int) -> int:
+        """Within one year's distance, dated decisions first, newest first; projections keep their order.
+
+        Without it "Will the ECB cut rates at its next meeting?" led with the 2024 cuts, not the
+        latest change, and a June hike came before September's."""
+        claim = self.claims[i]
+        if claim.get("kind") in NUMERIC_KINDS:
+            return 0
+        when = parse_when(claim.get("horizon")) or parse_when(self._published[i])
+        return -when.toordinal() if when else 0
+
     def _visible(self, i: int, as_of: Optional[date], kinds: Optional[Sequence[str]]) -> bool:
         claim = self.claims[i]
         if kinds and claim.get("kind") not in kinds:
@@ -589,7 +600,7 @@ class Index:
         if rates:
             asked = years(question)
             lead = [i for i in order if i not in superseded and rates & set(self.claims[i].get("entities") or [])]
-            lead.sort(key=lambda i: self._rate_gap(i, asked))  # stable: fused order within a year
+            lead.sort(key=lambda i: (self._rate_gap(i, asked), self._rate_recency(i)))  # stable otherwise
             first = set(lead)
             order = lead + [i for i in order if i not in first]
         if rerank is not None and order:

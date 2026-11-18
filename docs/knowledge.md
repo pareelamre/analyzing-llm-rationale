@@ -75,9 +75,12 @@ Then:
   rates", "rate hike", "rates unchanged", "25 bps"), the bank's own policy rate joins its entities,
   and that rate's current claims lead, the asked year first. The base says which rate a bank sets
   through a `sets` relation (`rbi sets repo_rate`) or a rate alias built on the bank's name
-  ("Fed rates" on the federal funds rate). In such a question "rate", "cut" and the like are not
-  topic words, so one bank's rate path is never evidence for another's. Before this, the FOMC's
-  unemployment projections led and the 2026 federal funds rate came eighth.
+  ("Fed rates" on the federal funds rate, "ECB rates" on the ECB deposit facility rate). Within
+  one year's distance, dated decisions come newest first, so with no year asked the latest change
+  leads. In such a question "rate", "cut" and the like are not topic words, so one bank's rate path
+  is never evidence for another's. Before this, the FOMC's unemployment projections led and the
+  2026 federal funds rate came eighth. The RBI's aliases say "RBI MPC", not a bare "MPC", which
+  the Bank of England's committee shares.
 
 ## Adding a report
 
@@ -111,7 +114,10 @@ Two jobs in the data repo keep the base growing toward what Foresea is asked:
   EIA's Short-Term Energy Outlook (Brent, WTI, Henry Hub, US gasoline and diesel, power prices,
   US and world oil and gas output; yearly averages plus December values), the Fed's Summary of
   Economic Projections (FOMC medians, with the previous projection beside each), ECB staff
-  projections, and the IMF World Economic Outlook for 13 economies (DataMapper API). Each reader
+  projections (plus the market-based three-month EURIBOR path they assume, the nearest public
+  path for ECB rates), every ECB deposit facility rate change of the last three years from the
+  ECB Data Portal (each new decision adds a source dated the day it took effect), and the IMF World
+  Economic Outlook for 13 economies (DataMapper API). Each reader
   uses one scenario name across editions, so a new edition supersedes the last on the same metric
   and year while other publishers stay beside it. Nothing is written unless enough values were
   found, each is in a plausible range, and none moved more than 60% (8 points for rates) from the
