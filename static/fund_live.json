@@ -9,16 +9,16 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": 71.4467,
+      "agent_transfer": 71.109,
       "event_model": 68.9233,
-      "pairs_model": -9.9123,
-      "put_premium": 38.4597
+      "pairs_model": -9.6023,
+      "put_premium": 47.1687
     }
   },
   "by_asset_class": {
-    "commodity": 494.312,
-    "event": 4101.0996,
-    "option": 655.777
+    "commodity": 494.622,
+    "event": 4100.7619,
+    "option": 664.486
   },
   "cash_usd": 4918.5287,
   "curve": [
@@ -721,18 +721,17 @@
     {
       "nav_usd": 10169.7172,
       "ts": "2026-11-19T08:09:11.689989+00:00"
+    },
+    {
+      "nav_usd": 10178.3986,
+      "ts": "2026-11-19T10:01:16.316109+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [
-      {
-        "instrument": "polymarket:will-bitcoin-dip-to-60k-in-november-2026",
-        "reason": "no room under the fund's limits"
-      }
-    ],
+    "passed": [],
     "seeded": null,
-    "signals": 3,
+    "signals": 8,
     "skipped": [
       {
         "pair": "copper-zinc",
@@ -740,11 +739,11 @@
         "z": -3.604
       }
     ],
-    "traded": true,
-    "window": "in window"
+    "traded": false,
+    "window": "15:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-19T08:09:11.689989+00:00",
+  "generated_at": "2026-11-19T10:01:16.316109+00:00",
   "guard": {
     "board": 30,
     "checked": 30,
@@ -761,16 +760,16 @@
     "holiday_list": true,
     "venues": {
       "bse_fo": {
-        "open": true,
-        "why": ""
+        "open": false,
+        "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
       },
       "mcx": {
         "open": true,
         "why": ""
       },
       "nse_fo": {
-        "open": true,
-        "why": ""
+        "open": false,
+        "why": "NSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
       }
     }
   },
@@ -946,7 +945,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10169.7172,
+  "nav_usd": 10178.3986,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -998,15 +997,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 314.15,
+      "mark": 313.9,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 11.1797,
+      "pnl_usd": 11.3731,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 263.2919,
+      "value_usd": 263.4853,
       "venue": "mcx"
     },
     {
@@ -1019,15 +1018,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1199.85,
+      "mark": 1200.45,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -21.092,
+      "pnl_usd": -20.9754,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 231.0202,
+      "value_usd": 231.1367,
       "venue": "mcx"
     },
     {
@@ -1103,15 +1102,15 @@
       "instrument_id": "kalshi:KXUKCHAGOS-28JAN01-26DEC01",
       "kind": "binary",
       "label": "Will the UK agree to or announce a decision not to transfer sovereignty over Diego Garcia to Mauritius before Dec 1, 2026?",
-      "mark": 0.93,
+      "mark": 0.87,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 0.2,
+      "pnl_usd": -1.0,
       "quantity": 20.0,
       "side": "NO",
       "underlying": "kalshi:KXUKCHAGOS-28JAN01-26DEC01",
-      "value_usd": 18.6,
+      "value_usd": 17.4,
       "venue": "kalshi"
     },
     {
@@ -1145,15 +1144,15 @@
       "instrument_id": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
       "kind": "binary",
       "label": "Strait of Hormuz traffic returns to normal by December 31?",
-      "mark": 0.963,
+      "mark": 0.966,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 15.2345,
+      "pnl_usd": 16.0969,
       "quantity": 287.443442,
       "side": "NO",
       "underlying": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
-      "value_usd": 276.808,
+      "value_usd": 277.6704,
       "venue": "polymarket"
     },
     {
@@ -1229,15 +1228,15 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2134.399,
+      "mark": 2161.812,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 18.5452,
+      "pnl_usd": 24.1383,
       "quantity": 19.041196356558505,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 435.4783,
+      "value_usd": 441.0713,
       "venue": "nse_fo"
     },
     {
@@ -1250,15 +1249,15 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 718.5279999999999,
+      "mark": 728.6909999999999,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 19.9144,
+      "pnl_usd": 23.0304,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 220.2987,
+      "value_usd": 223.4146,
       "venue": "nse_fo"
     }
   ],
@@ -1316,7 +1315,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 1.697,
+  "return_pct": 1.784,
   "scorecard": {
     "retired_records": [
       {
