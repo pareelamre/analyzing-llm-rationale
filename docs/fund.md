@@ -1515,6 +1515,35 @@ and how far the mid moved against each fill 5 and 60 minutes later (adverse sele
 The report is `reports/fund_weather_mm_eval.json`. No setting above may change once a price
 has been read.
 
+### Result (2026-11-19): NO-GO
+
+All 24 cities, 7,908 markets over 55 settlement days; 7,587 markets had a book wide
+enough to quote.
+
+| | Contracts filled | Profit per contract (95% CI) | Total |
+|---|---|---|---|
+| Pooled | 1,305,473 | -1.06 cents (-1.19 to -0.94) | -$13,884 |
+| With a 0.0175 x p x (1 - p) maker fee | | -1.36 cents (-1.49 to -1.24) | |
+
+What the run shows (description only):
+
+- **The spread was there, but informed traders took it back.** Each fill started 1.6 cents
+  better than the mid. An hour later the mid had moved about 2.3 cents against it, and
+  settlement left -1.06 cents. The traders who took the paper quotes knew where the price
+  was going.
+- **23 of 24 cities lost.** Newark was the worst (-4.6 cents a contract). Only San Diego
+  made money (+2.3 cents on 15,633 contracts), within what one city in 24 can do by chance.
+- **No time of day worked.** Before the settlement day -2.6 cents, 0-12 local -0.6, 12-18
+  -1.1. The 18-24 bucket made +0.7 cents on 32,873 contracts, too few to act on.
+- **Buying Yes lost more than selling it** (-1.5 against -0.6 cents a contract).
+- Kalshi's liquidity rewards are left out. To break even they would have to pay about a
+  cent for every contract filled.
+
+So market making in weather markets is dropped, as the verdict rule says, and no live
+paper market maker is built. With the forecasting tests above, this leaves no weather
+strategy for the fund.
+
+
 ## Trend-following test (pre-registered 2026-11-15, before any result)
 
 **Why.** The owner wants one system that looks across all markets for the largest
