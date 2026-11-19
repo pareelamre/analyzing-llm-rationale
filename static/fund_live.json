@@ -9,16 +9,16 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": 87.3484,
-      "event_model": 68.4743,
-      "pairs_model": -15.8656,
-      "put_premium": 45.4525
+      "agent_transfer": 99.4963,
+      "event_model": 71.168,
+      "pairs_model": -16.7388,
+      "put_premium": 47.617
     }
   },
   "by_asset_class": {
-    "commodity": 488.3588,
-    "event": 4116.5524,
-    "option": 662.7698
+    "commodity": 487.4856,
+    "event": 4131.394,
+    "option": 664.9343
   },
   "cash_usd": 4918.5287,
   "curve": [
@@ -745,36 +745,74 @@
     {
       "nav_usd": 10186.2097,
       "ts": "2026-11-19T18:00:55.521885+00:00"
+    },
+    {
+      "nav_usd": 10202.3425,
+      "ts": "2026-11-19T20:00:55.578526+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [],
+    "passed": [
+      {
+        "instrument": "polymarket:will-bitcoin-dip-to-60k-in-november-2026",
+        "reason": "no room under the fund's limits"
+      }
+    ],
     "seeded": null,
-    "signals": 2,
+    "signals": 1,
     "skipped": [
+      {
+        "instrument": "polymarket:friedrich-merz-out-as-chancellor-of-germany-before-2027",
+        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
+        "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
+      },
       {
         "pair": "copper-zinc",
         "reason": "stretched at z=-3.60 but its expected return is 0.0% per signal",
         "z": -3.604
+      },
+      {
+        "instrument": "mcx:COPPER",
+        "label": "Copper (MCX COPPER)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:ALUMINI",
+        "label": "Aluminium (MCX ALUMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
-    "traded": false,
-    "window": "23:30 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-19T18:00:55.521885+00:00",
+  "generated_at": "2026-11-19T20:00:55.578526+00:00",
   "guard": {
     "board": 30,
-    "checked": 0,
+    "checked": 30,
     "checker": "Open-Jev 2B (Qwen3.5-2B base)",
     "days_recorded": 11,
-    "dropped": [],
-    "flags": [],
+    "dropped": [
+      {
+        "forecast": 0.04,
+        "forecasted_at": "2026-11-19T17:37:35.349273+00:00",
+        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
+        "rationale_yes": 0.937
+      }
+    ],
+    "flags": [
+      {
+        "forecast": 0.040000000000000036,
+        "forecasted_at": "2026-11-19T17:37:35.349273+00:00",
+        "label": "friedrich-merz-out-as-chancellor-of-germany-before-2027",
+        "rationale_yes": 0.937
+      }
+    ],
     "kind": "checker",
-    "markets": 34,
+    "markets": 67,
     "mode": "live",
-    "unchecked": 30
+    "unchecked": 0
   },
   "hours": {
     "holiday_list": true,
@@ -784,8 +822,8 @@
         "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
       },
       "mcx": {
-        "open": true,
-        "why": ""
+        "open": false,
+        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       },
       "nse_fo": {
         "open": false,
@@ -965,7 +1003,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10186.2097,
+  "nav_usd": 10202.3425,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1017,15 +1055,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 320.65,
+      "mark": 321.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 6.1513,
+      "pnl_usd": 5.8805,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 258.2635,
+      "value_usd": 257.9926,
       "venue": "mcx"
     },
     {
@@ -1038,15 +1076,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1195.1,
+      "mark": 1192.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -22.0168,
+      "pnl_usd": -22.6192,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 230.0954,
+      "value_usd": 229.493,
       "venue": "mcx"
     },
     {
@@ -1185,15 +1223,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.953,
+      "mark": 0.959,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 64.2009,
+      "pnl_usd": 66.8947,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 427.8565,
+      "value_usd": 430.5502,
       "venue": "polymarket"
     },
     {
@@ -1206,15 +1244,15 @@
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
       "kind": "binary",
       "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "mark": 0.9,
+      "mark": 0.91,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -48.5913,
+      "pnl_usd": -36.4435,
       "quantity": 1214.783211,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 1093.3049,
+      "value_usd": 1105.4527,
       "venue": "polymarket"
     },
     {
@@ -1248,15 +1286,15 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2156.024,
+      "mark": 2166.632,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 22.9942,
+      "pnl_usd": 25.1588,
       "quantity": 19.041196356558505,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 439.9273,
+      "value_usd": 442.0918,
       "venue": "nse_fo"
     },
     {
@@ -1335,7 +1373,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 1.862,
+  "return_pct": 2.023,
   "scorecard": {
     "retired_records": [
       {
