@@ -10,15 +10,15 @@
     },
     "unrealized": {
       "agent_transfer": 67.7099,
-      "event_model": 71.617,
-      "pairs_model": -8.0567,
-      "put_premium": 19.997
+      "event_model": 71.168,
+      "pairs_model": -8.0707,
+      "put_premium": 12.2965
     }
   },
   "by_asset_class": {
-    "commodity": 496.1676,
-    "event": 4100.0566,
-    "option": 637.3143
+    "commodity": 496.1537,
+    "event": 4099.6076,
+    "option": 629.6138
   },
   "cash_usd": 4918.5287,
   "curve": [
@@ -705,13 +705,17 @@
     {
       "nav_usd": 10152.0672,
       "ts": "2026-11-19T02:01:05.803524+00:00"
+    },
+    {
+      "nav_usd": 10143.9037,
+      "ts": "2026-11-19T04:01:15.994082+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 4,
+    "signals": 3,
     "skipped": [
       {
         "pair": "copper-zinc",
@@ -720,10 +724,10 @@
       }
     ],
     "traded": false,
-    "window": "07:31 IST is outside the trading hours"
+    "window": "09:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-19T02:01:05.803524+00:00",
+  "generated_at": "2026-11-19T04:01:15.994082+00:00",
   "guard": {
     "board": 30,
     "checked": 30,
@@ -740,16 +744,16 @@
     "holiday_list": true,
     "venues": {
       "bse_fo": {
-        "open": false,
-        "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+        "open": true,
+        "why": ""
       },
       "mcx": {
-        "open": false,
-        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+        "open": true,
+        "why": ""
       },
       "nse_fo": {
-        "open": false,
-        "why": "NSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+        "open": true,
+        "why": ""
       }
     }
   },
@@ -925,7 +929,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10152.0672,
+  "nav_usd": 10143.9037,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -977,15 +981,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 314.15,
+      "mark": 312.95,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 11.1797,
+      "pnl_usd": 12.1081,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 263.2919,
+      "value_usd": 264.2203,
       "venue": "mcx"
     },
     {
@@ -998,15 +1002,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1209.4,
+      "mark": 1204.55,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -19.2364,
+      "pnl_usd": -20.1788,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 232.8758,
+      "value_usd": 231.9334,
       "venue": "mcx"
     },
     {
@@ -1145,15 +1149,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.96,
+      "mark": 0.959,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 67.3436,
+      "pnl_usd": 66.8947,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 430.9992,
+      "value_usd": 430.5502,
       "venue": "polymarket"
     },
     {
@@ -1208,15 +1212,15 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2067.698,
+      "mark": 2046.816,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 4.9363,
+      "pnl_usd": 0.6758,
       "quantity": 19.041196356558505,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 421.8694,
+      "value_usd": 417.6089,
       "venue": "nse_fo"
     },
     {
@@ -1229,15 +1233,15 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 702.697,
+      "mark": 691.477,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 15.0607,
+      "pnl_usd": 11.6207,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 215.4449,
+      "value_usd": 212.0049,
       "venue": "nse_fo"
     }
   ],
@@ -1295,7 +1299,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 1.521,
+  "return_pct": 1.439,
   "scorecard": {
     "retired_records": [
       {
