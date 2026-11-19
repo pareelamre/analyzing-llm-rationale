@@ -1443,6 +1443,78 @@ The market maker's opening weakness described in the trader's account is not
 there any more. The opening-prices idea is dropped with the rest of the hourly
 markets, and no live listener will be built.
 
+## Weather market-making test (pre-registered 2026-11-19, before any price was read)
+
+**Why.** Every forecasting test above lost to the market: the people trading weather
+markets know more than the fund's models. The owner asked whether making markets, earning
+the bid-ask spread instead of predicting, could work. A market maker earns the spread only
+when the traders who take its quotes are not better informed than its price. This test
+measures that on Kalshi's history. Before this was written, only the trade feed's field
+names and the series' fee type had been looked at, no prices.
+
+**Markets.** Every settled daily `KXHIGH*` event of the 24 cities in the weather
+evaluation, settlement days 2026-09-24 to 2026-11-18. Each event has about six range
+markets.
+
+**Data.**
+
+- **Order book:** Kalshi's event candlesticks at one-minute periods over each market's
+  trading life. A minute's yes bid and yes ask closes are the best bid and ask at the end
+  of that minute.
+- **Trades:** Kalshi's public trade feed for each market: time, yes price, size and the
+  taker's side. A taker on "no" sold Yes into the bids; a taker on "yes" bought Yes from
+  the asks. Block trades are left out.
+
+**Paper quotes.** At the end of each minute whose book has both a bid and an ask, at least
+3 cents apart:
+
+- a bid one cent above the best bid and an ask one cent below the best ask, 10 contracts
+  each;
+- the quotes rest for the next minute only, then are replaced;
+- no quote on a side that would take the market's net position past 50 contracts either
+  way.
+
+**Fills.** A trade in the next minute fills the paper bid when its taker sold Yes at or
+below the paper bid, and the paper ask when its taker bought Yes at or above the paper ask.
+The fill is at the paper price, for the trade's size up to what is left of the 10
+contracts. A cent better than every displayed order, the paper quote would have been first
+in line.
+
+**Fees.** These series' fee type is "quadratic", which Kalshi charges takers only, so a
+maker pays nothing. A maker fee of 0.0175 x price x (1 - price) per contract is also
+reported, for description only. Kalshi's liquidity rewards are left out.
+
+**Profit.** Every fill is held to settlement: a bought contract makes the result (1 or 0)
+minus its price, a sold one its price minus the result.
+
+**Metrics.**
+
+1. The mean net profit per filled contract.
+2. Total profit, contracts filled, and the markets and days quoted.
+
+95% intervals come from 2,000 bootstrap draws over settlement days (seed 20261119). For
+description only: results by city and by local time (before the settlement day, then
+0-12, 12-18 and 18-24 on it); the half-spread earned at each fill, against the mid then;
+and how far the mid moved against each fill 5 and 60 minutes later (adverse selection).
+
+**Verdict.**
+
+- **GO:** at least 1,000 contracts filled, and the mean net profit per contract has a 95%
+  interval entirely above zero. A live paper market maker on real order books is then
+  built, with its own pre-registered test, before any money is used.
+- **NO-GO:** anything else. Market making in weather markets is dropped.
+
+**Known limits.**
+
+- A minute-end book misses quotes that came and went within the minute.
+- The paper quote is assumed not to change what anyone else did. A real quote a cent
+  better might draw more takers, or be stepped in front of.
+- History shows trades, not the queue, so fills count only where the paper quote was
+  strictly better than every displayed order.
+
+The report is `reports/fund_weather_mm_eval.json`. No setting above may change once a price
+has been read.
+
 ## Trend-following test (pre-registered 2026-11-15, before any result)
 
 **Why.** The owner wants one system that looks across all markets for the largest
