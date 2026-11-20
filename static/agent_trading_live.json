@@ -4,26 +4,26 @@
       "agent_id": "qwen3.5-9b-selfhosted",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": true,
+        "positive_return": false,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0,
+      "max_drawdown": 0.000301,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.0104,
+      "return_pct": -0.0301,
       "settled_count": 0,
-      "sharpe": 0.3333
+      "sharpe": -0.3333
     }
   },
   "equity_curves": {
     "qwen3.5-9b-selfhosted": {
       "agent_id": "qwen3.5-9b-selfhosted",
-      "current_drawdown": 0.0,
-      "max_drawdown": 0.0,
-      "sharpe": 0.3333,
+      "current_drawdown": 0.000301,
+      "max_drawdown": 0.000301,
+      "sharpe": -0.3333,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -71,9 +71,9 @@
           "ts": "2026-11-08T12:34:07.374527+00:00"
         },
         {
-          "account_value": 10001.035969,
+          "account_value": 9996.985969,
           "event_type": "mark_to_market",
-          "ts": "2026-11-20T07:34:35.141849+00:00"
+          "ts": "2026-11-20T08:01:33.935874+00:00"
         }
       ]
     }
@@ -91,7 +91,7 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-11-20T07:34:35.143726+00:00",
+  "generated_at": "2026-11-20T08:01:33.938509+00:00",
   "latest_theses": {
     "qwen3.5-9b-selfhosted": {
       "agent_id": "qwen3.5-9b-selfhosted",
@@ -103,7 +103,7 @@
   },
   "leaderboard": [
     {
-      "account_value": 10001.035969,
+      "account_value": 9996.985969,
       "agent_id": "qwen3.5-9b-selfhosted",
       "cash": 6774.0569,
       "fees_paid": 0.0,
@@ -151,13 +151,13 @@
         {
           "avg_entry_price": 0.88,
           "cost_basis": 356.4,
-          "current_price": 0.9,
+          "current_price": 0.89,
           "ident": "KXTHC3MG-FED-26DEC10",
           "indicative_price": null,
           "platform": "kalshi",
           "quantity": 405.0,
           "side": "YES",
-          "unrealized_pnl": 8.1,
+          "unrealized_pnl": 4.05,
           "valuation_status": "bid_liquidation"
         },
         {
@@ -223,13 +223,13 @@
       ],
       "realized_count": 0,
       "realized_pnl": 0.0,
-      "return_pct": 0.0104,
+      "return_pct": -0.0301,
       "rule_exit_count": 0,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "total_pnl": 1.035969,
+      "total_pnl": -3.014031,
       "trade_count": 8,
-      "unrealized_pnl": 1.035969,
+      "unrealized_pnl": -3.014031,
       "updated_at": "2026-11-08T12:34:07.373918+00:00",
       "win_rate": null,
       "won_count": 0
@@ -238,7 +238,7 @@
   "mode": "shadow",
   "model_health": {
     "qwen3.5-9b-selfhosted": {
-      "cycle_age_seconds": 991675,
+      "cycle_age_seconds": 993294,
       "delayed_after_seconds": 50400,
       "detail": "The most recent confirmed cycle is beyond the stale window.",
       "expected_cycle_seconds": 43200,
