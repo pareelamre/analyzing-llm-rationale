@@ -9,16 +9,16 @@
       "agent_transfer": 0.8
     },
     "unrealized": {
-      "agent_transfer": 27.8565,
-      "event_model": 75.6576,
-      "pairs_model": -20.2939,
-      "put_premium": 43.8132
+      "agent_transfer": 10.236,
+      "event_model": 76.1066,
+      "pairs_model": -21.4547,
+      "put_premium": 50.2146
     }
   },
   "by_asset_class": {
-    "commodity": 483.9305,
-    "event": 4064.2438,
-    "option": 661.1305
+    "commodity": 482.7697,
+    "event": 4047.0722,
+    "option": 667.5319
   },
   "cash_usd": 4918.5287,
   "curve": [
@@ -773,13 +773,22 @@
     {
       "nav_usd": 10127.8334,
       "ts": "2026-11-20T06:01:14.532423+00:00"
+    },
+    {
+      "nav_usd": 10115.9025,
+      "ts": "2026-11-20T07:34:15.417713+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [],
+    "passed": [
+      {
+        "instrument": "kalshi:KXZELENSKYPUTIN-29-28",
+        "reason": "no room under the fund's limits"
+      }
+    ],
     "seeded": null,
-    "signals": 4,
+    "signals": 3,
     "skipped": [
       {
         "instrument": "polymarket:friedrich-merz-out-as-chancellor-of-germany-before-2027",
@@ -792,11 +801,11 @@
         "z": -3.401
       }
     ],
-    "traded": false,
-    "window": "11:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-20T06:01:14.532423+00:00",
+  "generated_at": "2026-11-20T07:34:15.417713+00:00",
   "guard": {
     "board": 30,
     "checked": 30,
@@ -1012,7 +1021,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 10127.8334,
+  "nav_usd": 10115.9025,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1064,15 +1073,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 315.8,
+      "mark": 317.25,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 9.9039,
+      "pnl_usd": 8.782,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 262.0161,
+      "value_usd": 260.8942,
       "venue": "mcx"
     },
     {
@@ -1085,15 +1094,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1153.0,
+      "mark": 1152.8,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -30.1978,
+      "pnl_usd": -30.2367,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 221.9143,
+      "value_usd": 221.8755,
       "venue": "mcx"
     },
     {
@@ -1148,15 +1157,15 @@
       "instrument_id": "kalshi:KXTHC3MG-FED-26DEC10",
       "kind": "binary",
       "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-      "mark": 0.89,
+      "mark": 0.9,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 4.05,
+      "pnl_usd": 8.1,
       "quantity": 405.0,
       "side": "YES",
       "underlying": "kalshi:KXTHC3MG-FED-26DEC10",
-      "value_usd": 360.45,
+      "value_usd": 364.5,
       "venue": "kalshi"
     },
     {
@@ -1211,15 +1220,15 @@
       "instrument_id": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
       "kind": "binary",
       "label": "Strait of Hormuz traffic returns to normal by December 31?",
-      "mark": 0.967,
+      "mark": 0.969,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 16.3843,
+      "pnl_usd": 16.9592,
       "quantity": 287.443442,
       "side": "NO",
       "underlying": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
-      "value_usd": 277.9578,
+      "value_usd": 278.5327,
       "venue": "polymarket"
     },
     {
@@ -1232,15 +1241,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.969,
+      "mark": 0.97,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 71.3842,
+      "pnl_usd": 71.8332,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 435.0398,
+      "value_usd": 435.4888,
       "venue": "polymarket"
     },
     {
@@ -1253,15 +1262,15 @@
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
       "kind": "binary",
       "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "mark": 0.9,
+      "mark": 0.91,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -48.5913,
+      "pnl_usd": -36.4435,
       "quantity": 1214.783211,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 1093.3049,
+      "value_usd": 1105.4527,
       "venue": "polymarket"
     },
     {
@@ -1274,15 +1283,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06299999999999994,
+      "mark": 0.05900000000000005,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 42.9916,
+      "pnl_usd": 8.5984,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 541.6936,
+      "value_usd": 507.3004,
       "venue": "polymarket"
     },
     {
@@ -1295,15 +1304,15 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2154.781,
+      "mark": 2174.632,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 22.7406,
+      "pnl_usd": 26.7911,
       "quantity": 19.041196356558505,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 439.6736,
+      "value_usd": 443.7242,
       "venue": "nse_fo"
     },
     {
@@ -1316,15 +1325,15 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 722.245,
+      "mark": 729.9119999999999,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 21.0726,
+      "pnl_usd": 23.4235,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 221.4569,
+      "value_usd": 223.8077,
       "venue": "nse_fo"
     }
   ],
@@ -1382,7 +1391,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 1.278,
+  "return_pct": 1.159,
   "scorecard": {
     "retired_records": [
       {
