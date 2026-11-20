@@ -6,21 +6,23 @@
   ],
   "attribution": {
     "realized": {
-      "agent_transfer": 0.8
+      "agent_transfer": 0.8,
+      "blend_model": -3.4501
     },
     "unrealized": {
-      "agent_transfer": -478.9256,
-      "event_model": 70.7191,
-      "pairs_model": -21.522,
+      "agent_transfer": -504.4973,
+      "blend_model": -20.0897,
+      "event_model": 77.0045,
+      "pairs_model": -22.6561,
       "put_premium": 54.5765
     }
   },
   "by_asset_class": {
-    "commodity": 482.7024,
-    "event": 3552.5232,
+    "commodity": 481.5683,
+    "event": 3566.7198,
     "option": 671.8938
   },
-  "cash_usd": 4918.5287,
+  "cash_usd": 4861.506,
   "curve": [
     {
       "nav_usd": 10106.6444,
@@ -805,43 +807,45 @@
     {
       "nav_usd": 9625.6481,
       "ts": "2026-11-20T18:01:16.436857+00:00"
+    },
+    {
+      "nav_usd": 9581.6878,
+      "ts": "2026-11-20T20:01:30.430284+00:00"
     }
   ],
   "cycle": {
-    "orders": 0,
+    "orders": 1,
     "passed": [],
     "seeded": null,
-    "signals": 3,
+    "signals": 1,
     "skipped": [
-      {
-        "instrument": "polymarket:friedrich-merz-out-as-chancellor-of-germany-before-2027",
-        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
-        "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
-      },
       {
         "pair": "copper-zinc",
         "reason": "stretched at z=-3.40 but its expected return is 0.0% per signal",
         "z": -3.401
+      },
+      {
+        "instrument": "mcx:COPPER",
+        "label": "Copper (MCX COPPER)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:ALUMINI",
+        "label": "Aluminium (MCX ALUMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
-    "traded": false,
-    "window": "23:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-20T18:01:16.436857+00:00",
+  "generated_at": "2026-11-20T20:01:30.430284+00:00",
   "guard": {
-    "board": 29,
-    "checked": 29,
+    "board": 30,
+    "checked": 30,
     "checker": "Open-Jev 2B (Qwen3.5-2B base)",
     "days_recorded": 12,
-    "dropped": [
-      {
-        "forecast": 0.04,
-        "forecasted_at": "2026-11-19T17:37:35.349273+00:00",
-        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
-        "rationale_yes": 0.937
-      }
-    ],
+    "dropped": [],
     "flags": [
       {
         "forecast": 0.040000000000000036,
@@ -851,7 +855,7 @@
       }
     ],
     "kind": "checker",
-    "markets": 33,
+    "markets": 66,
     "mode": "live",
     "unchecked": 0
   },
@@ -863,8 +867,8 @@
         "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
       },
       "mcx": {
-        "open": true,
-        "why": ""
+        "open": false,
+        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       },
       "nse_fo": {
         "open": false,
@@ -1044,13 +1048,14 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9625.6481,
+  "nav_usd": 9581.6878,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
     "india_equity": 617.3173,
     "kalshi:KXAIMILLENNIUM-28-26DEC01": 585.4414,
     "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 354.33,
+    "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126": 53.5726,
     "kalshi:KXTHC3MG-FED-26DEC10": 356.4,
     "kalshi:KXUKCHAGOS-28JAN01-26DEC01": 18.4,
     "kalshi:KXUSAEXPANDTERRITORY-29JAN21": 380.331,
@@ -1096,15 +1101,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 317.1,
+      "mark": 319.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 8.9298,
+      "pnl_usd": 7.4544,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 261.042,
+      "value_usd": 259.5666,
       "venue": "mcx"
     },
     {
@@ -1117,15 +1122,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1152.25,
+      "mark": 1154.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -30.4518,
+      "pnl_usd": -30.1105,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 221.6604,
+      "value_usd": 222.0017,
       "venue": "mcx"
     },
     {
@@ -1138,15 +1143,15 @@
       "instrument_id": "kalshi:KXAIMILLENNIUM-28-26DEC01",
       "kind": "binary",
       "label": "Will any AI lab solve a Millennium Prize Problem before Dec 1, 2026?",
-      "mark": 0.1,
+      "mark": 0.13,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -523.1604,
+      "pnl_usd": -504.4761,
       "quantity": 622.81,
       "side": "NO",
       "underlying": "kalshi:KXAIMILLENNIUM-28-26DEC01",
-      "value_usd": 62.281,
+      "value_usd": 80.9653,
       "venue": "kalshi"
     },
     {
@@ -1173,6 +1178,27 @@
     {
       "asset_class": "event",
       "attribution": {
+        "blend_model": 1.0
+      },
+      "collateral_usd": 53.57263491576087,
+      "entry_price": 0.08,
+      "instrument_id": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
+      "kind": "binary",
+      "label": "Bill Belichick out before Dec 1, 2026",
+      "mark": 0.05,
+      "marked": true,
+      "opened_at": "2026-11-20T20:01:30.430284+00:00",
+      "pair_key": null,
+      "pnl_usd": -20.0897,
+      "quantity": 669.6579364470109,
+      "side": "YES",
+      "underlying": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
+      "value_usd": 33.4829,
+      "venue": "kalshi"
+    },
+    {
+      "asset_class": "event",
+      "attribution": {
         "agent_transfer": 1.0
       },
       "collateral_usd": 356.4,
@@ -1180,15 +1206,15 @@
       "instrument_id": "kalshi:KXTHC3MG-FED-26DEC10",
       "kind": "binary",
       "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-      "mark": 0.91,
+      "mark": 0.89,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 12.15,
+      "pnl_usd": 4.05,
       "quantity": 405.0,
       "side": "YES",
       "underlying": "kalshi:KXTHC3MG-FED-26DEC10",
-      "value_usd": 368.55,
+      "value_usd": 360.45,
       "venue": "kalshi"
     },
     {
@@ -1243,15 +1269,15 @@
       "instrument_id": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
       "kind": "binary",
       "label": "Strait of Hormuz traffic returns to normal by December 31?",
-      "mark": 0.967,
+      "mark": 0.968,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 16.3843,
+      "pnl_usd": 16.6718,
       "quantity": 287.443442,
       "side": "NO",
       "underlying": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
-      "value_usd": 277.9578,
+      "value_usd": 278.2453,
       "venue": "polymarket"
     },
     {
@@ -1264,15 +1290,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.958,
+      "mark": 0.972,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 66.4457,
+      "pnl_usd": 72.7311,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 430.1013,
+      "value_usd": 436.3867,
       "venue": "polymarket"
     },
     {
@@ -1285,15 +1311,15 @@
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
       "kind": "binary",
       "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "mark": 0.9299999999999999,
+      "mark": 0.9,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -12.1478,
+      "pnl_usd": -48.5913,
       "quantity": 1214.783211,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 1129.7484,
+      "value_usd": 1093.3049,
       "venue": "polymarket"
     },
     {
@@ -1386,7 +1412,7 @@
       "snapshots": 80988
     }
   },
-  "realized_pnl_usd": 0.8,
+  "realized_pnl_usd": -2.6501,
   "retired": [
     {
       "analyst": "event_model",
@@ -1414,7 +1440,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -3.744,
+  "return_pct": -4.183,
   "scorecard": {
     "retired_records": [
       {
@@ -1639,6 +1665,47 @@
   "shadow": {},
   "starting_value": 10000.0,
   "trades": [
+    {
+      "action": "open",
+      "attribution": {
+        "blend_model": 1.0
+      },
+      "cycle_id": "fund-20261120T2001",
+      "evidence": [
+        {
+          "figure": "question: Bill Belichick out before Dec 1, 2026",
+          "source": "venue"
+        },
+        {
+          "figure": "model probability of YES: 24.4%",
+          "source": "the blend analyst forecast 2026-11-20 17:35 UTC"
+        },
+        {
+          "figure": "price to buy YES: 8\u00a2",
+          "source": "Kalshi order book"
+        },
+        {
+          "figure": "expected profit per dollar after costs: 203.3%",
+          "source": "orchestrator"
+        },
+        {
+          "figure": "size: 0.6% of the fund",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
+      "label": "Bill Belichick out before Dec 1, 2026",
+      "note": "The trade involves buying a bet that Bill Belichick will leave his job before December 1, 2026, for a cost of 8 cents. Based on the forecast, this bet has a 24.4% chance of winning and is expected to generate a 203.3% profit per dollar invested.",
+      "note_source": "model",
+      "notional_usd": 53.57263491576087,
+      "pair_key": null,
+      "price": 0.08,
+      "purpose": "view",
+      "quantity": 669.6579364470109,
+      "realized_pnl_usd": -3.450077688575001,
+      "side": "YES",
+      "ts": "2026-11-20T20:01:30.430284+00:00"
+    },
     {
       "action": "open",
       "attribution": {
