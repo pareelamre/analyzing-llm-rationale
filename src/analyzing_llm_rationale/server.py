@@ -3725,13 +3725,40 @@ async def robots_txt():
                              headers={"Cache-Control": "public, max-age=86400"})
 
 
-def _mcp_server_manifest() -> Dict[str, Any]:
+_SITE_SUMMARY = (
+    "Calibrated probability forecasts for any resolvable future event, prediction-market "
+    "analysis and data (Polymarket, Kalshi), ranges for ten NSE stock indices, a commodity "
+    "price-ratio tracker and a paper fund, each with a public track record."
+)
+_MCP_CATALOG: Optional[Dict[str, Any]] = None
+
+
+async def _mcp_catalog() -> Dict[str, Any]:
+    """The live MCP server's tools, resources and prompts (mcp_server.catalog), read once per
+    process so every discovery file lists exactly what /mcp/ serves."""
+    global _MCP_CATALOG
+    if _MCP_CATALOG is None:
+        if _PUBLIC_MCP is None:
+            return {"tools": [], "resources": [], "prompts": []}
+        from analyzing_llm_rationale.mcp_server import catalog
+        _MCP_CATALOG = await catalog(_PUBLIC_MCP)
+    return _MCP_CATALOG
+
+
+def _first_sentence(text: str, limit: int = 220) -> str:
+    text = " ".join(str(text or "").split())
+    end = re.search(r"(?<!e\.g)(?<!i\.e)\.\s", text)  # a full stop, not "e.g." or "i.e."
+    out = text if end is None else text[: end.start() + 1]
+    return out if len(out) <= limit else out[: limit - 1].rsplit(" ", 1)[0].rstrip(" ,:;") + "…"
+
+
+def _mcp_server_manifest(cat: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
         "name": "ink.foresea/forecasting",
-        "title": "Foresea Forecasting",
-        "description": "Forecast future events and scan prediction-market edges.",
-        "version": "1.0.0",
+        "title": "Foresea",
+        "description": _SITE_SUMMARY,
+        "version": "1.1.0",
         "websiteUrl": _CANONICAL,
         "repository": {
             "url": "https://github.com/pareelamre/analyzing-llm-rationale",
@@ -3744,39 +3771,28 @@ def _mcp_server_manifest() -> Dict[str, Any]:
             }
         ],
         "_meta": {
-            "ink.foresea/tools": [
-                "foresea_forecast",
-                "foresea_analyze_market",
-                "foresea_scan_markets",
-                "foresea_track_record",
-                "foresea_edge_board",
-                "foresea_pr_agent",
-            ],
-            "ink.foresea/resources": [
-                "foresea://track-record",
-                "foresea://pr-agent",
-                "foresea://openapi.json",
-            ],
+            "ink.foresea/tools": [tool["name"] for tool in cat["tools"]],
+            "ink.foresea/tools_that_act": [tool["name"] for tool in cat["tools"] if not tool["read_only"]],
+            "ink.foresea/resources": [res["uri"] for res in cat["resources"]],
+            "ink.foresea/prompts": [pr["name"] for pr in cat["prompts"]],
+            "ink.foresea/auth": "none for public data and forecasts",
         },
     }
 
 
-def _agent_manifest() -> Dict[str, Any]:
+def _agent_manifest(cat: Dict[str, Any]) -> Dict[str, Any]:
     openclaw_prompt = (
-        "You have access to Foresea at https://foresea.ink/mcp/. "
+        f"You have access to Foresea at {_MCP_ENDPOINT}. "
         "Use foresea_forecast for probability questions, foresea_analyze_market "
-        "for Polymarket or Kalshi URLs, foresea_scan_markets for market discovery, "
-        "foresea_edge_board for ranked disagreements, and foresea_track_record "
+        "for Polymarket or Kalshi URLs, foresea_scan_markets and foresea_edge_board for "
+        "market discovery, foresea_index_forecasts for Indian stock index ranges, "
+        "foresea_commodity_pairs for commodity relative value, and foresea_track_record "
         "before relying on an edge."
     )
     return {
         "schema_version": "2026-06-06",
         "name": "Foresea",
-        "description": (
-            "Prediction-market intelligence for AI agents: forecast questions, "
-            "scan live markets, compare market prices to Foresea probabilities, "
-            "and inspect public track record."
-        ),
+        "description": _SITE_SUMMARY,
         "homepage_url": _CANONICAL,
         "agent_integration_url": f"{_CANONICAL}/agents",
         "llms_txt_url": f"{_CANONICAL}/llms.txt",
@@ -3786,19 +3802,10 @@ def _agent_manifest() -> Dict[str, Any]:
             "endpoint": _MCP_ENDPOINT,
             "manifest_url": f"{_CANONICAL}/.well-known/mcp/server.json",
             "transport": "streamable-http",
-            "tools": [
-                "foresea_forecast",
-                "foresea_analyze_market",
-                "foresea_scan_markets",
-                "foresea_edge_board",
-                "foresea_track_record",
-                "foresea_pr_agent",
-            ],
-            "resources": [
-                "foresea://track-record",
-                "foresea://pr-agent",
-                "foresea://openapi.json",
-            ],
+            "tools": [tool["name"] for tool in cat["tools"]],
+            "tools_that_act": [tool["name"] for tool in cat["tools"] if not tool["read_only"]],
+            "resources": [res["uri"] for res in cat["resources"]],
+            "prompts": [pr["name"] for pr in cat["prompts"]],
         },
         "http": {
             "base_url": _CANONICAL,
@@ -3818,6 +3825,10 @@ def _agent_manifest() -> Dict[str, Any]:
                 "events": ["meta", "delta", "done", "error"],
             },
             "market_scan": {"method": "GET", "path": "/agent/scan"},
+            "edge_board": {"method": "GET", "path": "/edge-board"},
+            "index_forecasts": {"method": "GET", "path": "/markets/index-forecast"},
+            "commodity_pairs": {"method": "GET", "path": "/markets/commodity-pairs"},
+            "fund_board": {"method": "GET", "path": "/fund/board"},
             "radar_stream": {
                 "method": "GET",
                 "path": "/radar/stream",
@@ -3834,12 +3845,12 @@ def _agent_manifest() -> Dict[str, Any]:
         },
         "recommended_workflow": [
             "Read llms.txt or this manifest for discovery.",
-            "Use agent_scan to find candidate markets.",
+            "Use agent_scan or edge_board to find candidate markets.",
             "Use predict or predict_stream for probabilities and rationale.",
             "Use agent/analyze/stream when a UI should show live market-analysis tokens.",
             "Compare against track_record before trusting new domains.",
             "Preserve evidence links in downstream responses.",
-            "Use pr_agent for concise agent-to-agent introductions when users approve outreach.",
+            "Treat tools_that_act as needing the user's explicit approval.",
         ],
         "integrations": {
             "openclaw": {
@@ -3896,25 +3907,25 @@ def _ai_plugin_manifest() -> Dict[str, Any]:
 @app.get("/.well-known/mcp/server.json", include_in_schema=False)
 async def mcp_server_json():
     """MCP Registry discovery metadata for Foresea's public remote MCP server."""
-    return JSONResponse(_mcp_server_manifest(), headers={"Cache-Control": "public, max-age=86400"})
+    return JSONResponse(_mcp_server_manifest(await _mcp_catalog()), headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/.well-known/mcp.json", include_in_schema=False)
 async def mcp_json_alias():
     """Compatibility alias for MCP clients that probe the older well-known path."""
-    return JSONResponse(_mcp_server_manifest(), headers={"Cache-Control": "public, max-age=86400"})
+    return JSONResponse(_mcp_server_manifest(await _mcp_catalog()), headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/.well-known/agent.json", include_in_schema=False)
 async def agent_json():
     """General-purpose manifest for agents that probe well-known integration metadata."""
-    return JSONResponse(_agent_manifest(), headers={"Cache-Control": "public, max-age=86400"})
+    return JSONResponse(_agent_manifest(await _mcp_catalog()), headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/agent.json", include_in_schema=False)
 async def agent_json_alias():
     """Root-level compatibility alias for agent manifests."""
-    return JSONResponse(_agent_manifest(), headers={"Cache-Control": "public, max-age=86400"})
+    return JSONResponse(_agent_manifest(await _mcp_catalog()), headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/.well-known/ai-plugin.json", include_in_schema=False)
@@ -3944,62 +3955,71 @@ async def pr_agent_json():
 @app.get("/llms.txt", include_in_schema=False)
 async def llms_txt():
     """llms.txt (llmstxt.org): a concise, token-efficient guide that tells an LLM
-    agent what Foresea is and exactly how to call it."""
+    agent what Foresea is and exactly how to call it. The MCP tool list comes from the
+    live server, so it cannot drift from what /mcp/ serves."""
+    cat = await _mcp_catalog()
+    tools = "\n".join(
+        f"- `{tool['name']}`{'' if tool['read_only'] else ' (acts: ask the user first)'}: "
+        f"{_first_sentence(tool['description'])}"
+        for tool in cat["tools"]) or "- (the MCP endpoint is unavailable on this server)"
     body = f"""# Foresea
 
-> Foresea turns prediction-market questions into calibrated probability forecasts
-> with supporting evidence, a written rationale, and the model-vs-market edge.
-> Free to use, with an open JSON API agents can call directly.
+> {_SITE_SUMMARY} Free to use with no sign-in: an open JSON API and a remote MCP server.
 
-## Use the API
-- [Agent integration guide]({_CANONICAL}/agents): practical entry point for AI
-  agents, with MCP, OpenAPI, streaming, market-scan, and track-record examples.
-- [Agent manifest]({_CANONICAL}/.well-known/agent.json): machine-readable
-  endpoints, recommended workflow, and resource list.
-- [Remote MCP server]({_MCP_ENDPOINT}): Streamable HTTP MCP endpoint for agents.
-  Tools: `foresea_forecast`, `foresea_analyze_market`, `foresea_scan_markets`,
-  `foresea_track_record`, `foresea_pr_agent`. Discovery manifest:
-  `{_CANONICAL}/.well-known/mcp/server.json`.
-- OpenClaw agents: add Foresea as a remote Streamable-HTTP MCP server with
-  `{{"mcpServers": {{"foresea": {{"url": "{_MCP_ENDPOINT}"}}}}}}`, then add this
-  instruction to the agent: "Use Foresea for probability, forecasting,
-  prediction-market research, and market-edge questions; call
-  `foresea_track_record` before relying on an edge."
-- [Forecast](\
-{_CANONICAL}/docs): `POST {_CANONICAL}/predict` with `{{"question": "..."}}` returns a
-  structured forecast (binary / multiple-choice / numeric / date), a confidence,
-  a rationale, and relevant evidence sources. No auth required.
-- [Streaming forecast]({_CANONICAL}/docs): `POST {_CANONICAL}/predict/stream`
-  returns SSE events (`meta`, `delta`, `done`, `error`) for live agent-facing
-  conversational output.
-- [Agent analysis]({_CANONICAL}/docs): `POST {_CANONICAL}/agent/analyze` runs an
-  end-to-end analysis of a live market (fetch price, gather evidence, forecast,
-  compute edge) and returns one structured report.
-- [Streaming agent analysis]({_CANONICAL}/docs): `POST {_CANONICAL}/agent/analyze/stream`
-  streams the forecast thesis as SSE and finishes with the same structured report.
-- [Edge scan]({_CANONICAL}/docs): `GET {_CANONICAL}/agent/scan?platform=polymarket`
-  surfaces mispriced live markets (also `kalshi`, or `all`).
-- [PR agent]({_CANONICAL}/pr-agent): concise agent-to-agent outreach packet for
-  opt-in introductions. It does not send unsolicited messages.
-- [OpenAPI spec]({_CANONICAL}/openapi.json): full machine-readable API description.
+Foresea publishes how often it has been right, so check the track record before relying on
+an edge. Forecasts and market data are research, not investment advice; the fund is paper.
 
-## Track record
-- [Live accuracy]({_CANONICAL}/track-record): point-in-time forecasts scored
-  against prediction-market outcomes, with skill-vs-market by horizon.
+## Connect
+- [Remote MCP server]({_MCP_ENDPOINT}): Streamable HTTP, no auth. Any MCP client
+  (Claude, Cursor, OpenClaw agents and others) can add it with
+  `{{"mcpServers": {{"foresea": {{"url": "{_MCP_ENDPOINT}"}}}}}}`
+- [MCP discovery manifest]({_CANONICAL}/.well-known/mcp/server.json) and
+  [agent manifest]({_CANONICAL}/.well-known/agent.json): machine-readable lists of every
+  tool, resource, prompt and HTTP endpoint.
+- [Agent integration guide]({_CANONICAL}/agents): examples for MCP, OpenAPI, streaming and scans.
+- [OpenAPI spec]({_CANONICAL}/openapi.json) and [full reference]({_CANONICAL}/llms-full.txt).
+
+## MCP tools
+{tools}
+
+## Forecasts and markets (HTTP)
+- `POST {_CANONICAL}/predict` with `{{"question": "..."}}`: structured forecast (binary,
+  multiple-choice, numeric or date), confidence, rationale and evidence sources.
+- `POST {_CANONICAL}/predict/stream`: the same as SSE (`meta`, `delta`, `done`, `error`).
+- `POST {_CANONICAL}/agent/analyze`: end-to-end analysis of a live Polymarket or Kalshi
+  market: price, evidence, forecast and edge. `/agent/analyze/stream` streams it.
+- `GET {_CANONICAL}/agent/scan?platform=polymarket` (or `kalshi`, `all`): mispriced live markets.
+- `GET {_CANONICAL}/edge-board`: the ranked model-vs-market disagreements, with trade directions.
+
+## Data feeds (JSON, refreshed daily or hourly)
+- [NSE index ranges]({_CANONICAL}/markets/index-forecast): 80% and 90% ranges for ten Nifty
+  indices at 1, 5 and 21 sessions, with the live and 2016-2026 backtest record per index.
+- [Commodity pairs]({_CANONICAL}/markets/commodity-pairs): how stretched each commodity price
+  ratio is, its 10-year context and the tested toward/away label.
+- [Foresea Fund]({_CANONICAL}/fund/board): one paper portfolio run by Foresea's models.
+- [Track record]({_CANONICAL}/track-record): point-in-time forecasts scored against
+  outcomes, with skill against the market by horizon and domain.
 
 ## About
-- [Web app]({_CANONICAL}/): ask any forecasting question in natural language.
+- [Web app]({_CANONICAL}/): ask a forecasting question in plain language.
+- [Edge board]({_CANONICAL}/edge), [indices]({_CANONICAL}/edge/indices),
+  [commodity pairs]({_CANONICAL}/edge/pairs).
 - [Source](https://github.com/pareelamre/analyzing-llm-rationale)
 """
-    return PlainTextResponse(body, headers={"Cache-Control": "public, max-age=86400"})
+    return PlainTextResponse(body, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap_xml():
     urls = [(f"{_CANONICAL}/", "daily", "1.0"),
             (f"{_CANONICAL}/agents", "weekly", "0.9"),
-            (f"{_CANONICAL}/pr-agent", "weekly", "0.8"),
+            (f"{_CANONICAL}/edge", "hourly", "0.8"),
+            (f"{_CANONICAL}/edge/indices", "daily", "0.8"),
+            (f"{_CANONICAL}/edge/pairs", "daily", "0.8"),
+            (f"{_CANONICAL}/edge/agentic", "daily", "0.6"),
             (f"{_CANONICAL}/track-record", "daily", "0.8"),
+            (f"{_CANONICAL}/pr-agent", "weekly", "0.6"),
+            (f"{_CANONICAL}/llms.txt", "weekly", "0.6"),
             (f"{_CANONICAL}/docs", "weekly", "0.6")]
     items = "".join(
         f"<url><loc>{loc}</loc><changefreq>{cf}</changefreq><priority>{pr}</priority></url>"
@@ -4022,49 +4042,106 @@ async def track_record_digest():
                              headers={"Cache-Control": "public, max-age=600"})
 
 
+#: OpenAPI tags whose endpoints llms-full.txt lists: public reads and forecasts. Account,
+#: trading, personal-integration and twin endpoints need sign-in and are left to /openapi.json.
+_LLMS_FULL_TAGS = ("Inference", "Markets", "Agents", "Feed", "Analytics", "System", "Webhooks", "Venue APIs")
+#: Paths in those tags that are operator-only, need sign-in, or are page telemetry.
+_LLMS_FULL_SKIP = ("/analytics/dashboard", "/analytics/event", "/analytics/events", "/analytics/export.csv",
+                   "/analytics/summary", "/analytics/users", "/analytics/visit", "/trading/", "/agent-profiles",
+                   "/agent/runs", "/feedback", "/forecasts/share", "/providers/", "/track-record/mark-enrolled",
+                   "/track-record/pending-markets")
+
+
+def _llms_full_listed(path: str) -> bool:
+    if path == "/analytics/export":
+        return False
+    return not any(path.startswith(prefix) for prefix in _LLMS_FULL_SKIP)
+
+
+def _llms_full_endpoints() -> str:
+    spec = app.openapi()
+    by_tag: Dict[str, list] = {}
+    for path, ops in sorted((spec.get("paths") or {}).items()):
+        for method, op in ops.items():
+            tag = next(iter(op.get("tags") or []), "")
+            if tag in _LLMS_FULL_TAGS and _llms_full_listed(path):
+                summary = op.get("summary") or _first_sentence(op.get("description") or "")
+                by_tag.setdefault(tag, []).append(f"- `{method.upper()} {path}`: {summary}")
+    return "\n\n".join(f"### {tag}\n" + "\n".join(by_tag[tag]) for tag in _LLMS_FULL_TAGS if tag in by_tag)
+
+
 @app.get("/llms-full.txt", include_in_schema=False)
 async def llms_full_txt():
-    """llms-full.txt: exhaustive developer and agent documentation for all Foresea APIs and tools."""
-    body = f"""# Foresea Full Agent & Developer Reference
+    """llms-full.txt: the full agent reference. MCP tools, resources and prompts come from the
+    live server and HTTP endpoints from the OpenAPI spec, so neither can drift."""
+    cat = await _mcp_catalog()
 
-> Foresea turns prediction-market questions into calibrated probability forecasts
-> with supporting evidence, a written rationale, model-vs-market edge, and paper execution.
+    def params(tool: Dict[str, Any]) -> str:
+        parts = []
+        for name, spec in tool["parameters"].items():
+            kind = spec["type"] if isinstance(spec["type"], str) else "/".join(map(str, spec["type"])) or "any"
+            parts.append(f"{name}: {kind}{'' if spec['required'] else ' (optional)'}")
+        return ", ".join(parts) or "no arguments"
 
-## Core Architecture
-- **Canonical URL**: {_CANONICAL}
-- **Remote FastMCP Server**: {_MCP_ENDPOINT}
-- **OpenAPI Schema**: {_CANONICAL}/openapi.json
-- **Agent Discovery**: {_CANONICAL}/.well-known/agent.json, {_CANONICAL}/.well-known/mcp/server.json
+    tools = "\n\n".join(
+        f"### `{tool['name']}`\n"
+        f"{'Read-only.' if tool['read_only'] else 'Acts on the user account: call only with explicit approval.'} "
+        f"Arguments: {params(tool)}.\n\n{tool['description']}"
+        for tool in cat["tools"])
+    resources = "\n".join(f"- `{res['uri']}` ({res['name']}): {res['description']}" for res in cat["resources"])
+    prompts = "\n".join(f"- `{pr['name']}`: {_first_sentence(pr['description'])}" for pr in cat["prompts"])
+    body = f"""# Foresea: full agent reference
 
-## HTTP API Endpoints
+> {_SITE_SUMMARY}
 
-### 1. Probability Forecasting & Ensemble
-- `POST /predict`: Generate a structured probability forecast for binary, multiple-choice, numeric, or date questions.
-- `POST /predict/stream`: Server-Sent Events (SSE) stream for progressive real-time rationale rendering and structured JSON outcome.
-- `POST /predict/ensemble`: Multi-model forecast weighted inversely by historical empirical Brier score per domain.
+- Site: {_CANONICAL}
+- Remote MCP server (Streamable HTTP, no auth): {_MCP_ENDPOINT}
+- OpenAPI: {_CANONICAL}/openapi.json
+- Discovery: {_CANONICAL}/llms.txt, {_CANONICAL}/.well-known/agent.json,
+  {_CANONICAL}/.well-known/mcp/server.json
 
-### 2. Market Radar & Real-Time SSE Streams
-- `GET /radar`: Live model-vs-market opportunities and edge board with HTTP ETag caching.
-- `GET /radar/delta?since=<iso_timestamp>`: Incremental delta sync returning only newly modified markets since last poll.
-- `GET /radar/stream`: Persistent Server-Sent Events stream for instant radar deltas and keep-alive heartbeats.
-- `GET /feed/latest`: Unified alpha and autonomous trading feed with ETag support.
-- `GET /feed/stream`: Real-time SSE stream of live trades, theses, and edge signals.
+Using Foresea well:
+- Check `foresea_track_record` (or GET /track-record) before acting on an edge; skill
+  against the market differs by domain and horizon.
+- Keep the evidence links a forecast returns when you pass its answer on.
+- Tools marked "acts" change something for the user (orders, webhooks). Real trading is off
+  unless the operator enables it, and every live order needs the exact confirmation phrase.
+- Index ranges and commodity pairs are research, not investment advice; the fund is paper.
 
-### 3. Columnar Analytics & Data Export
-- `GET /analytics/export.parquet?dataset=edge_board`: Export live edge opportunities in compressed ZSTD Parquet format.
-- `GET /analytics/export.parquet?dataset=models_comparison`: Export historical model calibration and Brier benchmarks as Parquet.
-- `GET /track-record`: Complete audit trail of resolved forecasts and empirical calibration curves.
+## MCP tools ({len(cat["tools"])})
 
-### 4. FastMCP Tools (Streamable HTTP at /mcp/)
-- `foresea_forecast(question, question_type, market_probability, market_platform)`: Structured probability forecast.
-- `foresea_edge_board(limit, min_edge, fields, cursor)`: Filtered market opportunities with token-efficient field projections.
-- `foresea_track_record(fields)`: Verified historical accuracy and Brier score metrics.
-- `foresea_scan_markets(platform, limit)`: Live market scanner for Polymarket and Kalshi.
-- `foresea_analyze_market(url_or_question)`: End-to-end price fetching, evidence retrieval, and forecast thesis.
-- `foresea_orderbook(platform, ident)`: Live bids and asks orderbook depth.
-- `foresea_pr_agent(audience)`: Machine-readable outreach packet.
+{tools}
+
+## MCP resources
+
+{resources}
+
+## MCP prompts
+
+{prompts}
+
+## Data feeds
+
+- `GET /markets/index-forecast`: ten NSE indices. Each index has `close`, `as_of` and
+  `horizons` (h = 1, 5 or 21 sessions) with `quantiles` at 5, 10, 25, 50, 75, 90 and 95%,
+  `p_up` and round-level `levels`. `track_record.by_horizon` and `by_index` hold the live
+  record; `backtest.by_horizon` and `by_index` the 2016-2026 walk-forward (coverage of the
+  50/80/90% ranges and quantile-loss skill against an EWMA baseline).
+- `GET /markets/commodity-pairs`: `pairs` with the 60-session z-score of the price ratio
+  (`z`, `z_ratio`), `stretched`, `expected` return per signal, and `long_run` (10-year
+  z, percentile, story behind past extremes, `tide`: toward or away from the average).
+  `long_run.tide` holds the label's tested and live record; `rule` the entry and exit rule.
+- `GET /fund/board`: the paper fund's `nav_usd`, `cash_usd`, `positions`, `trades`,
+  `curve` and the analysts `retired` after failing their tests.
+- `GET /track-record`: resolved forecasts scored against outcomes.
+
+## HTTP endpoints (public)
+
+{_llms_full_endpoints()}
+
+Account, trading, personal-integration and twin endpoints need sign-in: see {_CANONICAL}/openapi.json.
 """
-    return PlainTextResponse(body, headers={"Cache-Control": "public, max-age=86400"})
+    return PlainTextResponse(body, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/analytics/export.parquet", tags=["Analytics"], summary="Export Foresea datasets as compressed Parquet")

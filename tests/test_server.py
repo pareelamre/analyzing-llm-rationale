@@ -5485,6 +5485,33 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(body["remotes"][0]["url"], "https://foresea.ink/mcp/")
         self.assertIn("foresea_scan_markets", body["_meta"]["ink.foresea/tools"])
 
+    def test_discovery_files_list_exactly_what_the_mcp_server_serves(self):
+        # Hand-kept lists drifted: six tools listed, 28 served, and one listed tool gone.
+        tools = self.client.get("/.well-known/mcp/server.json").json()["_meta"]["ink.foresea/tools"]
+        agent = self.client.get("/.well-known/agent.json").json()["mcp"]
+        llms, full = self.client.get("/llms.txt").text, self.client.get("/llms-full.txt").text
+        for name in ("foresea_index_forecasts", "foresea_commodity_pairs", "foresea_fund_board",
+                     "foresea_place_order", "foresea_track_record"):
+            self.assertIn(name, tools)
+        self.assertNotIn("foresea_pr_agent", tools)
+        self.assertEqual(agent["tools"], tools)
+        self.assertEqual(set(agent["tools_that_act"]),
+                         {"foresea_place_order", "foresea_cancel_order", "foresea_webhook_subscribe"})
+        for name in tools:
+            self.assertIn(f"`{name}`", llms)
+            self.assertIn(f"### `{name}`", full)
+        self.assertIn("foresea://markets/index-forecast", agent["resources"])
+        self.assertIn(f"## MCP tools ({len(tools)})", full)
+        # Operator-only and sign-in endpoints stay out of the public reference.
+        self.assertNotIn("/analytics/users", full)
+        self.assertNotIn("/trading/venue", full)
+        self.assertIn("`GET /markets/index-forecast`", full)
+
+    def test_sitemap_lists_the_board_pages(self):
+        r = self.client.get("/sitemap.xml")
+        for path in ("/edge", "/edge/indices", "/edge/pairs", "/llms.txt"):
+            self.assertIn(f"<loc>https://foresea.ink{path}</loc>", r.text)
+
     def test_mcp_discovery_manifest_compat_alias(self):
         r = self.client.get("/.well-known/mcp.json")
         self.assertEqual(r.status_code, 200)

@@ -13,7 +13,7 @@ class TestServerNewCapabilities(unittest.TestCase):
     def test_llms_full_txt(self):
         resp = self.client.get("/llms-full.txt")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn("Foresea Full Agent & Developer Reference", resp.text)
+        self.assertIn("# Foresea: full agent reference", resp.text)
         self.assertIn("/predict/ensemble", resp.text)
         self.assertIn("/analytics/export.parquet", resp.text)
 

@@ -7,7 +7,7 @@ import os
 import sys
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 import requests
 
@@ -88,6 +88,9 @@ def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]
 
 # tool method (aforecast/...) -> public tool name, for usage logging.
 _TOOL_NAMES = {
+    "index_forecast": "foresea_index_forecasts", "aindex_forecast": "foresea_index_forecasts",
+    "commodity_pairs": "foresea_commodity_pairs", "acommodity_pairs": "foresea_commodity_pairs",
+    "fund_board": "foresea_fund_board", "afund_board": "foresea_fund_board",
     "forecast": "foresea_forecast", "aforecast": "foresea_forecast",
     "batch_forecast": "foresea_batch_forecast", "abatch_forecast": "foresea_batch_forecast",
     "crypto_edge": "foresea_crypto_edge", "acrypto_edge": "foresea_crypto_edge",
@@ -643,6 +646,24 @@ class ForeseaClient:
     async def aedge_board(self) -> Dict[str, Any]:
         return await self._arequest("GET", "/edge-board")
 
+    def index_forecast(self) -> Dict[str, Any]:
+        return self._request("GET", "/markets/index-forecast")
+
+    async def aindex_forecast(self) -> Dict[str, Any]:
+        return await self._arequest("GET", "/markets/index-forecast")
+
+    def commodity_pairs(self) -> Dict[str, Any]:
+        return self._request("GET", "/markets/commodity-pairs")
+
+    async def acommodity_pairs(self) -> Dict[str, Any]:
+        return await self._arequest("GET", "/markets/commodity-pairs")
+
+    def fund_board(self) -> Dict[str, Any]:
+        return self._request("GET", "/fund/board")
+
+    async def afund_board(self) -> Dict[str, Any]:
+        return await self._arequest("GET", "/fund/board")
+
     def openapi(self) -> Dict[str, Any]:
         return self._request("GET", "/openapi.json")
 
@@ -923,6 +944,130 @@ def _mcp_import_error(exc: ImportError) -> RuntimeError:
     return RuntimeError("The MCP extra is required: pip install -e '.[mcp]'")
 
 
+#: MCP tool annotations (spec 2025-03-26+): clients use them to decide which tools may run
+#: without asking. Every Foresea tool only reads, except the three listed below.
+READ_ONLY_TOOL: Dict[str, Any] = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True,
+                                  "openWorldHint": True}
+TOOL_ANNOTATIONS: Dict[str, Dict[str, Any]] = {
+    "foresea_place_order": {"title": "Place a real order", "readOnlyHint": False, "destructiveHint": True,
+                            "idempotentHint": False, "openWorldHint": True},
+    "foresea_cancel_order": {"title": "Cancel a real order", "readOnlyHint": False, "destructiveHint": True,
+                             "idempotentHint": True, "openWorldHint": True},
+    "foresea_webhook_subscribe": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False,
+                                  "openWorldHint": True},
+}
+
+#: Index forecast quantiles (index_forecast.QUANTILES): 5, 10, 25, 50, 75, 90 and 95%.
+_Q90, _Q80, _QMED = (0, 6), (1, 5), 3
+
+
+def _match(text: Any, wanted: Optional[str]) -> bool:
+    return not wanted or str(wanted).strip().lower() in str(text or "").lower()
+
+
+def summarize_index_forecast(raw: Mapping[str, Any], *, index: Optional[str] = None,
+                             horizon: Optional[int] = None) -> Dict[str, Any]:
+    """Compact view of /markets/index-forecast for an agent: ranges per index and horizon, plus
+    the track record (live and 2016-2026 backtest), for one index when ``index`` names it."""
+    indices = []
+    for ix in raw.get("indices") or []:
+        if not _match(ix.get("name"), index):
+            continue
+        rows = []
+        for hz in ix.get("horizons") or []:
+            if horizon and hz.get("h") != horizon:
+                continue
+            q = hz.get("quantiles") or []
+            if len(q) < 7:
+                continue
+            rows.append({"sessions_ahead": hz.get("h"), "target_date": hz.get("target_date"),
+                         "range_80": [q[_Q80[0]], q[_Q80[1]]], "range_90": [q[_Q90[0]], q[_Q90[1]]],
+                         "median": q[_QMED], "p_close_higher": hz.get("p_up")})
+        indices.append({"name": ix.get("name"), "close": ix.get("close"), "as_of": ix.get("as_of"), "horizons": rows})
+    names = [ix["name"] for ix in indices]
+    one = names[0] if index and len(names) == 1 else None
+    track, back = raw.get("track_record") or {}, raw.get("backtest") or {}
+    return {
+        "as_of": raw.get("as_of"), "generated_at": raw.get("generated_at"), "source": raw.get("source"),
+        "note": ("80% and 90% ranges for where each index closes, not direction calls: in a 2016-2026 "
+                 "test no model called up or down better than each index's long-run up-rate. "
+                 "Research forecasts, not investment advice."),
+        "indices": indices,
+        "track_record": {"index": one or "all ten indices",
+                         "live": (track.get("by_index") or {}).get(one) if one else track.get("by_horizon"),
+                         "backtest": (back.get("by_index") or {}).get(one) if one else back.get("by_horizon"),
+                         "backtest_window": back.get("window"), "first_live_forecast": track.get("first_forecast")},
+        "available_indices": [ix.get("name") for ix in raw.get("indices") or []],
+    }
+
+
+_PAIR_FIELDS = ("key", "label", "why", "date", "ratio", "usual_ratio", "z", "z_ratio", "stretched", "rich",
+                "cheap", "expected")
+
+
+def summarize_commodity_pairs(raw: Mapping[str, Any], *, pair: Optional[str] = None) -> Dict[str, Any]:
+    """Compact view of /markets/commodity-pairs: each pair's stretch, its 10-year place and
+    label (toward or away from the long-run average), and the tracker's rule and record."""
+    pairs = []
+    for row in raw.get("pairs") or []:
+        if not (_match(row.get("key"), pair) or _match(row.get("label"), pair)):
+            continue
+        out = {k: row.get(k) for k in _PAIR_FIELDS if k in row}
+        lr = row.get("long_run") or {}
+        if lr:
+            out["long_run"] = {k: lr.get(k) for k in ("z", "percentile", "usual", "low", "high", "tide", "extreme")}
+            if lr.get("story"):
+                out["long_run"]["story"] = {k: lr["story"].get(k) for k in ("driver", "cause", "sources")}
+        pairs.append(out)
+    long_run = raw.get("long_run") or {}
+    return {
+        "generated_at": raw.get("generated_at"), "data_through": raw.get("data_through"), "source": raw.get("source"),
+        "note": ("Pairs of related commodities: z is how stretched the price ratio is over 60 sessions; "
+                 "a signal needs |z| >= the entry rule. 'tide' says whether betting the gap closes also "
+                 "bets toward the pair's 10-year average; away trades are taken at half size. "
+                 "Research, not investment advice."),
+        "rule": raw.get("rule"), "label_record": long_run.get("tide"),
+        "pairs": pairs,
+        "track_record": {k: (raw.get("track_record") or {}).get(k) for k in ("live_since", "first_signal", "by_pair")},
+    }
+
+
+def summarize_fund_board(raw: Mapping[str, Any], *, trades: int = 10) -> Dict[str, Any]:
+    """Compact view of /fund/board: the paper fund's value, positions and latest trades."""
+    pos = [{k: p.get(k) for k in ("label", "side", "venue", "asset_class", "value_usd", "pnl_usd", "pair_key")}
+           for p in raw.get("positions") or []]
+    recent = [{k: tr.get(k) for k in ("ts", "action", "label", "side", "price", "notional_usd", "realized_pnl_usd",
+                                      "purpose", "pair_key", "note")
+               if k in tr} for tr in (raw.get("trades") or [])[: max(0, int(trades))]]
+    return {
+        "paper": True, "fund_id": raw.get("fund_id"), "generated_at": raw.get("generated_at"),
+        "note": "One paper portfolio run by Foresea's models; no real money. Not investment advice.",
+        "nav_usd": raw.get("nav_usd"), "cash_usd": raw.get("cash_usd"),
+        "realized_pnl_usd": raw.get("realized_pnl_usd"), "by_asset_class": raw.get("by_asset_class"),
+        "positions": pos, "recent_trades": recent, "retired_analysts": raw.get("retired"),
+    }
+
+
+async def catalog(mcp: Any) -> Dict[str, Any]:
+    """Every tool, resource and prompt the server registers, for discovery manifests."""
+    tools = []
+    for tool in await mcp.list_tools():
+        ann = tool.annotations
+        schema = tool.inputSchema or {}
+        required = set(schema.get("required") or [])
+        params = {name: {"type": spec.get("type") or [a.get("type") for a in spec.get("anyOf", []) if a.get("type")],
+                         "required": name in required}
+                  for name, spec in (schema.get("properties") or {}).items()}
+        tools.append({"name": tool.name, "description": " ".join((tool.description or "").split()),
+                      "read_only": bool(ann and ann.readOnlyHint), "destructive": bool(ann and ann.destructiveHint),
+                      "parameters": params})
+    resources = [{"uri": str(r.uri), "name": r.name, "description": " ".join((r.description or "").split())}
+                 for r in await mcp.list_resources()]
+    prompts = [{"name": pr.name, "description": " ".join((pr.description or "").split())}
+               for pr in await mcp.list_prompts()]
+    return {"tools": tools, "resources": resources, "prompts": prompts}
+
+
 def create_mcp_server(
     *,
     base_url: Optional[str] = None,
@@ -957,6 +1102,11 @@ def create_mcp_server(
         json_response=True,
     )
 
+    from mcp.types import ToolAnnotations
+
+    def _annotations(name: str) -> ToolAnnotations:
+        return ToolAnnotations(**TOOL_ANNOTATIONS.get(name, READ_ONLY_TOOL))
+
     def _tool_name(fn) -> str:
         return _TOOL_NAMES.get(getattr(fn, "__name__", ""), getattr(fn, "__name__", "?"))
 
@@ -988,7 +1138,7 @@ def create_mcp_server(
         except (TradingError, TradingValidationError, TradingDisabledError, TradingNotConfiguredError, TradingExecutionError) as exc:
             raise ToolError(f"Trading error: {exc}") from exc
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_forecast"))
     async def foresea_forecast(
         question: str,
         description: str = "",
@@ -1033,7 +1183,7 @@ def create_mcp_server(
         )
         return await _call_tool_async(client.aforecast, payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_analyze_market"))
     async def foresea_analyze_market(
         question: Optional[str] = None,
         platform: Optional[str] = None,
@@ -1076,7 +1226,7 @@ def create_mcp_server(
         )
         return await _call_tool_async(client.aanalyze_resilient, payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_scan_markets"))
     async def foresea_scan_markets(
         platform: str = "polymarket",
         limit: int = 4,
@@ -1103,7 +1253,7 @@ def create_mcp_server(
             query=query,
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_batch_quotes"))
     async def foresea_batch_quotes(refs: List[str]) -> Dict[str, Any]:
         """Call this when the user wants current price/volume for several markets
         at once -- a watchlist, a portfolio, "check on these 5 markets" -- instead
@@ -1120,7 +1270,7 @@ def create_mcp_server(
 
         return await _call_tool_async(client.abatch_quotes, refs)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_check_run"))
     async def foresea_check_run(client_run_key: str) -> Dict[str, Any]:
         """Call this after foresea_analyze_market timed out or errored with a
         message naming a client_run_key -- the research it started may still be
@@ -1133,7 +1283,7 @@ def create_mcp_server(
 
         return await _call_tool_async(client.acheck_run, client_run_key)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_track_record"))
     async def foresea_track_record(fields: Optional[List[str]] = None) -> Dict[str, Any]:
         """Call this when the user asks how reliable or accurate Foresea is, or wants
         to know whether to trust a forecast. Good triggers: "How good is Foresea?",
@@ -1149,7 +1299,7 @@ def create_mcp_server(
             return {k: v for k, v in summarised.items() if k in field_set or k in ("generated_at", "freshness")}
         return summarised
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_edge_board"))
     async def foresea_edge_board(
         limit: int = 20,
         min_edge: float = 0.0,
@@ -1184,7 +1334,7 @@ def create_mcp_server(
             summarised["total_matching_edges"] = total
         return summarised
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_venue_data"))
     async def foresea_venue_data(platform: str = "", operation: str = "",
                                 parameters: Optional[Dict[str, Any]] = None,
                                 body: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
@@ -1193,21 +1343,21 @@ def create_mcp_server(
         operation to discover operation names and schemas. No account or write access."""
         return await _call_tool_async(client.avenue_data, platform, operation, parameters, body)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_exchange_status"))
     async def foresea_exchange_status() -> Dict[str, Any]:
         """Call this to check Kalshi exchange operational status (trading active flag)
         and operational hours/schedule."""
 
         return await _call_tool_async(client.aexchange_status)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_orderbook"))
     async def foresea_orderbook(ticker_or_token: str, platform: str = "") -> Dict[str, Any]:
         """Call this to fetch the live bids and asks orderbook depth for a Kalshi market
         ticker (e.g. 'KXFED-25JUN-H') or Polymarket YES-token ID."""
 
         return await _call_tool_async(client.aorderbook, ticker_or_token, platform)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_market_tags"))
     async def foresea_market_tags() -> List[Dict[str, Any]]:
         """Call this to sample Polymarket's category vocabulary. Each entry is a
         label and the slug that identifies it.
@@ -1221,14 +1371,14 @@ def create_mcp_server(
 
         return await _call_tool_async(client.amarket_tags)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_price_history"))
     async def foresea_price_history(ticker_or_market: str, series_ticker: str = "") -> List[Dict[str, Any]]:
         """Call this to retrieve historical price series or OHLC candlesticks for a
         market (e.g. Kalshi ticker or Polymarket token/slug)."""
 
         return await _call_tool_async(client.aprice_history, ticker_or_market, series_ticker)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_live_data"))
     async def foresea_live_data(event_ticker: str = "", data_type: str = "", milestone_id: str = "") -> Dict[str, Any]:
         """Call this to fetch real-time sports game statistics, play-by-play data, and
         live event feeds from Kalshi. Provide event_ticker for event charts, or
@@ -1236,7 +1386,7 @@ def create_mcp_server(
 
         return await _call_tool_async(client.alive_data, event_ticker, data_type, milestone_id)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_polymarket_meta"))
     async def foresea_polymarket_meta(target: str = "series", market_id: str = "") -> List[Dict[str, Any]]:
         """Call this to fetch Polymarket metadata: event series listings, community
         discussion comments for a market, or sports league metadata (target: 'series',
@@ -1250,19 +1400,19 @@ def create_mcp_server(
 
         return await _call_tool_async(client.apolymarket_meta, target, market_id)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_recent_trades"))
     async def foresea_recent_trades(platform: str = "kalshi", ticker_or_token: str = "", limit: int = 20) -> List[Dict[str, Any]]:
         """Call this to fetch recent public executed trades / trade tape (prices, sizes, timestamps) on Kalshi or Polymarket."""
 
         return await _call_tool_async(client.arecent_trades, platform, ticker_or_token, limit)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_market_leaderboard"))
     async def foresea_market_leaderboard(limit: int = 20) -> List[Dict[str, Any]]:
         """Call this to fetch the top profitable prediction market trader leaderboard and rankings from Polymarket."""
 
         return await _call_tool_async(client.amarket_leaderboard, limit)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_debate_market"))
     async def foresea_debate_market(
         question: str,
         platform: str = "Market",
@@ -1273,7 +1423,7 @@ def create_mcp_server(
 
         return await _call_tool_async(client.adebate_market, question, platform, market_probability, resolution_criteria)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_optimize_portfolio"))
     async def foresea_optimize_portfolio(
         bankroll_usd: float = 1000.0,
         kelly_fraction: float = 0.25,
@@ -1283,23 +1433,27 @@ def create_mcp_server(
 
         return await _call_tool_async(client.aoptimize_portfolio, bankroll_usd, kelly_fraction, min_edge)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_feed_latest"))
     async def foresea_feed_latest(limit: int = 10, min_edge: float = 0.05) -> Dict[str, Any]:
         """Fetch the real-time unified Foresea Alpha & Agent Feed, combining live prediction market edge signals, autonomous agent trades & theses, and leaderboard standings."""
 
         return await _call_tool_async(client.afeed_latest, limit, min_edge)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_weather_radar"))
     async def foresea_weather_radar(target_date: Optional[str] = None) -> Dict[str, Any]:
         """Scan live temperature and weather prediction markets (Kalshi KXHIGHNY, KXHIGHCHI,
         KXHIGHMIA, KXHIGHAUS, KXHIGHDEN, KXHIGHPHIL, etc.) against neural weather models
         (Google DeepMind WeatherNext 3 / MetNet) and high-resolution multi-model ensembles,
         calibrated with station microclimate bias profiles. Returns ranked mispricings,
-        strike bracket probabilities, and model-vs-market edge."""
+        strike bracket probabilities, and model-vs-market edge.
+        Google's Weather API (WeatherNext/MetNet) is used when the server has a key, otherwise
+        Open-Meteo's models. Foresea's own pre-registered tests found no profitable weather edge
+        (Kalshi and Polymarket daily highs, Kalshi hourly markets, market making;
+        https://github.com/pareelamre/analyzing-llm-rationale/blob/main/docs/fund.md), so treat mispricings as research, not trades."""
 
         return await _call_tool_async(client.aweather_radar, target_date)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_weather_forecast"))
     async def foresea_weather_forecast(
         station_or_query: str,
         target_date: Optional[str] = None,
@@ -1307,11 +1461,15 @@ def create_mcp_server(
         """Retrieve neural model weather forecasts (Google Maps Weather API / WeatherNext 3 /
         MetNet, ECMWF, GFS, GraphCast) with empirical station bias correction (e.g. KNYC
         Central Park, KMDW Chicago Midway, KDEN Denver) and strike bracket probability
-        calculations for weather prediction markets."""
+        calculations for weather prediction markets.
+        Google's Weather API (WeatherNext/MetNet) is used when the server has a key, otherwise
+        Open-Meteo's models. Foresea's own pre-registered tests found no profitable weather edge
+        (Kalshi and Polymarket daily highs, Kalshi hourly markets, market making;
+        https://github.com/pareelamre/analyzing-llm-rationale/blob/main/docs/fund.md), so treat mispricings as research, not trades."""
 
         return await _call_tool_async(client.aweather_forecast, station_or_query, target_date)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_batch_forecast"))
     async def foresea_batch_forecast(
         questions: Optional[List[str]] = None,
         items: Optional[List[Dict[str, Any]]] = None,
@@ -1334,7 +1492,7 @@ def create_mcp_server(
         )
         return await _call_tool_async(client.abatch_forecast, payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_crypto_edge"))
     async def foresea_crypto_edge(
         min_edge: float = 0.0,
         limit: int = 20,
@@ -1345,7 +1503,7 @@ def create_mcp_server(
 
         return await _call_tool_async(client.acrypto_edge, min_edge=min_edge, limit=limit)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_webhook_subscribe"))
     async def foresea_webhook_subscribe(
         url: str,
         events: Optional[List[str]] = None,
@@ -1362,14 +1520,14 @@ def create_mcp_server(
         }
         return await _call_tool_async(client.awebhook_subscribe, payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_trade_account_status"))
     async def foresea_trade_account_status() -> Dict[str, Any]:
         """Check real prediction-market trading readiness, max order notional limits,
         and venue configuration statuses for Kalshi and Polymarket."""
 
         return await _call_tool_async(client.atrade_account_status)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_preview_order"))
     async def foresea_preview_order(
         platform: str,
         action: str,
@@ -1401,7 +1559,7 @@ def create_mcp_server(
         })
         return await _call_tool_async(client.apreview_order, payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_place_order"))
     async def foresea_place_order(
         platform: str,
         action: str,
@@ -1440,7 +1598,7 @@ def create_mcp_server(
         })
         return await _call_tool_async(client.aplace_order, payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=_annotations("foresea_cancel_order"))
     async def foresea_cancel_order(
         order_id: str,
         platform: str = "kalshi",
@@ -1449,6 +1607,43 @@ def create_mcp_server(
         """Cancel an active open order on Kalshi or Polymarket using its venue order ID."""
 
         return await _call_tool_async(client.acancel_order, order_id=order_id, platform=platform, ticker=ticker)
+
+    @mcp.tool(annotations=_annotations("foresea_index_forecasts"))
+    async def foresea_index_forecasts(index: Optional[str] = None, horizon: Optional[int] = None) -> Dict[str, Any]:
+        """Call this when the user asks where an Indian stock index will close, or how much it
+        could move: Nifty 50, Nifty Bank, Nifty Financial Services, Nifty Midcap Select, Nifty
+        Next 50, Nifty IT, Nifty Auto, Nifty Pharma, Nifty FMCG or Nifty Metal. Returns 80% and
+        90% ranges, the median and the chance of closing higher for the next session, one week
+        (5 sessions) and one month (21 sessions), with the live and 2016-2026 backtest track
+        record. Pass index (e.g. "Nifty Bank") for one index and its own record, and horizon
+        (1, 5 or 21) for one horizon. Ranges, not direction calls."""
+
+        raw = await _call_tool_async(client.aindex_forecast)
+        return summarize_index_forecast(raw, index=index, horizon=horizon)
+
+    @mcp.tool(annotations=_annotations("foresea_commodity_pairs"))
+    async def foresea_commodity_pairs(pair: Optional[str] = None) -> Dict[str, Any]:
+        """Call this when the user asks about relative value between commodities: gold/silver,
+        Brent/WTI, WTI/natural gas, copper/gold, copper/aluminium, zinc/lead, copper/zinc,
+        nickel/copper, or India's gold import premium. Returns how stretched each price ratio is
+        (60-session z-score), whether that is a signal, where the ratio sits in its 10-year
+        history with the story behind past extremes, and whether a trade would bet toward or
+        away from the long-run average (away trades are half size, with the tested record).
+        Pass pair (e.g. "copper-zinc" or "Brent") for one pair."""
+
+        raw = await _call_tool_async(client.acommodity_pairs)
+        return summarize_commodity_pairs(raw, pair=pair)
+
+    @mcp.tool(annotations=_annotations("foresea_fund_board"))
+    async def foresea_fund_board(trades: int = 10) -> Dict[str, Any]:
+        """Call this when the user asks what the Foresea Fund holds or how it is doing: one paper
+        portfolio (no real money) run by Foresea's models across prediction markets, MCX
+        commodity pairs and NSE index options. Returns value, cash, positions with profit and
+        loss, the latest trades (trades sets how many) and the analysts retired after failing
+        their tests."""
+
+        raw = await _call_tool_async(client.afund_board)
+        return summarize_fund_board(raw, trades=trades)
 
     @mcp.resource(
         "foresea://weather/radar",
@@ -1534,6 +1729,39 @@ def create_mcp_server(
         """Live Kalshi crypto prediction market mispricings and calibration data."""
 
         return json.dumps(await _call_tool_async(client.acrypto_edge, _kind="resource"), sort_keys=True)
+
+    @mcp.resource(
+        "foresea://markets/index-forecast",
+        name="Foresea NSE index forecasts",
+        mime_type="application/json",
+    )
+    async def index_forecast_resource() -> str:
+        """Ranges for ten NSE indices at three horizons, with the track record per index."""
+
+        raw = await _call_tool_async(client.aindex_forecast, _kind="resource")
+        return json.dumps(summarize_index_forecast(raw), sort_keys=True)
+
+    @mcp.resource(
+        "foresea://markets/commodity-pairs",
+        name="Foresea commodity pairs tracker",
+        mime_type="application/json",
+    )
+    async def commodity_pairs_resource() -> str:
+        """Commodity price-ratio stretch, long-run context and the toward/away label record."""
+
+        raw = await _call_tool_async(client.acommodity_pairs, _kind="resource")
+        return json.dumps(summarize_commodity_pairs(raw), sort_keys=True)
+
+    @mcp.resource(
+        "foresea://fund/board",
+        name="Foresea Fund (paper)",
+        mime_type="application/json",
+    )
+    async def fund_board_resource() -> str:
+        """The paper fund's value, positions and latest trades."""
+
+        raw = await _call_tool_async(client.afund_board, _kind="resource")
+        return json.dumps(summarize_fund_board(raw), sort_keys=True)
 
     @mcp.prompt()
     def foresea_forecast_prompt(question: str) -> str:
