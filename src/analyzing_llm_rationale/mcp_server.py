@@ -23,6 +23,10 @@ from analyzing_llm_rationale.trading import (
 logger = logging.getLogger(__name__)
 
 
+#: Set by the site (server.py) to count each tool call and resource read per day.
+USAGE_HOOK: Optional[Any] = None
+
+
 def _log_mcp_tool_call(
     tool: str,
     context: Optional[Dict[str, Any]] = None,
@@ -47,6 +51,11 @@ def _log_mcp_tool_call(
     if context:
         record.update(context)
     print(json.dumps(record, ensure_ascii=False), flush=True)
+    if USAGE_HOOK is not None:  # the site's durable daily counts (usage_counter)
+        try:
+            USAGE_HOOK(tool, kind)
+        except Exception:  # aqg: counting must never break a tool call
+            pass
 
 
 def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]:
