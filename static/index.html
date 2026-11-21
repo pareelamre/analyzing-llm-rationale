@@ -4676,6 +4676,14 @@ async function streamPredict(body, variant, convId, typingEl, signal, deviceMode
 }
 
 async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) {
+  // Why a stream broke, sent with forecast_interrupted: the browser's error, how long it ran,
+  // whether the tab was hidden on the way, and the last stage reached.
+  const streamStartedAt = performance.now();
+  let wentHidden = document.visibilityState !== 'visible';
+  const onVisibility = () => { if (document.visibilityState !== 'visible') wentHidden = true; };
+  document.addEventListener('visibilitychange', onVisibility);
+  let lastStatus = 'connecting';
+  let interruptReason = '';
   let resp;
   try {
     resp = await fetch('/agent/analyze/stream', {
@@ -4745,6 +4753,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   const finish = (report, outcome = 'completed') => {
     if (settled) return;
     settled = true;
+    document.removeEventListener('visibilitychange', onVisibility);
     cancelPendingRender();
     releaseStream();
     const data = outcome === 'completed'
@@ -4771,7 +4780,12 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     } else {
       trackEvent(
         outcome === 'cancelled' ? 'forecast_stopped' : 'forecast_interrupted',
-        { surface: 'agent_chat', had_partial_response: !!text }
+        {
+          surface: 'agent_chat', had_partial_response: !!text,
+          reason: interruptReason || outcome, elapsed_ms: Math.round(performance.now() - streamStartedAt),
+          went_hidden: wentHidden, visible_now: document.visibilityState === 'visible',
+          last_status: lastStatus, chars: text.length, online: navigator.onLine,
+        }
       );
     }
     const saved = appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
@@ -4826,6 +4840,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
         if (!block.trim()) continue;
         const { event, data } = _parseSseBlock(block);
         if (event === 'meta') {
+          if (data.status) lastStatus = data.status;
           if (Array.isArray(data.evidence_sources)) streamedEvidenceSources = data.evidence_sources;
           if (data.evidence_error) streamedEvidenceError = data.evidence_error;
           if (data.status === 'resolving') setProgress('Resolving the market');
@@ -4858,6 +4873,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
       return { ok: true, stopped: true };
     }
     if (text) {
+      interruptReason = `network_error: ${String(err?.name || 'Error')}: ${String(err?.message || '').slice(0, 80)}`;
       finish(null, 'interrupted');
       return { ok: true, interrupted: true };
     }
@@ -4874,6 +4890,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   }
   releaseStream();
   if (text) {
+    interruptReason = 'stream_ended_without_done';
     finish(null, 'interrupted');
     return { ok: true };
   }
