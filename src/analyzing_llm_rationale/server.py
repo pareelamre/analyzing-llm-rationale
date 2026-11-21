@@ -74,6 +74,7 @@ from analyzing_llm_rationale import (
     pr_agent,
     rag,
     server_security,
+    usage_counter,
     venue_mcp,
     web_page,
     webhooks,
@@ -2868,6 +2869,8 @@ def _mount_public_mcp_endpoint() -> None:
             streamable_http_path="/",
         )
         _PUBLIC_MCP_APP = _PUBLIC_MCP.streamable_http_app()
+        from analyzing_llm_rationale import mcp_server as _mcp_module
+        _mcp_module.USAGE_HOOK = lambda tool, kind: _USAGE.add("mcp_tool", tool, kind)
 
         async def reject_mcp_listen_stream() -> Response:
             # This stateless server sends responses on POST, never on a standalone
@@ -3055,6 +3058,41 @@ _analytics_attribution_actions = _meter.create_counter(
 def _should_redirect_run_app_hosts() -> bool:
     environment = (os.environ.get("ENVIRONMENT") or "").strip().lower()
     return environment in {"", "prod", "production"}
+
+
+# Daily usage counts that survive deploys (usage_counter): pages, API routes, discovery files,
+# MCP requests and tools, by kind of client, plus the referring site of page loads.
+_USAGE = usage_counter.UsageCounter()
+_OWN_HOSTS = {"foresea.ink", "www.foresea.ink"}
+
+
+def _usage_flush_safely() -> None:
+    try:
+        _USAGE.flush()
+    except Exception:
+        logger.warning("usage counts could not be saved; kept for the next flush", exc_info=True)
+
+
+@app.middleware("http")
+async def usage_count_middleware(request: Request, call_next):
+    response = await call_next(request)
+    try:
+        route = request.scope.get("route")
+        found = usage_counter.classify(request.method, request.url.path, getattr(route, "path", None),
+                                       response.headers.get("content-type", ""))
+        if found is not None:
+            _USAGE.add(found[0], found[1], usage_counter.client_class(request.headers.get("user-agent")))
+            if found[0] == "page":
+                host = usage_counter.referrer_host(request.headers.get("referer"), _OWN_HOSTS)
+                if host:
+                    _USAGE.add("referrer", host)
+        if _USAGE.store is None and _get_datastore() is not None:
+            _USAGE.store = usage_counter.DatastoreUsageStore(_get_datastore())
+        if _USAGE.due():
+            asyncio.get_running_loop().run_in_executor(None, _usage_flush_safely)
+    except Exception:  # aqg: counting must never break a request
+        logger.debug("usage count failed", exc_info=True)
+    return response
 
 
 @app.middleware("http")
@@ -9410,6 +9448,15 @@ async def record_analytics_event(event: AnalyticsEventRequest, request: Request)
             logger.exception("analytics event record failed")
             raise
     return {"status": "ok"}
+
+
+@app.get("/analytics/usage", tags=["System"], summary="Daily usage: pages, API, discovery files and MCP tools")
+async def analytics_usage(days: int = Query(30, ge=1, le=90)) -> Dict[str, Any]:
+    """How Foresea is used, per day: page loads, API routes, discovery files (llms.txt,
+    .well-known, OpenAPI), MCP requests and each MCP tool, by kind of client (browser, crawler,
+    agent, other), and the sites that link here. Counts only, no personal data. Counted on the
+    server, so ad blockers do not hide visits; kept in Datastore, so deploys do not reset it."""
+    return await asyncio.get_running_loop().run_in_executor(None, lambda: _USAGE.summary(days))
 
 
 @app.get("/analytics/summary", tags=["System"], response_model=AnalyticsSummary)
