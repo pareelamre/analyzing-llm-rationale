@@ -212,14 +212,16 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(skipped, [{"instrument": "blend_model:x", "label": "x",
                                     "reason": "the scorecard gives Blend no money: Failed: below zero."}])
 
-    def test_a_proven_put_spread_at_the_cap_is_sized_at_five_percent_at_risk(self):
+    def test_a_proven_put_spread_at_the_cap_is_held_to_the_three_percent_risk_limit(self):
+        # Trust at the 2.5x cap would put 5% at risk; fund_risk (2026-11-21) holds any one
+        # position's worst case to 3% of the fund.
         inst = {"id": "nse_fo:NIFTY:put_spread:2026-12-08:x", "label": "spread", "asset_class": "option",
                 "underlying": "NIFTY", "currency": "INR", "multiplier": 1.0}
         s = orch.Signal(analyst="put_premium", instrument=inst, side="BULL", price=50.0, edge=0.1, trust=0.625)
         snap = {"nav_usd": 10_000.0, "cash_usd": 10_000.0, "positions": [], "by_asset_class": {},
                 "net_exposure_by_underlying": {}}
         [order] = orch.plan(snap, [s], {}, {}, rates={"INR": 88.0})["orders"]
-        self.assertAlmostEqual(order.quantity * order.price / 88.0, 500.0)
+        self.assertAlmostEqual(order.quantity * order.price / 88.0, 300.0)
 
 
 if __name__ == "__main__":

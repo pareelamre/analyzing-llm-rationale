@@ -36,6 +36,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
+from analyzing_llm_rationale import fund_risk
+
 POSITION_CAP = 0.10
 CLASS_CAP = 0.40
 UNDERLYING_CAP = 0.15
@@ -424,8 +426,12 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
                             reason="the index model now values this structure well below what it sells for"))
     books = {_option_book(iid) for (iid, _side), pos in held.items() if pos["kind"] == "option"}
 
-    # 2. Entries, best edge x trust first, inside every limit.
+    # 2. Entries, best edge x trust first, inside every limit, and inside the risk limits
+    # (fund_risk): no new position may lose more than 3% of the fund, and everything held
+    # together no more than 40%. A pair's two legs are sized together.
     budget = max(0.0, cash - CASH_FLOOR * nav)
+    worst_total = fund_risk.portfolio_worst_case(snapshot.get("positions") or [])
+    pair_room: dict[str, float] = {}
     for s in sorted(signals, key=lambda s: -(s.edge * s.trust)):
         iid = s.instrument["id"]
         if (iid, s.side) in held:
@@ -456,14 +462,35 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
         cls = s.instrument.get("asset_class", "")
         cap = OPTION_CLASS_CAP if cls == "option" else CLASS_CAP
         target = min(target, cap * nav - by_class.get(cls, 0.0), budget)
+        kind = fund_risk.kind_of(cls, s.side, OPTION_SIDES)
+        per_dollar = fund_risk.loss_per_dollar(kind, cls)
+        if s.pair_key and s.pair_key in pair_room:
+            room = pair_room[s.pair_key]
+        else:
+            room = fund_risk.entry_room(nav, worst_total, per_dollar, legs=2 if s.pair_key else 1)
+            if s.pair_key:
+                pair_room[s.pair_key] = room
+        if room < target:
+            if room < MIN_ORDER_USD:
+                passed.append({"instrument": iid, "label": s.instrument.get("label"),
+                               "reason": "no room under the risk limits (worst case per position "
+                                         f"{fund_risk.MAX_LOSS_PER_POSITION:.0%}, all positions "
+                                         f"{fund_risk.MAX_LOSS_TOTAL:.0%} of the fund)"})
+                continue
+            target = room
         if target < MIN_ORDER_USD:
             passed.append({"instrument": iid, "reason": "no room under the fund's limits"})
             continue
+        worst = target * per_dollar
         qty = target * rate(s.instrument) / (price * float(s.instrument.get("multiplier") or 1.0))
         orders.append(Order("buy", s.instrument, s.side, qty, price, "view", _attribution([s]),
-                            s.facts + [_fact("size", f"{target / nav * 100:.1f}% of the fund", "orchestrator")],
+                            s.facts + [_fact("size", f"{target / nav * 100:.1f}% of the fund", "orchestrator"),
+                                       _fact("worst case", f"${worst:,.0f} ({worst / nav:.1%} of the fund)"
+                                             + ("" if kind != "linear" else f", on a {per_dollar:.0%} move"),
+                                             "risk limits")],
                             pair_key=s.pair_key, reason=s.reason or f"edge {_pct(s.edge)} per dollar after costs"))
         budget -= target
+        worst_total += worst
         by_class[cls] = by_class.get(cls, 0.0) + target
         if s.side in OPTION_SIDES:
             books.add(_option_book(iid))

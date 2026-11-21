@@ -47,7 +47,11 @@ sys.path.insert(0, str(ROOT / "src"))
 from analyzing_llm_rationale import fund_hours as fh  # noqa: E402
 from analyzing_llm_rationale import fund_knowledge as fk  # noqa: E402
 from analyzing_llm_rationale import fund_ledger as ledger  # noqa: E402
-from analyzing_llm_rationale import fund_notes, market_data  # noqa: E402
+from analyzing_llm_rationale import (  # noqa: E402
+    fund_notes,
+    fund_risk,  # noqa: E402
+    market_data,
+)
 from analyzing_llm_rationale import fund_options as fo  # noqa: E402
 from analyzing_llm_rationale import fund_orchestrator as orch  # noqa: E402
 from analyzing_llm_rationale import fund_scorecard as fsc  # noqa: E402
@@ -517,6 +521,8 @@ def run(now: Optional[datetime] = None) -> dict:
                           "indices": [name for name, _key in fo.INDEX_OPTIONS.values()],
                           "risk_per_structure": orch.OPTION_RISK * _scale(card, PUT_SLEEVE),
                           "class_cap": orch.OPTION_CLASS_CAP}
+    # Each position's worst case and alerts against the last published board (fund_risk).
+    payload["risk"] = fund_risk.review(snapshot, previous=_load_json(PAYLOAD_PATH))
     PAYLOAD_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
     conn.close()
     return payload
