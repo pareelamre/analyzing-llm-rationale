@@ -1736,6 +1736,38 @@ spreads above), so put premium pools both tests: +8.8% per rupee at risk (range
 the quarter-Kelly bet divided by 1.71: 4.1% of the fund at risk per spread, and
 8.3% for both.
 
+## Risk limits (owner, 2026-11-21)
+
+**Why.** A Kalshi No on "any AI lab solves a Millennium Prize Problem before Dec 1" was
+bought at 94 cents for 6% of the fund on 2026-11-08. On 2026-11-20 a Riemann hypothesis
+proof was claimed, the market went from 2 to about 70 cents Yes in hours, and the position
+lost about $400. Nothing in the fund said how much any one bet could lose, or warned when one
+was losing. The owner asked that no position blindside the fund (`fund_risk.py`).
+
+**Worst case.** Every position and order has one:
+
+- a prediction-market contract: its whole value (it pays 0 if it loses);
+- an option structure: its stake, which is sized as the most the structure can lose;
+- a futures leg: its notional times a severe 20-session move (15% for commodities, 12% for
+  indices). MCX copper fell 12% in the five sessions to 2026-11-20.
+
+**Limits on new positions.**
+
+- One position may lose at most 3% of the fund.
+- Everything held together may lose at most 40%. Above that, no new risk is added until
+  positions settle or shrink.
+- A pair's two legs are sized together, so a limit never leaves one leg bigger.
+
+**Alerts on held positions** (the board's Risk section): losing 2% of the fund, or half its
+stake, or falling 1% of the fund since the last update. Positions opened before these limits
+that could lose more than 3% are listed separately. **Nothing is sold automatically:**
+selling a prediction market at its bid on a scare locks in the loss, and the Millennium
+market can still settle No. Trimming an over-limit position is the owner's call.
+
+**On 2026-11-21:** everything held could lose 46.5% of the fund, so new risk is paused. The
+largest single worst case is the Venezuela No (Delcy Rodríguez) at 11.2%; three Iran-related
+bets together are about 12%.
+
 ## Trading hours (owner, 2026-11-16)
 
 The owner asked that the fund make proper use of each market's trading hours. A

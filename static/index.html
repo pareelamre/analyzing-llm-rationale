@@ -1272,6 +1272,7 @@
     .fund-foot { background: #fafafa; border-top: 1px solid var(--border); padding: 12px 18px 14px; }
     .fund-foot .fund-chips { margin-top: 0; }
     .fund-empty { color: var(--text-dim); font-size: 12px; margin: 0; padding: 14px 18px; }
+    .fund-risk-alert { color: #b45309; font-size: 12.5px; line-height: 1.45; margin-top: 2px; }
     .fund-retired { color: var(--text-dim); display: grid; font-size: 11.5px; gap: 4px; line-height: 1.5; margin: 6px 0 0 16px; padding: 0; }
     @media (max-width: 640px) { .fund-row { grid-template-columns: 1fr; } .fund-row-side { align-items: baseline; display: flex; gap: 10px; text-align: left; } .fund-row-side .fund-num { text-align: left; } }
     .agentic-positions-table code { overflow-wrap: anywhere; word-break: break-word; }
@@ -8442,6 +8443,24 @@ function renderFundBoard(d) {
   const indices = universe.indices || [];
   const pairs = universe.pairs || [];
 
+  // Risk (fund_risk, 2026-11-21): what each position could still lose, alerts, and the limits.
+  const risk = d.risk || null;
+  const riskShare = x => (x == null ? '—' : (+(x * 100).toFixed(1)) + '%');
+  const riskHtml = risk ? (() => {
+    const lim = risk.limits || {};
+    const alerts = (risk.alerts || []).map(a => `<div class="fund-row"><div><div class="fund-strong">${escHtml(a.label || '')} ${_fundSide(a.side)}</div>`
+      + `<div class="fund-risk-alert">${(a.alerts || []).map(escHtml).join(' · ')}</div></div></div>`).join('');
+    const top = (risk.positions || []).slice(0, 5).map(p => `<tr><td>${escHtml(p.label || '')} ${_fundSide(p.side)}</td>`
+      + `<td class="fund-num">${_fundMoney(p.worst_case_usd)}</td><td class="fund-num">${riskShare(p.worst_case_share)}</td></tr>`).join('');
+    return `<section class="agentic-panel">
+      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Risk</h4>
+        <p class="agentic-panel-copy">The most each position could still lose: a prediction market its whole value, a futures leg a severe ${riskShare((lim.stress_move || {}).commodity)} move. A new position may risk at most ${riskShare(lim.max_loss_per_position)} of the fund, and everything held together at most ${riskShare(lim.max_loss_total)}. Alerts flag a position losing ${riskShare(lim.alert_loss)} of the fund, half its stake, or ${riskShare(lim.alert_drop)} since the last update. Nothing is sold automatically.</p></div>
+        <div class="fund-row-side"><div class="fund-num fund-strong">${_fundMoney(risk.worst_case_total_usd)}</div><div>${riskShare(risk.worst_case_total_share)} of the fund at worst${risk.new_risk_paused ? ' · new risk paused' : ''}</div></div></div>
+      ${alerts ? `<div class="fund-list">${alerts}</div>` : '<p class="fund-empty">No position is past an alert limit.</p>'} ${(risk.over_limit || []).length ? `<p class="fund-empty">Opened before these limits, so above ${riskShare(lim.max_loss_per_position)} each: ${risk.over_limit.map(o => `${escHtml(o.label || '')} (${riskShare(o.worst_case_share)})`).join(', ')}. They are shown, not sold.</p>` : ''}
+      <div class="fund-table-wrap" style="margin-top:10px"><table class="eb-table fund-table"><thead><tr><th>Largest worst cases</th><th class="fund-num">Could lose</th><th class="fund-num">Of the fund</th></tr></thead><tbody>${top}</tbody></table></div>
+    </section>`;
+  })() : '';
+
   host.innerHTML = `
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div>
@@ -8462,6 +8481,7 @@ function renderFundBoard(d) {
       <div class="fund-table-wrap"><table class="eb-table fund-table"><thead><tr><th>Position</th><th class="fund-num">Value</th><th class="fund-num">P&amp;L</th></tr></thead>
       <tbody>${positionRows || '<tr><td colspan="3" class="text-sm text-gray-500">No open positions.</td></tr>'}</tbody></table></div>
     </section>
+    ${riskHtml}
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Who made the money</h4>
         <p class="agentic-panel-copy">Profit and loss split back to the analyst behind each position, in proportion to its share.</p></div>
