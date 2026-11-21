@@ -17179,6 +17179,43 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     )
 
 
+#: A comment line every this many seconds while an SSE stream waits on slow work, so phones,
+#: proxies and load balancers never see a silent connection and drop it (browsers ignore it).
+_SSE_KEEPALIVE_S = float(os.environ.get("SSE_KEEPALIVE_S", "15"))
+_SSE_KEEPALIVE = ": keep-alive\n\n"
+
+
+async def _keepalive_until(task: "asyncio.Future", interval: Optional[float] = None):
+    """Yield SSE keep-alive comments until ``task`` finishes; the caller then reads its result."""
+    every = _SSE_KEEPALIVE_S if interval is None else interval
+    while not task.done():
+        done, _ = await asyncio.wait({task}, timeout=every)
+        if not done:
+            yield _SSE_KEEPALIVE
+
+
+async def _with_keepalive(agen, interval: Optional[float] = None):
+    """Relay ``agen``'s items, yielding None whenever it is silent for ``interval`` seconds."""
+    every = _SSE_KEEPALIVE_S if interval is None else interval
+    it = agen.__aiter__()
+    nxt = asyncio.ensure_future(it.__anext__())
+    try:
+        while True:
+            done, _ = await asyncio.wait({nxt}, timeout=every)
+            if not done:
+                yield None
+                continue
+            try:
+                item = nxt.result()
+            except StopAsyncIteration:
+                return
+            yield item
+            nxt = asyncio.ensure_future(it.__anext__())
+    finally:
+        if not nxt.done():
+            nxt.cancel()
+
+
 @app.post(
     "/agent/analyze/stream",
     tags=["Agents"],
@@ -17212,7 +17249,10 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         nonlocal run
         yield _sse_event("meta", {"status": "resolving", "agent_run": _agent_run_reference(run).model_dump(mode="json")})
         try:
-            question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+            resolving = asyncio.ensure_future(_resolve_agent_question(req))
+            async for ping in _keepalive_until(resolving):
+                yield ping
+            question, quote, grounding_note, pipeline = resolving.result()
             _apply_effort_tier(req, question)
             if agent_profile is not None:
                 pipeline.insert(0, "agent_profile")
@@ -17231,9 +17271,10 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
             })
             pred_req = _agent_prediction_request(req, question, quote, grounding_note, market_chat=True)
             rag_user_id = claims.get("sub")
-            messages, evidence_articles, evidence_error = await _prepare_predict_messages(
-                pred_req, rag_user_id
-            )
+            preparing = asyncio.ensure_future(_prepare_predict_messages(pred_req, rag_user_id))
+            async for ping in _keepalive_until(preparing):
+                yield ping
+            messages, evidence_articles, evidence_error = preparing.result()
             provider, temperature, max_tokens = _select_predict_provider(pred_req)
         except HTTPException as exc:
             _fail_agent_run(
@@ -17260,10 +17301,16 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
             "evidence_error": evidence_error,
         })
 
-        messages, consensus = await _chat_consensus(pred_req, provider, messages)
+        consensus_task = asyncio.ensure_future(_chat_consensus(pred_req, provider, messages))
+        async for ping in _keepalive_until(consensus_task):
+            yield ping
+        messages, consensus = consensus_task.result()
         chunks: List[str] = []
         try:
-            async for chunk in _provider_stream_chat(provider, messages, temperature, max_tokens):
+            async for chunk in _with_keepalive(_provider_stream_chat(provider, messages, temperature, max_tokens)):
+                if chunk is None:  # the model is still reading the prompt: keep the line open
+                    yield _SSE_KEEPALIVE
+                    continue
                 if await request.is_disconnected():
                     _fail_agent_run(
                         claims["sub"], run, status="interrupted", error_code="client_disconnected", detail="Client disconnected during research"
@@ -17311,9 +17358,12 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
 
         yield _sse_event("meta", {"status": "skills"})
         try:
-            report = await _agent_report_from_prediction(
+            reporting = asyncio.ensure_future(_agent_report_from_prediction(
                 req, question, quote, grounding_note, pipeline, pred_req, result, agent_profile
-            )
+            ))
+            async for ping in _keepalive_until(reporting):
+                yield ping
+            report = reporting.result()
         except Exception:
             logger.exception("agent stream finalisation failed")
             _fail_agent_run(
