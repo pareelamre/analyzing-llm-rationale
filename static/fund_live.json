@@ -10,19 +10,19 @@
       "blend_model": -3.4501
     },
     "unrealized": {
-      "agent_transfer": -281.4194,
-      "blend_model": 13.3932,
-      "event_model": 76.5555,
+      "agent_transfer": -302.4739,
+      "blend_model": -16.7208,
+      "event_model": 74.7597,
       "pairs_model": -22.3659,
       "put_premium": 58.3
     }
   },
   "by_asset_class": {
     "commodity": 481.8585,
-    "event": 3822.8316,
+    "event": 3794.9484,
     "option": 675.6173
   },
-  "cash_usd": 4861.506,
+  "cash_usd": 4836.4248,
   "curve": [
     {
       "nav_usd": 10106.6444,
@@ -839,25 +839,39 @@
     {
       "nav_usd": 9841.8133,
       "ts": "2026-11-21T06:01:19.408075+00:00"
+    },
+    {
+      "nav_usd": 9788.849,
+      "ts": "2026-11-21T08:00:47.529834+00:00"
     }
   ],
   "cycle": {
-    "orders": 0,
+    "orders": 1,
     "passed": [],
     "seeded": null,
-    "signals": 4,
+    "signals": 2,
     "skipped": [
       {
         "pair": "copper-zinc",
         "reason": "stretched at z=-3.03 but its expected return is 0.0% per signal",
         "z": -3.031
+      },
+      {
+        "instrument": "mcx:COPPER",
+        "label": "Copper (MCX COPPER)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:ALUMINI",
+        "label": "Aluminium (MCX ALUMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
-    "traded": false,
-    "window": "11:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-21T06:01:19.408075+00:00",
+  "generated_at": "2026-11-21T08:00:47.529834+00:00",
   "guard": {
     "board": 30,
     "checked": 30,
@@ -1066,7 +1080,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9841.8133,
+  "nav_usd": 9788.849,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1079,6 +1093,7 @@
     "kalshi:KXUSAEXPANDTERRITORY-29JAN21": 380.331,
     "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31": 261.5735,
     "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026": 363.6556,
+    "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573": 25.0812,
     "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026": 1141.8962,
     "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026": 498.702
   },
@@ -1161,15 +1176,15 @@
       "instrument_id": "kalshi:KXAIMILLENNIUM-28-26DEC01",
       "kind": "binary",
       "label": "Will any AI lab solve a Millennium Prize Problem before Dec 1, 2026?",
-      "mark": 0.35,
+      "mark": 0.33,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -367.4579,
+      "pnl_usd": -379.9141,
       "quantity": 622.81,
       "side": "NO",
       "underlying": "kalshi:KXAIMILLENNIUM-28-26DEC01",
-      "value_usd": 217.9835,
+      "value_usd": 205.5273,
       "venue": "kalshi"
     },
     {
@@ -1203,15 +1218,15 @@
       "instrument_id": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
       "kind": "binary",
       "label": "Bill Belichick out before Dec 1, 2026",
-      "mark": 0.1,
+      "mark": 0.04,
       "marked": true,
       "opened_at": "2026-11-20T20:01:30.430284+00:00",
       "pair_key": null,
-      "pnl_usd": 13.3932,
+      "pnl_usd": -26.7863,
       "quantity": 669.6579364470109,
       "side": "YES",
       "underlying": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
-      "value_usd": 66.9658,
+      "value_usd": 26.7863,
       "venue": "kalshi"
     },
     {
@@ -1308,15 +1323,36 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.971,
+      "mark": 0.967,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 72.2822,
+      "pnl_usd": 70.4863,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 435.9377,
+      "value_usd": 434.1419,
+      "venue": "polymarket"
+    },
+    {
+      "asset_class": "event",
+      "attribution": {
+        "blend_model": 1.0
+      },
+      "collateral_usd": 25.081195887382073,
+      "entry_price": 0.152,
+      "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
+      "kind": "binary",
+      "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
+      "mark": 0.213,
+      "marked": true,
+      "opened_at": "2026-11-21T08:00:47.529834+00:00",
+      "pair_key": null,
+      "pnl_usd": 10.0655,
+      "quantity": 165.0078676801452,
+      "side": "YES",
+      "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
+      "value_usd": 35.1467,
       "venue": "polymarket"
     },
     {
@@ -1350,15 +1386,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06799999999999995,
+      "mark": 0.06699999999999995,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 85.9832,
+      "pnl_usd": 77.3848,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 584.6852,
+      "value_usd": 576.0868,
       "venue": "polymarket"
     },
     {
@@ -1458,7 +1494,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -1.582,
+  "return_pct": -2.112,
   "scorecard": {
     "retired_records": [
       {
@@ -1683,6 +1719,47 @@
   "shadow": {},
   "starting_value": 10000.0,
   "trades": [
+    {
+      "action": "open",
+      "attribution": {
+        "blend_model": 1.0
+      },
+      "cycle_id": "fund-20261121T0800",
+      "evidence": [
+        {
+          "figure": "question: Will Bitcoin dip to $45,000 by December 31, 2026?",
+          "source": "venue"
+        },
+        {
+          "figure": "model probability of YES: 22.2%",
+          "source": "the blend analyst forecast 2026-11-20 17:28 UTC"
+        },
+        {
+          "figure": "price to buy YES: 15.2\u00a2",
+          "source": "Polymarket order book"
+        },
+        {
+          "figure": "expected profit per dollar after costs: 43.8%",
+          "source": "orchestrator"
+        },
+        {
+          "figure": "size: 0.3% of the fund",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
+      "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
+      "note": "The trader is buying a bet that Bitcoin will fall below $45,000 by December 31, 2026, based on a 22.2% chance of this happening according to an analyst forecast. This trade costs 15.2 cents per dollar and is expected to yield a 43.8% profit per dollar after costs, but it only represents 0.3% of the total fund.",
+      "note_source": "model",
+      "notional_usd": 25.081195887382073,
+      "pair_key": null,
+      "price": 0.152,
+      "purpose": "view",
+      "quantity": 165.0078676801452,
+      "realized_pnl_usd": 0.0,
+      "side": "YES",
+      "ts": "2026-11-21T08:00:47.529834+00:00"
+    },
     {
       "action": "open",
       "attribution": {
