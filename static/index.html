@@ -7179,6 +7179,62 @@ const _CPT_CAUSE = { temporary: 'temporary cause', lasting: 'lasting cause', mix
 
 // The pair's place in its long history (pair_history): where the price ratio sits against the
 // last ten years of monthly prices, what drove it there, and the past extremes with their stories.
+// Relative value: the pair's price ratio against its own 10-year normal. This is what the
+// fund trades (commodity_pairs.RV_*); the 60-session score further down is a monitor.
+function _cptValueBadge(p) {
+  const rv = p.relative_value;
+  if (!rv) return '';
+  if (rv.signal) return '<span class="cpt-badge hot">Relative value trade</span>';
+  if (rv.held_back) return '<span class="cpt-badge near">Held back</span>';
+  return '';
+}
+
+function _cptValue(p, legs, ctx) {
+  const rv = p.relative_value;
+  if (!rv) return '';
+  const years = Math.round((Number(rv.window_months) || 120) / 12);
+  const z = Number(rv.z), az = Math.abs(z);
+  const pct = Math.max(1, Math.min(99, Math.round(Number(rv.percentile) * 100)));
+  const fmt = x => Number(x).toPrecision(4);
+  const entry = ctx.rvEntryZ;
+  let text;
+  if (!rv.rich) {
+    text = `${legs[0]} and ${legs[1]} are priced about as usual against each other, measured over the last ${years} years.`;
+  } else {
+    text = `${rv.rich} is dearer against ${rv.cheap} than in ${z > 0 ? pct : 100 - pct}% of the last ${years} years: the price ratio is ${az.toFixed(1)} standard deviations ${z > 0 ? 'above' : 'below'} its normal of ${fmt(rv.usual)}.`;
+    if (rv.signal) text += ` Relative value says sell ${rv.rich} and buy ${rv.cheap}, betting the ratio moves back toward that normal.`;
+    else if (rv.held_back) text += ` Past the ±${entry} line, but held back: ${rv.held_back}.`;
+    else text += ` A trade starts at ±${entry}.`;
+  }
+  if (rv.open_trade) text += ` Trade open since ${_cptDay(rv.open_trade.entry_date)}.`;
+  const exp = rv.expected || {}, bt = rv.backtest || {};
+  const facts = [];
+  if (exp.per_trade != null && rv.side != null) facts.push(`expected ${_cptPct(exp.per_trade, 1)} a trade after costs`);
+  if (bt.trades) facts.push(`this pair's backtest: ${bt.trades} trades, won ${Math.round(Number(bt.won) * 100)}%, average ${_cptPct(bt.avg_return, 1)}`);
+  const tip = `The price ratio against its own last ${years} years of monthly prices. From ±${entry} standard deviations out, the fund bets on a move back toward that normal: it sells the dear commodity and buys the cheap one, and closes back within ±${ctx.rvExitZ} or after ${ctx.rvMaxMonths} months. A cause that looks lasting holds the trade back. ${ctx.rvTested}`;
+  return `<div class="cpt-long"><div class="cpt-long-head">${_cptTip('Relative value', tip)}</div><p>${escHtml(text)}</p>`
+    + (facts.length ? `<p class="cpt-dim">${escHtml(facts.join(' · '))}.</p>` : '') + `</div>`;
+}
+
+function _cptValueTable(events, labels) {
+  const status = s => ({ open: 'Open', back_to_normal: 'Back near normal', timed_out: 'Time limit' }[s] || s);
+  return `<div class="ixf-scroll"><table class="eb-table"><thead><tr><th>Pair</th>`
+    + `<th>${_cptTip('Opened', 'The session the price ratio was far enough from its 10-year normal to trade.')}</th>`
+    + `<th>${_cptTip('Bet', 'Which commodity the trade sells (the dear one) and which it buys.')}</th>`
+    + `<th>${_cptTip('Score', 'How many standard deviations the ratio sat from its 10-year normal when the trade opened.')}</th>`
+    + `<th>${_cptTip('Result', 'Open, back near its normal, or closed at the time limit.')}</th>`
+    + `<th>${_cptTip('Return', 'Per unit of money on both sides, equal money on each, after costs.')}</th></tr></thead><tbody>`
+    + events.map(e => {
+      const [a, b] = (labels[e.pair] || e.pair).replace(' (MCX)', '').split(' / ');
+      const bet = b ? (Number(e.side) > 0 ? `buy ${a}, sell ${b}` : `sell ${a}, buy ${b}`) : '';
+      return `<tr class="eb-row"><td>${escHtml(labels[e.pair] || e.pair)}</td><td>${escHtml(_cptDay(e.entry_date))}</td><td>${escHtml(bet)}</td>`
+        + `<td>${Number(e.entry_z) >= 0 ? '+' : '−'}${Math.abs(Number(e.entry_z)).toFixed(2)}</td>`
+        + `<td>${escHtml(status(e.status))}${e.exit_date ? ' · ' + escHtml(_cptDay(e.exit_date)) : ''}</td>`
+        + `<td>${e.return != null ? _cptPct(e.return) : '—'}</td></tr>`;
+    }).join('')
+    + `</tbody></table></div>`;
+}
+
 function _cptLong(p, legs) {
   const lr = p.long_run;
   if (!lr) return '';
@@ -7296,7 +7352,7 @@ function _cptCard(p, ctx) {
   const zWindow = Math.min(ctx.zWindow, Number(p.sessions) || ctx.zWindow);
   const z = Number(p.z), az = Math.abs(z);
   const hot = p.stretched ?? az >= entryZ;
-  const badge = hot ? '<span class="cpt-badge hot">Stretched</span>'
+  const badge = hot ? '<span class="cpt-badge hot">Stretched (60 sessions)</span>'
     : p.unconfirmed ? '<span class="cpt-badge near">Ratio disagrees</span>'
     : az >= 1.5 ? '<span class="cpt-badge near">Near signal</span>' : '<span class="cpt-badge">Normal</span>';
   const zr = Number(p.z_ratio);
@@ -7334,8 +7390,9 @@ function _cptCard(p, ctx) {
     ...(p.expected ? [[_cptTip('Expected', `Average return per signal after costs that the tracker now expects. The US test counts as ${p.expected.prior_signals} signals${p.expected.us_backtest == null ? ' at zero, since this pair has no US contract to test' : ''}, and every closed MCX signal (before live and live) counts as one, so this pair's own record takes over as it grows. The fund trades a stretched pair only when this is above zero.`),
       `<b class="${Number(p.expected.per_signal) > 0 ? 'cpt-up' : Number(p.expected.per_signal) < 0 ? 'cpt-down' : ''}">${_cptPct(p.expected.per_signal)}</b>${_cptPlural(Number(p.expected.mcx_signals) || 0, 'MCX signal')}`]] : []),
   ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
-  return `<article class="cpt-card${hot ? ' hot' : ''}">${head}${badge}</div>`
-    + `<p class="cpt-say">${escHtml(_cptSay(p, legs, entryZ))}</p>`
+  return `<article class="cpt-card${hot || p.relative_value?.signal ? ' hot' : ''}">${head}${_cptValueBadge(p)}${badge}</div>`
+    + _cptValue(p, legs, ctx)
+    + `<p class="cpt-say">${p.relative_value ? '<b>Last 60 sessions:</b> ' : ''}${escHtml(_cptSay(p, legs, entryZ))}${p.relative_value && hot ? ' Monitored, not traded.' : ''}</p>`
     + (p.early ? `<p class="cpt-early">Early read on ${_cptPlural(Number(p.sessions), 'session')}. The usual range uses all of them and firms up as sessions come in (full read at ${ctx.zWindow}).</p>` : '')
     + _cptBack(p, legs, zWindow)
     + _cptSpark(p, entryZ, legs)
@@ -7380,9 +7437,13 @@ function renderCommodityPairs(d) {
     costPct: (rule.cost_per_side || 0.001) * 100,
     liveSince: d.track_record?.live_since || d.data_through, dataThrough: d.data_through,
     back: d.backtest?.pairs || {}, live: d.track_record?.by_pair || {},
+    rvEntryZ: d.relative_value?.rule?.entry_z || 1.5, rvExitZ: d.relative_value?.rule?.exit_z || 0.5,
+    rvMaxMonths: d.relative_value?.rule?.max_months || 24,
+    rvTested: (u => u ? `Tested on World Bank monthly prices: settings picked on 1985–2004, then on ${u.years}, which they never saw, ${u.trades} trades won ${Math.round(Number(u.won) * 100)}% and averaged ${_cptPct(u.avg_return, 1)} a trade.` : '')(d.relative_value?.backtest?.unseen),
   };
   const pairs = (d.pairs || []).slice();
-  const scored = pairs.filter(p => p.z != null).sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+  const rvZ = p => Math.abs(Number(p.relative_value?.z ?? 0));
+  const scored = pairs.filter(p => p.z != null).sort((a, b) => rvZ(b) - rvZ(a) || Math.abs(b.z) - Math.abs(a.z));
   const labels = Object.fromEntries(pairs.map(p => [p.key, p.label]));
   const stretched = scored.filter(p => p.stretched ?? Math.abs(p.z) >= ctx.entryZ);
   const unconfirmed = scored.filter(p => p.unconfirmed);
@@ -7408,12 +7469,21 @@ function renderCommodityPairs(d) {
       + `<p class="text-xs" style="color:var(--text-dim);margin:0 0 6px">Each signal uses only prices available on its day, but none was recorded live. ${_cptPlural(replay.length, 'signal')} over a few months is too few to judge the rule; the 2011–26 US backtest on each card is the larger test.</p>`
       + _cptSignalTable(replay, labels, ctx)
     : '';
+  const rvTrades = scored.filter(p => p.relative_value?.signal);
+  const rvHeld = scored.filter(p => p.relative_value?.held_back);
+  const rvSummary = d.relative_value
+    ? `<p class="cpt-summary"><b>Relative value:</b> ${rvTrades.length ? `${_cptPlural(rvTrades.length, 'pair')} far enough from ${rvTrades.length === 1 ? 'its' : 'their'} 10-year normal to trade: ${rvTrades.map(p => `${escHtml(p.label)} (sell ${escHtml(p.relative_value.rich)}, buy ${escHtml(p.relative_value.cheap)})`).join(', ')}.` : `no pair is ±${ctx.rvEntryZ} or more from its 10-year normal.`}${rvHeld.length ? ` Held back because the cause looks lasting: ${rvHeld.map(p => escHtml(p.label)).join(', ')}.` : ''}</p>` : '';
+  const rvRecent = (d.relative_value?.recent || []).slice().reverse();
+  const rvHtml = d.relative_value
+    ? `<h4 class="eb-h">Relative-value trades</h4>` + (rvRecent.length ? _cptValueTable(rvRecent, labels)
+      : `<p class="text-sm text-gray-500">None yet. One opens the first session a pair's price ratio is ±${ctx.rvEntryZ} or more from its 10-year normal.</p>`) : '';
   const updated = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   const stale = d.freshness?.stale
     ? `<p class="text-xs" style="color:#b45309;margin:6px 0 0">This tracker has not been refreshed for over four days.</p>` : '';
   host.innerHTML = `
-    <p class="cpt-lede">Ten pairs of commodities that usually move together. When one gets unusually expensive against the other, the gap has often closed again. Each card shows how stretched a pair is today, and the tracker records what happens when one stretches.</p>
+    <p class="cpt-lede">Ten pairs of commodities that usually move together. Relative value asks which one is dear against the other, measured against the pair's own last 10 years. When a price ratio is far from that normal, the fund bets it moves back: it sells the dear commodity and buys the cheap one. Each card also shows the 60-session score, a shorter view the tracker monitors but no longer trades.</p>
     <div class="cpt-guide"><b>How to read a card</b><ol>
+      <li><b>Relative value:</b> where the price ratio sits against its own last 10 years of monthly prices. From ±${ctx.rvEntryZ} standard deviations out, the fund sells the dear commodity and buys the cheap one, and closes the trade back within ±${ctx.rvExitZ} or after ${ctx.rvMaxMonths} months. A pair whose cause looks lasting is held back. ${ctx.rvTested}</li>
       <li><b>Score:</b> how unusual today's gap is against the last ${ctx.zWindow} sessions. 0 is typical, ±1 is common, ±${ctx.entryZ} or beyond happens about 1 session in 20. The chart shows the last ${ctx.zWindow} sessions; the shaded band is the usual range.</li>
       <li><b>Signal:</b> at ±${ctx.entryZ} the pair is stretched, and the tracker records a bet that the pricier side falls back against the cheaper one. It follows the bet until the gap closes (score back within ±${ctx.exitZ}) or ${ctx.maxHold} sessions pass.</li>
       <li><b>Ratio check:</b> a signal also needs the plain price ratio stretched the same way, to ±${ctx.ratioZ} or beyond. A hedge fitted on a short history can shrink toward zero, and then the score mostly follows one price on its own.</li>
@@ -7422,11 +7492,12 @@ function renderCommodityPairs(d) {
       <li><b>Expected:</b> the return per signal the tracker now expects. It starts from the 2011–26 US futures test (counted as ${ctx.priorSignals} signals; zero for pairs with no US contract) and moves toward each pair's own MCX record as its signals close. The fund trades a stretched pair only when this is above zero.</li>
       <li><b>Long run:</b> where each pair's price ratio sits against the last 10 years of monthly prices, why, and what followed past extremes.${_cptRecord(d.long_run?.driver_record)}</li>
       <li><b>Early read:</b> a pair is read from ${ctx.minSessions} sessions of prices. Until it has ${ctx.zWindow}, its score uses all of them, so it firms up as sessions come in.</li>
-      <li><b>A monitor first:</b> over 2011–26 on US futures, the same rule made money on three pairs and lost on three.</li>
+      <li><b>A monitor, not traded:</b> over 2011–26 on US futures, the 60-session rule made money on three pairs and lost on three, so since November 2026 the fund trades relative value instead.</li>
     </ol></div>
-    <p class="cpt-summary">${summary}${summaryNote}</p>${why}${stale}
+    ${rvSummary}<p class="cpt-summary">${summary}${summaryNote}</p>${why}${stale}
     <div class="cpt-grid">${scored.concat(pairs.filter(p => p.z == null)).map(p => _cptCard(p, ctx)).join('')}</div>
-    <h4 class="eb-h">Live signals</h4>
+    ${rvHtml}
+    <h4 class="eb-h">Live signals (60-session monitor)</h4>
     ${liveHtml}
     ${replayHtml}
     <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">Prices through the ${escHtml(_cptDay(d.data_through))} session${updated ? ', updated ' + escHtml(updated) : ''}. Hedge: least-squares fit of log prices over up to ${ctx.hedgeWindow} sessions, or equal money when the fit is not positive. Returns are per unit of money on both sides after ${ctx.costPct}% cost per side. US backtest on futures front months (roll gaps add noise). Data: ${escHtml(d.source || 'Upstox and FRED')}. Research tracker, not investment advice.</p>`;

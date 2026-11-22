@@ -43,11 +43,11 @@ jobs:
 
       - name: Commit tracker
         env:
-          GIT_REBASE_KEEP_THEIRS: "static/commodity_pairs_live.json,data/commodity_pairs_ledger.jsonl,data/commodity_prices.jsonl"
+          GIT_REBASE_KEEP_THEIRS: "static/commodity_pairs_live.json,data/commodity_pairs_ledger.jsonl,data/commodity_pairs_rv_ledger.jsonl,data/commodity_prices.jsonl"
           MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add static/commodity_pairs_live.json data/commodity_pairs_ledger.jsonl data/commodity_prices.jsonl 2>/dev/null || true
+          git add static/commodity_pairs_live.json data/commodity_pairs_ledger.jsonl data/commodity_pairs_rv_ledger.jsonl data/commodity_prices.jsonl 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No tracker changes to commit."
             exit 0

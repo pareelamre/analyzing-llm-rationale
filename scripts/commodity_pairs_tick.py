@@ -8,14 +8,18 @@ Each run:
      currency API) after the last stored day (no account or token for any of them),
   3. advances open signals through new sessions and opens signals on the newest session,
   4. places each pair in its long history (pair_history: IMF monthly metals and FRED oil and
-     gas from FRED) with the stories in data/pair_episodes.json; a failed fetch leaves it out,
-  5. writes the public payload served at ``GET /markets/commodity-pairs``.
+     gas from FRED, World Bank Pink Sheet gold, silver and platinum) with the stories in
+     data/pair_episodes.json; a failed fetch leaves it out,
+  5. reads each pair's relative value against that 10-year normal and advances the relative-value
+     trades the fund follows (commodity_pairs.RV_*),
+  6. writes the public payload served at ``GET /markets/commodity-pairs``.
 
 Outputs (committed back to the repo by the workflow):
   - ``data/commodity_prices.jsonl``: MCX front-month prices and the snapshot rows,
     one row per commodity, source and session, appended only. Expired contracts leave Upstox's
     route, so this is the history.
   - ``data/commodity_pairs_ledger.jsonl``: every live signal, appended and then closed.
+  - ``data/commodity_pairs_rv_ledger.jsonl``: every relative-value trade, appended and then closed.
   - ``static/commodity_pairs_live.json``: today's pair states and the track record.
 """
 from __future__ import annotations
@@ -35,6 +39,7 @@ from analyzing_llm_rationale import pair_history  # noqa: E402
 
 logger = logging.getLogger("commodity_pairs_tick")
 LEDGER = ROOT / "data" / "commodity_pairs_ledger.jsonl"
+RV_LEDGER = ROOT / "data" / "commodity_pairs_rv_ledger.jsonl"
 PAYLOAD = ROOT / "static" / "commodity_pairs_live.json"
 PRICES = ROOT / "data" / "commodity_prices.jsonl"
 
@@ -65,6 +70,7 @@ def already_published(previous: dict | None, now: datetime) -> bool:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--ledger", type=Path, default=LEDGER)
+    parser.add_argument("--rv-ledger", type=Path, default=RV_LEDGER)
     parser.add_argument("--payload", type=Path, default=PAYLOAD)
     parser.add_argument("--prices", type=Path, default=PRICES)
     parser.add_argument("--force", action="store_true", help="Fetch even when the newest weekday is published")
@@ -89,15 +95,20 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # aqg: top-level boundary -- the long view is optional context
         logger.warning("long-run context unavailable (%s: %s)", type(exc).__name__, exc)
         long_run = None
-    payload, ledger = cp.run(series, ledger, now, long_run=long_run)
+    rv_ledger = _read_jsonl(args.rv_ledger)
+    payload, ledger = cp.run(series, ledger, now, long_run=long_run, rv_ledger=rv_ledger)
     _write_jsonl(args.prices, stored)
     _write_jsonl(args.ledger, ledger)
+    _write_jsonl(args.rv_ledger, rv_ledger)
     args.payload.parent.mkdir(parents=True, exist_ok=True)
     args.payload.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
     logger.info(
-        "data_through=%s new_price_rows=%d stretched=%s signals: open %d->%d, total %d->%d",
+        "data_through=%s new_price_rows=%d stretched=%s signals: open %d->%d, total %d->%d; "
+        "relative value: signals %s, open trades %d",
         payload["data_through"], len(new_prices), [p["key"] for p in payload["pairs"] if p.get("stretched")],
         before[0], sum(e["status"] == "open" for e in ledger), before[1], len(ledger),
+        [p["key"] for p in payload["pairs"] if (p.get("relative_value") or {}).get("signal")],
+        sum(e["status"] == "open" for e in rv_ledger),
     )
     return 0
 

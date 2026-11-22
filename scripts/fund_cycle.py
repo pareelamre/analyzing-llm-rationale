@@ -385,6 +385,21 @@ def _scale(card: dict, analyst: str) -> float:
     return next((float(r["scale"]) for r in card.get("strategies") or [] if r["analyst"] == analyst), 1.0)
 
 
+def held_pair_entries(positions: list[dict], universe_pairs: list[dict], today: date) -> dict[str, dict]:
+    """Each held pair: sessions held, and the side it holds on the price ratio (+1 when the
+    first leg is long or the second short), which relative-value exits need."""
+    first_legs = {p["key"]: p["a"]["id"] for p in universe_pairs}
+    out: dict[str, dict] = {}
+    for pos in positions:
+        if not pos.get("pair_key"):
+            continue
+        entry = out.setdefault(pos["pair_key"], {"sessions": _sessions_since(pos["opened_at"], today)})
+        if pos["pair_key"] in first_legs and pos.get("side") in ("LONG", "SHORT"):
+            on_first = pos["instrument_id"] == first_legs[pos["pair_key"]]
+            entry.setdefault("side", (1 if pos["side"] == "LONG" else -1) * (1 if on_first else -1))
+    return out
+
+
 def _sessions_since(stamp: str, today: date) -> int:
     start = datetime.fromisoformat(stamp).date()
     return sum(1 for d in range((today - start).days) if (start + timedelta(days=d + 1)).weekday() < 5)
@@ -461,17 +476,16 @@ def run(now: Optional[datetime] = None) -> dict:
                 quotes.update(spread["quotes"])
             else:
                 option_skips.append(spread["skipped"])
-        held_pairs = {}
-        for pos in snapshot["positions"]:
-            if pos.get("pair_key"):
-                held_pairs[pos["pair_key"]] = {"sessions": _sessions_since(pos["opened_at"], today)}
-        pair_rows = {p.get("key"): p for p in tracker.get("pairs") or []}
+        held_pairs = held_pair_entries(snapshot["positions"], universe.get("pairs", []), today)
+        tracker_rows = {p.get("key"): p for p in tracker.get("pairs") or []}
+        pair_rows = {key: tracker_rows.get(orch.tracker_key(key)) or {} for key in held_pairs}
+        rv_rule = (tracker.get("relative_value") or {}).get("rule") if tracker.get("relative_value") else None
         signals, unfunded = fsc.apply(signals, card)
         option_skips += unfunded
         signals, closed = fh.gate(signals, quotes, now, calendar)
         option_skips += closed
         result = orch.plan(snapshot, signals, quotes, hedges, forecasts=forecasts, held_pairs=held_pairs,
-                           pair_rows=pair_rows, rates=rates,
+                           pair_rows=pair_rows, rates=rates, rv_rule=rv_rule,
                            option_values={k: v for k, v in options["values"].items() if k not in sleeve_ids},
                            owner_trims=_load_json(OWNER_ACTIONS_PATH).get("trims") or [])
         # Exits and hedges wait for their venue too; a pair's legs go or stay together.

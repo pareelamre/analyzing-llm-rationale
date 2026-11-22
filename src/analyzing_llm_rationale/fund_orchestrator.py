@@ -20,8 +20,9 @@ Models advise; this code decides. Each cycle it:
 
 Analysts in this first version (and why some are absent):
 - event_model: the on-device model's nightly forecasts on the Edge board.
-- pairs_model: the commodity-pairs tracker, only for pairs whose 16-year backtest made money
-  after costs. A stretched pair with a losing backtest is skipped with that reason recorded.
+- pairs_model: the commodity-pairs tracker's relative-value trades (since 2026-11-22): a price
+  ratio far from its own 10-year normal, bet back toward it (commodity_pairs.RV_*). A pair
+  held back, or with no expected gain, is skipped with that reason recorded.
 - options_model (fund_options): the index model forecasts ranges, not direction, so it trades
   them where a range is the whole bet: defined-risk option structures on the NSE indices it
   covers. It opens no index futures until a directional analyst joins.
@@ -207,9 +208,96 @@ def blend_board(board: Iterable[Mapping[str, Any]], params: Mapping[str, Any]) -
     return out
 
 
+#: Fund pairs read from a tracker pair under another name: MCX crude and natural gas futures are
+#: priced off WTI and Henry Hub, so their ratio is the tracker's WTI / gas ratio.
+PAIR_TRACKER = {"crude-natgas": "wti-natgas"}
+
+
+def tracker_key(fund_key: str) -> str:
+    return PAIR_TRACKER.get(fund_key, fund_key)
+
+
 def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[str, Any]], *,
                  analyst: str = "pairs_model", trust: float = DEFAULT_TRUST) -> tuple[list[Signal], list[dict]]:
-    """Signals for stretched fund pairs expected to make money; and the skipped ones, with why.
+    """Relative-value trades for the fund's pairs, and the pairs held back, with why.
+
+    Since 2026-11-22 a pair trade is a relative-value trade (commodity_pairs.RV_*): the price
+    ratio at least 1.5 standard deviations from its own 10-year normal, betting it moves back
+    toward it. The 60-session stretch is shown on the site but no longer traded: on 2010-2026 US
+    futures it lost or broke even after costs (commodity_pairs.BACKTEST). A tracker from before
+    relative value falls back to that older rule (legacy_pair_signals).
+    """
+    if tracker.get("relative_value") is None:
+        return legacy_pair_signals(tracker, universe_pairs, analyst=analyst, trust=trust)
+    rows = {p.get("key"): p for p in tracker.get("pairs") or []}
+    rv_info = tracker.get("relative_value") or {}
+    rule, record = rv_info.get("rule") or {}, rv_info.get("backtest") or {}
+    signals, skipped = [], []
+    for pair in universe_pairs:
+        row = rows.get(tracker_key(pair["key"])) or {}
+        rv = row.get("relative_value")
+        if not rv or rv.get("side") is None:
+            continue
+        if not rv.get("signal"):
+            skipped.append({"pair": pair["key"], "z": rv["z"], "reason": f"relative value at z={rv['z']:.2f} held back: "
+                            + str(rv.get("held_back") or "no signal")})
+            continue
+        edge = float((rv.get("expected") or {}).get("per_trade") or 0.0)
+        if edge <= 0.0:
+            skipped.append({"pair": pair["key"], "z": rv["z"],
+                            "reason": f"relative value at z={rv['z']:.2f} but its expected return is {_pct(edge)} a trade"})
+            continue
+        # side +1: the ratio is cheap, so buy the first leg and sell the second (and the reverse).
+        a_side, b_side = ("LONG", "SHORT") if rv["side"] > 0 else ("SHORT", "LONG")
+        facts = _rv_facts(pair, row, rv, rule, record)
+        for leg, side in (("a", a_side), ("b", b_side)):
+            signals.append(Signal(analyst=analyst, instrument=dict(pair[leg]), side=side, price=0.0,
+                                  edge=edge, trust=trust, facts=facts, pair_key=pair["key"],
+                                  reason=f"{rv['rich']} dear against {rv['cheap']}: the price ratio is {abs(rv['z']):.1f} "
+                                         f"standard deviations {'above' if rv['z'] > 0 else 'below'} its 10-year normal"))
+    return signals, skipped
+
+
+def _rv_facts(pair: Mapping[str, Any], row: Mapping[str, Any], rv: Mapping[str, Any],
+              rule: Mapping[str, Any], record: Mapping[str, Any]) -> list[dict]:
+    years = int(rv.get("window_months") or 120) // 12
+    pct = _ordinal(max(1, min(99, round(float(rv.get("percentile") or 0.0) * 100))))
+    exp = rv.get("expected") or {}
+    facts = [_fact("pair", pair.get("label") or pair["key"], "fund universe"),
+             _fact("relative value", f"{rv['rich']} dear against {rv['cheap']}: price ratio {rv.get('ratio')} against a "
+                   f"{years}-year normal of {rv.get('usual')} (z {float(rv['z']):+.2f}, {pct} percentile)",
+                   f"pairs tracker long view, data through {row.get('date')}"),
+             _fact("entry rule", f"|z| >= {rule.get('entry_z', 1.5)} against the {years}-year normal, betting toward it; "
+                   f"out back inside |z| < {rule.get('exit_z', 0.5)} or after {rule.get('max_months', 24)} months",
+                   "pairs tracker (commodity_pairs.RV_*)"),
+             _fact("expected return per trade after costs", _pct(float(exp.get("per_trade") or 0.0)),
+                   f"unseen-years average counted as {exp.get('prior_trades')} trades, plus {exp.get('backtest_trades')} "
+                   f"backtest and {exp.get('live_trades')} live trades of this pair")]
+    unseen = record.get("unseen") or {}
+    if unseen:
+        facts.append(_fact("relative-value backtest", f"on {unseen['years']}, unseen when the settings were picked: "
+                           f"{unseen['trades']} trades, won {float(unseen['won']) * 100:.0f}%, "
+                           f"{float(unseen['avg_return']) * 100:+.1f}% a trade on average",
+                           f"{record.get('sample')} (scripts/pair_rv_backtest.py)"))
+    own = rv.get("backtest") or {}
+    if own:
+        facts.append(_fact("this pair's backtest", f"{own['trades']} trades, won {float(own['won']) * 100:.0f}%, "
+                           f"{float(own['avg_return']) * 100:+.1f}% a trade", "scripts/pair_rv_backtest.py"))
+    long_run = row.get("long_run") or {}
+    story = long_run.get("story")
+    if story:
+        facts.append(_fact("cause", f"({story['driver']}) {story['cause'].split('. ')[0].rstrip('.')}",
+                           "data/pair_episodes.json"))
+    if row.get("z") is not None:
+        facts.append(_fact("60-session stretch", f"z {float(row['z']):+.2f} (shown, not traded)",
+                           f"pairs tracker, data through {row.get('date')}"))
+    return facts
+
+
+def legacy_pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[str, Any]], *,
+                        analyst: str = "pairs_model", trust: float = DEFAULT_TRUST) -> tuple[list[Signal], list[dict]]:
+    """The 60-session rule the fund traded until 2026-11-22: signals for stretched fund pairs
+    expected to make money, and the skipped ones, with why.
 
     The expected return per signal is the tracker's blend of the US backtest with the pair's own
     MCX signals (commodity_pairs.expected_return), so it recalibrates as signals close. A tracker
@@ -276,6 +364,35 @@ def pair_signals(tracker: Mapping[str, Any], universe_pairs: Sequence[Mapping[st
             signals.append(Signal(analyst=analyst, instrument=dict(pair[leg]), side=side, price=0.0,
                                   edge=edge, trust=trust * size, facts=facts, pair_key=pair["key"]))
     return signals, skipped
+
+
+def pair_exit_reason(row: Mapping[str, Any], entry: Mapping[str, Any], *, rv_rule: Optional[Mapping[str, Any]],
+                     exit_z: float = 0.5, max_hold: int = 20) -> Optional[str]:
+    """Why a held pair should close now, or None to keep it.
+
+    Under relative value (``rv_rule``), a held pair closes back near its 10-year normal, after the
+    rule's holding limit, or when it bets on the ratio moving further from that normal (a trade
+    opened under the 60-session rule can, as copper / aluminium did in November 2026). A pair
+    whose long view is missing today is kept: a failed fetch is not a reason to trade. Without
+    ``rv_rule`` the 60-session rule's band and limit apply.
+    """
+    sessions = int(entry.get("sessions") or 0)
+    if rv_rule is None:
+        z = row.get("z")
+        if z is not None and abs(float(z)) < exit_z:
+            return f"spread back inside |z| < {exit_z}"
+        return f"held {sessions} sessions, the {max_hold}-session limit" if sessions >= max_hold else None
+    rv, side = row.get("relative_value"), entry.get("side")
+    if not rv or not side:
+        return None
+    z, rv_exit = float(rv["z"]), float(rv_rule.get("exit_z", 0.5))
+    if abs(z) < rv_exit:
+        return f"price ratio back near its 10-year normal (|z| {abs(z):.2f} < {rv_exit})"
+    if side * z > 0:
+        return (f"this trade needs the price ratio to move further from its 10-year normal (z {z:+.2f}): relative "
+                f"value says {rv.get('rich')} is the dear leg, the one this trade holds")
+    limit = int(rv_rule.get("max_sessions") or 504)
+    return f"held {sessions} sessions, the {limit}-session limit" if sessions >= limit else None
 
 
 def _tide_fact(label: Optional[str], info: Mapping[str, Any], size: float) -> Optional[dict[str, str]]:
@@ -351,7 +468,7 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
          hedges: Mapping[str, dict], *, forecasts: Mapping[str, Mapping[str, Any]] = (),
          held_pairs: Mapping[str, Mapping[str, Any]] = (), pair_rows: Mapping[str, Mapping[str, Any]] = (),
          option_values: Mapping[str, float] = (), rates: Mapping[str, float] = (),
-         exit_z: float = 0.5, max_hold: int = 20,
+         exit_z: float = 0.5, max_hold: int = 20, rv_rule: Optional[Mapping[str, Any]] = None,
          owner_trims: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Orders for one cycle from the fund's nav() ``snapshot``, ``signals`` and ``quotes``.
 
@@ -359,7 +476,9 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
     instrument id to its latest fresh forecast row (model_probability, forecasted_at): a held
     side is sold only when such a forecast values it below its bid, so positions the model has
     not looked at again are kept. ``held_pairs`` maps a held pair to the sessions it has been
-    held, and ``pair_rows`` gives each pair's latest tracker row. ``option_values`` is the index
+    held and the side it holds on the price ratio (+1: first leg long), and ``pair_rows`` gives
+    each pair's latest tracker row; ``rv_rule`` is the tracker's relative-value rule, which then
+    decides pair exits (pair_exit_reason). ``option_values`` is the index
     model's value of each held option structure, per unit; ``rates`` gives units of each
     currency per USD, so a rupee contract is sized in rupees.
     """
@@ -403,10 +522,8 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
                             reason="the latest forecast values this side well below what it sells for"))
     for key, entry in dict(held_pairs).items():
         row = dict(pair_rows).get(key) or {}
-        z, sessions = row.get("z"), int(entry.get("sessions") or 0)
-        if (z is not None and abs(float(z)) < exit_z) or sessions >= max_hold:
-            why = f"spread back inside |z| < {exit_z}" if z is not None and abs(float(z)) < exit_z else \
-                  f"held {sessions} sessions, the {max_hold}-session limit"
+        why = pair_exit_reason(row, entry, rv_rule=rv_rule, exit_z=exit_z, max_hold=max_hold)
+        if why:
             for (iid, side), pos in held.items():
                 if pos.get("pair_key") == key and pos.get("mark") is not None:
                     orders.append(Order("sell", {"id": iid, "label": pos.get("label")}, side, pos["quantity"],
