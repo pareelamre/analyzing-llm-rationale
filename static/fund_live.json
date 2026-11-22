@@ -10,8 +10,8 @@
       "blend_model": -3.4501
     },
     "unrealized": {
-      "agent_transfer": -384.5557,
-      "blend_model": 22.5649,
+      "agent_transfer": -384.8432,
+      "blend_model": 19.0997,
       "event_model": 71.617,
       "pairs_model": -22.4459,
       "put_premium": 60.7174
@@ -19,7 +19,7 @@
   },
   "by_asset_class": {
     "commodity": 481.7785,
-    "event": 3749.0096,
+    "event": 3745.257,
     "option": 678.0346
   },
   "cash_usd": 4836.4248,
@@ -907,35 +907,29 @@
     {
       "nav_usd": 9745.2475,
       "ts": "2026-11-22T08:01:20.839934+00:00"
+    },
+    {
+      "nav_usd": 9741.4949,
+      "ts": "2026-11-22T10:00:50.057672+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 0,
+    "signals": 2,
     "skipped": [
       {
         "pair": "copper-zinc",
         "reason": "stretched at z=-3.03 but its expected return is 0.0% per signal",
         "z": -3.031
-      },
-      {
-        "instrument": "mcx:COPPER",
-        "label": "Copper (MCX COPPER)",
-        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
-      },
-      {
-        "instrument": "mcx:ALUMINI",
-        "label": "Aluminium (MCX ALUMINI)",
-        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
-    "traded": true,
-    "window": "in window"
+    "traded": false,
+    "window": "15:30 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-22T08:01:20.839934+00:00",
+  "generated_at": "2026-11-22T10:00:50.057672+00:00",
   "guard": {
     "board": 31,
     "checked": 31,
@@ -1137,7 +1131,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9745.2475,
+  "nav_usd": 9741.4949,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1179,6 +1173,16 @@
     "risk_per_structure": 0.041344000000000006,
     "settled": []
   },
+  "owner_actions": [
+    {
+      "id": "trim-banknifty-put-spread-2026-11-22",
+      "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
+      "max_worst_case_share": 0.03,
+      "reason": "Owner: bring the Nifty Bank put credit spread inside the 3% risk limit (it could lose 4.6% of the fund).",
+      "requested": "2026-11-22",
+      "side": "BULL"
+    }
+  ],
   "paper": true,
   "positions": [
     {
@@ -1359,15 +1363,15 @@
       "instrument_id": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
       "kind": "binary",
       "label": "Strait of Hormuz traffic returns to normal by December 31?",
-      "mark": 0.971,
+      "mark": 0.97,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 17.5341,
+      "pnl_usd": 17.2466,
       "quantity": 287.443442,
       "side": "NO",
       "underlying": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
-      "value_usd": 279.1076,
+      "value_usd": 278.8201,
       "venue": "polymarket"
     },
     {
@@ -1401,15 +1405,15 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.167,
+      "mark": 0.146,
       "marked": true,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": 2.4751,
+      "pnl_usd": -0.99,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 27.5563,
+      "value_usd": 24.0911,
       "venue": "polymarket"
     },
     {
@@ -1551,7 +1555,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -2.548,
+  "return_pct": -2.585,
   "risk": {
     "alerts": [
       {
@@ -1579,7 +1583,7 @@
       {
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.1134
+        "worst_case_share": 0.1135
       },
       {
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
@@ -1620,7 +1624,7 @@
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "pnl_usd": -36.44,
         "side": "NO",
-        "worst_case_share": 0.1134,
+        "worst_case_share": 0.1135,
         "worst_case_usd": 1105.45
       },
       {
@@ -1688,10 +1692,10 @@
         "entry_worst_case_usd": 261.57,
         "kind": "binary",
         "label": "Strait of Hormuz traffic returns to normal by December 31?",
-        "pnl_usd": 17.53,
+        "pnl_usd": 17.25,
         "side": "NO",
         "worst_case_share": 0.0286,
-        "worst_case_usd": 279.11
+        "worst_case_usd": 278.82
       },
       {
         "alerts": [],
@@ -1751,10 +1755,10 @@
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": 2.48,
+        "pnl_usd": -0.99,
         "side": "YES",
-        "worst_case_share": 0.0028,
-        "worst_case_usd": 27.56
+        "worst_case_share": 0.0025,
+        "worst_case_usd": 24.09
       },
       {
         "alerts": [],
@@ -1767,8 +1771,8 @@
         "worst_case_usd": 18.8
       }
     ],
-    "worst_case_total_share": 0.4617,
-    "worst_case_total_usd": 4499.3
+    "worst_case_total_share": 0.4615,
+    "worst_case_total_usd": 4495.54
   },
   "scorecard": {
     "retired_records": [
