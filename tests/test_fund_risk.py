@@ -82,3 +82,33 @@ class ReviewTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OwnerTrimTests(unittest.TestCase):
+    SPREAD = "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000"
+
+    def _spread(self, value, quantity=19.04):
+        return {"instrument_id": self.SPREAD, "side": "BULL", "label": "Nifty Bank put credit spread",
+                "kind": "option", "asset_class": "option", "quantity": quantity, "mark": 2196.435,
+                "collateral_usd": 416.93, "value_usd": value, "pnl_usd": value - 416.93}
+
+    def _trim(self):
+        return [{"id": "trim-banknifty", "instrument_id": self.SPREAD, "side": "BULL", "max_worst_case_share": 0.03,
+                 "reason": "Owner: bring it inside the 3% limit."}]
+
+    def test_an_over_limit_spread_is_cut_back_to_three_percent(self):
+        snap = {**_snap([self._spread(451.38)], cash=4_000.0), "nav_usd": 9_745.25}
+        [order] = orch.plan(snap, [], {}, {}, owner_trims=self._trim())["orders"]
+        self.assertEqual((order.action, order.purpose, order.side), ("sell", "trim", "BULL"))
+        part = 1 - 0.03 * 9_745.25 / 451.38
+        self.assertAlmostEqual(order.quantity, 19.04 * part)
+        self.assertAlmostEqual(451.38 * (1 - part), 0.03 * 9_745.25)  # what is left risks 3%
+        self.assertIn("Owner", order.reason)
+
+    def test_a_spread_within_the_limit_is_left_alone(self):
+        snap = {**_snap([self._spread(300.0)]), "nav_usd": 9_745.25}  # 3.1%, inside the 10% tolerance
+        self.assertEqual(orch.plan(snap, [], {}, {}, owner_trims=self._trim())["orders"], [])
+
+    def test_no_instruction_no_trim(self):
+        snap = {**_snap([self._spread(451.38)]), "nav_usd": 9_745.25}
+        self.assertEqual(orch.plan(snap, [], {}, {})["orders"], [])

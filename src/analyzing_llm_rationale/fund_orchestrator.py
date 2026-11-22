@@ -351,7 +351,8 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
          hedges: Mapping[str, dict], *, forecasts: Mapping[str, Mapping[str, Any]] = (),
          held_pairs: Mapping[str, Mapping[str, Any]] = (), pair_rows: Mapping[str, Mapping[str, Any]] = (),
          option_values: Mapping[str, float] = (), rates: Mapping[str, float] = (),
-         exit_z: float = 0.5, max_hold: int = 20) -> dict[str, Any]:
+         exit_z: float = 0.5, max_hold: int = 20,
+         owner_trims: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Orders for one cycle from the fund's nav() ``snapshot``, ``signals`` and ``quotes``.
 
     ``hedges`` maps an underlying to the instrument that offsets it. ``forecasts`` maps an event
@@ -424,6 +425,31 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
                              _fact("model value at expiry", f"{worth:,.2f} per unit", "index model"),
                              _fact("bid now", f"{bid:,.2f} per unit", "order book")],
                             reason="the index model now values this structure well below what it sells for"))
+    # 1b. Owner trims (configs/fund_owner_actions.json): sell part of a held position so its
+    #     worst case (fund_risk) is at most the share of the fund the owner set. Skipped when the
+    #     position is already being sold, and repeated only if it grows 10% past the limit again.
+    selling = {(o.instrument["id"], o.side) for o in orders if o.action == "sell"}
+    for trim in owner_trims:
+        key = (trim.get("instrument_id"), trim.get("side"))
+        pos = held.get(key)
+        if pos is None or key in selling or not pos.get("mark") or not float(pos.get("quantity") or 0):
+            continue
+        worst = fund_risk.position_worst_case(pos)
+        share = float(trim.get("max_worst_case_share") or fund_risk.MAX_LOSS_PER_POSITION)
+        limit = share * nav
+        if worst <= limit * 1.10:
+            continue
+        part = 1.0 - limit / worst
+        orders.append(Order("sell", {"id": key[0], "label": pos.get("label")}, key[1],
+                            float(pos["quantity"]) * part, float(pos["mark"]), "trim",
+                            pos.get("attribution") or {},
+                            [_fact("position", pos.get("label") or key[0], "fund ledger"),
+                             _fact("worst case now", f"${worst:,.0f} ({worst / nav:.1%} of the fund)", "risk limits"),
+                             _fact("owner's limit", f"{share:.0%} of the fund (${limit:,.0f})",
+                                   f"owner instruction {trim.get('id', '')}".strip()),
+                             _fact("selling", f"{part:.0%} of the position at {float(pos['mark']):,.2f} per unit",
+                                   "orchestrator")],
+                            reason=str(trim.get("reason") or f"owner: trim to a {share:.0%} worst case")))
     books = {_option_book(iid) for (iid, _side), pos in held.items() if pos["kind"] == "option"}
 
     # 2. Entries, best edge x trust first, inside every limit, and inside the risk limits

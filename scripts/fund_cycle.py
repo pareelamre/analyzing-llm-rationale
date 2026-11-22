@@ -72,6 +72,8 @@ BANKNIFTY_SLEEVE_REPORT_PATH = ROOT / "reports" / "fund_banknifty_put_eval.json"
 #: The put premium sleeve's analyst (docs/fund.md, "Put premium sleeve").
 PUT_SLEEVE = "put_premium"
 BLEND_PATH = ROOT / "configs" / "fund_blend.json"
+#: Owner instructions carried out at the next trading cycle (trims to a risk limit).
+OWNER_ACTIONS_PATH = ROOT / "configs" / "fund_owner_actions.json"
 CHECKS_PATH = ROOT / "static" / "fund_rationale_checks.json"
 #: Rationale checks older than this no longer describe a live forecast.
 CHECKS_MAX_AGE_H = 48
@@ -470,7 +472,8 @@ def run(now: Optional[datetime] = None) -> dict:
         option_skips += closed
         result = orch.plan(snapshot, signals, quotes, hedges, forecasts=forecasts, held_pairs=held_pairs,
                            pair_rows=pair_rows, rates=rates,
-                           option_values={k: v for k, v in options["values"].items() if k not in sleeve_ids})
+                           option_values={k: v for k, v in options["values"].items() if k not in sleeve_ids},
+                           owner_trims=_load_json(OWNER_ACTIONS_PATH).get("trims") or [])
         # Exits and hedges wait for their venue too; a pair's legs go or stay together.
         orders, closed = fh.gate(result["orders"], quotes, now, calendar)
         passed = result["passed"] + closed
@@ -523,6 +526,7 @@ def run(now: Optional[datetime] = None) -> dict:
                           "class_cap": orch.OPTION_CLASS_CAP}
     # Each position's worst case and alerts against the last published board (fund_risk).
     payload["risk"] = fund_risk.review(snapshot, previous=_load_json(PAYLOAD_PATH))
+    payload["owner_actions"] = _load_json(OWNER_ACTIONS_PATH).get("trims") or []
     PAYLOAD_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
     conn.close()
     return payload
