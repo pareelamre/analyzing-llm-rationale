@@ -52,6 +52,9 @@ MODEL = "mlx-community/Qwen3.5-9B-4bit"
 MAX_TOKENS = 1800
 #: A passage that fails this many times (not counting live-traffic pauses) is recorded as failed.
 MAX_TRIES = 3
+#: Errors that mean the model server is not answering at all (stopped, restarting): the run stops
+#: and the passage is read on a later run, without counting a try. A timeout is the passage's own.
+UNREACHABLE = frozenset({"ConnectionError", "ConnectionRefusedError", "ConnectionResetError", "ConnectTimeout"})
 
 FORWARD = re.compile(r"\b(expect|project|forecast|outlook|scenario|risk|likely|unlikely|will|could|would|"
                      r"should|target|policy|plan|estimate|grow|decline|rise|fall|increase|decrease|by 20\d\d)",
@@ -63,6 +66,13 @@ LEADERS = re.compile(r"\.{4,}|(?:\. ){4,}")
 
 class ReportError(Exception):
     """A job cannot go on: bad file, wrong status, or a base that would break."""
+
+
+class SetupError(ReportError):
+    """The night job itself is broken (a package missing from its venv): no passage can be read.
+
+    On 2026-11-19 the venv lacked requests, and every passage of two reports was recorded as
+    failed three times over, so both went to review with nothing to review."""
 
 
 class Busy(Exception):
@@ -433,7 +443,15 @@ def read(root: Path, job: dict, call: Callable[[str], str], busy: Callable[[bool
                 log(f"{chunk['id']}: handed the model back to the site ({exc})")
                 stats["interrupted"] += 1
                 continue
+            except ImportError as exc:
+                save_job(root, job)
+                raise SetupError(f"the reader's venv is missing a package ({exc})") from exc
             except Exception as exc:  # one bad passage must not stop the report
+                if type(exc).__name__ in UNREACHABLE:
+                    log(f"{chunk['id']}: the model server is not answering ({type(exc).__name__}); "
+                        "stopping until the next run")
+                    save_job(root, job)
+                    return {**stats, "finished": False, "error": "model server not answering"}
                 n = tries[chunk["id"]] = tries.get(chunk["id"], 0) + 1
                 log(f"{chunk['id']}: failed ({type(exc).__name__}: {str(exc)[:120]})")
                 save_job(root, job)
@@ -507,10 +525,31 @@ def finish(root: Path, job: dict) -> list[dict]:
                               "claim": cid})
     knowledge.write_jsonl(where / "candidates.jsonl", candidates)
     knowledge.write_jsonl(where / "candidate_relations.jsonl", relations)
+    rows = len(_read_jsonl(where / "done.jsonl"))
     job.update(status="review", candidates=len(candidates), gate_dropped=dropped, failed_passages=failed,
                read_done=_now())
+    if rows and failed == rows:
+        # Nothing was read: say so in the status table instead of waiting for a review of nothing.
+        job.update(status="stuck", why=f"every passage failed ({failed}); fix the cause, then retry")
     save_job(root, job)
     return candidates
+
+
+def retry(root: Path, jid: str) -> dict:
+    """Read a job's failed passages again on the next run: their rows go, their tries reset."""
+    job = load_job(root, jid)
+    if job.get("status") in ("published", "dropped"):
+        raise ReportError(f"{jid} is {job.get('status')}")
+    where = folder(root, jid)
+    rows = _read_jsonl(where / "done.jsonl")
+    failed = {row["chunk"] for row in rows if row.get("error")}
+    knowledge.write_jsonl(where / "done.jsonl", [row for row in rows if not row.get("error")])
+    job["tries"] = {k: v for k, v in (job.get("tries") or {}).items() if k not in failed}
+    for key in ("why", "candidates", "gate_dropped", "failed_passages", "read_done"):
+        job.pop(key, None)
+    job.update(status="new", retried=len(failed), retried_at=_now())
+    save_job(root, job)
+    return job
 
 
 # --------------------------------------------------------------------------------------------
@@ -767,6 +806,13 @@ def run(root: Path, *, call: Callable[[str], str], busy: Callable[[bool], Option
         try:
             stats = read(root, job, call, busy, deadline=deadline, crawler=crawler, sleep=sleep, clock=clock, log=log)
             results.append({"id": job["id"], "status": job["status"], **stats})
+            if stats.get("error"):
+                break  # the model server is down: every other job would fail the same way
+        except SetupError as exc:
+            # Not this report's fault: leave it as it is and stop the run until the venv is fixed.
+            results.append({"id": job["id"], "status": job["status"], "error": str(exc)})
+            log(f"stopping: {exc}")
+            break
         except ReportError as exc:
             job.update(status="new", error=str(exc), error_at=_now())
             failures = job["fetch_failures"] = job.get("fetch_failures", 0) + 1

@@ -304,6 +304,74 @@ class ReadTests(Base):
         self.assertEqual((job["failed_passages"], job["candidates"]), (1, 1))
 
 
+class SetupFailureTests(Base):
+    """2026-11-19: the night venv lacked requests and two reports went to review with 0 claims."""
+
+    def test_a_missing_package_stops_the_run_without_spending_the_report(self):
+        def no_requests(prompt):
+            raise ModuleNotFoundError("No module named 'requests'")
+        job = self.queue()
+        reports.prepare(self.root, job, pages=fake_pages)
+        with self.assertRaises(reports.SetupError):
+            reports.read(self.root, job, no_requests, lambda s: None, deadline=self.clock() + 3600,
+                         sleep=self.clock.sleep, clock=self.clock)
+        self.assertEqual(reports._read_jsonl(reports.folder(self.root, JID) / "done.jsonl"), [])
+        self.assertEqual(reports.unread(self.root, job), 2)
+        lines = []
+        results = reports.run(self.root, call=no_requests, busy=lambda s: None, deadline=self.clock() + 3600,
+                              sleep=self.clock.sleep, clock=self.clock, log=lines.append)
+        self.assertIn("missing a package", results[0]["error"])
+        job = reports.load_job(self.root, JID)
+        self.assertEqual(job["status"], "reading")          # untouched: no fetch failure counted
+        self.assertNotIn("fetch_failures", job)
+        self.assertTrue(any(line.startswith("stopping:") for line in lines))
+
+    def test_an_unreachable_model_server_stops_the_run_and_counts_no_try(self):
+        class ConnectionError(Exception):  # requests' class name, without importing requests
+            pass
+
+        def down(prompt):
+            raise ConnectionError("Connection refused")
+        job, stats = self.read_all(call=down)
+        self.assertFalse(stats["finished"])
+        self.assertEqual(stats["error"], "model server not answering")
+        self.assertEqual(reports._read_jsonl(reports.folder(self.root, JID) / "done.jsonl"), [])
+        self.assertEqual(reports.load_job(self.root, JID).get("tries"), {})
+        stats = reports.read(self.root, reports.load_job(self.root, JID), reply_for, lambda s: None,
+                             deadline=self.clock() + 3600, sleep=self.clock.sleep, clock=self.clock)
+        self.assertTrue(stats["finished"])
+        self.assertEqual(stats["read"], 2)
+
+    def test_a_report_where_every_passage_failed_is_stuck_not_in_review(self):
+        def broken(prompt):
+            raise TimeoutError("model stuck")
+        job, stats = self.read_all(call=broken)
+        job = reports.load_job(self.root, JID)
+        self.assertEqual(job["status"], "stuck")
+        self.assertIn("every passage failed (2)", job["why"])
+
+    def test_retry_reads_the_failed_passages_again(self):
+        def broken(prompt):
+            if "140 million" in prompt:
+                raise TimeoutError("model stuck")
+            return reply_for(prompt)
+        self.read_all(call=broken)
+        job = reports.retry(self.root, JID)
+        self.assertEqual((job["status"], job["retried"]), ("new", 1))
+        self.assertEqual(reports.unread(self.root, job), 1)
+        stats = reports.read(self.root, job, reply_for, lambda s: None, deadline=self.clock() + 3600,
+                             sleep=self.clock.sleep, clock=self.clock)
+        self.assertEqual(stats["read"], 1)
+        job = reports.load_job(self.root, JID)
+        self.assertEqual((job["status"], job["failed_passages"], job["candidates"]), ("review", 0, 2))
+
+    def test_published_or_dropped_jobs_cannot_be_retried(self):
+        self.queue()
+        reports.drop_job(self.root, JID, "not useful")
+        with self.assertRaises(reports.ReportError):
+            reports.retry(self.root, JID)
+
+
 class PublishTests(Base):
     def setUp(self):
         super().setUp()

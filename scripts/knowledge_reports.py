@@ -135,6 +135,12 @@ def cmd_entities(args) -> int:
     return 0
 
 
+def cmd_retry(args) -> int:
+    job = reports.retry(_root(args), args.id)
+    print(f"{job['id']}: {job.get('retried', 0)} failed passages will be read again on the next run")
+    return 0
+
+
 def cmd_drop(args) -> int:
     print(json.dumps(reports.drop_job(_root(args), args.id, args.why)))
     return 0
@@ -183,6 +189,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--summary")
     p.add_argument("--licence")
     p.set_defaults(fn=cmd_publish)
+    p = sub.add_parser("retry", help="read a job's failed passages again on the next run")
+    p.add_argument("id")
+    p.set_defaults(fn=cmd_retry)
     p = sub.add_parser("drop")
     p.add_argument("id")
     p.add_argument("--why", required=True)
