@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-11-20T20:35:55.947861+00:00",
+ "generated_at": "2026-11-22T15:15:17.014654+00:00",
  "data_through": "2026-11-20",
- "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee)",
+ "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee); long view from IMF monthly metals (FRED) and the World Bank Pink Sheet (gold, silver, platinum; CC BY 4.0)",
  "rule": {
   "hedge_window": 250,
   "z_window": 60,
@@ -130,6 +130,80 @@
    }
   }
  },
+ "relative_value": {
+  "rule": {
+   "window_months": 120,
+   "entry_z": 1.5,
+   "exit_z": 0.5,
+   "max_months": 24,
+   "max_sessions": 504,
+   "cost_per_side": 0.001,
+   "lasting_causes": "held back"
+  },
+  "backtest": {
+   "sample": "World Bank Pink Sheet monthly prices, 1975-2026, nine pairs",
+   "picked_on": {
+    "years": "1985-2004",
+    "trades": 57,
+    "won": 0.825,
+    "avg_return": 0.078
+   },
+   "unseen": {
+    "years": "2005-2026",
+    "trades": 72,
+    "won": 0.639,
+    "avg_return": 0.0584,
+    "avg_return_95": [
+     0.0247,
+     0.0924
+    ],
+    "worst": -0.3023,
+    "avg_months": 14.2
+   },
+   "all": {
+    "years": "1985-2026",
+    "trades": 129,
+    "won": 0.721,
+    "avg_return": 0.067,
+    "avg_months": 14.0
+   },
+   "tracker_sources": {
+    "years": "1992-2026",
+    "trades": 54,
+    "won": 0.667,
+    "avg_return": 0.0595,
+    "note": "the tracker's own IMF and FRED monthly prices, same settings"
+   },
+   "timing_filter": "waiting for the ratio to turn toward normal did not help on 1985-2004"
+  },
+  "live": {
+   "trades": 2,
+   "closed": 0,
+   "open": 2
+  },
+  "recent": [
+   {
+    "pair": "gold-platinum",
+    "entry_date": "2026-11-20",
+    "entry_z": 1.5,
+    "side": -1,
+    "status": "open",
+    "exit_date": null,
+    "sessions": null,
+    "return": null
+   },
+   {
+    "pair": "zinc-lead",
+    "entry_date": "2026-11-20",
+    "entry_z": 2.951,
+    "side": -1,
+    "status": "open",
+    "exit_date": null,
+    "sessions": null,
+    "return": null
+   }
+  ]
+ },
  "pairs": [
   {
    "key": "gold-silver",
@@ -257,6 +331,250 @@
     "prior_signals": 20,
     "mcx_signals": 2,
     "mcx_avg": 0.01246
+   },
+   "long_run": {
+    "source": "World Bank Pink Sheet monthly prices",
+    "data_from": "1960-01",
+    "data_to": "2026-10",
+    "window_months": 120,
+    "ratio": 84.257,
+    "usual": 79.9121,
+    "low": 51.6069,
+    "high": 111.457,
+    "z": 0.438,
+    "percentile": 0.617,
+    "extreme": false,
+    "analogues": null,
+    "story": null,
+    "episodes": [
+     {
+      "side": "high",
+      "from": "1972-06",
+      "to": "1972-08",
+      "peak": "1972-06",
+      "ratio": 38.75,
+      "usual": 24.7167,
+      "z": 2.48,
+      "after_12m": 0.1911,
+      "months_to_normal": 20,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "1973-04",
+      "to": "1973-08",
+      "peak": "1973-06",
+      "ratio": 46.1538,
+      "usual": 25.3474,
+      "z": 2.76,
+      "after_12m": -0.319,
+      "months_to_normal": 8,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "low",
+      "from": "1979-12",
+      "to": "1980-02",
+      "peak": "1980-01",
+      "ratio": 17.3522,
+      "usual": 30.9889,
+      "z": -2.77,
+      "after_12m": 1.1689,
+      "months_to_normal": 3,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "1981-07",
+      "to": "1981-07",
+      "peak": "1981-07",
+      "ratio": 47.5581,
+      "usual": 33.4222,
+      "z": 2.08,
+      "after_12m": 0.0966,
+      "months_to_normal": 18,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "1981-11",
+      "to": "1981-11",
+      "peak": "1981-11",
+      "ratio": 48.5882,
+      "usual": 33.8905,
+      "z": 2.02,
+      "after_12m": -0.1285,
+      "months_to_normal": 14,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "1982-06",
+      "to": "1982-07",
+      "peak": "1982-06",
+      "ratio": 56.25,
+      "usual": 34.6922,
+      "z": 2.45,
+      "after_12m": -0.3725,
+      "months_to_normal": 6,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "1986-04",
+      "to": "1987-01",
+      "peak": "1986-09",
+      "ratio": 74.6429,
+      "usual": 39.7822,
+      "z": 2.35,
+      "after_12m": -0.1891,
+      "months_to_normal": 135,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "1990-11",
+      "to": "1991-02",
+      "peak": "1991-02",
+      "ratio": 98.3784,
+      "usual": 56.5976,
+      "z": 2.18,
+      "after_12m": -0.1224,
+      "months_to_normal": 37,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "low",
+      "from": "1997-11",
+      "to": "1998-08",
+      "peak": "1998-02",
+      "ratio": 43.6765,
+      "usual": 75.5662,
+      "z": -4.17,
+      "after_12m": 0.1947,
+      "months_to_normal": 45,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "low",
+      "from": "1999-02",
+      "to": "1999-08",
+      "peak": "1999-08",
+      "ratio": 48.4906,
+      "usual": 73.0984,
+      "z": -2.29,
+      "after_12m": 0.1532,
+      "months_to_normal": 21,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2008-10",
+      "to": "2008-12",
+      "peak": "2008-12",
+      "ratio": 79.2233,
+      "usual": 59.6353,
+      "z": 2.18,
+      "after_12m": -0.186,
+      "months_to_normal": 5,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "low",
+      "from": "2011-02",
+      "to": "2011-07",
+      "peak": "2011-04",
+      "ratio": 34.6838,
+      "usual": 60.8684,
+      "z": -3.74,
+      "after_12m": 0.5093,
+      "months_to_normal": 7,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2020-03",
+      "to": "2020-05",
+      "peak": "2020-04",
+      "ratio": 111.457,
+      "usual": 67.1387,
+      "z": 2.38,
+      "after_12m": -0.3856,
+      "months_to_normal": 4,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2025-04",
+      "to": "2025-05",
+      "peak": "2025-05",
+      "ratio": 100.8841,
+      "usual": 80.3897,
+      "z": 2.28,
+      "after_12m": -0.4171,
+      "months_to_normal": 2,
+      "settled": false,
+      "story": null
+     },
+     {
+      "side": "low",
+      "from": "2026-01",
+      "to": "2026-05",
+      "peak": "2026-01",
+      "ratio": 51.6069,
+      "usual": 80.6397,
+      "z": -4.11,
+      "after_12m": null,
+      "months_to_normal": null,
+      "settled": false,
+      "story": null
+     }
+    ],
+    "tide": "away"
+   },
+   "relative_value": {
+    "z": 0.438,
+    "percentile": 0.617,
+    "ratio": 84.257,
+    "usual": 79.9121,
+    "window_months": 120,
+    "rich": null,
+    "cheap": null,
+    "side": null,
+    "driver": null,
+    "signal": false,
+    "held_back": null,
+    "expected": {
+     "per_trade": 0.04242,
+     "prior": 0.0584,
+     "prior_trades": 20,
+     "backtest_trades": 12,
+     "live_trades": 0
+    },
+    "backtest": {
+     "trades": 12,
+     "won": 0.583,
+     "avg_return": 0.0158
+    },
+    "live": {
+     "trades": 0,
+     "closed": 0,
+     "open": 0
+    },
+    "open_trade": null
    }
   },
   {
@@ -268,8 +586,8 @@
    ],
    "why": "The benchmark crude spread between the North Sea and US grades.",
    "source": "international",
-   "sessions": 403,
-   "data_from": "2025-03-31",
+   "sessions": 402,
+   "data_from": "2025-04-01",
    "date": "2026-11-17",
    "short_history": false,
    "early": false,
@@ -354,85 +672,77 @@
    "cointegrated": true,
    "half_life": 6.1,
    "replay": {
-    "signals": 13,
-    "closed": 13,
-    "reverted": 0.769,
-    "avg_return": 0.01538,
-    "total_return": 0.1999,
-    "win_rate": 0.846
+    "signals": 12,
+    "closed": 12,
+    "reverted": 0.75,
+    "avg_return": 0.01567,
+    "total_return": 0.188,
+    "win_rate": 0.833
    },
    "replay_signals": [
     {
-     "entry_date": "2025-04-29",
-     "entry_z": -2.47,
-     "status": "reverted",
-     "exit_date": "2025-04-30",
-     "sessions": 1,
-     "spread_return": 0.011624
-    },
-    {
      "entry_date": "2025-05-01",
-     "entry_z": -2.307,
+     "entry_z": -2.249,
      "status": "reverted",
      "exit_date": "2025-05-20",
      "sessions": 12,
-     "spread_return": 0.004921
+     "spread_return": 0.004859
     },
     {
      "entry_date": "2025-08-22",
-     "entry_z": 2.331,
+     "entry_z": 2.287,
      "status": "reverted",
      "exit_date": "2025-09-04",
      "sessions": 7,
-     "spread_return": 0.010291
+     "spread_return": 0.010378
     },
     {
      "entry_date": "2025-09-09",
-     "entry_z": 3.151,
+     "entry_z": 3.106,
      "status": "timed_out",
      "exit_date": "2025-10-07",
      "sessions": 20,
-     "spread_return": 0.00115
+     "spread_return": 0.001204
     },
     {
      "entry_date": "2025-11-10",
-     "entry_z": -2.21,
+     "entry_z": -2.207,
      "status": "reverted",
      "exit_date": "2025-11-18",
      "sessions": 5,
-     "spread_return": 0.008543
+     "spread_return": 0.008624
     },
     {
      "entry_date": "2025-11-24",
-     "entry_z": 2.312,
+     "entry_z": 2.267,
      "status": "reverted",
      "exit_date": "2025-12-04",
      "sessions": 7,
-     "spread_return": 0.009215
+     "spread_return": 0.009212
     },
     {
      "entry_date": "2026-01-09",
-     "entry_z": 2.205,
+     "entry_z": 2.213,
      "status": "timed_out",
      "exit_date": "2026-02-09",
      "sessions": 20,
-     "spread_return": -0.008641
+     "spread_return": -0.008978
     },
     {
      "entry_date": "2026-03-09",
-     "entry_z": -2.459,
+     "entry_z": -2.401,
      "status": "reverted",
      "exit_date": "2026-03-10",
      "sessions": 1,
-     "spread_return": 0.030057
+     "spread_return": 0.029941
     },
     {
      "entry_date": "2026-03-18",
-     "entry_z": 4.686,
+     "entry_z": 4.695,
      "status": "reverted",
      "exit_date": "2026-04-17",
      "sessions": 20,
-     "spread_return": 0.033484
+     "spread_return": 0.033529
     },
     {
      "entry_date": "2026-05-07",
@@ -468,11 +778,11 @@
     }
    ],
    "expected": {
-    "per_signal": 0.00819,
+    "per_signal": 0.00808,
     "us_backtest": 0.00352,
     "prior_signals": 20,
-    "mcx_signals": 13,
-    "mcx_avg": 0.01538
+    "mcx_signals": 12,
+    "mcx_avg": 0.01567
    },
    "long_run": {
     "source": "FRED daily spot prices, monthly averages",
@@ -607,6 +917,37 @@
      }
     ],
     "tide": "toward"
+   },
+   "relative_value": {
+    "z": -0.783,
+    "percentile": 0.167,
+    "ratio": 1.0378,
+    "usual": 1.0698,
+    "window_months": 120,
+    "rich": "WTI",
+    "cheap": "Brent",
+    "side": null,
+    "driver": null,
+    "signal": false,
+    "held_back": null,
+    "expected": {
+     "per_trade": 0.04504,
+     "prior": 0.0584,
+     "prior_trades": 20,
+     "backtest_trades": 18,
+     "live_trades": 0
+    },
+    "backtest": {
+     "trades": 18,
+     "won": 0.889,
+     "avg_return": 0.0302
+    },
+    "live": {
+     "trades": 0,
+     "closed": 0,
+     "open": 0
+    },
+    "open_trade": null
    }
   },
   {
@@ -618,8 +959,8 @@
    ],
    "why": "The oil-gas ratio: energy priced as liquid fuel against gas.",
    "source": "international",
-   "sessions": 407,
-   "data_from": "2025-03-31",
+   "sessions": 406,
+   "data_from": "2025-04-01",
    "date": "2026-11-17",
    "short_history": false,
    "early": false,
@@ -706,35 +1047,35 @@
    "replay": {
     "signals": 6,
     "closed": 5,
-    "reverted": 0.6,
-    "avg_return": 0.06245,
-    "total_return": 0.3122,
-    "win_rate": 0.8
+    "reverted": 0.8,
+    "avg_return": 0.07429,
+    "total_return": 0.3715,
+    "win_rate": 1.0
    },
    "replay_signals": [
     {
      "entry_date": "2025-06-11",
-     "entry_z": 2.226,
+     "entry_z": 2.243,
      "status": "reverted",
-     "exit_date": "2025-06-24",
-     "sessions": 8,
-     "spread_return": 0.060001
+     "exit_date": "2025-06-23",
+     "sessions": 7,
+     "spread_return": 0.000227
     },
     {
-     "entry_date": "2025-10-02",
-     "entry_z": -2.032,
+     "entry_date": "2025-10-21",
+     "entry_z": -2.109,
      "status": "timed_out",
-     "exit_date": "2025-10-31",
+     "exit_date": "2025-11-19",
      "sessions": 20,
-     "spread_return": 0.002799
+     "spread_return": 0.015805
     },
     {
-     "entry_date": "2025-11-10",
-     "entry_z": -2.273,
-     "status": "timed_out",
-     "exit_date": "2025-12-11",
-     "sessions": 20,
-     "spread_return": -0.096384
+     "entry_date": "2025-11-20",
+     "entry_z": -2.165,
+     "status": "reverted",
+     "exit_date": "2025-12-16",
+     "sessions": 16,
+     "spread_return": 0.009597
     },
     {
      "entry_date": "2026-01-22",
@@ -762,11 +1103,11 @@
     }
    ],
    "expected": {
-    "per_signal": 0.01851,
+    "per_signal": 0.02087,
     "us_backtest": 0.00752,
     "prior_signals": 20,
     "mcx_signals": 5,
-    "mcx_avg": 0.06245
+    "mcx_avg": 0.07429
    },
    "long_run": {
     "source": "FRED daily spot prices, monthly averages",
@@ -946,6 +1287,37 @@
      }
     ],
     "tide": "away"
+   },
+   "relative_value": {
+    "z": 0.869,
+    "percentile": 0.8,
+    "ratio": 28.8238,
+    "usual": 21.3459,
+    "window_months": 120,
+    "rich": "WTI",
+    "cheap": "Natural gas",
+    "side": null,
+    "driver": null,
+    "signal": false,
+    "held_back": null,
+    "expected": {
+     "per_trade": 0.13226,
+     "prior": 0.0584,
+     "prior_trades": 20,
+     "backtest_trades": 19,
+     "live_trades": 0
+    },
+    "backtest": {
+     "trades": 19,
+     "won": 0.895,
+     "avg_return": 0.21
+    },
+    "live": {
+     "trades": 0,
+     "closed": 0,
+     "open": 0
+    },
+    "open_trade": null
    }
   },
   {
@@ -1053,6 +1425,120 @@
     "prior_signals": 20,
     "mcx_signals": 0,
     "mcx_avg": null
+   },
+   "long_run": {
+    "source": "IMF monthly prices (FRED) and World Bank Pink Sheet monthly prices",
+    "data_from": "1992-01",
+    "data_to": "2026-09",
+    "window_months": 120,
+    "ratio": 3.4596,
+    "usual": 4.1474,
+    "low": 2.5799,
+    "high": 5.5314,
+    "z": -0.841,
+    "percentile": 0.242,
+    "extreme": false,
+    "analogues": null,
+    "story": null,
+    "episodes": [
+     {
+      "side": "high",
+      "from": "2005-07",
+      "to": "2006-12",
+      "peak": "2006-05",
+      "ratio": 11.9395,
+      "usual": 6.1717,
+      "z": 3.37,
+      "after_12m": -0.0359,
+      "months_to_normal": 29,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2007-04",
+      "to": "2007-07",
+      "peak": "2007-07",
+      "ratio": 12.0014,
+      "usual": 6.6061,
+      "z": 2.19,
+      "after_12m": -0.2548,
+      "months_to_normal": 4,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "low",
+      "from": "2008-12",
+      "to": "2009-02",
+      "peak": "2009-02",
+      "ratio": 3.5296,
+      "usual": 6.8984,
+      "z": -2.21,
+      "after_12m": 0.7769,
+      "months_to_normal": 4,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "low",
+      "from": "2020-02",
+      "to": "2020-08",
+      "peak": "2020-04",
+      "ratio": 3.0053,
+      "usual": 4.8688,
+      "z": -3.08,
+      "after_12m": 0.7629,
+      "months_to_normal": 8,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "low",
+      "from": "2025-02",
+      "to": "2026-04",
+      "peak": "2025-04",
+      "ratio": 2.8504,
+      "usual": 4.3713,
+      "z": -2.67,
+      "after_12m": -0.0421,
+      "months_to_normal": null,
+      "settled": false,
+      "story": null
+     }
+    ],
+    "tide": "toward"
+   },
+   "relative_value": {
+    "z": -0.841,
+    "percentile": 0.242,
+    "ratio": 3.4596,
+    "usual": 4.1474,
+    "window_months": 120,
+    "rich": "Gold",
+    "cheap": "Copper",
+    "side": null,
+    "driver": null,
+    "signal": false,
+    "held_back": null,
+    "expected": {
+     "per_trade": 0.06728,
+     "prior": 0.0584,
+     "prior_trades": 20,
+     "backtest_trades": 9,
+     "live_trades": 0
+    },
+    "backtest": {
+     "trades": 9,
+     "won": 0.667,
+     "avg_return": 0.087
+    },
+    "live": {
+     "trades": 0,
+     "closed": 0,
+     "open": 0
+    },
+    "open_trade": null
    }
   },
   {
@@ -1181,6 +1667,189 @@
     "prior_signals": 20,
     "mcx_signals": 2,
     "mcx_avg": -0.02617
+   },
+   "long_run": {
+    "source": "World Bank Pink Sheet monthly prices",
+    "data_from": "1960-01",
+    "data_to": "2026-10",
+    "window_months": 120,
+    "ratio": 2.712,
+    "usual": 1.884,
+    "low": 1.2242,
+    "high": 3.3765,
+    "z": 1.5,
+    "percentile": 0.942,
+    "extreme": false,
+    "analogues": null,
+    "story": null,
+    "episodes": [
+     {
+      "side": "low",
+      "from": "1969-12",
+      "to": "1970-09",
+      "peak": "1969-12",
+      "ratio": 0.2632,
+      "usual": 0.3732,
+      "z": -2.97,
+      "after_12m": 0.0571,
+      "months_to_normal": 17,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "1972-06",
+      "to": "1975-07",
+      "peak": "1973-06",
+      "ratio": 0.7843,
+      "usual": 0.3577,
+      "z": 4.09,
+      "after_12m": 0.0069,
+      "months_to_normal": 331,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "1982-09",
+      "to": "1982-09",
+      "peak": "1982-09",
+      "ratio": 1.3084,
+      "usual": 0.8316,
+      "z": 2.17,
+      "after_12m": -0.2694,
+      "months_to_normal": 8,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "low",
+      "from": "1999-09",
+      "to": "2001-06",
+      "peak": "2000-05",
+      "ratio": 0.5228,
+      "usual": 0.8743,
+      "z": -3.77,
+      "after_12m": -0.1485,
+      "months_to_normal": 101,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2008-10",
+      "to": "2009-07",
+      "peak": "2008-12",
+      "ratio": 0.9714,
+      "usual": 0.5461,
+      "z": 3.49,
+      "after_12m": -0.1869,
+      "months_to_normal": null,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2009-11",
+      "to": "2009-11",
+      "peak": "2009-11",
+      "ratio": 0.8044,
+      "usual": 0.5502,
+      "z": 2.11,
+      "after_12m": 0.006,
+      "months_to_normal": null,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2011-08",
+      "to": "2012-08",
+      "peak": "2011-10",
+      "ratio": 1.0853,
+      "usual": 0.6006,
+      "z": 2.62,
+      "after_12m": -0.0161,
+      "months_to_normal": null,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2019-06",
+      "to": "2019-08",
+      "peak": "2019-08",
+      "ratio": 1.7462,
+      "usual": 1.0822,
+      "z": 2.08,
+      "after_12m": 0.1996,
+      "months_to_normal": null,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2020-03",
+      "to": "2020-11",
+      "peak": "2020-04",
+      "ratio": 2.2321,
+      "usual": 1.1455,
+      "z": 2.81,
+      "after_12m": -0.3478,
+      "months_to_normal": null,
+      "settled": true,
+      "story": null
+     },
+     {
+      "side": "high",
+      "from": "2024-08",
+      "to": "2025-05",
+      "peak": "2025-04",
+      "ratio": 3.3556,
+      "usual": 1.6938,
+      "z": 2.68,
+      "after_12m": -0.3063,
+      "months_to_normal": 9,
+      "settled": false,
+      "story": null
+     }
+    ],
+    "tide": "away"
+   },
+   "relative_value": {
+    "z": 1.5,
+    "percentile": 0.942,
+    "ratio": 2.712,
+    "usual": 1.884,
+    "window_months": 120,
+    "rich": "Gold",
+    "cheap": "Platinum",
+    "side": -1,
+    "driver": null,
+    "signal": true,
+    "held_back": null,
+    "expected": {
+     "per_trade": 0.0332,
+     "prior": 0.0584,
+     "prior_trades": 20,
+     "backtest_trades": 15,
+     "live_trades": 0
+    },
+    "backtest": {
+     "trades": 15,
+     "won": 0.6,
+     "avg_return": -0.0004
+    },
+    "live": {
+     "trades": 1,
+     "closed": 0,
+     "open": 1
+    },
+    "open_trade": {
+     "entry_date": "2026-11-20",
+     "entry_z": 1.5,
+     "side": -1
+    }
    }
   },
   {
@@ -1345,6 +2014,37 @@
      }
     ],
     "tide": "away"
+   },
+   "relative_value": {
+    "z": 1.187,
+    "percentile": 0.9,
+    "ratio": 3.9714,
+    "usual": 3.5228,
+    "window_months": 120,
+    "rich": "Copper",
+    "cheap": "Aluminium",
+    "side": null,
+    "driver": null,
+    "signal": false,
+    "held_back": null,
+    "expected": {
+     "per_trade": 0.03744,
+     "prior": 0.0584,
+     "prior_trades": 20,
+     "backtest_trades": 15,
+     "live_trades": 0
+    },
+    "backtest": {
+     "trades": 15,
+     "won": 0.467,
+     "avg_return": 0.0095
+    },
+    "live": {
+     "trades": 0,
+     "closed": 0,
+     "open": 0
+    },
+    "open_trade": null
    }
   },
   {
@@ -1589,6 +2289,41 @@
      }
     ],
     "tide": "away"
+   },
+   "relative_value": {
+    "z": 2.951,
+    "percentile": 0.983,
+    "ratio": 2.0711,
+    "usual": 1.363,
+    "window_months": 120,
+    "rich": "Zinc",
+    "cheap": "Lead",
+    "side": -1,
+    "driver": "temporary",
+    "signal": true,
+    "held_back": null,
+    "expected": {
+     "per_trade": 0.06264,
+     "prior": 0.0584,
+     "prior_trades": 20,
+     "backtest_trades": 14,
+     "live_trades": 0
+    },
+    "backtest": {
+     "trades": 14,
+     "won": 0.714,
+     "avg_return": 0.0687
+    },
+    "live": {
+     "trades": 1,
+     "closed": 0,
+     "open": 1
+    },
+    "open_trade": {
+     "entry_date": "2026-11-20",
+     "entry_z": 2.951,
+     "side": -1
+    }
    }
   },
   {
@@ -1766,6 +2501,37 @@
      }
     ],
     "tide": "away"
+   },
+   "relative_value": {
+    "z": 0.533,
+    "percentile": 0.625,
+    "ratio": 3.1096,
+    "usual": 2.7988,
+    "window_months": 120,
+    "rich": "Copper",
+    "cheap": "Zinc",
+    "side": null,
+    "driver": null,
+    "signal": false,
+    "held_back": null,
+    "expected": {
+     "per_trade": 0.05382,
+     "prior": 0.0584,
+     "prior_trades": 20,
+     "backtest_trades": 11,
+     "live_trades": 0
+    },
+    "backtest": {
+     "trades": 11,
+     "won": 0.636,
+     "avg_return": 0.0455
+    },
+    "live": {
+     "trades": 0,
+     "closed": 0,
+     "open": 0
+    },
+    "open_trade": null
    }
   },
   {
@@ -2037,6 +2803,37 @@
      }
     ],
     "tide": "toward"
+   },
+   "relative_value": {
+    "z": -2.094,
+    "percentile": 0.017,
+    "ratio": 1.2147,
+    "usual": 1.9994,
+    "window_months": 120,
+    "rich": "Copper",
+    "cheap": "Nickel",
+    "side": 1,
+    "driver": "lasting",
+    "signal": false,
+    "held_back": "the cause looks lasting (Indonesia's fast-growing nickel smelting industry kept the market in surplus while copper rallied on its own shortages): past lasting extremes have not come back to normal",
+    "expected": {
+     "per_trade": 0.07524,
+     "prior": 0.0584,
+     "prior_trades": 20,
+     "backtest_trades": 16,
+     "live_trades": 0
+    },
+    "backtest": {
+     "trades": 16,
+     "won": 0.875,
+     "avg_return": 0.0963
+    },
+    "live": {
+     "trades": 0,
+     "closed": 0,
+     "open": 0
+    },
+    "open_trade": null
    }
   },
   {
