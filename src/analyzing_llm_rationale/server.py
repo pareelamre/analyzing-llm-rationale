@@ -7911,7 +7911,7 @@ async def _fetch_evidence_with_cache(
         try:
             from analyzing_llm_rationale.news_pipeline import NewsPipeline
             evidence_pipeline = NewsPipeline(
-                fetch_sources=("web", "gdelt", "google-news", "newsapi", "beat", "rss", "open-meteo"),
+                fetch_sources=("web", "gdelt", "google-news", "newsapi", "beat", "rss", "open-meteo", "aseri"),
                 summarize_articles=False,
                 use_embeddings=False,
                 min_relevance=float(os.environ.get("EVIDENCE_MIN_RELEVANCE", "0.25")),

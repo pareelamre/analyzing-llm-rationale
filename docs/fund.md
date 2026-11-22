@@ -1885,6 +1885,31 @@ the newest report's view of where the pair's price ratio is heading:
 - **What it does not do:** change sizes. The view is new and unscored; like the rationale checker
   it is shown first and judged on resolved pair trades before it may move money.
 
+## Geopolitical signals from aseri (owner, 2026-11-22)
+
+Owner: add aseri's Hormuz and risk-index feeds as fund evidence. aseri
+(https://exdsgift.github.io/aseri/) publishes daily, as static JSON with no key: ships through
+Hormuz, Bab el-Mandeb, Suez and the Taiwan Strait (IMF PortWatch), the Caldara-Iacoviello
+geopolitical risk index and Ukraine's air-raid alert hours. Each comes with a Timestral-209M
+forecast range that is scored in public.
+
+- `aseri_feed.py` is the "aseri" evidence channel. It is on for the forecast job, /predict and
+  the signed-in agent. A question that names Iran, Hormuz, the Houthis, the Red Sea, Taiwan,
+  Ukraine/Russia or war risk gets one item. The item gives the latest value, the 7-day average
+  against normal, the last 30 days' range, aseri's 8-in-10 range at its horizons, and aseri's
+  track record (live count, backtest coverage). Hint words are the relevance check, so the
+  item skips the lexical floor.
+- Credit: every item carries aseri's and each source's attribution. aseri's forecasts are
+  CC BY-NC 4.0 and PortWatch needs the IMF's permission for commercial use. Foresea is
+  non-commercial (owner, 2026-11-22: "just for our paper fund"), so both are fine. Revisit
+  if Foresea ever charges or runs ads.
+- Left out: aseri's Brent forecast (on its own backtest it is no better than the last price,
+  and its 80% range held 71% of the time) and "World War III" page views.
+- aseri's ranges have no live record yet: zero to two scored forecasts per series as of
+  2026-11-22, against 30 needed. Its backtests were mostly as good as a 4-week average. The
+  value is the measured data (Hormuz at about 2 ships a day against a normal of 22); treat
+  the ranges as context.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes

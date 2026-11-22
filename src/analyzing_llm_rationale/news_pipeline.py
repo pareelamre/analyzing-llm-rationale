@@ -13,6 +13,7 @@ from xml.etree import ElementTree
 
 import numpy as np
 
+from analyzing_llm_rationale import aseri_feed
 from analyzing_llm_rationale.evidence_time import age_days, article_date, recency_weight
 
 logger = logging.getLogger("foresea.news")
@@ -129,8 +130,8 @@ STOOQ_RSS_FEEDS = (
 # and leaked irrelevant headlines into evidence. It stays available if explicitly
 # configured. `web` prefers a configured provider (Tavily, Serper, Brave, or
 # SearXNG) and otherwise uses the existing keyless DuckDuckGo fallback.
-DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "bing-news", "beat", "rss", "open-meteo")
-SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "bing-news", "newsapi", "beat", "rss", "stooq", "fred",
+DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "bing-news", "beat", "rss", "open-meteo", "aseri")
+SOURCE_DIVERSITY_ORDER = ("web", "aseri", "gdelt", "google-news", "bing-news", "newsapi", "beat", "rss", "stooq", "fred",
                           "open-meteo")
 HIGH_CREDIBILITY_SOURCES = {
     "abc news",
@@ -187,6 +188,7 @@ CHANNEL_CREDIBILITY = {
     "stooq": 0.55,
     "fred": 0.90,       # St. Louis Fed official data
     "open-meteo": 0.88, # ECMWF/GFS ensemble forecast
+    "aseri": 0.85,      # measured ship transits, risk index, alerts (aseri_feed)
 }
 
 # Channels that return generic, query-agnostic headlines (Stooq market RSS,
@@ -206,8 +208,13 @@ _MIN_GENERIC_RELEVANCE = 0.35
 # return anything, the evidence pack is not trustworthy as question-specific
 # evidence, and callers are told so rather than being handed generic filler.
 _QUERY_SPECIFIC_CHANNELS = (
-    "web", "gdelt", "google-news", "bing-news", "newsapi", "fred", "open-meteo",
+    "web", "gdelt", "google-news", "bing-news", "newsapi", "fred", "open-meteo", "aseri",
 )
+
+# Channels fetched only when the question names their topic (aseri_feed.SERIES_HINTS), so
+# the hint match is their relevance check: the measured data shares few words with the
+# question ("ships a day" vs "close the Strait") and would fail a lexical floor.
+_HINT_GATED_CHANNELS = ("aseri",)
 
 # Open-Meteo is fetched only for weather-related questions.
 _WEATHER_HINTS = {
@@ -599,6 +606,11 @@ class NewsPipeline:
         if "beat" in self._fetch_sources and _beats_for(query):
             beat_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
             beat_future = beat_pool.submit(self._fetch_beats, query)
+        # aseri's daily signals (ship transits, risk index, alerts) run alongside too.
+        aseri_pool = aseri_future = None
+        if "aseri" in self._fetch_sources and aseri_feed.series_for(query):
+            aseri_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            aseri_future = aseri_pool.submit(aseri_feed.evidence, query)
 
         if "web" in self._fetch_sources:
             articles.extend(self._fetch_web(query, limit=per_source_limit))
@@ -633,6 +645,10 @@ class NewsPipeline:
         if beat_future is not None:
             articles.extend(beat_future.result())
             beat_pool.shutdown(wait=False)
+
+        if aseri_future is not None:
+            articles.extend(aseri_future.result())
+            aseri_pool.shutdown(wait=False)
 
         if "rss" in self._fetch_sources:
             articles.extend(self._fetch_rss(limit=per_source_limit))
@@ -1545,6 +1561,8 @@ class NewsPipeline:
             floor = getattr(self, "_min_relevance", 0.0)
             if article.get("source_channel") in _QUERY_AGNOSTIC_CHANNELS:
                 floor = max(floor, _MIN_GENERIC_RELEVANCE)
+            if article.get("source_channel") in _HINT_GATED_CHANNELS:
+                floor = 0.0
             if article.get("relevance", 1.0) < floor:
                 return False
             seen_keys.update(dedupe_keys)
