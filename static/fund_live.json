@@ -10,16 +10,16 @@
       "blend_model": -3.4501
     },
     "unrealized": {
-      "agent_transfer": -402.3272,
+      "agent_transfer": -385.1306,
       "blend_model": 17.9446,
-      "event_model": 72.9639,
+      "event_model": 73.4128,
       "pairs_model": -22.4404,
       "put_premium": 60.553
     }
   },
   "by_asset_class": {
     "commodity": 481.7839,
-    "event": 3727.9648,
+    "event": 3745.6104,
     "option": 677.8703
   },
   "cash_usd": 4836.4248,
@@ -923,25 +923,23 @@
     {
       "nav_usd": 9724.0437,
       "ts": "2026-11-22T14:01:17.865298+00:00"
+    },
+    {
+      "nav_usd": 9741.6893,
+      "ts": "2026-11-22T16:01:04.406682+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 2,
-    "skipped": [
-      {
-        "pair": "copper-zinc",
-        "reason": "stretched at z=-3.03 but its expected return is 0.0% per signal",
-        "z": -3.031
-      }
-    ],
+    "signals": 3,
+    "skipped": [],
     "traded": false,
-    "window": "19:31 IST is outside the trading hours"
+    "window": "21:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-22T14:01:17.865298+00:00",
+  "generated_at": "2026-11-22T16:01:04.406682+00:00",
   "guard": {
     "board": 31,
     "checked": 31,
@@ -974,7 +972,7 @@
   "knowledge": {
     "pairs": {
       "copper-aluminium": {
-        "agrees": true,
+        "agrees": null,
         "change": 0.0325,
         "cite": "World Bank, Oct 2026",
         "claims": [
@@ -990,7 +988,7 @@
         ],
         "source": "worldbank-2026-10-commodity-markets-outlook",
         "text": "World Bank, Oct 2026 forecasts imply copper/aluminium moving from 4.06 (2026) to 4.19 (2027), +3.2%",
-        "traded": true,
+        "traded": false,
         "years": [
           2026,
           2027
@@ -1112,7 +1110,7 @@
         ]
       },
       "zinc-lead": {
-        "agrees": null,
+        "agrees": true,
         "change": -0.1212,
         "cite": "World Bank, Oct 2026",
         "claims": [
@@ -1128,7 +1126,7 @@
         ],
         "source": "worldbank-2026-10-commodity-markets-outlook",
         "text": "World Bank, Oct 2026 forecasts imply zinc/lead moving from 1.83 (2026) to 1.61 (2027), -12.1%",
-        "traded": false,
+        "traded": true,
         "years": [
           2026,
           2027
@@ -1143,7 +1141,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9724.0437,
+  "nav_usd": 9741.6893,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1396,15 +1394,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.963,
+      "mark": 0.964,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 68.6905,
+      "pnl_usd": 69.1395,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 432.3461,
+      "value_usd": 432.795,
       "venue": "polymarket"
     },
     {
@@ -1459,15 +1457,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06799999999999995,
+      "mark": 0.06999999999999995,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 85.9832,
+      "pnl_usd": 103.1798,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 584.6852,
+      "value_usd": 601.8818,
       "venue": "polymarket"
     },
     {
@@ -1567,7 +1565,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -2.76,
+  "return_pct": -2.583,
   "risk": {
     "alerts": [
       {
@@ -1595,37 +1593,37 @@
       {
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.1137
+        "worst_case_share": 0.1135
       },
       {
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.0601
+        "worst_case_share": 0.0618
       },
       {
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "side": "BULL",
-        "worst_case_share": 0.0464
+        "worst_case_share": 0.0463
       },
       {
         "label": "US announces end of Iranian blockade by November 30, 2026?",
         "side": "NO",
-        "worst_case_share": 0.0445
+        "worst_case_share": 0.0444
       },
       {
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "side": "NO",
-        "worst_case_share": 0.0396
+        "worst_case_share": 0.0395
       },
       {
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
         "side": "NO",
-        "worst_case_share": 0.0384
+        "worst_case_share": 0.0383
       },
       {
         "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
         "side": "YES",
-        "worst_case_share": 0.0383
+        "worst_case_share": 0.0382
       }
     ],
     "positions": [
@@ -1636,7 +1634,7 @@
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "pnl_usd": -36.44,
         "side": "NO",
-        "worst_case_share": 0.1137,
+        "worst_case_share": 0.1135,
         "worst_case_usd": 1105.45
       },
       {
@@ -1644,10 +1642,10 @@
         "entry_worst_case_usd": 498.7,
         "kind": "binary",
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "pnl_usd": 85.98,
+        "pnl_usd": 103.18,
         "side": "NO",
-        "worst_case_share": 0.0601,
-        "worst_case_usd": 584.69
+        "worst_case_share": 0.0618,
+        "worst_case_usd": 601.88
       },
       {
         "alerts": [],
@@ -1656,7 +1654,7 @@
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "pnl_usd": 34.34,
         "side": "BULL",
-        "worst_case_share": 0.0464,
+        "worst_case_share": 0.0463,
         "worst_case_usd": 451.27
       },
       {
@@ -1664,10 +1662,10 @@
         "entry_worst_case_usd": 363.66,
         "kind": "binary",
         "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "pnl_usd": 68.69,
+        "pnl_usd": 69.14,
         "side": "NO",
-        "worst_case_share": 0.0445,
-        "worst_case_usd": 432.35
+        "worst_case_share": 0.0444,
+        "worst_case_usd": 432.8
       },
       {
         "alerts": [],
@@ -1676,7 +1674,7 @@
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "pnl_usd": 4.27,
         "side": "NO",
-        "worst_case_share": 0.0396,
+        "worst_case_share": 0.0395,
         "worst_case_usd": 384.6
       },
       {
@@ -1686,7 +1684,7 @@
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
         "pnl_usd": 19.05,
         "side": "NO",
-        "worst_case_share": 0.0384,
+        "worst_case_share": 0.0383,
         "worst_case_usd": 373.38
       },
       {
@@ -1696,7 +1694,7 @@
         "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
         "pnl_usd": 16.2,
         "side": "YES",
-        "worst_case_share": 0.0383,
+        "worst_case_share": 0.0382,
         "worst_case_usd": 372.6
       },
       {
@@ -1783,8 +1781,8 @@
         "worst_case_usd": 18.8
       }
     ],
-    "worst_case_total_share": 0.4605,
-    "worst_case_total_usd": 4478.1
+    "worst_case_total_share": 0.4615,
+    "worst_case_total_usd": 4495.74
   },
   "scorecard": {
     "retired_records": [
