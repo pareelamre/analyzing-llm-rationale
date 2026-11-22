@@ -18,13 +18,13 @@ from opentelemetry.trace import Status, StatusCode
 
 from . import knowledge, market_data
 from .benchmark_tools import _domain_blacklisted
-from .news_pipeline import _QUERY_AGNOSTIC_CHANNELS, NewsPipeline
+from .news_pipeline import _HINT_GATED_CHANNELS, _QUERY_AGNOSTIC_CHANNELS, NewsPipeline
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 meter = metrics.get_meter(__name__)
 prefetches = meter.create_counter("agent.research.prefetches", unit="1")
-NEWS_SOURCES = ("web", "gdelt", "google-news", "bing-news")
+NEWS_SOURCES = ("web", "gdelt", "google-news", "bing-news", "aseri")
 MAX_MARKETS = 2
 MIN_RELEVANCE = 0.25
 PREFETCH_TIMEOUT_S = 20.0
@@ -54,7 +54,9 @@ def search_market_evidence(query: str) -> dict[str, Any]:
                 continue
             if (parts.scheme not in {"http", "https"} or not parts.hostname
                     or _domain_blacklisted(url)
-                    or not math.isfinite(relevance) or relevance < MIN_RELEVANCE
+                    or not math.isfinite(relevance)
+                    # A hint-gated data channel (aseri) matched the question by topic already.
+                    or (relevance < MIN_RELEVANCE and article.get("source_channel") not in _HINT_GATED_CHANNELS)
                     or article.get("source_channel") in _QUERY_AGNOSTIC_CHANNELS):
                 continue
             # Do not truncate a citation into a different (or invalid) URL.

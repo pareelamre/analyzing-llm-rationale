@@ -60,7 +60,7 @@ def _fetch_secret_from_gcp(secret_name: str) -> Optional[str]:
         return None
 
 REMOTE_PROVIDER_CHOICES = ["local-qwen", "hf-router", "openai-compatible"]
-NEWS_SOURCE_CHOICES = ["newsapi", "gdelt", "google-news", "stooq", "rss"]
+NEWS_SOURCE_CHOICES = ["newsapi", "gdelt", "google-news", "stooq", "rss", "aseri"]
 METACULUS_BOT_PROFILES = {
     "qwen-primary": (
         "qwen3-8-27b",
@@ -855,8 +855,9 @@ def init_server_state(args: argparse.Namespace) -> None:
                 newsapi_key=newsapi_key,
                 use_query_planner=False,
                 # "beat" adds the specialist feeds (news_pipeline.BEAT_FEEDS) for questions
-                # on their topic; the general homepage RSS stays off.
-                fetch_sources=args.evidence_source or ("web", "gdelt", "google-news", "beat"),
+                # on their topic; "aseri" adds measured ship transits, risk index and alerts
+                # for Iran/Red Sea/Taiwan/Ukraine/war questions; the general homepage RSS stays off.
+                fetch_sources=args.evidence_source or ("web", "gdelt", "google-news", "beat", "aseri"),
                 summarize_articles=False,
                 # Lexical/BM25 ranking by default: loading the sentence-transformer can
                 # exhaust a 512 MiB Cloud Run instance. Hosts with room (the forecast
