@@ -1910,6 +1910,49 @@ forecast range that is scored in public.
   value is the measured data (Hormuz at about 2 ships a day against a normal of 22); treat
   the ranges as context.
 
+## Relative value on pairs (owner, 2026-11-22)
+
+Owner: "I just want the concept of relative value metrics to be applied to the commodity pairs we
+are monitoring." Since this change the fund's pair trades are relative-value trades; the 60-session
+score stays on the board as a monitor.
+
+**The metric.** Each pair's price ratio against its own last 10 years of monthly prices: a z-score,
+a percentile, and which leg is dear (commodity_pairs.relative_value, from pair_history's long view).
+Gold, silver and platinum now have that history too, from the World Bank's monthly prices (the
+Pink Sheet, CC BY 4.0, credited on the board); the base metals keep IMF prices and the oil and gas
+legs FRED's.
+
+**The rule (commodity_pairs.RV_*).** From 1.5 standard deviations out, sell the dear leg and buy the
+cheap one, equal money, betting the ratio moves back toward its 10-year normal. Close back within
+0.5, or after 24 months (504 sessions). A pair whose current story says the cause is lasting is
+held back: no lasting extreme in the stories has come back to normal, and a backtest cannot judge
+stories written afterwards. MCX crude / natural gas reads the WTI / Henry Hub ratio.
+
+**The test (scripts/pair_rv_backtest.py).** World Bank monthly prices, 1975-2026, nine pairs. The
+settings were picked on 1985-2004 alone (entry 1.5, 2 or 2.5; with or without waiting for the ratio
+to turn; 6, 12 or 24 months), then scored on 2005-2026:
+
+| | trades | won | average a trade |
+|---|---|---|---|
+| 1985-2004 (picked on) | 57 | 83% | +7.8% |
+| 2005-2026 (unseen) | 72 | 64% | +5.8% (95% range +2.5% to +9.2%) |
+| Tracker's own IMF/FRED prices, 1992-2026 | 54 | 67% | +6.0% |
+
+Returns are per dollar on both legs after 0.1% a side; trades last about 14 months. Every one of the
+18 settings made money on the unseen years. Waiting for the ratio to turn did not help on the early
+years, so there is no timing filter. By pair, oil/gas, nickel/copper, Brent/WTI and copper/gold did
+best; gold/platinum (no gain) and copper/aluminium (+1%, won 47%) were weakest. Each pair's expected
+return blends the unseen average (as 20 trades) with its own backtest and live trades.
+
+**Changes to the book.** Held pair trades now close back near the normal, after the limit, or when
+they bet against relative value. The copper / aluminium trade opened 2026-11-16 under the 60-session
+rule held copper, the dear leg, so it closes at the next MCX session. On 2026-11-20 prices the rule
+trades zinc / lead (zinc dearer than in 98% of the last 10 years: sell zinc, buy lead) and holds
+back nickel / copper (Indonesia's nickel surplus looks lasting).
+
+**Caveats.** Monthly averages are rougher than daily prices; the ranges and averages lean on oil
+and gas, whose ratio swings most; a story's "lasting" label is a judgement, recorded with sources.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes

@@ -20,12 +20,16 @@ its last 60 sessions. This module adds the long view, per pair:
   driver is judged from what was known at the time, but the stories were written afterwards,
   so the tally is context, not a tested rule.
 
-Nothing here changes a trade: the fund shows it on each pair trade as evidence.
+Since 2026-11-22 the position is also what the fund trades: commodity_pairs.relative_value turns
+it into a relative-value trade (RV_*). The analogues and stories stay evidence, except that a
+current story whose cause is lasting holds such a trade back.
 """
 from __future__ import annotations
 
 import json
+import logging
 import math
+import re
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
@@ -41,6 +45,19 @@ IMF_MONTHLY = {"copper": "PCOPPUSDM", "aluminium": "PALUMUSDM", "zinc": "PZINCUS
                "nickel": "PNICKUSDM"}
 #: The oil and gas legs use the tracker's own FRED daily series, averaged by month, from this date.
 DAILY_FROM = "1997-01-01"
+#: The World Bank's monthly commodity prices ("Pink Sheet", CC BY 4.0), from 1960: the only free
+#: long history for gold, silver and platinum, so the gold pairs get a 10-year view too (owner,
+#: 2026-11-22). Its link changes each year, so it is read from the Commodity Markets page; the
+#: last known link is the fallback. Columns by commodity: PINK_SHEET_LIVE feeds the tracker, and
+#: the backtest (scripts/pair_rv_backtest.py) reads every leg from it for the longer history.
+PINK_SHEET_PAGE = "https://www.worldbank.org/en/research/commodity-markets"
+PINK_SHEET_FALLBACK = ("https://thedocs.worldbank.org/en/doc/74e8be41ceb20fa0da750cda2f6b9e4e-0050012026/"
+                       "related/CMO-Historical-Data-Monthly.xlsx")
+PINK_SHEET_COLUMNS = {"gold": "Gold", "silver": "Silver", "platinum": "Platinum", "copper": "Copper",
+                      "aluminium": "Aluminum", "zinc": "Zinc", "lead": "Lead", "nickel": "Nickel",
+                      "brentcrude": "Crude oil, Brent", "crudeoil": "Crude oil, WTI", "naturalgas": "Natural gas, US"}
+PINK_SHEET_LIVE = ("gold", "silver", "platinum")
+PINK_SHEET_CREDIT = "World Bank, Commodity Price Data (The Pink Sheet), CC BY 4.0"
 WINDOW_MONTHS = 120
 EXTREME_Z = 1.5
 EPISODE_Z = 2.0
@@ -50,6 +67,7 @@ BACK_WITHIN = 24
 EPISODES_PATH = Path(__file__).resolve().parents[2] / "data" / "pair_episodes.json"
 
 HttpGet = Callable[..., Any]
+logger = logging.getLogger(__name__)
 
 
 def _fred_csv(series_id: str, *, http_get: HttpGet, start: Optional[str] = None) -> list[tuple[str, float]]:
@@ -67,8 +85,59 @@ def _fred_csv(series_id: str, *, http_get: HttpGet, start: Optional[str] = None)
     return rows
 
 
+def pink_sheet_url(*, http_get: HttpGet = requests.get) -> str:
+    """The current Pink Sheet link from the Commodity Markets page, else the last known one."""
+    try:
+        page = cp._get(PINK_SHEET_PAGE, accept="text/html", http_get=http_get).text
+    except cp.FeedError:
+        return PINK_SHEET_FALLBACK
+    found = re.findall(r"https://thedocs\.worldbank\.org/[^\"'\s<>]*CMO-Historical-Data-Monthly\.xlsx", page)
+    return found[0] if found else PINK_SHEET_FALLBACK
+
+
+def parse_pink_sheet(data: bytes, commodities: Sequence[str] = tuple(PINK_SHEET_COLUMNS)
+                     ) -> dict[str, list[tuple[str, float]]]:
+    """Commodity -> [(YYYY-MM, price)] from the Pink Sheet's "Monthly Prices" sheet."""
+    from .knowledge_tables import TableError, Workbook
+
+    try:
+        rows = Workbook(data).rows("Monthly Prices")
+    except TableError as exc:
+        raise cp.FeedError(f"Pink Sheet: {exc}") from exc
+    header = next((r for r in rows if r and "Copper" in [str(c).strip() for c in r if c is not None]), None)
+    if header is None:
+        raise cp.FeedError("Pink Sheet: no header row with the commodity names")
+    names = [str(c).strip() if c is not None else "" for c in header]
+    out: dict[str, list[tuple[str, float]]] = {}
+    for commodity in commodities:
+        column = PINK_SHEET_COLUMNS[commodity]
+        if column not in names:
+            raise cp.FeedError(f"Pink Sheet: no column {column!r}")
+        col = names.index(column)
+        series = []
+        for row in rows:
+            label = str(row[0]).strip() if row and row[0] is not None else ""
+            match = re.fullmatch(r"(\d{4})M(\d{2})", label)
+            v = row[col] if len(row) > col else None
+            if match and isinstance(v, float) and math.isfinite(v) and v > 0:
+                series.append((f"{match.group(1)}-{match.group(2)}", v))
+        if len(series) < WINDOW_MONTHS + 1:
+            raise cp.FeedError(f"Pink Sheet: only {len(series)} months of {column}")
+        out[commodity] = series
+    return out
+
+
+def fetch_pink_sheet(commodities: Sequence[str] = PINK_SHEET_LIVE, *, http_get: HttpGet = requests.get
+                     ) -> dict[str, list[tuple[str, float]]]:
+    url = pink_sheet_url(http_get=http_get)
+    resp = cp._get(url, accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", http_get=http_get)
+    return parse_pink_sheet(resp.content, commodities)
+
+
 def fetch_monthly(today: date, *, http_get: HttpGet = requests.get) -> dict[str, list[tuple[str, float]]]:
-    """Commodity -> [(YYYY-MM, monthly average price)], complete months only."""
+    """Commodity -> [(YYYY-MM, monthly average price)], complete months only. A Pink Sheet
+    failure leaves its commodities out (their pairs lose the long view for a day); the IMF and
+    FRED series must load."""
     current = today.isoformat()[:7]
     out: dict[str, list[tuple[str, float]]] = {}
     for commodity, series_id in IMF_MONTHLY.items():
@@ -78,7 +147,26 @@ def fetch_monthly(today: date, *, http_get: HttpGet = requests.get) -> dict[str,
         for day, v in _fred_csv(series_id, http_get=http_get, start=DAILY_FROM):
             months[day[:7]].append(v)
         out[commodity] = sorted((m, float(np.mean(v))) for m, v in months.items() if m < current)
+    try:
+        pink = fetch_pink_sheet(http_get=http_get)
+    except Exception as exc:  # aqg: optional source -- a World Bank outage must not stop the IMF and FRED view
+        logger.warning("Pink Sheet unavailable, gold pairs without a long view today: %s: %s", type(exc).__name__, exc)
+        pink = {}
+    for commodity, series in pink.items():
+        out[commodity] = [(m, v) for m, v in series if m < current]
     return out
+
+
+def source_label(pair: Mapping[str, str]) -> str:
+    """Where a pair's monthly prices come from."""
+    names = {"imf": "IMF monthly prices (FRED)", "fred": "FRED daily spot prices, monthly averages",
+             "pink": "World Bank Pink Sheet monthly prices"}
+    kinds = []
+    for leg in (pair["a"], pair["b"]):
+        kind = "imf" if leg in IMF_MONTHLY else "pink" if leg in PINK_SHEET_LIVE else "fred"
+        if kind not in kinds:
+            kinds.append(kind)
+    return " and ".join(names[k] for k in kinds)
 
 
 def monthly_ratio(pair: Mapping[str, str], monthly: Mapping[str, Sequence[tuple[str, float]]]
@@ -213,7 +301,7 @@ def pair_context(pair: Mapping[str, str], monthly: Mapping[str, Sequence[tuple[s
     side = "high" if z > 0 else "low"
     current = next((s for s in stories if s["to"] is None and s["side"] == side), None) if abs(z) >= EXTREME_Z else None
     return {
-        "source": "IMF monthly prices (FRED)" if pair["a"] in IMF_MONTHLY else "FRED daily spot prices, monthly averages",
+        "source": source_label(pair),
         "data_from": months[0], "data_to": months[-1], "window_months": WINDOW_MONTHS,
         "ratio": round(math.exp(now), 4), "usual": round(math.exp(mean), 4),
         "low": round(math.exp(float(w.min())), 4), "high": round(math.exp(float(w.max())), 4),

@@ -23,9 +23,15 @@ from FRED. Gold, platinum and the rupee are a daily snapshot from the open fawaz
 API, also stored. The gold import-parity pair compares MCX gold at 11:00 IST, when that snapshot
 is taken, with the snapshot's gold price landed in India (rupees plus import duty).
 
-This is a tracker, not a strategy with an edge: the same rule on 2010-2026 US futures history
-mostly lost money or broke even after costs (see BACKTEST). Live signals are recorded only on
+This 60-session rule is a monitor, not a strategy with an edge: on 2010-2026 US futures history
+it mostly lost money or broke even after costs (see BACKTEST). Live signals are recorded only on
 the newest session at the time of a run, so the ledger never adds a signal after the fact.
+
+Since 2026-11-22 the fund trades relative value instead (RV_*): each price ratio against its own
+10-year normal, a trade only from RV_ENTRY_Z out and only toward that normal, held until it is
+back near it or RV_MAX_MONTHS pass. On World Bank monthly prices that rule won 64% of 72 trades
+in 2005-2026, years its settings never saw (scripts/pair_rv_backtest.py). Its trades are kept in
+their own ledger (data/commodity_pairs_rv_ledger.jsonl).
 """
 from __future__ import annotations
 
@@ -93,6 +99,45 @@ TIDE_RECORD: dict[str, Any] = {
     "gap_95": [0.0203, 0.0732],
     "unseen": {"years": "2017-2026", "sharpe": [1.09, 1.12], "worst_drawdown": [0.432, 0.229],
                "total_return": [4.567, 4.476]},
+}
+#: Relative value, the rule the fund trades since 2026-11-22 (owner: "apply the concept of
+#: relative value metrics to the commodity pairs we are monitoring"). A pair's price ratio is
+#: judged against its own 10-year normal (pair_history: trailing 120 monthly averages), not its
+#: last 60 sessions. From RV_ENTRY_Z out the trade bets the ratio moves back toward that normal
+#: (sell the dear leg, buy the cheap one); it ends back inside RV_EXIT_Z or after RV_MAX_MONTHS.
+#: A pair whose current story says the cause is lasting is held back: such extremes have not come
+#: back (pair_history driver record), and the backtest cannot judge stories written afterwards.
+#: Settings were picked on 1985-2004 World Bank monthly prices and scored on 2005-2026, unseen
+#: (scripts/pair_rv_backtest.py, 2026-11-22). Waiting for the ratio to turn first was tried and
+#: did not help on the early years, so there is no timing filter. RV_RECORD is that run, per
+#: dollar on both legs after costs; RV_BY_PAIR is each pair's own trades over all years.
+RV_ENTRY_Z = 1.5
+RV_EXIT_Z = 0.5
+RV_MAX_MONTHS = 24
+RV_SESSIONS_PER_MONTH = 21
+#: A pair's expected return per trade blends the unseen-years average, counted as this many
+#: trades, with the pair's own backtest trades and its closed live ones.
+RV_PRIOR_TRADES = 20
+RV_RECORD: dict[str, Any] = {
+    "sample": "World Bank Pink Sheet monthly prices, 1975-2026, nine pairs",
+    "picked_on": {"years": "1985-2004", "trades": 57, "won": 0.825, "avg_return": 0.078},
+    "unseen": {"years": "2005-2026", "trades": 72, "won": 0.639, "avg_return": 0.0584,
+               "avg_return_95": [0.0247, 0.0924], "worst": -0.3023, "avg_months": 14.2},
+    "all": {"years": "1985-2026", "trades": 129, "won": 0.721, "avg_return": 0.067, "avg_months": 14.0},
+    "tracker_sources": {"years": "1992-2026", "trades": 54, "won": 0.667, "avg_return": 0.0595,
+                        "note": "the tracker's own IMF and FRED monthly prices, same settings"},
+    "timing_filter": "waiting for the ratio to turn toward normal did not help on 1985-2004",
+}
+RV_BY_PAIR: dict[str, dict[str, Any]] = {
+    "gold-silver": {"trades": 12, "won": 0.583, "avg_return": 0.0158},
+    "brent-wti": {"trades": 18, "won": 0.889, "avg_return": 0.0302},
+    "wti-natgas": {"trades": 19, "won": 0.895, "avg_return": 0.21},
+    "copper-gold": {"trades": 9, "won": 0.667, "avg_return": 0.087},
+    "gold-platinum": {"trades": 15, "won": 0.6, "avg_return": -0.0004},
+    "copper-aluminium": {"trades": 15, "won": 0.467, "avg_return": 0.0095},
+    "zinc-lead": {"trades": 14, "won": 0.714, "avg_return": 0.0687},
+    "copper-zinc": {"trades": 11, "won": 0.636, "avg_return": 0.0455},
+    "nickel-copper": {"trades": 16, "won": 0.875, "avg_return": 0.0963},
 }
 #: The first session the live tracker evaluated. Signals before it come only from the replay.
 LIVE_SINCE = date(2026, 11, 6)
@@ -646,13 +691,114 @@ def tide(z_short: Optional[float], long_run: Optional[dict]) -> Optional[str]:
     return "toward" if (z_short > 0) == (float(long_run["z"]) > 0) else "away"
 
 
+def rv_expected(key: str, live: Optional[Mapping[str, Any]] = None) -> dict[str, Any]:
+    """Expected return per relative-value trade: the unseen-years average as RV_PRIOR_TRADES trades,
+    plus the pair's own backtest trades and its closed live ones."""
+    prior = float(RV_RECORD["unseen"]["avg_return"])
+    own = RV_BY_PAIR.get(key) or {}
+    parts = [(int(own.get("trades") or 0), float(own.get("avg_return") or 0.0)),
+             (int((live or {}).get("closed") or 0), float((live or {}).get("avg_return") or 0.0))]
+    n = sum(c for c, _ in parts)
+    per_trade = (RV_PRIOR_TRADES * prior + sum(c * a for c, a in parts)) / (RV_PRIOR_TRADES + n)
+    return {"per_trade": round(per_trade, 5), "prior": prior, "prior_trades": RV_PRIOR_TRADES,
+            "backtest_trades": parts[0][0], "live_trades": parts[1][0]}
+
+
+def relative_value(pair: Mapping[str, str], long_ctx: Optional[Mapping[str, Any]],
+                   live: Optional[Mapping[str, Any]] = None) -> Optional[dict[str, Any]]:
+    """The pair's relative-value read: which leg is dear against the 10-year normal, and the trade.
+
+    ``side`` is on the price ratio: +1 buys the first leg and sells the second (the ratio is
+    cheap), -1 the reverse. ``signal`` is True when the fund should hold that trade.
+    """
+    if not long_ctx or long_ctx.get("z") is None:
+        return None
+    z = float(long_ctx["z"])
+    first, second = _legs(dict(pair))
+    away = abs(z) >= RV_EXIT_Z
+    rich, cheap = ((first, second) if z > 0 else (second, first)) if away else (None, None)
+    side = (-1 if z > 0 else 1) if abs(z) >= RV_ENTRY_Z else None
+    story = long_ctx.get("story") or {}
+    held_back = None
+    if side is not None and story.get("driver") == "lasting":
+        held_back = ("the cause looks lasting (" + str(story.get("cause") or "").split(". ")[0].rstrip(".")
+                     + "): past lasting extremes have not come back to normal")
+    return {
+        "z": round(z, 3), "percentile": long_ctx.get("percentile"), "ratio": long_ctx.get("ratio"),
+        "usual": long_ctx.get("usual"), "window_months": long_ctx.get("window_months"),
+        "rich": rich, "cheap": cheap, "side": side, "driver": story.get("driver"),
+        "signal": side is not None and held_back is None, "held_back": held_back,
+        "expected": rv_expected(pair["key"], live), "backtest": RV_BY_PAIR.get(pair["key"]),
+    }
+
+
+def update_rv_ledger(ledger: list[dict], rows: Sequence[Mapping[str, Any]],
+                     views: Mapping[str, Optional[Mapping[str, Any]]], now: datetime) -> int:
+    """Close open relative-value trades back near the normal or past RV_MAX_MONTHS, then open new ones.
+
+    Measured on today's series, like update_ledger: a roll rescales earlier MCX prices, so both ends
+    share one basis. The return is per dollar on both legs (equal money), after costs.
+    """
+    by_key = {row["key"]: row for row in rows if "_days" in row}
+    max_sessions = RV_MAX_MONTHS * RV_SESSIONS_PER_MONTH
+    for event in ledger:
+        row, view = by_key.get(event["pair"]), views.get(event["pair"])
+        if event["status"] != "open" or row is None or view is None:
+            continue
+        days, la, lb = row["_days"], row["_la"], row["_lb"]
+        entry = date.fromisoformat(event["entry_date"])
+        if entry not in days:
+            continue
+        i = days.index(entry)
+        held = len(days) - 1 - i
+        z = float(view["z"])
+        back = abs(z) < RV_EXIT_Z or event["side"] * z > 0
+        if back or held >= max_sessions:
+            move = float((la[-1] - lb[-1]) - (la[i] - lb[i]))
+            event.update({"status": "back_to_normal" if back else "timed_out", "exit_date": days[-1].isoformat(),
+                          "exit_z": round(z, 3), "sessions": held,
+                          "return": round(event["side"] * move / 2 - 2 * COST_PER_SIDE, 6)})
+    open_pairs = {e["pair"] for e in ledger if e["status"] == "open"}
+    seen = {(e["pair"], e["entry_date"]) for e in ledger}
+    added = 0
+    for key, view in views.items():
+        row = by_key.get(key)
+        if not view or not view.get("signal") or row is None or key in open_pairs:
+            continue
+        day = row["_days"][-1].isoformat()
+        if (key, day) in seen:
+            continue
+        ledger.append({"pair": key, "entry_date": day, "issued_at": now.isoformat(), "entry_z": view["z"],
+                       "side": view["side"], "status": "open", "rule": "relative_value"})
+        added += 1
+    return added
+
+
+def rv_summary(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    done = [e for e in events if e.get("status") in ("back_to_normal", "timed_out")]
+    out: dict[str, Any] = {"trades": len(events), "closed": len(done), "open": sum(e.get("status") == "open" for e in events)}
+    if done:
+        r = np.array([float(e["return"]) for e in done])
+        out.update(avg_return=round(float(r.mean()), 5), win_rate=round(float((r > 0).mean()), 3))
+    return out
+
+
 def run(series: dict, ledger: list[dict], now: datetime, *,
-        long_run: Optional[dict] = None) -> tuple[dict, list[dict]]:
-    """``long_run`` is pair_history.contexts(): each pair's place in its long history and its stories."""
+        long_run: Optional[dict] = None, rv_ledger: Optional[list[dict]] = None) -> tuple[dict, list[dict]]:
+    """``long_run`` is pair_history.contexts(): each pair's place in its long history and its stories.
+    ``rv_ledger`` (changed in place) records the relative-value trades the fund follows."""
     rows = [track_pair(pair, series) for pair in PAIRS]
     long_pairs = (long_run or {}).get("pairs") or {}
     tides = {row["key"]: tide(row.get("z"), long_pairs[row["key"]]) for row in rows if row["key"] in long_pairs}
     update_ledger(ledger, rows, now, tides=tides)
+    rv_ledger = rv_ledger if rv_ledger is not None else []
+    views = {}
+    if long_run:
+        for pair in PAIRS:
+            if pair["key"] in long_pairs:
+                mine = [e for e in rv_ledger if e["pair"] == pair["key"]]
+                views[pair["key"]] = relative_value(pair, long_pairs[pair["key"]], rv_summary(mine))
+        update_rv_ledger(rv_ledger, rows, views, now)
     live = {}
     for pair in PAIRS:
         events = [e for e in ledger if e["pair"] == pair["key"]]
@@ -663,11 +809,16 @@ def run(series: dict, ledger: list[dict], now: datetime, *,
             row["expected"] = expected_return(row["key"], row.get("replay") or {}, live[row["key"]])
         if row["key"] in long_pairs:
             row["long_run"] = {**long_pairs[row["key"]], "tide": tide(row.get("z"), long_pairs[row["key"]])}
+        if views.get(row["key"]):
+            mine = [e for e in rv_ledger if e["pair"] == row["key"]]
+            row["relative_value"] = {**views[row["key"]], "live": rv_summary(mine),
+                                     "open_trade": next(({k: e.get(k) for k in ("entry_date", "entry_z", "side")}
+                                                         for e in mine if e["status"] == "open"), None)}
     dated = [row["date"] for row in public if row.get("date")]
     payload = {
         "generated_at": now.astimezone(timezone.utc).isoformat(),
         "data_through": max(dated) if dated else None,
-        "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee)",
+        "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee); long view from IMF monthly metals (FRED) and the World Bank Pink Sheet (gold, silver, platinum; CC BY 4.0)",
         "rule": {
             "hedge_window": HEDGE_WINDOW, "z_window": Z_WINDOW, "entry_z": ENTRY_Z, "exit_z": EXIT_Z,
             "ratio_confirm_z": RATIO_CONFIRM_Z, "tide_z": TIDE_Z,
@@ -679,6 +830,15 @@ def run(series: dict, ledger: list[dict], now: datetime, *,
             "driver_record": (long_run or {}).get("driver_record") or {},
             "tide": {"away_size": TIDE_AWAY_SIZE, "backtest": TIDE_RECORD,
                      "live": {k: summarize([e for e in ledger if e.get("tide") == k]) for k in ("toward", "away")}},
+        } if long_run else None,
+        "relative_value": {
+            "rule": {"window_months": 120, "entry_z": RV_ENTRY_Z, "exit_z": RV_EXIT_Z, "max_months": RV_MAX_MONTHS,
+                     "max_sessions": RV_MAX_MONTHS * RV_SESSIONS_PER_MONTH, "cost_per_side": COST_PER_SIDE,
+                     "lasting_causes": "held back"},
+            "backtest": RV_RECORD,
+            "live": rv_summary(rv_ledger),
+            "recent": [{k: e.get(k) for k in ("pair", "entry_date", "entry_z", "side", "status", "exit_date", "sessions", "return")}
+                       for e in sorted(rv_ledger, key=lambda e: e["entry_date"])[-30:]],
         } if long_run else None,
         "pairs": public,
         "track_record": {
