@@ -10,8 +10,8 @@
       "blend_model": -3.4501
     },
     "unrealized": {
-      "agent_transfer": -352.1182,
-      "blend_model": 17.1196,
+      "agent_transfer": -372.8644,
+      "blend_model": -16.3633,
       "event_model": 72.5149,
       "pairs_model": -22.4404,
       "put_premium": 60.553
@@ -19,7 +19,7 @@
   },
   "by_asset_class": {
     "commodity": 481.7839,
-    "event": 3776.8998,
+    "event": 3722.6708,
     "option": 677.8703
   },
   "cash_usd": 4836.4248,
@@ -931,28 +931,95 @@
     {
       "nav_usd": 9772.9787,
       "ts": "2026-11-22T18:01:23.016198+00:00"
+    },
+    {
+      "nav_usd": 9718.7497,
+      "ts": "2026-11-22T19:53:58.224290+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [],
+    "passed": [
+      {
+        "instrument": "mcx:ALUMINI",
+        "label": "Aluminium (MCX ALUMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:COPPER",
+        "label": "Copper (MCX COPPER)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
+        "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
+        "reason": "NSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+      }
+    ],
     "seeded": null,
-    "signals": 3,
-    "skipped": [],
-    "traded": false,
-    "window": "23:31 IST is outside the trading hours"
+    "signals": 0,
+    "skipped": [
+      {
+        "instrument": "kalshi:KXNFLRETIRE-MEVANS5-2728",
+        "label": "Will Mike Evans announce his retirement before the 2027-28 NFL season?",
+        "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
+      },
+      {
+        "instrument": "polymarket:friedrich-merz-out-as-chancellor-of-germany-before-2027",
+        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
+        "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
+      },
+      {
+        "instrument": "mcx:ZINCMINI",
+        "label": "Zinc (MCX ZINCMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:LEADMINI",
+        "label": "Lead (MCX LEADMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      }
+    ],
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-22T18:01:23.016198+00:00",
+  "generated_at": "2026-11-22T19:53:58.224290+00:00",
   "guard": {
     "board": 31,
     "checked": 31,
     "checker": "Open-Jev 2B (Qwen3.5-2B base)",
     "days_recorded": 14,
-    "dropped": [],
-    "flags": [],
+    "dropped": [
+      {
+        "forecast": 0.01,
+        "forecasted_at": "2026-11-22T17:26:37.353052+00:00",
+        "label": "Will Mike Evans announce his retirement before the 2027-28 NFL season?",
+        "rationale_yes": 0.8116
+      },
+      {
+        "forecast": 0.04,
+        "forecasted_at": "2026-11-22T17:28:19.811226+00:00",
+        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
+        "rationale_yes": 0.9246
+      }
+    ],
+    "flags": [
+      {
+        "forecast": 0.040000000000000036,
+        "forecasted_at": "2026-11-22T17:28:19.811226+00:00",
+        "label": "friedrich-merz-out-as-chancellor-of-germany-before-2027",
+        "rationale_yes": 0.9246
+      },
+      {
+        "forecast": 0.010000000000000009,
+        "forecasted_at": "2026-11-22T17:26:37.353052+00:00",
+        "label": "KXNFLRETIRE-MEVANS5-2728",
+        "rationale_yes": 0.8116
+      }
+    ],
     "kind": "checker",
-    "markets": 34,
+    "markets": 68,
     "mode": "live",
     "unchecked": 0
   },
@@ -1145,7 +1212,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9772.9787,
+  "nav_usd": 9718.7497,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1293,15 +1360,15 @@
       "instrument_id": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
       "kind": "binary",
       "label": "Bill Belichick out before Dec 1, 2026",
-      "mark": 0.11,
+      "mark": 0.06,
       "marked": true,
       "opened_at": "2026-11-20T20:01:30.430284+00:00",
       "pair_key": null,
-      "pnl_usd": 20.0897,
+      "pnl_usd": -13.3932,
       "quantity": 669.6579364470109,
       "side": "YES",
       "underlying": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
-      "value_usd": 73.6624,
+      "value_usd": 40.1795,
       "venue": "kalshi"
     },
     {
@@ -1440,15 +1507,15 @@
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
       "kind": "binary",
       "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "mark": 0.91,
+      "mark": 0.9,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -36.4435,
+      "pnl_usd": -48.5913,
       "quantity": 1214.783211,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 1105.4527,
+      "value_usd": 1093.3049,
       "venue": "polymarket"
     },
     {
@@ -1461,15 +1528,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06999999999999995,
+      "mark": 0.06899999999999995,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 103.1798,
+      "pnl_usd": 94.5815,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 601.8818,
+      "value_usd": 593.2835,
       "venue": "polymarket"
     },
     {
@@ -1569,7 +1636,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -2.27,
+  "return_pct": -2.813,
   "risk": {
     "alerts": [
       {
@@ -1597,37 +1664,37 @@
       {
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.1131
+        "worst_case_share": 0.1125
       },
       {
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.0616
+        "worst_case_share": 0.061
       },
       {
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "side": "BULL",
-        "worst_case_share": 0.0462
+        "worst_case_share": 0.0464
       },
       {
         "label": "US announces end of Iranian blockade by November 30, 2026?",
         "side": "NO",
-        "worst_case_share": 0.0442
+        "worst_case_share": 0.0444
       },
       {
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "side": "NO",
-        "worst_case_share": 0.0394
+        "worst_case_share": 0.0396
       },
       {
         "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
         "side": "YES",
-        "worst_case_share": 0.039
+        "worst_case_share": 0.0392
       },
       {
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
         "side": "NO",
-        "worst_case_share": 0.0382
+        "worst_case_share": 0.0384
       }
     ],
     "positions": [
@@ -1636,20 +1703,20 @@
         "entry_worst_case_usd": 1141.9,
         "kind": "binary",
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-        "pnl_usd": -36.44,
+        "pnl_usd": -48.59,
         "side": "NO",
-        "worst_case_share": 0.1131,
-        "worst_case_usd": 1105.45
+        "worst_case_share": 0.1125,
+        "worst_case_usd": 1093.3
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 498.7,
         "kind": "binary",
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "pnl_usd": 103.18,
+        "pnl_usd": 94.58,
         "side": "NO",
-        "worst_case_share": 0.0616,
-        "worst_case_usd": 601.88
+        "worst_case_share": 0.061,
+        "worst_case_usd": 593.28
       },
       {
         "alerts": [],
@@ -1658,7 +1725,7 @@
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "pnl_usd": 34.34,
         "side": "BULL",
-        "worst_case_share": 0.0462,
+        "worst_case_share": 0.0464,
         "worst_case_usd": 451.27
       },
       {
@@ -1668,7 +1735,7 @@
         "label": "US announces end of Iranian blockade by November 30, 2026?",
         "pnl_usd": 68.24,
         "side": "NO",
-        "worst_case_share": 0.0442,
+        "worst_case_share": 0.0444,
         "worst_case_usd": 431.9
       },
       {
@@ -1678,7 +1745,7 @@
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "pnl_usd": 4.27,
         "side": "NO",
-        "worst_case_share": 0.0394,
+        "worst_case_share": 0.0396,
         "worst_case_usd": 384.6
       },
       {
@@ -1688,7 +1755,7 @@
         "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
         "pnl_usd": 24.3,
         "side": "YES",
-        "worst_case_share": 0.039,
+        "worst_case_share": 0.0392,
         "worst_case_usd": 380.7
       },
       {
@@ -1698,7 +1765,7 @@
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
         "pnl_usd": 19.05,
         "side": "NO",
-        "worst_case_share": 0.0382,
+        "worst_case_share": 0.0384,
         "worst_case_usd": 373.38
       },
       {
@@ -1708,7 +1775,7 @@
         "label": "Strait of Hormuz traffic returns to normal by December 31?",
         "pnl_usd": 16.96,
         "side": "NO",
-        "worst_case_share": 0.0285,
+        "worst_case_share": 0.0287,
         "worst_case_usd": 278.53
       },
       {
@@ -1718,7 +1785,7 @@
         "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
         "pnl_usd": 26.21,
         "side": "BULL",
-        "worst_case_share": 0.0232,
+        "worst_case_share": 0.0233,
         "worst_case_usd": 226.6
       },
       {
@@ -1731,7 +1798,7 @@
         "label": "Will any AI lab solve a Millennium Prize Problem before Dec 1, 2026?",
         "pnl_usd": -479.56,
         "side": "NO",
-        "worst_case_share": 0.0108,
+        "worst_case_share": 0.0109,
         "worst_case_usd": 105.88
       },
       {
@@ -1739,10 +1806,10 @@
         "entry_worst_case_usd": 53.57,
         "kind": "binary",
         "label": "Bill Belichick out before Dec 1, 2026",
-        "pnl_usd": 20.09,
+        "pnl_usd": -13.39,
         "side": "YES",
-        "worst_case_share": 0.0075,
-        "worst_case_usd": 73.66
+        "worst_case_share": 0.0041,
+        "worst_case_usd": 40.18
       },
       {
         "alerts": [],
@@ -1785,8 +1852,8 @@
         "worst_case_usd": 18.8
       }
     ],
-    "worst_case_total_share": 0.4632,
-    "worst_case_total_usd": 4527.02
+    "worst_case_total_share": 0.4602,
+    "worst_case_total_usd": 4472.79
   },
   "scorecard": {
     "retired_records": [
