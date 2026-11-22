@@ -10,8 +10,8 @@
       "blend_model": -3.4501
     },
     "unrealized": {
-      "agent_transfer": -372.0995,
-      "blend_model": 26.03,
+      "agent_transfer": -384.5557,
+      "blend_model": 22.5649,
       "event_model": 71.617,
       "pairs_model": -22.4459,
       "put_premium": 60.7174
@@ -19,7 +19,7 @@
   },
   "by_asset_class": {
     "commodity": 481.7785,
-    "event": 3764.931,
+    "event": 3749.0096,
     "option": 678.0346
   },
   "cash_usd": 4836.4248,
@@ -903,25 +903,39 @@
     {
       "nav_usd": 9761.1689,
       "ts": "2026-11-22T06:01:23.787510+00:00"
+    },
+    {
+      "nav_usd": 9745.2475,
+      "ts": "2026-11-22T08:01:20.839934+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 2,
+    "signals": 0,
     "skipped": [
       {
         "pair": "copper-zinc",
         "reason": "stretched at z=-3.03 but its expected return is 0.0% per signal",
         "z": -3.031
+      },
+      {
+        "instrument": "mcx:COPPER",
+        "label": "Copper (MCX COPPER)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:ALUMINI",
+        "label": "Aluminium (MCX ALUMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
-    "traded": false,
-    "window": "11:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-22T06:01:23.787510+00:00",
+  "generated_at": "2026-11-22T08:01:20.839934+00:00",
   "guard": {
     "board": 31,
     "checked": 31,
@@ -1123,7 +1137,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9761.1689,
+  "nav_usd": 9745.2475,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1219,15 +1233,15 @@
       "instrument_id": "kalshi:KXAIMILLENNIUM-28-26DEC01",
       "kind": "binary",
       "label": "Will any AI lab solve a Millennium Prize Problem before Dec 1, 2026?",
-      "mark": 0.15,
+      "mark": 0.13,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -492.0199,
+      "pnl_usd": -504.4761,
       "quantity": 622.81,
       "side": "NO",
       "underlying": "kalshi:KXAIMILLENNIUM-28-26DEC01",
-      "value_usd": 93.4215,
+      "value_usd": 80.9653,
       "venue": "kalshi"
     },
     {
@@ -1387,15 +1401,15 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.188,
+      "mark": 0.167,
       "marked": true,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": 5.9403,
+      "pnl_usd": 2.4751,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 31.0215,
+      "value_usd": 27.5563,
       "venue": "polymarket"
     },
     {
@@ -1537,13 +1551,13 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -2.388,
+  "return_pct": -2.548,
   "risk": {
     "alerts": [
       {
         "alerts": [
-          "losing 5.0% of the fund",
-          "lost 84% of its stake"
+          "losing 5.2% of the fund",
+          "lost 86% of its stake"
         ],
         "label": "Will any AI lab solve a Millennium Prize Problem before Dec 1, 2026?",
         "side": "NO"
@@ -1565,17 +1579,17 @@
       {
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.1133
+        "worst_case_share": 0.1134
       },
       {
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.0617
+        "worst_case_share": 0.0618
       },
       {
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "side": "BULL",
-        "worst_case_share": 0.0462
+        "worst_case_share": 0.0463
       },
       {
         "label": "US announces end of Iranian blockade by November 30, 2026?",
@@ -1585,7 +1599,7 @@
       {
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "side": "NO",
-        "worst_case_share": 0.0394
+        "worst_case_share": 0.0395
       },
       {
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
@@ -1606,7 +1620,7 @@
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "pnl_usd": -36.44,
         "side": "NO",
-        "worst_case_share": 0.1133,
+        "worst_case_share": 0.1134,
         "worst_case_usd": 1105.45
       },
       {
@@ -1616,7 +1630,7 @@
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
         "pnl_usd": 103.18,
         "side": "NO",
-        "worst_case_share": 0.0617,
+        "worst_case_share": 0.0618,
         "worst_case_usd": 601.88
       },
       {
@@ -1626,7 +1640,7 @@
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "pnl_usd": 34.45,
         "side": "BULL",
-        "worst_case_share": 0.0462,
+        "worst_case_share": 0.0463,
         "worst_case_usd": 451.38
       },
       {
@@ -1646,7 +1660,7 @@
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "pnl_usd": 4.27,
         "side": "NO",
-        "worst_case_share": 0.0394,
+        "worst_case_share": 0.0395,
         "worst_case_usd": 384.6
       },
       {
@@ -1686,21 +1700,21 @@
         "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
         "pnl_usd": 26.27,
         "side": "BULL",
-        "worst_case_share": 0.0232,
+        "worst_case_share": 0.0233,
         "worst_case_usd": 226.65
       },
       {
         "alerts": [
-          "losing 5.0% of the fund",
-          "lost 84% of its stake"
+          "losing 5.2% of the fund",
+          "lost 86% of its stake"
         ],
         "entry_worst_case_usd": 585.44,
         "kind": "binary",
         "label": "Will any AI lab solve a Millennium Prize Problem before Dec 1, 2026?",
-        "pnl_usd": -492.02,
+        "pnl_usd": -504.48,
         "side": "NO",
-        "worst_case_share": 0.0096,
-        "worst_case_usd": 93.42
+        "worst_case_share": 0.0083,
+        "worst_case_usd": 80.97
       },
       {
         "alerts": [],
@@ -1709,7 +1723,7 @@
         "label": "Bill Belichick out before Dec 1, 2026",
         "pnl_usd": 20.09,
         "side": "YES",
-        "worst_case_share": 0.0075,
+        "worst_case_share": 0.0076,
         "worst_case_usd": 73.66
       },
       {
@@ -1737,10 +1751,10 @@
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": 5.94,
+        "pnl_usd": 2.48,
         "side": "YES",
-        "worst_case_share": 0.0032,
-        "worst_case_usd": 31.02
+        "worst_case_share": 0.0028,
+        "worst_case_usd": 27.56
       },
       {
         "alerts": [],
@@ -1753,8 +1767,8 @@
         "worst_case_usd": 18.8
       }
     ],
-    "worst_case_total_share": 0.4626,
-    "worst_case_total_usd": 4515.21
+    "worst_case_total_share": 0.4617,
+    "worst_case_total_usd": 4499.3
   },
   "scorecard": {
     "retired_records": [
