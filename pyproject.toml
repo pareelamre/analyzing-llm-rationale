@@ -46,6 +46,8 @@ dev = [
 reports = [
   "pypdf>=5.0.0",
   "pypdfium2>=4.30",
+  # stream_call talks to the local model with requests (missing on 2026-11-19: SetupError).
+  "requests>=2.31",
 ]
 analysis = [
   "matplotlib>=3.8.0",
