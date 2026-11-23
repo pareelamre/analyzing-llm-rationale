@@ -193,6 +193,20 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(sorted(o.instrument["id"] for o in out["orders"]), ["mcx:ALUMINI", "mcx:COPPER"])
         self.assertTrue(all(o.purpose == "exit" for o in out["orders"]))
 
+    def test_the_end_of_day_check_exits_but_opens_nothing(self):
+        held = [{"instrument_id": "mcx:COPPER", "side": "LONG", "kind": "linear", "quantity": 1, "mark": 900.0,
+                 "pair_key": "copper-aluminium", "attribution": {"pairs_model": 1.0}},
+                {"instrument_id": "mcx:ALUMINI", "side": "SHORT", "kind": "linear", "quantity": 1, "mark": 250.0,
+                 "pair_key": "copper-aluminium", "attribution": {"pairs_model": 1.0}}]
+        signals, _ = orch.event_signals([_row("hamas", 0.02, 0.20, 0.22)], NOW)
+        out = orch.plan(_snapshot(positions=held), signals, {}, {}, held_pairs={"copper-aluminium": {"sessions": 3}},
+                        pair_rows={"copper-aluminium": {"z": 0.3}}, entries=False)
+        self.assertEqual(sorted((o.instrument["id"], o.purpose) for o in out["orders"]),
+                         [("mcx:ALUMINI", "exit"), ("mcx:COPPER", "exit")])
+        self.assertIn("end-of-day check", out["passed"][0]["reason"])
+        # The same signal opens at the open.
+        self.assertEqual([o.purpose for o in orch.plan(_snapshot(), signals, {}, {})["orders"]], ["view"])
+
     def test_concentration_beyond_the_underlying_limit_is_hedged_on_another_venue(self):
         perp = {"id": "kalshi_perp:KXGOLDPERP", "label": "Gold (Kalshi perp)", "multiplier": 1.0,
                 "asset_class": "commodity", "underlying": "gold"}

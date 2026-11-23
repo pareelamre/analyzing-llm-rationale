@@ -1807,9 +1807,19 @@ open, and only on a price from the session under way:
 - **Each blocked trade is listed** under "Passed on this cycle", with the venue's
   hours.
 
-**What each run now does.** At 01:30 IST, after the nightly forecast and the
-rationale check, the fund trades prediction markets and any open Kalshi perps.
-At 13:30 IST it also trades NSE options and MCX pairs at that session's prices.
+**What each run now does (owner, 2026-11-23: "place it at the start of the
+trading window and one check at the end of the trading window").** The day has
+three slots, each one trading cycle:
+
+| Slot | IST | Usual run | What it does |
+| --- | --- | --- | --- |
+| Night | 01:00-02:59 | 01:30 | After the nightly forecast and the rationale check: prediction markets and any open Kalshi perps |
+| Open | 09:00-10:59 | 09:30 | Everything, NSE options and MCX pairs at the first prices of the session |
+| End-of-day check | 14:00-15:59 | 14:27-15:30 | Exits, owner trims and hedges only; new positions wait for the next open |
+
+Until 2026-11-23 the exchange trades waited for 13:30 IST, four hours into the
+session. The slots are at least four hours apart, so a three-hour gap between
+trading cycles keeps each to one run (it was ten hours with two runs a day).
 Pair signals still come from the last daily close, so a signal from one close
 now fills at the next session's live price, not at that close.
 

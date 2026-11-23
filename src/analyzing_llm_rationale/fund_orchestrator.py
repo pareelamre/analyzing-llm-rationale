@@ -469,7 +469,7 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
          held_pairs: Mapping[str, Mapping[str, Any]] = (), pair_rows: Mapping[str, Mapping[str, Any]] = (),
          option_values: Mapping[str, float] = (), rates: Mapping[str, float] = (),
          exit_z: float = 0.5, max_hold: int = 20, rv_rule: Optional[Mapping[str, Any]] = None,
-         owner_trims: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+         owner_trims: Sequence[Mapping[str, Any]] = (), entries: bool = True) -> dict[str, Any]:
     """Orders for one cycle from the fund's nav() ``snapshot``, ``signals`` and ``quotes``.
 
     ``hedges`` maps an underlying to the instrument that offsets it. ``forecasts`` maps an event
@@ -480,7 +480,9 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
     each pair's latest tracker row; ``rv_rule`` is the tracker's relative-value rule, which then
     decides pair exits (pair_exit_reason). ``option_values`` is the index
     model's value of each held option structure, per unit; ``rates`` gives units of each
-    currency per USD, so a rupee contract is sized in rupees.
+    currency per USD, so a rupee contract is sized in rupees. ``entries=False`` is the
+    end-of-day check: exits, owner trims and hedges only, and every signal not already held
+    is listed as passed.
     """
     nav = float(snapshot["nav_usd"])
     cash = float(snapshot["cash_usd"])
@@ -578,6 +580,10 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
     for s in sorted(signals, key=lambda s: -(s.edge * s.trust)):
         iid = s.instrument["id"]
         if (iid, s.side) in held:
+            continue
+        if not entries:
+            passed.append({"instrument": iid, "label": s.instrument.get("label"),
+                           "reason": "end-of-day check: exits and risk only; new positions wait for the next open"})
             continue
         other = {"YES": "NO", "NO": "YES"}.get(s.side)
         if other and (iid, other) in held:
