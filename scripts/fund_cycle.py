@@ -7,6 +7,12 @@ last trading cycle (or with FUND_ANY_HOUR=1), and each venue only while it is op
 price from its session under way (fund_hours: NSE and BSE derivatives 09:15-15:30 IST, MCX
 09:00-23:30/23:55 IST, on their trading days; Kalshi and Polymarket at any hour).
 
+Owner, 2026-11-23: trade at the start of the exchanges' trading window and check once at its
+end. So the day has three slots: the night run (01:00-02:59 IST, after the nightly forecast:
+prediction markets and Kalshi perps), the open (09:00-10:59 IST: everything, NSE and MCX at
+that session's first prices), and the end-of-day check (FUND_CHECK_HOURS_IST, 14:00-15:59 IST:
+exits, owner trims and hedges only, no new positions).
+
 The first run opens the fund from the on-device agent's account (FUND_SEED_AGENT_STORE):
 its cash, and each open position at the agent's own entry price, so the fund starts at the
 same $10,000 the agent did and the agent's track continues inside the fund.
@@ -100,8 +106,11 @@ FX_URLS = (
 )
 SEED_AGENT_ID = "qwen3.5-9b-selfhosted"
 UNIVERSE_MAX_AGE_DAYS = int(os.environ.get("FUND_UNIVERSE_MAX_AGE_DAYS", "30"))
-RUN_HOURS = {int(h) for h in os.environ.get("FUND_RUN_HOURS_IST", "1,2,13,14").split(",") if h.strip()}
-MIN_HOURS_BETWEEN = float(os.environ.get("FUND_MIN_HOURS_BETWEEN_CYCLES", "10"))
+RUN_HOURS = {int(h) for h in os.environ.get("FUND_RUN_HOURS_IST", "1,2,9,10,14,15").split(",") if h.strip()}
+#: The end-of-day check's hours: exits and risk only (plan(entries=False)).
+CHECK_HOURS = {int(h) for h in os.environ.get("FUND_CHECK_HOURS_IST", "14,15").split(",") if h.strip()}
+#: Keeps each slot to one trading cycle; the slots themselves are at least four hours apart.
+MIN_HOURS_BETWEEN = float(os.environ.get("FUND_MIN_HOURS_BETWEEN_CYCLES", "3"))
 RECENT_TRADES = 40
 
 
@@ -234,7 +243,14 @@ def trading_window(conn: sqlite3.Connection, now: datetime) -> tuple[bool, str]:
     last = _last_cycle(conn)
     if last and (now - last).total_seconds() < MIN_HOURS_BETWEEN * 3600:
         return False, f"last trading cycle {last:%H:%M} UTC, under {MIN_HOURS_BETWEEN:g} hours ago"
+    if is_check(now):
+        return True, "end-of-day check: exits and risk only, no new positions"
     return True, "in window"
+
+
+def is_check(now: datetime) -> bool:
+    """Whether this run is the end-of-day check, which opens no new positions."""
+    return os.environ.get("FUND_ANY_HOUR") != "1" and now.astimezone(IST).hour in CHECK_HOURS
 
 
 def settle_expired(conn: sqlite3.Connection, specs: dict[str, dict], now: datetime, stamp: str,
@@ -485,7 +501,7 @@ def run(now: Optional[datetime] = None) -> dict:
         signals, closed = fh.gate(signals, quotes, now, calendar)
         option_skips += closed
         result = orch.plan(snapshot, signals, quotes, hedges, forecasts=forecasts, held_pairs=held_pairs,
-                           pair_rows=pair_rows, rates=rates, rv_rule=rv_rule,
+                           pair_rows=pair_rows, rates=rates, rv_rule=rv_rule, entries=not is_check(now),
                            option_values={k: v for k, v in options["values"].items() if k not in sleeve_ids},
                            owner_trims=_load_json(OWNER_ACTIONS_PATH).get("trims") or [])
         # Exits and hedges wait for their venue too; a pair's legs go or stay together.

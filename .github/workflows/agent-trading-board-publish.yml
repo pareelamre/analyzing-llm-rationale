@@ -154,8 +154,12 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           FUND_STORE_PATH: tmp/fund/store.sqlite
           FUND_SEED_AGENT_STORE: tmp/agent-trading-board/qwen3.5-9b-selfhosted/store.sqlite
-          FUND_RUN_HOURS_IST: "1,2,13,14"
-          FUND_MIN_HOURS_BETWEEN_CYCLES: "10"
+          # Owner, 2026-11-23: trade at the exchanges' open, check once at the end of the
+          # day. Night 01-02 IST (prediction markets), open 09-10 IST (everything), end-of-day
+          # check 14-15 IST (exits and risk only). The VPS dispatches at :30 IST on odd hours.
+          FUND_RUN_HOURS_IST: "1,2,9,10,14,15"
+          FUND_CHECK_HOURS_IST: "14,15"
+          FUND_MIN_HOURS_BETWEEN_CYCLES: "3"
           FUND_LLM_URL: ${{ vars.SELF_HOSTED_LLM_URL }}
           SELF_HOSTED_LLM_API_KEY: ${{ secrets.SELF_HOSTED_LLM_API_KEY }}
           # Optional, read-only Upstox Analytics Token: live option order books. Without it the

@@ -117,7 +117,32 @@ class FundCycleTests(unittest.TestCase):
                             now="2026-11-09T20:00:00+00:00")
             ok, why = cycle.trading_window(fund, datetime(2026, 11, 9, 20, 45, tzinfo=timezone.utc))
             self.assertFalse(ok)
-            self.assertIn("under 10 hours ago", why)
+            self.assertIn("under 3 hours ago", why)
+
+    def test_the_day_trades_at_the_open_and_checks_once_at_the_end(self):
+        # Owner, 2026-11-23: trade at the start of the trading window, one check at its end.
+        fund = sqlite3.connect(":memory:")
+        fund_ledger.ensure_schema(fund)
+        utc = lambda h, m: datetime(2026, 11, 24, h, m, tzinfo=timezone.utc)  # noqa: E731
+        with mock.patch.dict(os.environ, {"FUND_ANY_HOUR": ""}):
+            # 04:00 UTC is 09:30 IST: the open trades everything.
+            ok, why = cycle.trading_window(fund, utc(4, 0))
+            self.assertEqual((ok, why, cycle.is_check(utc(4, 0))), (True, "in window", False))
+            # 08:00 UTC is 13:30 IST, no longer a trading slot.
+            self.assertFalse(cycle.trading_window(fund, utc(8, 0))[0])
+            # 09:27 UTC is 14:57 IST: the end-of-day check, exits and risk only.
+            ok, why = cycle.trading_window(fund, utc(9, 27))
+            self.assertTrue(ok and cycle.is_check(utc(9, 27)))
+            self.assertIn("end-of-day check", why)
+            # One trading cycle per slot: a trade at the open blocks a second run in that slot,
+            # not the end-of-day check.
+            fund_ledger.open_fund(fund, cycle.FUND_ID, 100.0)
+            fund_ledger.buy(fund, cycle.FUND_ID, {"id": "kalshi:X"}, "YES", 1, 0.5, cycle_id="fund-20261124T0400",
+                            now="2026-11-24T04:00:00+00:00")
+            self.assertFalse(cycle.trading_window(fund, utc(4, 57))[0])
+            self.assertTrue(cycle.trading_window(fund, utc(8, 57))[0])
+        with mock.patch.dict(os.environ, {"FUND_ANY_HOUR": "1"}):
+            self.assertFalse(cycle.is_check(utc(9, 27)))
 
     def test_an_expired_structure_is_settled_at_the_index_close_without_blocking_trading(self):
         from analyzing_llm_rationale import fund_options as fo
