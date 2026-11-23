@@ -1,5 +1,5 @@
 {
-  "about": "Owner instructions the fund carries out at its next trading cycle while the venue is open (scripts/fund_cycle.py, fund_orchestrator.plan owner_trims). A trim sells part of a held position so its worst case (fund_risk) is at most max_worst_case_share of the fund; it repeats only if the position grows 10% past that again.",
+  "about": "Owner instructions the fund carries out at its next trading cycle while the venue is open (scripts/fund_cycle.py, fund_orchestrator.plan owner_trims). A trim sells part of a held position so its worst case (fund_risk) is at most max_worst_case_share of the fund; it repeats only if the position grows 10% past that again. A hold keeps a held pair open: the pair rules (relative value, holding limits) do not close it while it is listed; remove the entry to hand it back to the rules.",
   "trims": [
     {
       "id": "trim-banknifty-put-spread-2026-11-22",
@@ -8,6 +8,14 @@
       "max_worst_case_share": 0.03,
       "requested": "2026-11-22",
       "reason": "Owner: bring the Nifty Bank put credit spread inside the 3% risk limit (it could lose 4.6% of the fund)."
+    }
+  ],
+  "holds": [
+    {
+      "id": "hold-copper-aluminium-2026-11-23",
+      "pair_key": "copper-aluminium",
+      "requested": "2026-11-23",
+      "reason": "Owner: keep the copper / aluminium pair (long copper, short aluminium, opened 2026-11-16) open; the owner expects the ratio to swing back."
     }
   ]
 }

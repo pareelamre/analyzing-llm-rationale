@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import sys
 import unittest
 import zipfile
@@ -259,6 +260,25 @@ class FundTests(unittest.TestCase):
                         rv_rule=TRACKER["relative_value"]["rule"])
         self.assertEqual(sorted(o.instrument["id"] for o in out["orders"]), ["mcx:ALUMINI", "mcx:COPPER"])
         self.assertTrue(all(o.purpose == "exit" for o in out["orders"]))
+
+    def test_an_owner_hold_keeps_the_pair_open(self):
+        held = [{"instrument_id": "mcx:COPPER", "side": "LONG", "kind": "linear", "quantity": 1, "mark": 900.0,
+                 "pair_key": "copper-aluminium", "attribution": {"pairs_model": 1.0}},
+                {"instrument_id": "mcx:ALUMINI", "side": "SHORT", "kind": "linear", "quantity": 1, "mark": 250.0,
+                 "pair_key": "copper-aluminium", "attribution": {"pairs_model": 1.0}}]
+        snapshot = {"nav_usd": 10_000.0, "cash_usd": 6_000.0, "positions": held, "by_asset_class": {},
+                    "net_exposure_by_underlying": {}}
+        out = orch.plan(snapshot, [], {}, {}, held_pairs={"copper-aluminium": {"sessions": 4, "side": 1}},
+                        pair_rows={"copper-aluminium": _rv_row("copper-aluminium", 1.19, None, signal=False)},
+                        rv_rule=TRACKER["relative_value"]["rule"],
+                        owner_holds=[{"id": "hold-1", "pair_key": "copper-aluminium"}], entries=False)
+        self.assertEqual(out["orders"], [])
+        [note] = out["passed"]
+        self.assertIn("owner hold hold-1: kept open although this trade needs", note["reason"])
+
+    def test_the_owner_file_holds_copper_aluminium(self):
+        actions = json.loads((Path(__file__).resolve().parents[1] / "configs" / "fund_owner_actions.json").read_text())
+        self.assertEqual([h["pair_key"] for h in actions["holds"]], ["copper-aluminium"])
 
     def test_the_cycle_reads_the_held_side_on_the_ratio(self):
         universe = [{"key": "copper-aluminium", "a": {"id": "mcx:COPPER"}, "b": {"id": "mcx:ALUMINI"}}]

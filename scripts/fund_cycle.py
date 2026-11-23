@@ -503,7 +503,8 @@ def run(now: Optional[datetime] = None) -> dict:
         result = orch.plan(snapshot, signals, quotes, hedges, forecasts=forecasts, held_pairs=held_pairs,
                            pair_rows=pair_rows, rates=rates, rv_rule=rv_rule, entries=not is_check(now),
                            option_values={k: v for k, v in options["values"].items() if k not in sleeve_ids},
-                           owner_trims=_load_json(OWNER_ACTIONS_PATH).get("trims") or [])
+                           owner_trims=_load_json(OWNER_ACTIONS_PATH).get("trims") or [],
+                           owner_holds=_load_json(OWNER_ACTIONS_PATH).get("holds") or [])
         # Exits and hedges wait for their venue too; a pair's legs go or stay together.
         orders, closed = fh.gate(result["orders"], quotes, now, calendar)
         passed = result["passed"] + closed

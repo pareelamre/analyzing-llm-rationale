@@ -469,7 +469,8 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
          held_pairs: Mapping[str, Mapping[str, Any]] = (), pair_rows: Mapping[str, Mapping[str, Any]] = (),
          option_values: Mapping[str, float] = (), rates: Mapping[str, float] = (),
          exit_z: float = 0.5, max_hold: int = 20, rv_rule: Optional[Mapping[str, Any]] = None,
-         owner_trims: Sequence[Mapping[str, Any]] = (), entries: bool = True) -> dict[str, Any]:
+         owner_trims: Sequence[Mapping[str, Any]] = (), owner_holds: Sequence[Mapping[str, Any]] = (),
+         entries: bool = True) -> dict[str, Any]:
     """Orders for one cycle from the fund's nav() ``snapshot``, ``signals`` and ``quotes``.
 
     ``hedges`` maps an underlying to the instrument that offsets it. ``forecasts`` maps an event
@@ -478,7 +479,9 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
     not looked at again are kept. ``held_pairs`` maps a held pair to the sessions it has been
     held and the side it holds on the price ratio (+1: first leg long), and ``pair_rows`` gives
     each pair's latest tracker row; ``rv_rule`` is the tracker's relative-value rule, which then
-    decides pair exits (pair_exit_reason). ``option_values`` is the index
+    decides pair exits (pair_exit_reason); a pair in ``owner_holds`` (the owner's "keep it
+    open", configs/fund_owner_actions.json) is never closed by the rules and the exit it skipped
+    is listed as passed. ``option_values`` is the index
     model's value of each held option structure, per unit; ``rates`` gives units of each
     currency per USD, so a rupee contract is sized in rupees. ``entries=False`` is the
     end-of-day check: exits, owner trims and hedges only, and every signal not already held
@@ -522,9 +525,14 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
                              _fact("bid now", _cents(bid), "order book"),
                              _fact("bid above the model's value", f"{(bid - worth) * 100:.1f} points", "orchestrator")],
                             reason="the latest forecast values this side well below what it sells for"))
+    holds = {str(h["pair_key"]): h for h in owner_holds if h.get("pair_key")}
     for key, entry in dict(held_pairs).items():
         row = dict(pair_rows).get(key) or {}
         why = pair_exit_reason(row, entry, rv_rule=rv_rule, exit_z=exit_z, max_hold=max_hold)
+        if why and key in holds:
+            passed.append({"instrument": key, "label": key,
+                           "reason": f"owner hold {holds[key].get('id', '')}: kept open although {why}"})
+            continue
         if why:
             for (iid, side), pos in held.items():
                 if pos.get("pair_key") == key and pos.get("mark") is not None:

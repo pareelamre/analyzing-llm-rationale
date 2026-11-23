@@ -1963,6 +1963,12 @@ back nickel / copper (Indonesia's nickel surplus looks lasting).
 **Caveats.** Monthly averages are rougher than daily prices; the ranges and averages lean on oil
 and gas, whose ratio swings most; a story's "lasting" label is a judgement, recorded with sources.
 
+**Owner holds (2026-11-23).** The owner can keep a held pair open against the rules: a `holds` entry
+in `configs/fund_owner_actions.json` stops every pair exit for that pair (the skipped exit is listed
+as passed, with its reason). The first is copper / aluminium: the owner chose to keep the long-copper,
+short-aluminium trade from 2026-11-16 open, expecting the ratio to swing back. Remove the entry to
+hand the pair back to the rules.
+
 ## Build order
 
 1. **Ledger and orchestrator.** The current $10,000 on-device account becomes
