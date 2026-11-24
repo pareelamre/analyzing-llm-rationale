@@ -1,6 +1,6 @@
 {
- "generated_at": "2026-11-22T15:15:17.014654+00:00",
- "data_through": "2026-11-20",
+ "generated_at": "2026-11-24T02:26:31.709264+00:00",
+ "data_through": "2026-11-23",
  "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee); long view from IMF monthly metals (FRED) and the World Bank Pink Sheet (gold, silver, platinum; CC BY 4.0)",
  "rule": {
   "hedge_window": 250,
@@ -214,23 +214,22 @@
    ],
    "why": "The gold-silver ratio, the most watched precious-metals spread.",
    "source": "india",
-   "sessions": 126,
+   "sessions": 127,
    "data_from": "2026-05-14",
-   "date": "2026-11-20",
+   "date": "2026-11-23",
    "short_history": true,
    "early": false,
-   "ratio": 81.899933,
-   "usual_ratio": 85.172968,
+   "ratio": 81.700461,
+   "usual_ratio": 83.359025,
    "to_usual": {
-    "a": 0.03996,
-    "b": -0.08817
+    "a": 0.0203,
+    "b": -0.04597
    },
-   "beta": 0.4245,
+   "beta": 0.4271,
    "hedge": "regression",
-   "z": -3.387,
-   "z_ratio": 2.056,
+   "z": -1.7,
+   "z_ratio": 1.925,
    "z_recent": [
-    1.279,
     0.734,
     0.591,
     0.753,
@@ -289,16 +288,17 @@
     -0.32,
     -1.297,
     -2.082,
-    -3.387
+    -3.387,
+    -1.7
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
-   "unconfirmed": true,
-   "eg_t": -2.238,
-   "eg_crit_5pct": -3.386,
+   "unconfirmed": false,
+   "eg_t": -2.529,
+   "eg_crit_5pct": -3.385,
    "cointegrated": false,
-   "half_life": 8.6,
+   "half_life": 7.5,
    "replay": {
     "signals": 2,
     "closed": 2,
@@ -337,11 +337,11 @@
     "data_from": "1960-01",
     "data_to": "2026-10",
     "window_months": 120,
-    "ratio": 84.257,
+    "ratio": 84.0518,
     "usual": 79.9121,
     "low": 51.6069,
     "high": 111.457,
-    "z": 0.438,
+    "z": 0.418,
     "percentile": 0.617,
     "extreme": false,
     "analogues": null,
@@ -546,9 +546,9 @@
     "tide": "away"
    },
    "relative_value": {
-    "z": 0.438,
+    "z": 0.418,
     "percentile": 0.617,
-    "ratio": 84.257,
+    "ratio": 84.0518,
     "usual": 79.9121,
     "window_months": 120,
     "rich": null,
@@ -586,8 +586,8 @@
    ],
    "why": "The benchmark crude spread between the North Sea and US grades.",
    "source": "international",
-   "sessions": 402,
-   "data_from": "2025-04-01",
+   "sessions": 400,
+   "data_from": "2025-04-03",
    "date": "2026-11-17",
    "short_history": false,
    "early": false,
@@ -672,77 +672,69 @@
    "cointegrated": true,
    "half_life": 6.1,
    "replay": {
-    "signals": 12,
-    "closed": 12,
-    "reverted": 0.75,
-    "avg_return": 0.01567,
-    "total_return": 0.188,
-    "win_rate": 0.833
+    "signals": 11,
+    "closed": 11,
+    "reverted": 0.727,
+    "avg_return": 0.01625,
+    "total_return": 0.1788,
+    "win_rate": 0.818
    },
    "replay_signals": [
     {
-     "entry_date": "2025-05-01",
-     "entry_z": -2.249,
-     "status": "reverted",
-     "exit_date": "2025-05-20",
-     "sessions": 12,
-     "spread_return": 0.004859
-    },
-    {
      "entry_date": "2025-08-22",
-     "entry_z": 2.287,
+     "entry_z": 2.146,
      "status": "reverted",
-     "exit_date": "2025-09-04",
-     "sessions": 7,
-     "spread_return": 0.010378
+     "exit_date": "2025-09-08",
+     "sessions": 9,
+     "spread_return": 0.009184
     },
     {
      "entry_date": "2025-09-09",
-     "entry_z": 3.106,
+     "entry_z": 2.958,
      "status": "timed_out",
      "exit_date": "2025-10-07",
      "sessions": 20,
-     "spread_return": 0.001204
+     "spread_return": 0.001344
     },
     {
      "entry_date": "2025-11-10",
-     "entry_z": -2.207,
+     "entry_z": -2.194,
      "status": "reverted",
      "exit_date": "2025-11-18",
      "sessions": 5,
-     "spread_return": 0.008624
+     "spread_return": 0.008828
     },
     {
      "entry_date": "2025-11-24",
-     "entry_z": 2.267,
+     "entry_z": 2.157,
      "status": "reverted",
      "exit_date": "2025-12-04",
      "sessions": 7,
-     "spread_return": 0.009212
+     "spread_return": 0.009205
     },
     {
      "entry_date": "2026-01-09",
-     "entry_z": 2.213,
+     "entry_z": 2.23,
      "status": "timed_out",
      "exit_date": "2026-02-09",
      "sessions": 20,
-     "spread_return": -0.008978
+     "spread_return": -0.009796
     },
     {
      "entry_date": "2026-03-09",
-     "entry_z": -2.401,
+     "entry_z": -2.259,
      "status": "reverted",
-     "exit_date": "2026-03-10",
-     "sessions": 1,
-     "spread_return": 0.029941
+     "exit_date": "2026-03-13",
+     "sessions": 4,
+     "spread_return": 0.027113
     },
     {
      "entry_date": "2026-03-18",
-     "entry_z": 4.695,
+     "entry_z": 4.721,
      "status": "reverted",
      "exit_date": "2026-04-17",
      "sessions": 20,
-     "spread_return": 0.033529
+     "spread_return": 0.033651
     },
     {
      "entry_date": "2026-05-07",
@@ -778,11 +770,11 @@
     }
    ],
    "expected": {
-    "per_signal": 0.00808,
+    "per_signal": 0.00804,
     "us_backtest": 0.00352,
     "prior_signals": 20,
-    "mcx_signals": 12,
-    "mcx_avg": 0.01567
+    "mcx_signals": 11,
+    "mcx_avg": 0.01625
    },
    "long_run": {
     "source": "FRED daily spot prices, monthly averages",
@@ -959,8 +951,8 @@
    ],
    "why": "The oil-gas ratio: energy priced as liquid fuel against gas.",
    "source": "international",
-   "sessions": 406,
-   "data_from": "2025-04-01",
+   "sessions": 404,
+   "data_from": "2025-04-03",
    "date": "2026-11-17",
    "short_history": false,
    "early": false,
@@ -1045,29 +1037,37 @@
    "cointegrated": false,
    "half_life": 15.4,
    "replay": {
-    "signals": 6,
-    "closed": 5,
-    "reverted": 0.8,
-    "avg_return": 0.07429,
-    "total_return": 0.3715,
-    "win_rate": 1.0
+    "signals": 7,
+    "closed": 6,
+    "reverted": 0.833,
+    "avg_return": 0.07246,
+    "total_return": 0.4348,
+    "win_rate": 0.833
    },
    "replay_signals": [
     {
      "entry_date": "2025-06-11",
-     "entry_z": 2.243,
+     "entry_z": 2.095,
      "status": "reverted",
      "exit_date": "2025-06-23",
      "sessions": 7,
-     "spread_return": 0.000227
+     "spread_return": 0.118976
+    },
+    {
+     "entry_date": "2025-10-01",
+     "entry_z": -2.17,
+     "status": "reverted",
+     "exit_date": "2025-10-14",
+     "sessions": 8,
+     "spread_return": 0.040502
     },
     {
      "entry_date": "2025-10-21",
-     "entry_z": -2.109,
+     "entry_z": -2.623,
      "status": "timed_out",
      "exit_date": "2025-11-19",
      "sessions": 20,
-     "spread_return": 0.015805
+     "spread_return": -0.08013
     },
     {
      "entry_date": "2025-11-20",
@@ -1103,11 +1103,11 @@
     }
    ],
    "expected": {
-    "per_signal": 0.02087,
+    "per_signal": 0.02251,
     "us_backtest": 0.00752,
     "prior_signals": 20,
-    "mcx_signals": 5,
-    "mcx_avg": 0.07429
+    "mcx_signals": 6,
+    "mcx_avg": 0.07246
    },
    "long_run": {
     "source": "FRED daily spot prices, monthly averages",
@@ -1329,23 +1329,22 @@
    ],
    "why": "The copper-gold ratio, read as growth against safety.",
    "source": "india",
-   "sessions": 102,
+   "sessions": 103,
    "data_from": "2026-07-01",
-   "date": "2026-11-20",
+   "date": "2026-11-23",
    "short_history": true,
    "early": false,
    "ratio": 9.5e-05,
-   "usual_ratio": 0.000104,
+   "usual_ratio": 0.000101,
    "to_usual": {
-    "a": 0.09493,
-    "b": -0.17322
+    "a": 0.06759,
+    "b": -0.12007
    },
-   "beta": 0.4768,
+   "beta": 0.5113,
    "hedge": "regression",
-   "z": -3.584,
-   "z_ratio": 0.222,
+   "z": -2.53,
+   "z_ratio": 0.269,
    "z_recent": [
-    0.855,
     0.971,
     0.465,
     0.204,
@@ -1404,16 +1403,17 @@
     -3.077,
     -4.118,
     -3.839,
-    -3.584
+    -3.584,
+    -2.53
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
    "unconfirmed": true,
-   "eg_t": -0.674,
-   "eg_crit_5pct": -3.397,
+   "eg_t": -1.562,
+   "eg_crit_5pct": -3.396,
    "cointegrated": false,
-   "half_life": 28.6,
+   "half_life": 12.6,
    "replay": {
     "signals": 0,
     "closed": 0
@@ -1431,11 +1431,11 @@
     "data_from": "1992-01",
     "data_to": "2026-09",
     "window_months": 120,
-    "ratio": 3.4596,
+    "ratio": 3.4671,
     "usual": 4.1474,
     "low": 2.5799,
     "high": 5.5314,
-    "z": -0.841,
+    "z": -0.83,
     "percentile": 0.242,
     "extreme": false,
     "analogues": null,
@@ -1510,9 +1510,9 @@
     "tide": "toward"
    },
    "relative_value": {
-    "z": -0.841,
+    "z": -0.83,
     "percentile": 0.242,
-    "ratio": 3.4596,
+    "ratio": 3.4671,
     "usual": 4.1474,
     "window_months": 120,
     "rich": "Gold",
@@ -1550,23 +1550,22 @@
    ],
    "why": "Monetary against industrial precious metal.",
    "source": "international",
-   "sessions": 302,
+   "sessions": 303,
    "data_from": "2025-08-15",
-   "date": "2026-11-20",
+   "date": "2026-11-23",
    "short_history": true,
    "early": false,
-   "ratio": 2.700905,
-   "usual_ratio": 2.830883,
+   "ratio": 2.75115,
+   "usual_ratio": 2.823948,
    "to_usual": {
-    "a": 0.04812,
-    "b": -0.0925
+    "a": 0.02646,
+    "b": -0.05236
    },
-   "beta": 0.4842,
+   "beta": 0.4856,
    "hedge": "regression",
-   "z": -2.89,
-   "z_ratio": 1.596,
+   "z": -1.644,
+   "z_ratio": 1.917,
    "z_recent": [
-    1.358,
     0.572,
     0.736,
     0.455,
@@ -1625,16 +1624,17 @@
     -1.033,
     -1.312,
     -1.381,
-    -2.89
+    -2.89,
+    -1.644
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
-   "unconfirmed": true,
-   "eg_t": -2.329,
+   "unconfirmed": false,
+   "eg_t": -2.493,
    "eg_crit_5pct": -3.362,
    "cointegrated": false,
-   "half_life": 14.8,
+   "half_life": 13.9,
    "replay": {
     "signals": 2,
     "closed": 2,
@@ -1673,14 +1673,20 @@
     "data_from": "1960-01",
     "data_to": "2026-10",
     "window_months": 120,
-    "ratio": 2.712,
+    "ratio": 2.7624,
     "usual": 1.884,
     "low": 1.2242,
     "high": 3.3765,
-    "z": 1.5,
-    "percentile": 0.942,
-    "extreme": false,
-    "analogues": null,
+    "z": 1.576,
+    "percentile": 0.95,
+    "extreme": true,
+    "analogues": {
+     "months": 160,
+     "back_3m": 0.494,
+     "median_3m": -0.0001,
+     "back_12m": 0.463,
+     "median_12m": -0.0136
+    },
     "story": null,
     "episodes": [
      {
@@ -1817,9 +1823,9 @@
     "tide": "away"
    },
    "relative_value": {
-    "z": 1.5,
-    "percentile": 0.942,
-    "ratio": 2.712,
+    "z": 1.576,
+    "percentile": 0.95,
+    "ratio": 2.7624,
     "usual": 1.884,
     "window_months": 120,
     "rich": "Gold",
@@ -1861,21 +1867,21 @@
    ],
    "why": "The two largest base metals, substitutes in wiring and cable.",
    "source": "india",
-   "sessions": 57,
+   "sessions": 58,
    "data_from": "2026-09-01",
-   "date": "2026-11-20",
+   "date": "2026-11-23",
    "short_history": true,
    "early": true,
-   "ratio": 3.63751,
-   "usual_ratio": 4.182388,
+   "ratio": 3.772002,
+   "usual_ratio": 4.206757,
    "to_usual": {
-    "a": 0.14979,
-    "b": -0.17914
+    "a": 0.11526,
+    "b": -0.13078
    },
-   "beta": 0.7071,
+   "beta": 0.7783,
    "hedge": "regression",
-   "z": -3.712,
-   "z_ratio": -3.176,
+   "z": -2.721,
+   "z_ratio": -2.451,
    "z_recent": [
     0.231,
     0.193,
@@ -1914,14 +1920,15 @@
     -2.996,
     -3.534,
     -3.682,
-    -3.712
+    -3.712,
+    -2.721
    ],
    "stretched": true,
    "rich": "Aluminium",
    "cheap": "Copper",
    "unconfirmed": false,
-   "eg_t": 2.499,
-   "eg_crit_5pct": -3.445,
+   "eg_t": 0.688,
+   "eg_crit_5pct": -3.443,
    "cointegrated": false,
    "half_life": null,
    "replay": {
@@ -1954,12 +1961,12 @@
     "data_from": "1992-01",
     "data_to": "2026-09",
     "window_months": 120,
-    "ratio": 3.9714,
+    "ratio": 4.0588,
     "usual": 3.5228,
     "low": 2.8401,
     "high": 4.4095,
-    "z": 1.187,
-    "percentile": 0.9,
+    "z": 1.403,
+    "percentile": 0.925,
     "extreme": false,
     "analogues": null,
     "story": null,
@@ -2016,9 +2023,9 @@
     "tide": "away"
    },
    "relative_value": {
-    "z": 1.187,
-    "percentile": 0.9,
-    "ratio": 3.9714,
+    "z": 1.403,
+    "percentile": 0.925,
+    "ratio": 4.0588,
     "usual": 3.5228,
     "window_months": 120,
     "rich": "Copper",
@@ -2056,21 +2063,21 @@
    ],
    "why": "Mined together and traded as a classic base-metal pair.",
    "source": "india",
-   "sessions": 39,
+   "sessions": 40,
    "data_from": "2026-09-10",
-   "date": "2026-11-20",
+   "date": "2026-11-23",
    "short_history": true,
    "early": true,
-   "ratio": 2.015081,
-   "usual_ratio": 2.075924,
+   "ratio": 1.940584,
+   "usual_ratio": 1.97034,
    "to_usual": {
-    "a": 0.03019,
-    "b": -0.02606
+    "a": 0.01533,
+    "b": -0.01256
    },
-   "beta": 1.1264,
+   "beta": 1.2039,
    "hedge": "regression",
-   "z": -1.695,
-   "z_ratio": -1.796,
+   "z": -0.869,
+   "z_ratio": -1.021,
    "z_recent": [
     0.904,
     1.471,
@@ -2091,15 +2098,16 @@
     -0.185,
     -1.55,
     -1.317,
-    -1.695
+    -1.695,
+    -0.869
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
    "unconfirmed": false,
-   "eg_t": -3.351,
-   "eg_crit_5pct": -3.497,
-   "cointegrated": false,
+   "eg_t": -3.671,
+   "eg_crit_5pct": -3.492,
+   "cointegrated": true,
    "half_life": 1.2,
    "replay": {
     "signals": 0,
@@ -2118,12 +2126,12 @@
     "data_from": "1992-01",
     "data_to": "2026-09",
     "window_months": 120,
-    "ratio": 2.0711,
+    "ratio": 2.0985,
     "usual": 1.363,
     "low": 1.0975,
     "high": 2.1467,
-    "z": 2.951,
-    "percentile": 0.983,
+    "z": 3.044,
+    "percentile": 0.992,
     "extreme": true,
     "analogues": {
      "months": 58,
@@ -2291,9 +2299,9 @@
     "tide": "away"
    },
    "relative_value": {
-    "z": 2.951,
-    "percentile": 0.983,
-    "ratio": 2.0711,
+    "z": 3.044,
+    "percentile": 0.992,
+    "ratio": 2.0985,
     "usual": 1.363,
     "window_months": 120,
     "rich": "Zinc",
@@ -2335,21 +2343,21 @@
    ],
    "why": "Construction and manufacturing demand on both legs.",
    "source": "india",
-   "sessions": 52,
+   "sessions": 53,
    "data_from": "2026-09-08",
-   "date": "2026-11-20",
+   "date": "2026-11-23",
    "short_history": true,
    "early": true,
-   "ratio": 2.978065,
-   "usual_ratio": 3.384281,
+   "ratio": 3.177982,
+   "usual_ratio": 3.511194,
    "to_usual": {
-    "a": 0.1364,
-    "b": -0.11428
+    "a": 0.10485,
+    "b": -0.07736
    },
-   "beta": 1.0536,
+   "beta": 1.2384,
    "hedge": "regression",
-   "z": -3.031,
-   "z_ratio": -3.09,
+   "z": -2.257,
+   "z_ratio": -2.419,
    "z_recent": [
     1.413,
     1.14,
@@ -2383,14 +2391,15 @@
     -3.031,
     -3.604,
     -3.401,
-    -3.031
+    -3.031,
+    -2.257
    ],
    "stretched": true,
    "rich": "Zinc",
    "cheap": "Copper",
    "unconfirmed": false,
-   "eg_t": 1.854,
-   "eg_crit_5pct": -3.456,
+   "eg_t": 0.287,
+   "eg_crit_5pct": -3.453,
    "cointegrated": false,
    "half_life": null,
    "replay": {
@@ -2419,12 +2428,12 @@
     "data_from": "1992-01",
     "data_to": "2026-09",
     "window_months": 120,
-    "ratio": 3.1096,
+    "ratio": 3.1752,
     "usual": 2.7988,
     "low": 1.9832,
     "high": 4.0498,
-    "z": 0.533,
-    "percentile": 0.625,
+    "z": 0.639,
+    "percentile": 0.633,
     "extreme": false,
     "analogues": null,
     "story": null,
@@ -2503,9 +2512,9 @@
     "tide": "away"
    },
    "relative_value": {
-    "z": 0.533,
-    "percentile": 0.625,
-    "ratio": 3.1096,
+    "z": 0.639,
+    "percentile": 0.633,
+    "ratio": 3.1752,
     "usual": 2.7988,
     "window_months": 120,
     "rich": "Copper",
@@ -2543,21 +2552,21 @@
    ],
    "why": "Battery and steel demand against the broad industrial metal.",
    "source": "india",
-   "sessions": 55,
+   "sessions": 56,
    "data_from": "2026-08-28",
-   "date": "2026-11-20",
+   "date": "2026-11-23",
    "short_history": true,
    "early": true,
-   "ratio": 1.243501,
-   "usual_ratio": 1.262441,
+   "ratio": 1.220374,
+   "usual_ratio": 1.233974,
    "to_usual": {
-    "a": 0.01523,
-    "b": -0.03901
+    "a": 0.01114,
+    "b": -0.02772
    },
-   "beta": 0.3799,
+   "beta": 0.3942,
    "hedge": "regression",
-   "z": -0.461,
-   "z_ratio": 2.205,
+   "z": -0.341,
+   "z_ratio": 1.684,
    "z_recent": [
     -1.643,
     -1.73,
@@ -2594,16 +2603,17 @@
     0.767,
     0.318,
     -0.123,
-    -0.461
+    -0.461,
+    -0.341
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
    "unconfirmed": false,
-   "eg_t": -1.914,
-   "eg_crit_5pct": -3.449,
+   "eg_t": -1.945,
+   "eg_crit_5pct": -3.447,
    "cointegrated": false,
-   "half_life": 6.2,
+   "half_life": 6.1,
    "replay": {
     "signals": 1,
     "closed": 1,
@@ -2634,11 +2644,11 @@
     "data_from": "1992-01",
     "data_to": "2026-09",
     "window_months": 120,
-    "ratio": 1.2147,
+    "ratio": 1.1908,
     "usual": 1.9994,
     "low": 1.1279,
     "high": 3.4626,
-    "z": -2.094,
+    "z": -2.177,
     "percentile": 0.017,
     "extreme": true,
     "analogues": {
@@ -2805,9 +2815,9 @@
     "tide": "toward"
    },
    "relative_value": {
-    "z": -2.094,
+    "z": -2.177,
     "percentile": 0.017,
-    "ratio": 1.2147,
+    "ratio": 1.1908,
     "usual": 1.9994,
     "window_months": 120,
     "rich": "Copper",
@@ -2845,23 +2855,22 @@
    ],
    "why": "India's gold price against the landed cost of imported gold: the domestic premium.",
    "source": "parity",
-   "sessions": 101,
+   "sessions": 102,
    "data_from": "2026-06-10",
-   "date": "2026-11-20",
+   "date": "2026-11-23",
    "short_history": true,
    "early": false,
-   "ratio": 0.99742,
-   "usual_ratio": 1.007019,
+   "ratio": 1.005608,
+   "usual_ratio": 1.007083,
    "to_usual": {
-    "a": 0.00962,
-    "b": -0.00953
+    "a": 0.00147,
+    "b": -0.00146
    },
    "beta": 1.0,
    "hedge": "fixed",
-   "z": -1.46,
-   "z_ratio": -1.46,
+   "z": -0.225,
+   "z_ratio": -0.225,
    "z_recent": [
-    -0.754,
     -0.456,
     -1.37,
     -1.6,
@@ -2920,16 +2929,17 @@
     0.07,
     0.304,
     -0.176,
-    -1.46
+    -1.46,
+    -0.225
    ],
    "stretched": false,
    "rich": null,
    "cheap": null,
    "unconfirmed": false,
-   "eg_t": -2.928,
-   "eg_crit_5pct": -3.398,
+   "eg_t": -3.046,
+   "eg_crit_5pct": -3.397,
    "cointegrated": false,
-   "half_life": 6.7,
+   "half_life": 6.4,
    "replay": {
     "signals": 0,
     "closed": 0
