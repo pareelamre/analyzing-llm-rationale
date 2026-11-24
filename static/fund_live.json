@@ -10,16 +10,16 @@
       "blend_model": -3.4501
     },
     "unrealized": {
-      "agent_transfer": -273.703,
-      "blend_model": -12.4031,
-      "event_model": 70.9353,
-      "pairs_model": -18.6382,
+      "agent_transfer": -265.1047,
+      "blend_model": -13.2282,
+      "event_model": 71.8332,
+      "pairs_model": -24.4836,
       "put_premium": 24.8419
     }
   },
   "by_asset_class": {
-    "commodity": 485.5861,
-    "event": 3824.2127,
+    "commodity": 479.7407,
+    "event": 3832.8839,
     "option": 642.1592
   },
   "cash_usd": 4836.4248,
@@ -1031,56 +1031,29 @@
     {
       "nav_usd": 9788.3827,
       "ts": "2026-11-24T10:01:13.862602+00:00"
+    },
+    {
+      "nav_usd": 9791.2085,
+      "ts": "2026-11-24T12:01:24.049699+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [
-      {
-        "instrument": "copper-aluminium",
-        "label": "copper-aluminium",
-        "reason": "owner hold hold-copper-aluminium-2026-11-23: kept open although this trade needs the price ratio to move further from its 10-year normal (z +1.40): relative value says Copper is the dear leg, the one this trade holds"
-      },
-      {
-        "instrument": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
-        "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
-        "reason": "end-of-day check: exits and risk only; new positions wait for the next open"
-      },
-      {
-        "instrument": "polymarket:will-predictfun-launch-a-token-by-november-30-2026",
-        "label": "Will Predict.fun launch a token by November 30, 2026?",
-        "reason": "end-of-day check: exits and risk only; new positions wait for the next open"
-      },
-      {
-        "instrument": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
-        "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-        "reason": "NSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
-      }
-    ],
+    "passed": [],
     "seeded": null,
-    "signals": 2,
+    "signals": 4,
     "skipped": [
       {
         "instrument": "polymarket:friedrich-merz-out-as-chancellor-of-germany-before-2027",
         "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
         "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
-      },
-      {
-        "instrument": "mcx:ZINCMINI",
-        "label": "Zinc (MCX ZINCMINI)",
-        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
-      },
-      {
-        "instrument": "mcx:LEADMINI",
-        "label": "Lead (MCX LEADMINI)",
-        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
-    "traded": true,
-    "window": "end-of-day check: exits and risk only, no new positions"
+    "traded": false,
+    "window": "17:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-24T10:01:13.862602+00:00",
+  "generated_at": "2026-11-24T12:01:24.049699+00:00",
   "guard": {
     "board": 31,
     "checked": 31,
@@ -1133,8 +1106,8 @@
         "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
       },
       "mcx": {
-        "open": false,
-        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+        "open": true,
+        "why": ""
       },
       "nse_fo": {
         "open": false,
@@ -1314,7 +1287,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9788.3827,
+  "nav_usd": 9791.2085,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1378,15 +1351,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 323.8,
+      "mark": 320.2,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 3.7345,
+      "pnl_usd": 6.5353,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 255.8466,
+      "value_usd": 258.6475,
       "venue": "mcx"
     },
     {
@@ -1399,15 +1372,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1193.9,
+      "mark": 1149.65,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -22.3727,
+      "pnl_usd": -31.0189,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 229.7395,
+      "value_usd": 221.0933,
       "venue": "mcx"
     },
     {
@@ -1567,15 +1540,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.968,
+      "mark": 0.97,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 70.9353,
+      "pnl_usd": 71.8332,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 434.5908,
+      "value_usd": 435.4888,
       "venue": "polymarket"
     },
     {
@@ -1588,15 +1561,15 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.158,
+      "mark": 0.153,
       "marked": true,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": 0.99,
+      "pnl_usd": 0.165,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 26.0712,
+      "value_usd": 25.2462,
       "venue": "polymarket"
     },
     {
@@ -1630,15 +1603,15 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06000000000000005,
+      "mark": 0.061000000000000054,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 17.1967,
+      "pnl_usd": 25.795,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 515.8987,
+      "value_usd": 524.497,
       "venue": "polymarket"
     },
     {
@@ -1738,7 +1711,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -2.116,
+  "return_pct": -2.088,
   "risk": {
     "alerts": [
       {
@@ -1771,12 +1744,12 @@
       {
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.0527
+        "worst_case_share": 0.0536
       },
       {
         "label": "US announces end of Iranian blockade by November 30, 2026?",
         "side": "NO",
-        "worst_case_share": 0.0444
+        "worst_case_share": 0.0445
       },
       {
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
@@ -1791,7 +1764,7 @@
       {
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "side": "NO",
-        "worst_case_share": 0.0389
+        "worst_case_share": 0.0388
       },
       {
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
@@ -1815,20 +1788,20 @@
         "entry_worst_case_usd": 498.7,
         "kind": "binary",
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "pnl_usd": 17.2,
+        "pnl_usd": 25.8,
         "side": "NO",
-        "worst_case_share": 0.0527,
-        "worst_case_usd": 515.9
+        "worst_case_share": 0.0536,
+        "worst_case_usd": 524.5
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 363.66,
         "kind": "binary",
         "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "pnl_usd": 70.94,
+        "pnl_usd": 71.83,
         "side": "NO",
-        "worst_case_share": 0.0444,
-        "worst_case_usd": 434.59
+        "worst_case_share": 0.0445,
+        "worst_case_usd": 435.49
       },
       {
         "alerts": [],
@@ -1857,7 +1830,7 @@
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "pnl_usd": 0.0,
         "side": "NO",
-        "worst_case_share": 0.0389,
+        "worst_case_share": 0.0388,
         "worst_case_usd": 380.33
       },
       {
@@ -1918,30 +1891,30 @@
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Aluminium (MCX ALUMINI)",
-        "pnl_usd": 3.73,
+        "pnl_usd": 6.54,
         "side": "SHORT",
-        "worst_case_share": 0.0039,
-        "worst_case_usd": 38.38
+        "worst_case_share": 0.004,
+        "worst_case_usd": 38.8
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Copper (MCX COPPER)",
-        "pnl_usd": -22.37,
+        "pnl_usd": -31.02,
         "side": "LONG",
-        "worst_case_share": 0.0035,
-        "worst_case_usd": 34.46
+        "worst_case_share": 0.0034,
+        "worst_case_usd": 33.16
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": 0.99,
+        "pnl_usd": 0.17,
         "side": "YES",
-        "worst_case_share": 0.0027,
-        "worst_case_usd": 26.07
+        "worst_case_share": 0.0026,
+        "worst_case_usd": 25.25
       },
       {
         "alerts": [],
@@ -1954,8 +1927,8 @@
         "worst_case_usd": 18.8
       }
     ],
-    "worst_case_total_share": 0.4637,
-    "worst_case_total_usd": 4539.21
+    "worst_case_total_share": 0.4644,
+    "worst_case_total_usd": 4547.01
   },
   "scorecard": {
     "retired_records": [
