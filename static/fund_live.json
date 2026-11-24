@@ -10,16 +10,16 @@
       "blend_model": -3.4501
     },
     "unrealized": {
-      "agent_transfer": 24.4044,
-      "blend_model": -13.2282,
+      "agent_transfer": 25.2667,
+      "blend_model": -13.8882,
       "event_model": 70.9353,
-      "pairs_model": -24.2772,
+      "pairs_model": -24.4533,
       "put_premium": 24.4232
     }
   },
   "by_asset_class": {
-    "commodity": 479.9471,
-    "event": 3536.0536,
+    "commodity": 479.771,
+    "event": 3536.2559,
     "option": 641.7405
   },
   "cash_usd": 4836.4248,
@@ -1051,25 +1051,50 @@
     {
       "nav_usd": 9494.166,
       "ts": "2026-11-24T18:01:21.223015+00:00"
+    },
+    {
+      "nav_usd": 9494.1922,
+      "ts": "2026-11-24T20:01:15.988583+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [],
-    "seeded": null,
-    "signals": 6,
-    "skipped": [
+    "passed": [
       {
-        "instrument": "polymarket:friedrich-merz-out-as-chancellor-of-germany-before-2027",
-        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
-        "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
+        "instrument": "copper-aluminium",
+        "label": "copper-aluminium",
+        "reason": "owner hold hold-copper-aluminium-2026-11-23: kept open although this trade needs the price ratio to move further from its 10-year normal (z +1.40): relative value says Copper is the dear leg, the one this trade holds"
+      },
+      {
+        "instrument": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
+        "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
+        "reason": "NSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
       }
     ],
-    "traded": false,
-    "window": "23:31 IST is outside the trading hours"
+    "seeded": null,
+    "signals": 0,
+    "skipped": [
+      {
+        "instrument": "polymarket:will-predictfun-launch-a-token-by-november-30-2026",
+        "label": "Will Predict.fun launch a token by November 30, 2026?",
+        "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
+      },
+      {
+        "instrument": "mcx:ZINCMINI",
+        "label": "Zinc (MCX ZINCMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:LEADMINI",
+        "label": "Lead (MCX LEADMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      }
+    ],
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-24T18:01:21.223015+00:00",
+  "generated_at": "2026-11-24T20:01:15.988583+00:00",
   "guard": {
     "board": 31,
     "checked": 31,
@@ -1077,13 +1102,25 @@
     "days_recorded": 16,
     "dropped": [
       {
-        "forecast": 0.04,
-        "forecasted_at": "2026-11-23T17:27:26.619956+00:00",
-        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
-        "rationale_yes": 0.941
+        "forecast": 0.08,
+        "forecasted_at": "2026-11-24T17:35:24.275268+00:00",
+        "label": "Will Predict.fun launch a token by November 30, 2026?",
+        "rationale_yes": 0.7015
       }
     ],
     "flags": [
+      {
+        "forecast": 0.07999999999999996,
+        "forecasted_at": "2026-11-24T17:35:24.275268+00:00",
+        "label": "will-predictfun-launch-a-token-by-november-30-2026",
+        "rationale_yes": 0.7015
+      },
+      {
+        "forecast": 0.010000000000000009,
+        "forecasted_at": "2026-11-24T17:34:01.950929+00:00",
+        "label": "clarity-act-signed-into-law-in-2026",
+        "rationale_yes": 0.8278
+      },
       {
         "forecast": 0.010000000000000009,
         "forecasted_at": "2026-11-23T17:27:52.375185+00:00",
@@ -1098,7 +1135,7 @@
       }
     ],
     "kind": "checker",
-    "markets": 33,
+    "markets": 66,
     "mode": "live",
     "unchecked": 0
   },
@@ -1110,8 +1147,8 @@
         "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
       },
       "mcx": {
-        "open": true,
-        "why": ""
+        "open": false,
+        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       },
       "nse_fo": {
         "open": false,
@@ -1291,7 +1328,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9494.166,
+  "nav_usd": 9494.1922,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1354,15 +1391,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 316.1,
+      "mark": 316.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 9.7188,
+      "pnl_usd": 9.7966,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 261.831,
+      "value_usd": 261.9087,
       "venue": "mcx"
     },
     {
@@ -1375,15 +1412,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1134.3,
+      "mark": 1133.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -33.996,
+      "pnl_usd": -34.2499,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 218.1161,
+      "value_usd": 217.8623,
       "venue": "mcx"
     },
     {
@@ -1501,15 +1538,15 @@
       "instrument_id": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
       "kind": "binary",
       "label": "Strait of Hormuz traffic returns to normal by December 31?",
-      "mark": 0.966,
+      "mark": 0.969,
       "marked": true,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 16.0969,
+      "pnl_usd": 16.9592,
       "quantity": 287.443442,
       "side": "NO",
       "underlying": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
-      "value_usd": 277.6704,
+      "value_usd": 278.5327,
       "venue": "polymarket"
     },
     {
@@ -1543,15 +1580,15 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.153,
+      "mark": 0.149,
       "marked": true,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": 0.165,
+      "pnl_usd": -0.495,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 25.2462,
+      "value_usd": 24.5862,
       "venue": "polymarket"
     },
     {
@@ -1821,10 +1858,10 @@
         "entry_worst_case_usd": 261.57,
         "kind": "binary",
         "label": "Strait of Hormuz traffic returns to normal by December 31?",
-        "pnl_usd": 16.1,
+        "pnl_usd": 16.96,
         "side": "NO",
-        "worst_case_share": 0.0292,
-        "worst_case_usd": 277.67
+        "worst_case_share": 0.0293,
+        "worst_case_usd": 278.53
       },
       {
         "alerts": [],
@@ -1851,30 +1888,30 @@
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Aluminium (MCX ALUMINI)",
-        "pnl_usd": 9.72,
+        "pnl_usd": 9.8,
         "side": "SHORT",
         "worst_case_share": 0.0041,
-        "worst_case_usd": 39.27
+        "worst_case_usd": 39.29
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Copper (MCX COPPER)",
-        "pnl_usd": -34.0,
+        "pnl_usd": -34.25,
         "side": "LONG",
         "worst_case_share": 0.0034,
-        "worst_case_usd": 32.72
+        "worst_case_usd": 32.68
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": 0.17,
+        "pnl_usd": -0.49,
         "side": "YES",
-        "worst_case_share": 0.0027,
-        "worst_case_usd": 25.25
+        "worst_case_share": 0.0026,
+        "worst_case_usd": 24.59
       },
       {
         "alerts": [],
@@ -1888,7 +1925,7 @@
       }
     ],
     "worst_case_total_share": 0.4476,
-    "worst_case_total_usd": 4249.79
+    "worst_case_total_usd": 4249.97
   },
   "scorecard": {
     "retired_records": [
