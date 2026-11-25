@@ -12,16 +12,16 @@
     },
     "unrealized": {
       "agent_transfer": 28.2016,
-      "blend_model": -9.763,
-      "event_model": 62.3885,
-      "pairs_model": -17.9384,
-      "put_premium": 39.9915
+      "blend_model": -9.928,
+      "event_model": 60.5927,
+      "pairs_model": -18.9853,
+      "put_premium": 39.0332
     }
   },
   "by_asset_class": {
-    "commodity": 486.286,
-    "event": 3534.7693,
-    "option": 509.4795
+    "commodity": 485.239,
+    "event": 3532.8085,
+    "option": 508.5212
   },
   "cash_usd": 19385.6529,
   "curve": [
@@ -1084,11 +1084,31 @@
     {
       "nav_usd": 23916.1877,
       "ts": "2026-11-25T08:01:11.938372+00:00"
+    },
+    {
+      "nav_usd": 23912.2216,
+      "ts": "2026-11-25T08:56:11.737157+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [],
+    "passed": [
+      {
+        "instrument": "copper-aluminium",
+        "label": "copper-aluminium",
+        "reason": "owner hold hold-copper-aluminium-2026-11-23: kept open although this trade needs the price ratio to move further from its 10-year normal (z +1.23): relative value says Copper is the dear leg, the one this trade holds"
+      },
+      {
+        "instrument": "mcx:ZINCMINI",
+        "label": "Zinc (MCX ZINCMINI)",
+        "reason": "end-of-day check: exits and risk only; new positions wait for the next open"
+      },
+      {
+        "instrument": "mcx:LEADMINI",
+        "label": "Lead (MCX LEADMINI)",
+        "reason": "end-of-day check: exits and risk only; new positions wait for the next open"
+      }
+    ],
     "seeded": null,
     "signals": 2,
     "skipped": [
@@ -1103,11 +1123,11 @@
         "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
       }
     ],
-    "traded": false,
-    "window": "13:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "end-of-day check: exits and risk only, no new positions"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-25T08:01:11.938372+00:00",
+  "generated_at": "2026-11-25T08:56:11.737157+00:00",
   "guard": {
     "board": 31,
     "checked": 31,
@@ -1347,7 +1367,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 23916.1877,
+  "nav_usd": 23912.2216,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1410,15 +1430,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 303.1,
+      "mark": 305.2,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 19.8264,
+      "pnl_usd": 18.1936,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 271.9385,
+      "value_usd": 270.3058,
       "venue": "mcx"
     },
     {
@@ -1431,15 +1451,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1115.0,
+      "mark": 1118.0,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -37.7647,
+      "pnl_usd": -37.1789,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 214.3475,
+      "value_usd": 214.9333,
       "venue": "mcx"
     },
     {
@@ -1578,15 +1598,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.968,
+      "mark": 0.964,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 70.9353,
+      "pnl_usd": 69.1395,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 434.5908,
+      "value_usd": 432.795,
       "venue": "polymarket"
     },
     {
@@ -1599,15 +1619,15 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.174,
+      "mark": 0.173,
       "marked": true,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": 3.6302,
+      "pnl_usd": 3.4652,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 28.7114,
+      "value_usd": 28.5464,
       "venue": "polymarket"
     },
     {
@@ -1662,15 +1682,15 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2140.187,
+      "mark": 2137.011,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 14.125,
+      "pnl_usd": 13.7047,
       "quantity": 12.289880162631071,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 283.2287,
+      "value_usd": 282.8084,
       "venue": "nse_fo"
     },
     {
@@ -1683,15 +1703,15 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 734.3119999999999,
+      "mark": 732.566,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 25.8665,
+      "pnl_usd": 25.3285,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 226.2508,
+      "value_usd": 225.7128,
       "venue": "nse_fo"
     }
   ],
@@ -1749,7 +1769,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": 139.162,
+  "return_pct": 139.122,
   "risk": {
     "alerts": [],
     "limits": {
@@ -1789,7 +1809,7 @@
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
         "pnl_usd": 42.99,
         "side": "NO",
-        "worst_case_share": 0.0226,
+        "worst_case_share": 0.0227,
         "worst_case_usd": 541.69
       },
       {
@@ -1797,10 +1817,10 @@
         "entry_worst_case_usd": 363.66,
         "kind": "binary",
         "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "pnl_usd": 70.94,
+        "pnl_usd": 69.14,
         "side": "NO",
-        "worst_case_share": 0.0182,
-        "worst_case_usd": 434.59
+        "worst_case_share": 0.0181,
+        "worst_case_usd": 432.8
       },
       {
         "alerts": [],
@@ -1837,10 +1857,10 @@
         "entry_worst_case_usd": 269.1,
         "kind": "option",
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-        "pnl_usd": 14.12,
+        "pnl_usd": 13.7,
         "side": "BULL",
         "worst_case_share": 0.0118,
-        "worst_case_usd": 283.23
+        "worst_case_usd": 282.81
       },
       {
         "alerts": [],
@@ -1857,20 +1877,20 @@
         "entry_worst_case_usd": 200.38,
         "kind": "option",
         "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-        "pnl_usd": 25.87,
+        "pnl_usd": 25.33,
         "side": "BULL",
-        "worst_case_share": 0.0095,
-        "worst_case_usd": 226.25
+        "worst_case_share": 0.0094,
+        "worst_case_usd": 225.71
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Aluminium (MCX ALUMINI)",
-        "pnl_usd": 19.83,
+        "pnl_usd": 18.19,
         "side": "SHORT",
         "worst_case_share": 0.0017,
-        "worst_case_usd": 40.79
+        "worst_case_usd": 40.55
       },
       {
         "alerts": [],
@@ -1887,20 +1907,20 @@
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Copper (MCX COPPER)",
-        "pnl_usd": -37.76,
+        "pnl_usd": -37.18,
         "side": "LONG",
         "worst_case_share": 0.0013,
-        "worst_case_usd": 32.15
+        "worst_case_usd": 32.24
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": 3.63,
+        "pnl_usd": 3.47,
         "side": "YES",
         "worst_case_share": 0.0012,
-        "worst_case_usd": 28.71
+        "worst_case_usd": 28.55
       },
       {
         "alerts": [],
@@ -1913,8 +1933,8 @@
         "worst_case_usd": 18.8
       }
     ],
-    "worst_case_total_share": 0.1722,
-    "worst_case_total_usd": 4117.18
+    "worst_case_total_share": 0.1721,
+    "worst_case_total_usd": 4114.12
   },
   "scorecard": {
     "retired_records": [
