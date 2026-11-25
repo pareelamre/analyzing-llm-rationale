@@ -7,22 +7,23 @@
   "attribution": {
     "realized": {
       "agent_transfer": -584.6414,
-      "blend_model": -3.4501
+      "blend_model": -3.4501,
+      "put_premium": 14401.3989
     },
     "unrealized": {
       "agent_transfer": 10.0267,
-      "blend_model": -13.0631,
-      "event_model": 63.7354,
-      "pairs_model": -24.3854,
-      "put_premium": 24.4232
+      "blend_model": -12.7331,
+      "event_model": 63.2864,
+      "pairs_model": -16.6629,
+      "put_premium": 41.7297
     }
   },
   "by_asset_class": {
-    "commodity": 479.839,
-    "event": 3514.6411,
-    "option": 641.7405
+    "commodity": 487.5615,
+    "event": 3514.5221,
+    "option": 511.2176
   },
-  "cash_usd": 4836.4248,
+  "cash_usd": 19385.6529,
   "curve": [
     {
       "nav_usd": 10106.6444,
@@ -1071,11 +1072,36 @@
     {
       "nav_usd": 9472.6454,
       "ts": "2026-11-25T02:01:15.283162+00:00"
+    },
+    {
+      "nav_usd": 23898.9542,
+      "ts": "2026-11-25T04:01:11.678988+00:00"
     }
   ],
   "cycle": {
-    "orders": 0,
-    "passed": [],
+    "orders": 1,
+    "passed": [
+      {
+        "instrument": "copper-aluminium",
+        "label": "copper-aluminium",
+        "reason": "owner hold hold-copper-aluminium-2026-11-23: kept open although this trade needs the price ratio to move further from its 10-year normal (z +1.23): relative value says Copper is the dear leg, the one this trade holds"
+      },
+      {
+        "instrument": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
+        "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
+        "reason": "no room under the risk limits (worst case per position 3%, all positions 40% of the fund)"
+      },
+      {
+        "instrument": "mcx:ZINCMINI",
+        "label": "Zinc (MCX ZINCMINI)",
+        "reason": "no room under the risk limits (worst case per position 3%, all positions 40% of the fund)"
+      },
+      {
+        "instrument": "mcx:LEADMINI",
+        "label": "Lead (MCX LEADMINI)",
+        "reason": "no room under the risk limits (worst case per position 3%, all positions 40% of the fund)"
+      }
+    ],
     "seeded": null,
     "signals": 3,
     "skipped": [
@@ -1085,11 +1111,11 @@
         "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
       }
     ],
-    "traded": false,
-    "window": "07:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-25T02:01:15.283162+00:00",
+  "generated_at": "2026-11-25T04:01:11.678988+00:00",
   "guard": {
     "board": 31,
     "checked": 31,
@@ -1138,16 +1164,16 @@
     "holiday_list": true,
     "venues": {
       "bse_fo": {
-        "open": false,
-        "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+        "open": true,
+        "why": ""
       },
       "mcx": {
-        "open": false,
-        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+        "open": true,
+        "why": ""
       },
       "nse_fo": {
-        "open": false,
-        "why": "NSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+        "open": true,
+        "why": ""
       }
     }
   },
@@ -1323,11 +1349,11 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9472.6454,
+  "nav_usd": 23898.9542,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
-    "india_equity": 617.3173,
+    "india_equity": 469.488,
     "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 354.33,
     "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126": 53.5726,
     "kalshi:KXTHC3MG-FED-26DEC10": 356.4,
@@ -1386,15 +1412,15 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 315.9,
+      "mark": 304.85,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 9.8743,
+      "pnl_usd": 18.4657,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 261.9865,
+      "value_usd": 270.5779,
       "venue": "mcx"
     },
     {
@@ -1407,15 +1433,15 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1132.95,
+      "mark": 1128.5,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -34.2597,
+      "pnl_usd": -35.1286,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 217.8525,
+      "value_usd": 216.9836,
       "venue": "mcx"
     },
     {
@@ -1554,15 +1580,15 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.971,
+      "mark": 0.97,
       "marked": true,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 72.2822,
+      "pnl_usd": 71.8332,
       "quantity": 448.95747725795985,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 435.9377,
+      "value_usd": 435.4888,
       "venue": "polymarket"
     },
     {
@@ -1575,15 +1601,15 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.154,
+      "mark": 0.156,
       "marked": true,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": 0.33,
+      "pnl_usd": 0.66,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 25.4112,
+      "value_usd": 25.7412,
       "venue": "polymarket"
     },
     {
@@ -1633,20 +1659,20 @@
       "attribution": {
         "put_premium": 1.0
       },
-      "collateral_usd": 416.9330387968,
+      "collateral_usd": 269.1037362728191,
       "entry_price": 2060.6800000000003,
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2059.809,
+      "mark": 2155.0209999999997,
       "marked": true,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 5.4039,
-      "quantity": 19.041196356558505,
+      "pnl_usd": 16.0881,
+      "quantity": 12.289880162631071,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 422.3369,
+      "value_usd": 285.1918,
       "venue": "nse_fo"
     },
     {
@@ -1659,15 +1685,15 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 712.0889999999999,
+      "mark": 733.582,
       "marked": true,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 19.0193,
+      "pnl_usd": 25.6416,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 219.4036,
+      "value_usd": 226.0258,
       "venue": "nse_fo"
     }
   ],
@@ -1697,7 +1723,7 @@
       "snapshots": 80988
     }
   },
-  "realized_pnl_usd": -588.0915,
+  "realized_pnl_usd": 13813.3074,
   "retired": [
     {
       "analyst": "event_model",
@@ -1725,7 +1751,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -5.274,
+  "return_pct": 138.99,
   "risk": {
     "alerts": [],
     "limits": {
@@ -1739,42 +1765,12 @@
         "index": 0.12
       }
     },
-    "new_risk_paused": true,
+    "new_risk_paused": false,
     "over_limit": [
       {
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.1141
-      },
-      {
-        "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "side": "NO",
-        "worst_case_share": 0.0545
-      },
-      {
-        "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "side": "NO",
-        "worst_case_share": 0.046
-      },
-      {
-        "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-        "side": "BULL",
-        "worst_case_share": 0.0446
-      },
-      {
-        "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-        "side": "YES",
-        "worst_case_share": 0.041
-      },
-      {
-        "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
-        "side": "NO",
-        "worst_case_share": 0.0392
-      },
-      {
-        "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-        "side": "NO",
-        "worst_case_share": 0.0378
+        "worst_case_share": 0.0452
       }
     ],
     "positions": [
@@ -1785,7 +1781,7 @@
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "pnl_usd": -60.74,
         "side": "NO",
-        "worst_case_share": 0.1141,
+        "worst_case_share": 0.0452,
         "worst_case_usd": 1081.16
       },
       {
@@ -1795,7 +1791,7 @@
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
         "pnl_usd": 17.2,
         "side": "NO",
-        "worst_case_share": 0.0545,
+        "worst_case_share": 0.0216,
         "worst_case_usd": 515.9
       },
       {
@@ -1803,20 +1799,10 @@
         "entry_worst_case_usd": 363.66,
         "kind": "binary",
         "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "pnl_usd": 72.28,
+        "pnl_usd": 71.83,
         "side": "NO",
-        "worst_case_share": 0.046,
-        "worst_case_usd": 435.94
-      },
-      {
-        "alerts": [],
-        "entry_worst_case_usd": 416.93,
-        "kind": "option",
-        "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-        "pnl_usd": 5.4,
-        "side": "BULL",
-        "worst_case_share": 0.0446,
-        "worst_case_usd": 422.34
+        "worst_case_share": 0.0182,
+        "worst_case_usd": 435.49
       },
       {
         "alerts": [],
@@ -1825,7 +1811,7 @@
         "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
         "pnl_usd": 32.4,
         "side": "YES",
-        "worst_case_share": 0.041,
+        "worst_case_share": 0.0163,
         "worst_case_usd": 388.8
       },
       {
@@ -1835,7 +1821,7 @@
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "pnl_usd": -8.55,
         "side": "NO",
-        "worst_case_share": 0.0392,
+        "worst_case_share": 0.0156,
         "worst_case_usd": 371.78
       },
       {
@@ -1845,8 +1831,18 @@
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
         "pnl_usd": 3.81,
         "side": "NO",
-        "worst_case_share": 0.0378,
+        "worst_case_share": 0.015,
         "worst_case_usd": 358.14
+      },
+      {
+        "alerts": [],
+        "entry_worst_case_usd": 269.1,
+        "kind": "option",
+        "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
+        "pnl_usd": 16.09,
+        "side": "BULL",
+        "worst_case_share": 0.0119,
+        "worst_case_usd": 285.19
       },
       {
         "alerts": [],
@@ -1855,7 +1851,7 @@
         "label": "Strait of Hormuz traffic returns to normal by December 31?",
         "pnl_usd": 16.96,
         "side": "NO",
-        "worst_case_share": 0.0294,
+        "worst_case_share": 0.0117,
         "worst_case_usd": 278.53
       },
       {
@@ -1863,10 +1859,20 @@
         "entry_worst_case_usd": 200.38,
         "kind": "option",
         "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-        "pnl_usd": 19.02,
+        "pnl_usd": 25.64,
         "side": "BULL",
-        "worst_case_share": 0.0232,
-        "worst_case_usd": 219.4
+        "worst_case_share": 0.0095,
+        "worst_case_usd": 226.03
+      },
+      {
+        "alerts": [],
+        "entry_worst_case_usd": 37.82,
+        "kind": "linear",
+        "label": "Aluminium (MCX ALUMINI)",
+        "pnl_usd": 18.47,
+        "side": "SHORT",
+        "worst_case_share": 0.0017,
+        "worst_case_usd": 40.59
       },
       {
         "alerts": [],
@@ -1875,38 +1881,28 @@
         "label": "Bill Belichick out before Dec 1, 2026",
         "pnl_usd": -13.39,
         "side": "YES",
-        "worst_case_share": 0.0042,
+        "worst_case_share": 0.0017,
         "worst_case_usd": 40.18
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
-        "label": "Aluminium (MCX ALUMINI)",
-        "pnl_usd": 9.87,
-        "side": "SHORT",
-        "worst_case_share": 0.0041,
-        "worst_case_usd": 39.3
-      },
-      {
-        "alerts": [],
-        "entry_worst_case_usd": 37.82,
-        "kind": "linear",
         "label": "Copper (MCX COPPER)",
-        "pnl_usd": -34.26,
+        "pnl_usd": -35.13,
         "side": "LONG",
-        "worst_case_share": 0.0034,
-        "worst_case_usd": 32.68
+        "worst_case_share": 0.0014,
+        "worst_case_usd": 32.55
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": 0.33,
+        "pnl_usd": 0.66,
         "side": "YES",
-        "worst_case_share": 0.0027,
-        "worst_case_usd": 25.41
+        "worst_case_share": 0.0011,
+        "worst_case_usd": 25.74
       },
       {
         "alerts": [],
@@ -1915,12 +1911,12 @@
         "label": "Will the UK agree to or announce a decision not to transfer sovereignty over Diego Garcia to Mauritius before Dec 1, 2026?",
         "pnl_usd": 0.4,
         "side": "NO",
-        "worst_case_share": 0.002,
+        "worst_case_share": 0.0008,
         "worst_case_usd": 18.8
       }
     ],
-    "worst_case_total_share": 0.4464,
-    "worst_case_total_usd": 4228.36
+    "worst_case_total_share": 0.1715,
+    "worst_case_total_usd": 4098.88
   },
   "scorecard": {
     "retired_records": [
@@ -2146,6 +2142,43 @@
   "shadow": {},
   "starting_value": 10000.0,
   "trades": [
+    {
+      "action": "reduce",
+      "attribution": {
+        "put_premium": 1.0
+      },
+      "cycle_id": "fund-20261125T0401",
+      "evidence": [
+        {
+          "figure": "position: Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
+          "source": "fund ledger"
+        },
+        {
+          "figure": "worst case now: $442 (4.6% of the fund)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "owner's limit: 3% of the fund ($285)",
+          "source": "owner instruction trim-banknifty-put-spread-2026-11-22"
+        },
+        {
+          "figure": "selling: 35% of the position at 2,155.02 per unit",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
+      "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
+      "note": "The trader is selling 35% of a bank stock option position that carries a maximum potential loss of $442, which exceeds the owner's personal risk limit of $285. Consequently, the trader is reducing their exposure by selling a portion of this position at a specific price per unit.",
+      "note_source": "model",
+      "notional_usd": 14549.228175553686,
+      "pair_key": null,
+      "price": 2155.0209999999997,
+      "purpose": "trim",
+      "quantity": 6.751316193927432,
+      "realized_pnl_usd": 14401.398873029706,
+      "side": "BULL",
+      "ts": "2026-11-25T04:01:11.678988+00:00"
+    },
     {
       "action": "settle",
       "attribution": {
