@@ -6,24 +6,25 @@
   ],
   "attribution": {
     "realized": {
-      "agent_transfer": -584.6414,
+      "agent_transfer": -604.2743,
       "blend_model": -3.4501,
+      "event_model": 22.9231,
       "put_premium": 8.8381
     },
     "unrealized": {
-      "agent_transfer": 27.8252,
-      "blend_model": -10.4918,
-      "event_model": 61.9396,
+      "agent_transfer": 38.8598,
+      "blend_model": -2.9701,
+      "event_model": 40.8123,
       "pairs_model": -18.6897,
       "put_premium": 43.3022
     }
   },
   "by_asset_class": {
     "commodity": 485.5346,
-    "event": 3533.2151,
+    "event": 2088.4419,
     "option": 512.7901
   },
-  "cash_usd": 4993.0921,
+  "cash_usd": 6438.5845,
   "corrections": [
     {
       "applied": "2026-11-25T11:22:45.586888+00:00",
@@ -1131,25 +1132,45 @@
     {
       "nav_usd": 9524.632,
       "ts": "2026-11-25T18:59:06.922134+00:00"
+    },
+    {
+      "nav_usd": 9525.3511,
+      "ts": "2026-11-25T20:01:12.901477+00:00"
     }
   ],
   "cycle": {
-    "orders": 0,
-    "passed": [],
+    "orders": 6,
+    "passed": [
+      {
+        "instrument": "copper-aluminium",
+        "label": "copper-aluminium",
+        "reason": "owner hold hold-copper-aluminium-2026-11-23: kept open although this trade needs the price ratio to move further from its 10-year normal (z +1.43): relative value says Copper is the dear leg, the one this trade holds"
+      }
+    ],
     "seeded": null,
-    "signals": 4,
+    "signals": 0,
     "skipped": [
       {
         "instrument": "polymarket:putin-out-before-2027-346",
         "label": "Putin out as President of Russia by December 31, 2026?",
         "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
+      },
+      {
+        "instrument": "mcx:ZINCMINI",
+        "label": "Zinc (MCX ZINCMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:LEADMINI",
+        "label": "Lead (MCX LEADMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
-    "traded": false,
-    "window": "00:29 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-25T18:59:06.922134+00:00",
+  "generated_at": "2026-11-25T20:01:12.901477+00:00",
   "guard": {
     "board": 32,
     "checked": 32,
@@ -1277,7 +1298,7 @@
         ]
       },
       "crude-natgas": {
-        "agrees": false,
+        "agrees": null,
         "change": 0.0353,
         "cite": "US EIA, Nov 2026",
         "claims": [
@@ -1293,7 +1314,7 @@
         ],
         "source": "eia-2026-11-steo",
         "text": "US EIA, Nov 2026 forecasts imply crude oil/natural gas moving from 28.84 (2026) to 29.86 (2027), +3.5%",
-        "traded": true,
+        "traded": false,
         "years": [
           2026,
           2027
@@ -1377,21 +1398,21 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9524.632,
+  "nav_usd": 9525.3511,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
     "india_equity": 469.488,
-    "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 354.33,
+    "kalshi:KXMEDIARELEASESPIDERMAN-DEC26": 285.7605,
     "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126": 53.5726,
-    "kalshi:KXTHC3MG-FED-26DEC10": 356.4,
+    "kalshi:KXTHC3MG-FED-26DEC10": 261.9472,
     "kalshi:KXUKCHAGOS-28JAN01-26DEC01": 18.4,
-    "kalshi:KXUSAEXPANDTERRITORY-29JAN21": 380.331,
+    "kalshi:KXUSAEXPANDTERRITORY-29JAN21": 292.3297,
     "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31": 261.5735,
-    "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026": 363.6556,
+    "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026": 238.379,
     "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573": 25.0812,
-    "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026": 1141.8962,
-    "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026": 498.702
+    "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026": 298.461,
+    "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026": 276.2351
   },
   "options": {
     "class_cap": 0.1,
@@ -1481,7 +1502,7 @@
       "attribution": {
         "agent_transfer": 1.0
       },
-      "collateral_usd": 354.33,
+      "collateral_usd": 285.760533,
       "currency": "USD",
       "entry_price": 0.9299999999999999,
       "instrument_id": "kalshi:KXMEDIARELEASESPIDERMAN-DEC26",
@@ -1493,10 +1514,10 @@
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
       "pnl_usd": 0.0,
-      "quantity": 381.0,
+      "quantity": 307.2693903225807,
       "side": "NO",
       "underlying": "kalshi:KXMEDIARELEASESPIDERMAN-DEC26",
-      "value_usd": 354.33,
+      "value_usd": 285.7605,
       "venue": "kalshi"
     },
     {
@@ -1510,16 +1531,16 @@
       "instrument_id": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
       "kind": "binary",
       "label": "Bill Belichick out before Dec 1, 2026",
-      "mark": 0.07,
+      "mark": 0.08,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-20T20:01:30.430284+00:00",
       "pair_key": null,
-      "pnl_usd": -6.6966,
+      "pnl_usd": 0.0,
       "quantity": 669.6579364470109,
       "side": "YES",
       "underlying": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
-      "value_usd": 46.8761,
+      "value_usd": 53.5726,
       "venue": "kalshi"
     },
     {
@@ -1527,7 +1548,7 @@
       "attribution": {
         "agent_transfer": 1.0
       },
-      "collateral_usd": 356.4,
+      "collateral_usd": 261.94715525,
       "currency": "USD",
       "entry_price": 0.8799999999999999,
       "instrument_id": "kalshi:KXTHC3MG-FED-26DEC10",
@@ -1538,11 +1559,11 @@
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 32.4,
-      "quantity": 405.0,
+      "pnl_usd": 23.8134,
+      "quantity": 297.667221875,
       "side": "YES",
       "underlying": "kalshi:KXTHC3MG-FED-26DEC10",
-      "value_usd": 388.8,
+      "value_usd": 285.7605,
       "venue": "kalshi"
     },
     {
@@ -1573,7 +1594,7 @@
       "attribution": {
         "event_model": 1.0
       },
-      "collateral_usd": 380.3310234210526,
+      "collateral_usd": 292.32970829923556,
       "currency": "USD",
       "entry_price": 0.89,
       "instrument_id": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
@@ -1584,11 +1605,11 @@
       "multiplier": 1.0,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": -8.5468,
-      "quantity": 427.3382285629804,
+      "pnl_usd": -6.5692,
+      "quantity": 328.4603464036354,
       "side": "NO",
       "underlying": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
-      "value_usd": 371.7843,
+      "value_usd": 285.7605,
       "venue": "kalshi"
     },
     {
@@ -1619,22 +1640,22 @@
       "attribution": {
         "event_model": 1.0
       },
-      "collateral_usd": 363.6555565789475,
+      "collateral_usd": 238.37902910533248,
       "currency": "USD",
       "entry_price": 0.81,
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.967,
+      "mark": 0.971,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 70.4863,
-      "quantity": 448.95747725795985,
+      "pnl_usd": 47.3815,
+      "quantity": 294.2950976609043,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 434.1419,
+      "value_usd": 285.7605,
       "venue": "polymarket"
     },
     {
@@ -1648,16 +1669,16 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.129,
+      "mark": 0.134,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": -3.7952,
+      "pnl_usd": -2.9701,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 21.286,
+      "value_usd": 22.1111,
       "venue": "polymarket"
     },
     {
@@ -1665,7 +1686,7 @@
       "attribution": {
         "agent_transfer": 1.0
       },
-      "collateral_usd": 1141.8962,
+      "collateral_usd": 298.46099358255367,
       "currency": "USD",
       "entry_price": 0.939999984902656,
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
@@ -1676,11 +1697,11 @@
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -48.5913,
-      "quantity": 1214.783211,
+      "pnl_usd": -12.7005,
+      "quantity": 317.51170040014586,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 1093.3049,
+      "value_usd": 285.7605,
       "venue": "polymarket"
     },
     {
@@ -1688,22 +1709,22 @@
       "attribution": {
         "agent_transfer": 1.0
       },
-      "collateral_usd": 498.702,
+      "collateral_usd": 276.2351394337028,
       "currency": "USD",
       "entry_price": 0.057999995290470445,
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.061000000000000054,
+      "mark": 0.06000000000000005,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 25.795,
-      "quantity": 8598.311043,
+      "pnl_usd": 9.5254,
+      "quantity": 4762.675204545904,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 524.497,
+      "value_usd": 285.7605,
       "venue": "polymarket"
     },
     {
@@ -1779,7 +1800,7 @@
       "snapshots": 80988
     }
   },
-  "realized_pnl_usd": -579.2534,
+  "realized_pnl_usd": -575.9633,
   "retired": [
     {
       "analyst": "event_model",
@@ -1807,9 +1828,38 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -4.754,
+  "return_pct": -4.746,
   "risk": {
-    "alerts": [],
+    "alerts": [
+      {
+        "alerts": [
+          "fell $103 since the last update"
+        ],
+        "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
+        "side": "YES"
+      },
+      {
+        "alerts": [
+          "fell $148 since the last update"
+        ],
+        "label": "US announces end of Iranian blockade by November 30, 2026?",
+        "side": "NO"
+      },
+      {
+        "alerts": [
+          "fell $808 since the last update"
+        ],
+        "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
+        "side": "NO"
+      },
+      {
+        "alerts": [
+          "fell $239 since the last update"
+        ],
+        "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
+        "side": "NO"
+      }
+    ],
     "limits": {
       "alert_drop": 0.01,
       "alert_loss": 0.02,
@@ -1821,99 +1871,76 @@
         "index": 0.12
       }
     },
-    "new_risk_paused": true,
-    "over_limit": [
-      {
-        "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-        "side": "NO",
-        "worst_case_share": 0.1148
-      },
-      {
-        "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "side": "NO",
-        "worst_case_share": 0.0551
-      },
-      {
-        "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "side": "NO",
-        "worst_case_share": 0.0456
-      },
-      {
-        "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-        "side": "YES",
-        "worst_case_share": 0.0408
-      },
-      {
-        "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
-        "side": "NO",
-        "worst_case_share": 0.039
-      },
-      {
-        "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-        "side": "NO",
-        "worst_case_share": 0.0372
-      }
-    ],
+    "new_risk_paused": false,
+    "over_limit": [],
     "positions": [
       {
         "alerts": [],
-        "entry_worst_case_usd": 1141.9,
-        "kind": "binary",
-        "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-        "pnl_usd": -48.59,
-        "side": "NO",
-        "worst_case_share": 0.1148,
-        "worst_case_usd": 1093.3
-      },
-      {
-        "alerts": [],
-        "entry_worst_case_usd": 498.7,
-        "kind": "binary",
-        "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "pnl_usd": 25.8,
-        "side": "NO",
-        "worst_case_share": 0.0551,
-        "worst_case_usd": 524.5
-      },
-      {
-        "alerts": [],
-        "entry_worst_case_usd": 363.66,
-        "kind": "binary",
-        "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "pnl_usd": 70.49,
-        "side": "NO",
-        "worst_case_share": 0.0456,
-        "worst_case_usd": 434.14
-      },
-      {
-        "alerts": [],
-        "entry_worst_case_usd": 356.4,
-        "kind": "binary",
-        "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-        "pnl_usd": 32.4,
-        "side": "YES",
-        "worst_case_share": 0.0408,
-        "worst_case_usd": 388.8
-      },
-      {
-        "alerts": [],
-        "entry_worst_case_usd": 380.33,
-        "kind": "binary",
-        "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
-        "pnl_usd": -8.55,
-        "side": "NO",
-        "worst_case_share": 0.039,
-        "worst_case_usd": 371.78
-      },
-      {
-        "alerts": [],
-        "entry_worst_case_usd": 354.33,
+        "entry_worst_case_usd": 285.76,
         "kind": "binary",
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
         "pnl_usd": 0.0,
         "side": "NO",
-        "worst_case_share": 0.0372,
-        "worst_case_usd": 354.33
+        "worst_case_share": 0.03,
+        "worst_case_usd": 285.76
+      },
+      {
+        "alerts": [
+          "fell $103 since the last update"
+        ],
+        "entry_worst_case_usd": 261.95,
+        "kind": "binary",
+        "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
+        "pnl_usd": 23.81,
+        "side": "YES",
+        "worst_case_share": 0.03,
+        "worst_case_usd": 285.76
+      },
+      {
+        "alerts": [],
+        "entry_worst_case_usd": 292.33,
+        "kind": "binary",
+        "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
+        "pnl_usd": -6.57,
+        "side": "NO",
+        "worst_case_share": 0.03,
+        "worst_case_usd": 285.76
+      },
+      {
+        "alerts": [
+          "fell $148 since the last update"
+        ],
+        "entry_worst_case_usd": 238.38,
+        "kind": "binary",
+        "label": "US announces end of Iranian blockade by November 30, 2026?",
+        "pnl_usd": 47.38,
+        "side": "NO",
+        "worst_case_share": 0.03,
+        "worst_case_usd": 285.76
+      },
+      {
+        "alerts": [
+          "fell $808 since the last update"
+        ],
+        "entry_worst_case_usd": 298.46,
+        "kind": "binary",
+        "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
+        "pnl_usd": -12.7,
+        "side": "NO",
+        "worst_case_share": 0.03,
+        "worst_case_usd": 285.76
+      },
+      {
+        "alerts": [
+          "fell $239 since the last update"
+        ],
+        "entry_worst_case_usd": 276.24,
+        "kind": "binary",
+        "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
+        "pnl_usd": 9.53,
+        "side": "NO",
+        "worst_case_share": 0.03,
+        "worst_case_usd": 285.76
       },
       {
         "alerts": [],
@@ -1950,10 +1977,10 @@
         "entry_worst_case_usd": 53.57,
         "kind": "binary",
         "label": "Bill Belichick out before Dec 1, 2026",
-        "pnl_usd": -6.7,
+        "pnl_usd": 0.0,
         "side": "YES",
-        "worst_case_share": 0.0049,
-        "worst_case_usd": 46.88
+        "worst_case_share": 0.0056,
+        "worst_case_usd": 53.57
       },
       {
         "alerts": [],
@@ -1980,10 +2007,10 @@
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": -3.8,
+        "pnl_usd": -2.97,
         "side": "YES",
-        "worst_case_share": 0.0022,
-        "worst_case_usd": 21.29
+        "worst_case_share": 0.0023,
+        "worst_case_usd": 22.11
       },
       {
         "alerts": [],
@@ -1996,8 +2023,8 @@
         "worst_case_usd": 18.8
       }
     ],
-    "worst_case_total_share": 0.4324,
-    "worst_case_total_usd": 4118.83
+    "worst_case_total_share": 0.2807,
+    "worst_case_total_usd": 2674.05
   },
   "scorecard": {
     "retired_records": [
@@ -2223,6 +2250,228 @@
   "shadow": {},
   "starting_value": 10000.0,
   "trades": [
+    {
+      "action": "reduce",
+      "attribution": {
+        "agent_transfer": 1.0
+      },
+      "cycle_id": "fund-20261125T2001",
+      "evidence": [
+        {
+          "figure": "position: Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
+          "source": "fund ledger"
+        },
+        {
+          "figure": "worst case now: $354 (3.7% of the fund)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "limit: 3% of the fund per position ($286)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "selling: 19% of the position at 0.93 per unit",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "kalshi:KXMEDIARELEASESPIDERMAN-DEC26",
+      "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
+      "note": "The trader is betting that the official trailer for Spider-Man: Beyond the Spider-Verse will be released worldwide before December 1, 2026. They are currently holding a position worth $354 but are selling 19% of it at a price of 0.93 per unit.",
+      "note_source": "model",
+      "notional_usd": 68.56946699999996,
+      "pair_key": null,
+      "price": 0.93,
+      "purpose": "trim",
+      "quantity": 73.73060967741931,
+      "realized_pnl_usd": 0.0,
+      "side": "NO",
+      "ts": "2026-11-25T20:01:12.901477+00:00"
+    },
+    {
+      "action": "reduce",
+      "attribution": {
+        "agent_transfer": 1.0
+      },
+      "cycle_id": "fund-20261125T2001",
+      "evidence": [
+        {
+          "figure": "position: Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
+          "source": "fund ledger"
+        },
+        {
+          "figure": "worst case now: $389 (4.1% of the fund)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "limit: 3% of the fund per position ($286)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "selling: 27% of the position at 0.96 per unit",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "kalshi:KXTHC3MG-FED-26DEC10",
+      "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
+      "note": "The trader is betting that 3 mg THC beverages will be classified as legal hemp by December 10, 2026, but they have already sold 27% of their position at a price of 0.96 per unit. This trade is limited to a maximum exposure of 3% of the total fund, which corresponds to a current risk value of $286.",
+      "note_source": "model",
+      "notional_usd": 103.039467,
+      "pair_key": null,
+      "price": 0.96,
+      "purpose": "trim",
+      "quantity": 107.332778125,
+      "realized_pnl_usd": 8.586622250000005,
+      "side": "YES",
+      "ts": "2026-11-25T20:01:12.901477+00:00"
+    },
+    {
+      "action": "reduce",
+      "attribution": {
+        "event_model": 1.0
+      },
+      "cycle_id": "fund-20261125T2001",
+      "evidence": [
+        {
+          "figure": "position: Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
+          "source": "fund ledger"
+        },
+        {
+          "figure": "worst case now: $372 (3.9% of the fund)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "limit: 3% of the fund per position ($286)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "selling: 23% of the position at 0.87 per unit",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "kalshi:KXUSAEXPANDTERRITORY-29JAN21",
+      "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
+      "note": "The trader is betting that the United States will not acquire any new territory before January 21, 2029, by purchasing a contract that costs $286. They are also selling 23% of this bet at a price of 0.87 per unit, which is part of a risk limit that caps the total position at 3% of the fund.",
+      "note_source": "model",
+      "notional_usd": 86.02375747863013,
+      "pair_key": null,
+      "price": 0.87,
+      "purpose": "trim",
+      "quantity": 98.87788215934499,
+      "realized_pnl_usd": -1.9775576431869126,
+      "side": "NO",
+      "ts": "2026-11-25T20:01:12.901477+00:00"
+    },
+    {
+      "action": "reduce",
+      "attribution": {
+        "event_model": 1.0
+      },
+      "cycle_id": "fund-20261125T2001",
+      "evidence": [
+        {
+          "figure": "position: US announces end of Iranian blockade by November 30, 2026?",
+          "source": "fund ledger"
+        },
+        {
+          "figure": "worst case now: $436 (4.6% of the fund)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "limit: 3% of the fund per position ($286)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "selling: 34% of the position at 0.97 per unit",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
+      "label": "US announces end of Iranian blockade by November 30, 2026?",
+      "note": "The trader is betting that the US will announce an end to the Iranian blockade by November 30, 2026, but they are immediately selling 34% of their position at a price of 0.97 per unit. This trade is limited to a maximum loss of $286, which represents 3% of the total fund, even though the current worst-case value of the position is $436.",
+      "note_source": "model",
+      "notional_usd": 150.17717058874092,
+      "pair_key": null,
+      "price": 0.971,
+      "purpose": "trim",
+      "quantity": 154.66237959705555,
+      "realized_pnl_usd": 24.90064311512593,
+      "side": "NO",
+      "ts": "2026-11-25T20:01:12.901477+00:00"
+    },
+    {
+      "action": "reduce",
+      "attribution": {
+        "agent_transfer": 1.0
+      },
+      "cycle_id": "fund-20261125T2001",
+      "evidence": [
+        {
+          "figure": "position: Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
+          "source": "fund ledger"
+        },
+        {
+          "figure": "worst case now: $1,093 (11.5% of the fund)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "limit: 3% of the fund per position ($286)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "selling: 74% of the position at 0.90 per unit",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
+      "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
+      "note": "The trader is buying a bet on whether Delcy Rodr\u00edguez will lead Venezuela by the end of 2026, but they are immediately selling 74% of that bet at a price of 0.90 per unit. This action means they are locking in a profit on most of the position while keeping a small portion open, all within a strict risk limit of $286.",
+      "note_source": "model",
+      "notional_usd": 807.5443595398687,
+      "pair_key": null,
+      "price": 0.9,
+      "purpose": "trim",
+      "quantity": 897.2715105998541,
+      "realized_pnl_usd": -35.89084687757759,
+      "side": "NO",
+      "ts": "2026-11-25T20:01:12.901477+00:00"
+    },
+    {
+      "action": "reduce",
+      "attribution": {
+        "agent_transfer": 1.0
+      },
+      "cycle_id": "fund-20261125T2001",
+      "evidence": [
+        {
+          "figure": "position: Will Mojtaba Khamenei be head of state in Iran end of 2026?",
+          "source": "fund ledger"
+        },
+        {
+          "figure": "worst case now: $516 (5.4% of the fund)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "limit: 3% of the fund per position ($286)",
+          "source": "risk limits"
+        },
+        {
+          "figure": "selling: 45% of the position at 0.06 per unit",
+          "source": "orchestrator"
+        }
+      ],
+      "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
+      "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
+      "note": "The trader is buying a bet on whether Mojtaba Khamenei will become the head of state in Iran by the end of 2026. They are selling 45% of this bet at a price of 0.06 per unit, which is within their risk limit of $286.",
+      "note_source": "model",
+      "notional_usd": 230.13815030724592,
+      "pair_key": null,
+      "price": 0.06000000000000005,
+      "purpose": "trim",
+      "quantity": 3835.6358384540954,
+      "realized_pnl_usd": 7.671289740948737,
+      "side": "NO",
+      "ts": "2026-11-25T20:01:12.901477+00:00"
+    },
     {
       "action": "reduce",
       "attribution": {
