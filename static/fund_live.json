@@ -11,17 +11,17 @@
       "put_premium": 8.8381
     },
     "unrealized": {
-      "agent_transfer": 15.4169,
-      "blend_model": -12.7331,
+      "agent_transfer": 27.8252,
+      "blend_model": -10.4918,
       "event_model": 61.9396,
-      "pairs_model": -20.663,
-      "put_premium": 43.241
+      "pairs_model": -18.6897,
+      "put_premium": 43.3022
     }
   },
   "by_asset_class": {
-    "commodity": 483.5614,
-    "event": 3518.5654,
-    "option": 512.729
+    "commodity": 485.5346,
+    "event": 3533.2151,
+    "option": 512.7901
   },
   "cash_usd": 4993.0921,
   "corrections": [
@@ -1127,6 +1127,10 @@
     {
       "nav_usd": 9507.948,
       "ts": "2026-11-25T18:01:06.632440+00:00"
+    },
+    {
+      "nav_usd": 9524.632,
+      "ts": "2026-11-25T18:59:06.922134+00:00"
     }
   ],
   "cycle": {
@@ -1134,19 +1138,38 @@
     "passed": [],
     "seeded": null,
     "signals": 4,
-    "skipped": [],
+    "skipped": [
+      {
+        "instrument": "polymarket:putin-out-before-2027-346",
+        "label": "Putin out as President of Russia by December 31, 2026?",
+        "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
+      }
+    ],
     "traded": false,
-    "window": "23:31 IST is outside the trading hours"
+    "window": "00:29 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-25T18:01:06.632440+00:00",
+  "generated_at": "2026-11-25T18:59:06.922134+00:00",
   "guard": {
     "board": 32,
-    "checked": 0,
+    "checked": 32,
     "checker": "Open-Jev 2B (Qwen3.5-2B base)",
     "days_recorded": 17,
-    "dropped": [],
+    "dropped": [
+      {
+        "forecast": 0.01,
+        "forecasted_at": "2026-11-25T17:39:30.950904+00:00",
+        "label": "Putin out as President of Russia by December 31, 2026?",
+        "rationale_yes": 0.7191
+      }
+    ],
     "flags": [
+      {
+        "forecast": 0.010000000000000009,
+        "forecasted_at": "2026-11-25T17:39:30.950904+00:00",
+        "label": "putin-out-before-2027-346",
+        "rationale_yes": 0.7191
+      },
       {
         "forecast": 0.07999999999999996,
         "forecasted_at": "2026-11-24T17:35:24.275268+00:00",
@@ -1161,9 +1184,9 @@
       }
     ],
     "kind": "checker",
-    "markets": 33,
+    "markets": 67,
     "mode": "live",
-    "unchecked": 32
+    "unchecked": 0
   },
   "hours": {
     "holiday_list": true,
@@ -1173,8 +1196,8 @@
         "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
       },
       "mcx": {
-        "open": true,
-        "why": ""
+        "open": false,
+        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       },
       "nse_fo": {
         "open": false,
@@ -1354,7 +1377,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9507.948,
+  "nav_usd": 9524.632,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1418,16 +1441,16 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 308.7,
+      "mark": 308.3,
       "marked": true,
       "multiplier": 1000.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 15.5688,
+      "pnl_usd": 15.8817,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 267.6809,
+      "value_usd": 267.9939,
       "venue": "mcx"
     },
     {
@@ -1441,16 +1464,16 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1124.0,
+      "mark": 1132.45,
       "marked": true,
       "multiplier": 2500.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -36.2317,
+      "pnl_usd": -34.5714,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 215.8804,
+      "value_usd": 217.5407,
       "venue": "mcx"
     },
     {
@@ -1464,16 +1487,16 @@
       "instrument_id": "kalshi:KXMEDIARELEASESPIDERMAN-DEC26",
       "kind": "binary",
       "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-      "mark": 0.92,
+      "mark": 0.93,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -3.81,
+      "pnl_usd": 0.0,
       "quantity": 381.0,
       "side": "NO",
       "underlying": "kalshi:KXMEDIARELEASESPIDERMAN-DEC26",
-      "value_usd": 350.52,
+      "value_usd": 354.33,
       "venue": "kalshi"
     },
     {
@@ -1487,16 +1510,16 @@
       "instrument_id": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
       "kind": "binary",
       "label": "Bill Belichick out before Dec 1, 2026",
-      "mark": 0.06,
+      "mark": 0.07,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-20T20:01:30.430284+00:00",
       "pair_key": null,
-      "pnl_usd": -13.3932,
+      "pnl_usd": -6.6966,
       "quantity": 669.6579364470109,
       "side": "YES",
       "underlying": "kalshi:KXNCAAFCOACHLEAVE-26BBEL-120126",
-      "value_usd": 40.1795,
+      "value_usd": 46.8761,
       "venue": "kalshi"
     },
     {
@@ -1625,16 +1648,16 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.156,
+      "mark": 0.129,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": 0.66,
+      "pnl_usd": -3.7952,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 25.7412,
+      "value_usd": 21.286,
       "venue": "polymarket"
     },
     {
@@ -1671,16 +1694,16 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.06000000000000005,
+      "mark": 0.061000000000000054,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 17.1967,
+      "pnl_usd": 25.795,
       "quantity": 8598.311043,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 515.8987,
+      "value_usd": 524.497,
       "venue": "polymarket"
     },
     {
@@ -1694,16 +1717,16 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2136.866,
+      "mark": 2137.325,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 15.4481,
+      "pnl_usd": 15.5092,
       "quantity": 12.289880162631071,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 284.5518,
+      "value_usd": 284.613,
       "venue": "nse_fo"
     },
     {
@@ -1784,7 +1807,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -4.921,
+  "return_pct": -4.754,
   "risk": {
     "alerts": [],
     "limits": {
@@ -1803,32 +1826,32 @@
       {
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.115
+        "worst_case_share": 0.1148
       },
       {
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.0543
+        "worst_case_share": 0.0551
       },
       {
         "label": "US announces end of Iranian blockade by November 30, 2026?",
         "side": "NO",
-        "worst_case_share": 0.0457
+        "worst_case_share": 0.0456
       },
       {
         "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
         "side": "YES",
-        "worst_case_share": 0.0409
+        "worst_case_share": 0.0408
       },
       {
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "side": "NO",
-        "worst_case_share": 0.0391
+        "worst_case_share": 0.039
       },
       {
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
         "side": "NO",
-        "worst_case_share": 0.0369
+        "worst_case_share": 0.0372
       }
     ],
     "positions": [
@@ -1839,7 +1862,7 @@
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "pnl_usd": -48.59,
         "side": "NO",
-        "worst_case_share": 0.115,
+        "worst_case_share": 0.1148,
         "worst_case_usd": 1093.3
       },
       {
@@ -1847,10 +1870,10 @@
         "entry_worst_case_usd": 498.7,
         "kind": "binary",
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "pnl_usd": 17.2,
+        "pnl_usd": 25.8,
         "side": "NO",
-        "worst_case_share": 0.0543,
-        "worst_case_usd": 515.9
+        "worst_case_share": 0.0551,
+        "worst_case_usd": 524.5
       },
       {
         "alerts": [],
@@ -1859,7 +1882,7 @@
         "label": "US announces end of Iranian blockade by November 30, 2026?",
         "pnl_usd": 70.49,
         "side": "NO",
-        "worst_case_share": 0.0457,
+        "worst_case_share": 0.0456,
         "worst_case_usd": 434.14
       },
       {
@@ -1869,7 +1892,7 @@
         "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
         "pnl_usd": 32.4,
         "side": "YES",
-        "worst_case_share": 0.0409,
+        "worst_case_share": 0.0408,
         "worst_case_usd": 388.8
       },
       {
@@ -1879,7 +1902,7 @@
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "pnl_usd": -8.55,
         "side": "NO",
-        "worst_case_share": 0.0391,
+        "worst_case_share": 0.039,
         "worst_case_usd": 371.78
       },
       {
@@ -1887,20 +1910,20 @@
         "entry_worst_case_usd": 354.33,
         "kind": "binary",
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-        "pnl_usd": -3.81,
+        "pnl_usd": 0.0,
         "side": "NO",
-        "worst_case_share": 0.0369,
-        "worst_case_usd": 350.52
+        "worst_case_share": 0.0372,
+        "worst_case_usd": 354.33
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 269.1,
         "kind": "option",
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-        "pnl_usd": 15.45,
+        "pnl_usd": 15.51,
         "side": "BULL",
         "worst_case_share": 0.0299,
-        "worst_case_usd": 284.55
+        "worst_case_usd": 284.61
       },
       {
         "alerts": [],
@@ -1909,7 +1932,7 @@
         "label": "Strait of Hormuz traffic returns to normal by December 31?",
         "pnl_usd": 17.82,
         "side": "NO",
-        "worst_case_share": 0.0294,
+        "worst_case_share": 0.0293,
         "worst_case_usd": 279.39
       },
       {
@@ -1927,40 +1950,40 @@
         "entry_worst_case_usd": 53.57,
         "kind": "binary",
         "label": "Bill Belichick out before Dec 1, 2026",
-        "pnl_usd": -13.39,
+        "pnl_usd": -6.7,
         "side": "YES",
-        "worst_case_share": 0.0042,
-        "worst_case_usd": 40.18
+        "worst_case_share": 0.0049,
+        "worst_case_usd": 46.88
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Aluminium (MCX ALUMINI)",
-        "pnl_usd": 15.57,
+        "pnl_usd": 15.88,
         "side": "SHORT",
         "worst_case_share": 0.0042,
-        "worst_case_usd": 40.15
+        "worst_case_usd": 40.2
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Copper (MCX COPPER)",
-        "pnl_usd": -36.23,
+        "pnl_usd": -34.57,
         "side": "LONG",
         "worst_case_share": 0.0034,
-        "worst_case_usd": 32.38
+        "worst_case_usd": 32.63
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": 0.66,
+        "pnl_usd": -3.8,
         "side": "YES",
-        "worst_case_share": 0.0027,
-        "worst_case_usd": 25.74
+        "worst_case_share": 0.0022,
+        "worst_case_usd": 21.29
       },
       {
         "alerts": [],
@@ -1973,8 +1996,8 @@
         "worst_case_usd": 18.8
       }
     ],
-    "worst_case_total_share": 0.4316,
-    "worst_case_total_usd": 4103.81
+    "worst_case_total_share": 0.4324,
+    "worst_case_total_usd": 4118.83
   },
   "scorecard": {
     "retired_records": [
