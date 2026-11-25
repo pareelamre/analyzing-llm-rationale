@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-24T23:34:00.185836+00:00",
+ "generated_at": "2026-11-25T12:01:37.436086+00:00",
  "data_through": "2026-11-24",
  "source": "Upstox (MCX front-month futures), FRED (Brent, WTI and Henry Hub spot) and the fawazahmed0 currency API (gold, platinum and the rupee); long view from IMF monthly metals (FRED) and the World Bank Pink Sheet (gold, silver, platinum; CC BY 4.0)",
  "rule": {
@@ -134,6 +134,9 @@
   "rule": {
    "window_months": 120,
    "entry_z": 1.5,
+   "entry_z_by_pair": {
+    "wti-natgas": 0.85
+   },
    "exit_z": 0.5,
    "max_months": 24,
    "max_sessions": 504,
@@ -177,11 +180,21 @@
    "timing_filter": "waiting for the ratio to turn toward normal did not help on 1985-2004"
   },
   "live": {
-   "trades": 2,
+   "trades": 3,
    "closed": 0,
-   "open": 2
+   "open": 3
   },
   "recent": [
+   {
+    "pair": "wti-natgas",
+    "entry_date": "2026-11-17",
+    "entry_z": 0.869,
+    "side": -1,
+    "status": "open",
+    "exit_date": null,
+    "sessions": null,
+    "return": null
+   },
    {
     "pair": "gold-platinum",
     "entry_date": "2026-11-20",
@@ -547,6 +560,7 @@
    },
    "relative_value": {
     "z": 0.669,
+    "entry_z": 1.5,
     "percentile": 0.775,
     "ratio": 86.6471,
     "usual": 79.9121,
@@ -912,6 +926,7 @@
    },
    "relative_value": {
     "z": -0.783,
+    "entry_z": 1.5,
     "percentile": 0.167,
     "ratio": 1.0378,
     "usual": 1.0698,
@@ -1290,15 +1305,16 @@
    },
    "relative_value": {
     "z": 0.869,
+    "entry_z": 0.85,
     "percentile": 0.8,
     "ratio": 28.8238,
     "usual": 21.3459,
     "window_months": 120,
     "rich": "WTI",
     "cheap": "Natural gas",
-    "side": null,
+    "side": -1,
     "driver": null,
-    "signal": false,
+    "signal": true,
     "held_back": null,
     "expected": {
      "per_trade": 0.13226,
@@ -1313,11 +1329,15 @@
      "avg_return": 0.21
     },
     "live": {
-     "trades": 0,
+     "trades": 1,
      "closed": 0,
-     "open": 0
+     "open": 1
     },
-    "open_trade": null
+    "open_trade": {
+     "entry_date": "2026-11-17",
+     "entry_z": 0.869,
+     "side": -1
+    }
    }
   },
   {
@@ -1511,6 +1531,7 @@
    },
    "relative_value": {
     "z": -0.93,
+    "entry_z": 1.5,
     "percentile": 0.225,
     "ratio": 3.3934,
     "usual": 4.1474,
@@ -1824,6 +1845,7 @@
    },
    "relative_value": {
     "z": 1.66,
+    "entry_z": 1.5,
     "percentile": 0.95,
     "ratio": 2.8195,
     "usual": 1.884,
@@ -2025,6 +2047,7 @@
    },
    "relative_value": {
     "z": 1.225,
+    "entry_z": 1.5,
     "percentile": 0.908,
     "ratio": 3.9867,
     "usual": 3.5228,
@@ -2302,6 +2325,7 @@
    },
    "relative_value": {
     "z": 2.844,
+    "entry_z": 1.5,
     "percentile": 0.983,
     "ratio": 2.0399,
     "usual": 1.363,
@@ -2516,6 +2540,7 @@
    },
    "relative_value": {
     "z": 0.53,
+    "entry_z": 1.5,
     "percentile": 0.625,
     "ratio": 3.1076,
     "usual": 2.7988,
@@ -2820,6 +2845,7 @@
    },
    "relative_value": {
     "z": -2.036,
+    "entry_z": 1.5,
     "percentile": 0.025,
     "ratio": 1.2316,
     "usual": 1.9994,
