@@ -56,6 +56,55 @@ class FundLedgerTests(unittest.TestCase):
         snap = ledger.nav(self.conn, "fund", {}, {})
         self.assertEqual(snap["realized_pnl_by_analyst"], {"a": 10.0, "b": 10.0})
 
+    def test_a_rupee_fill_without_its_rate_is_refused(self):
+        with self.assertRaises(ledger.LedgerError):
+            ledger.buy(self.conn, "fund", GOLD_MCX, "LONG", 10, 12_000.0)
+        ledger.buy(self.conn, "fund", GOLD_MCX, "LONG", 10, 12_000.0, fx=100.0)
+        with self.assertRaises(ledger.LedgerError):
+            ledger.sell(self.conn, "fund", GOLD_MCX["id"], "LONG", 5, 12_500.0)
+        self.assertEqual(ledger.nav(self.conn, "fund", {}, {"INR": 100.0})["positions"][0]["currency"], "INR")
+
+    def _rupee_option_sold_at_one_rupee_per_dollar(self):
+        spread = {"id": "nse_fo:BANKNIFTY:put_spread:x", "label": "Bank Nifty spread", "venue": "nse_fo",
+                  "asset_class": "option", "underlying": "india_equity", "currency": "INR", "multiplier": 1.0,
+                  "key": "BN", "legs": [{"kind": "PE", "strike": 59300, "qty": -1}, {"kind": "PE", "strike": 57000, "qty": 1}]}
+        ledger.buy(self.conn, "fund", spread, "BULL", 19.0, 2060.68, fx=92.867, now="2026-11-16T08:00:00+00:00")
+        ledger.record_nav(self.conn, ledger.nav(self.conn, "fund", {}, {"INR": 92.867}), now="2026-11-25T02:00:00+00:00")
+        # The bug: a rupee sale booked at fx 1.0 (written straight to the ledger, as the old cycle did).
+        held = self.conn.execute("SELECT * FROM fund_positions").fetchone()
+        pnl = ledger.position_pnl_usd(held, 2155.02, 1.0, 6.75)
+        coll = held["collateral_usd"] * 6.75 / held["quantity"]
+        self.conn.execute("UPDATE fund_positions SET quantity = quantity - 6.75, collateral_usd = collateral_usd - ?",
+                          (coll,))
+        ledger._record(self.conn, "fund", {"id": spread["id"], "label": spread["label"]}, "BULL", "reduce",
+                       quantity=6.75, price=2155.02, fx=1.0, notional_usd=coll + pnl, fee_usd=0.0,
+                       cash_delta=coll + pnl, realized=pnl, attribution={"put_premium": 1.0}, purpose="trim",
+                       pair_key=None, cycle_id="c", note="trim", note_source=None, evidence=(),
+                       now="2026-11-25T04:01:11+00:00")
+        snap = ledger.nav(self.conn, "fund", {}, {"INR": 92.867})
+        ledger.record_nav(self.conn, snap, now="2026-11-25T04:01:11+00:00")
+        return spread, pnl, coll
+
+    def test_a_correction_rebooks_a_sale_at_its_real_rate_once(self):
+        spread, wrong, coll = self._rupee_option_sold_at_one_rupee_per_dollar()
+        before = self.conn.execute("SELECT cash, realized_pnl FROM fund_account").fetchone()
+        fix = {"id": "fx-1", "trade_ts": "2026-11-25T04:01:11+00:00", "instrument_id": spread["id"], "fx": 92.867}
+        done = ledger.reprice_trade(self.conn, "fund", fix, now="2026-11-25T12:00:00+00:00")
+        right = 6.75 * 2155.02 / 92.867 - coll
+        self.assertAlmostEqual(done["profit_usd"], right, places=3)
+        self.assertAlmostEqual(done["delta_usd"], right - wrong, places=3)
+        after = self.conn.execute("SELECT cash, realized_pnl FROM fund_account").fetchone()
+        self.assertAlmostEqual(after["cash"] - before["cash"], right - wrong, places=6)
+        self.assertAlmostEqual(after["realized_pnl"] - before["realized_pnl"], right - wrong, places=6)
+        trade = self.conn.execute("SELECT * FROM fund_trades WHERE action = 'reduce'").fetchone()
+        self.assertAlmostEqual(trade["realized_pnl_usd"], right, places=6)
+        self.assertEqual(trade["fx"], 92.867)
+        self.assertIn("Corrected 2026-11-25", trade["note"])
+        navs = [r["nav_usd"] for r in self.conn.execute("SELECT nav_usd FROM fund_nav ORDER BY ts")]
+        self.assertLess(abs(navs[1] - navs[0]), 20.0)  # the false jump is gone from the history
+        self.assertIsNone(ledger.reprice_trade(self.conn, "fund", fix))
+        self.assertEqual([c["id"] for c in ledger.corrections(self.conn, "fund")], ["fx-1"])
+
     def test_a_binary_side_is_marked_at_its_own_bid(self):
         ledger.buy(self.conn, "fund", EVENT, "NO", 100, 0.90)
         snap = ledger.nav(self.conn, "fund", {EVENT["id"]: {"yes_bid": 0.05, "no_bid": 0.93}}, {})

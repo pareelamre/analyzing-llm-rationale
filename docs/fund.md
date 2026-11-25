@@ -1768,6 +1768,23 @@ market can still settle No. Trimming an over-limit position is the owner's call.
 largest single worst case is the Venezuela No (Delcy Rodríguez) at 11.2%; three Iran-related
 bets together are about 12%.
 
+## Accounting checks (2026-11-25)
+
+On 2026-11-25 the owner's Nifty Bank trim sold in rupees but was booked at one rupee per dollar:
+the fund's value jumped from $9,473 to $23,899 on a false $14,393 profit (the real one was $8.84).
+The cycle looked up a held position's currency on the board's position rows, which did not carry it.
+Three changes stop it happening again and repair the record:
+
+- **Positions carry their currency** (and multiplier) on every board row, so a sale finds its rate.
+- **The ledger refuses a non-dollar fill without its rate** (a rate of 1.0 for rupees is refused).
+- **Books check:** trading at the cycle's own marks barely moves the fund's value, so if a cycle's
+  trades move it by more than 2% (`FUND_ACCOUNTING_TOLERANCE`), all of them are undone and listed
+  as passed with the reason.
+- **Corrections:** `configs/fund_corrections.json` re-books a named trade at its real rate once
+  (`fund_ledger.reprice_trade`): its profit, the cash, the realized total and every fund value
+  recorded since move by the difference, and the trade's note says so. Applied corrections are in
+  the board's `corrections`.
+
 ## Trading hours (owner, 2026-11-16)
 
 The owner asked that the fund make proper use of each market's trading hours. A
