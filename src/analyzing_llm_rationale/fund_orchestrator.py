@@ -470,7 +470,7 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
          option_values: Mapping[str, float] = (), rates: Mapping[str, float] = (),
          exit_z: float = 0.5, max_hold: int = 20, rv_rule: Optional[Mapping[str, Any]] = None,
          owner_trims: Sequence[Mapping[str, Any]] = (), owner_holds: Sequence[Mapping[str, Any]] = (),
-         entries: bool = True) -> dict[str, Any]:
+         entries: bool = True, risk_trims: bool = False) -> dict[str, Any]:
     """Orders for one cycle from the fund's nav() ``snapshot``, ``signals`` and ``quotes``.
 
     ``hedges`` maps an underlying to the instrument that offsets it. ``forecasts`` maps an event
@@ -485,7 +485,8 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
     model's value of each held option structure, per unit; ``rates`` gives units of each
     currency per USD, so a rupee contract is sized in rupees. ``entries=False`` is the
     end-of-day check: exits, owner trims and hedges only, and every signal not already held
-    is listed as passed.
+    is listed as passed. ``risk_trims`` sells down any other held position whose worst case is
+    over the per-position limit (fund_risk.MAX_LOSS_PER_POSITION), as an owner trim would.
     """
     nav = float(snapshot["nav_usd"])
     cash = float(snapshot["cash_usd"])
@@ -577,13 +578,48 @@ def plan(snapshot: Mapping[str, Any], signals: Sequence[Signal], quotes: Mapping
                              _fact("selling", f"{part:.0%} of the position at {float(pos['mark']):,.2f} per unit",
                                    "orchestrator")],
                             reason=str(trim.get("reason") or f"owner: trim to a {share:.0%} worst case")))
+    # 1c. Risk trims (2026-11-25): the per-position limit binds held positions too. A position
+    #     whose worst case is over it (positions bought before the limit, or grown since) is sold
+    #     down to it, with the same 10% slack as owner trims. Pair legs are left alone (they are
+    #     small and a lone leg would unbalance the pair). The fund's one large loss so far, -$585
+    #     on an inherited Kalshi NO, came from such a position, and on 2026-11-25 they filled the
+    #     40% budget that a relative-value pair needed.
+    if risk_trims and nav > 0:
+        selling = {(o.instrument["id"], o.side) for o in orders if o.action == "sell"}
+        limit = fund_risk.MAX_LOSS_PER_POSITION * nav
+        for key, pos in sorted(held.items()):
+            if key in selling or pos.get("pair_key") or not pos.get("mark") or not float(pos.get("quantity") or 0):
+                continue
+            worst = fund_risk.position_worst_case(pos)
+            if worst <= limit * 1.10:
+                continue
+            part = 1.0 - limit / worst
+            orders.append(Order("sell", {"id": key[0], "label": pos.get("label")}, key[1],
+                                float(pos["quantity"]) * part, float(pos["mark"]), "trim",
+                                pos.get("attribution") or {},
+                                [_fact("position", pos.get("label") or key[0], "fund ledger"),
+                                 _fact("worst case now", f"${worst:,.0f} ({worst / nav:.1%} of the fund)", "risk limits"),
+                                 _fact("limit", f"{fund_risk.MAX_LOSS_PER_POSITION:.0%} of the fund per position "
+                                       f"(${limit:,.0f})", "risk limits"),
+                                 _fact("selling", f"{part:.0%} of the position at {float(pos['mark']):,.2f} per unit",
+                                       "orchestrator")],
+                                reason=f"over the {fund_risk.MAX_LOSS_PER_POSITION:.0%} per-position risk limit: "
+                                       f"sell {part:.0%} so its worst case is ${limit:,.0f}"))
     books = {_option_book(iid) for (iid, _side), pos in held.items() if pos["kind"] == "option"}
 
     # 2. Entries, best edge x trust first, inside every limit, and inside the risk limits
     # (fund_risk): no new position may lose more than 3% of the fund, and everything held
     # together no more than 40%. A pair's two legs are sized together.
-    budget = max(0.0, cash - CASH_FLOOR * nav)
-    worst_total = fund_risk.portfolio_worst_case(snapshot.get("positions") or [])
+    # Sales planned above (exits, trims) run first, so the risk and cash they free count here.
+    freed_risk = freed_cash = 0.0
+    for o in orders:
+        pos = held.get((o.instrument["id"], o.side))
+        if o.action == "sell" and pos and float(pos.get("quantity") or 0):
+            part = min(1.0, float(o.quantity) / float(pos["quantity"]))
+            freed_risk += fund_risk.position_worst_case(pos) * part
+            freed_cash += float(pos.get("value_usd") or 0.0) * part
+    budget = max(0.0, cash + freed_cash - CASH_FLOOR * nav)
+    worst_total = max(0.0, fund_risk.portfolio_worst_case(snapshot.get("positions") or []) - freed_risk)
     pair_room: dict[str, float] = {}
     for s in sorted(signals, key=lambda s: -(s.edge * s.trust)):
         iid = s.instrument["id"]

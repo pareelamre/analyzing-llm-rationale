@@ -80,6 +80,40 @@ class ReviewTests(unittest.TestCase):
         self.assertTrue(risk.review(_snap(held))["new_risk_paused"])
 
 
+class RiskTrimTests(unittest.TestCase):
+    """2026-11-25: the per-position limit binds held positions too (fund_orchestrator.plan risk_trims)."""
+
+    def _inherited(self):
+        big = {**_binary(1_081.0, iid="polymarket:delcy", label="Delcy NO"), "quantity": 1_200.0, "mark": 0.9008}
+        small = {**_binary(279.0, iid="polymarket:hormuz", label="Hormuz NO"), "quantity": 300.0, "mark": 0.93}
+        leg = {"instrument_id": "mcx:COPPER", "side": "LONG", "label": "Copper", "kind": "linear",
+               "asset_class": "commodity", "quantity": 0.007, "mark": 1128.5, "collateral_usd": 900.0,
+               "value_usd": 900.0, "pnl_usd": 0.0, "pair_key": "copper-aluminium", "multiplier": 1.0}
+        return big, small, leg
+
+    def test_an_over_limit_bet_is_sold_down_to_three_percent(self):
+        big, small, leg = self._inherited()
+        out = orch.plan(_snap([big, small, leg], cash=6_000.0), [], {}, {}, risk_trims=True)
+        [order] = out["orders"]
+        self.assertEqual((order.instrument["id"], order.action, order.purpose), ("polymarket:delcy", "sell", "trim"))
+        part = 1 - 0.03 * NAV / 1_081.0
+        self.assertAlmostEqual(order.quantity, 1_200.0 * part)
+        self.assertIn("per-position risk limit", order.reason)
+
+    def test_without_the_switch_nothing_is_trimmed(self):
+        big, small, leg = self._inherited()
+        self.assertEqual(orch.plan(_snap([big, small, leg], cash=6_000.0), [], {}, {})["orders"], [])
+
+    def test_risk_freed_by_a_trim_lets_a_new_position_in_the_same_cycle(self):
+        held = [{**_binary(1_400.0, iid=f"kalshi:H{i}", label=f"held {i}"), "quantity": 1_500.0, "mark": 0.93}
+                for i in range(3)]  # 3 x 14% = 42%: over the 40% total
+        s = orch.Signal(analyst="blend_model", instrument=EVENT, side="YES", price=0.40, edge=0.1, trust=1.0, kelly=0.2)
+        blocked = orch.plan(_snap(held, cash=5_000.0), [s], {}, {})
+        self.assertEqual(blocked["orders"], [])
+        out = orch.plan(_snap(held, cash=5_000.0), [s], {}, {}, risk_trims=True)
+        self.assertEqual(sorted(o.purpose for o in out["orders"]), ["trim", "trim", "trim", "view"])
+
+
 if __name__ == "__main__":
     unittest.main()
 
