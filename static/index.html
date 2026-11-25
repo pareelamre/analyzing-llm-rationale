@@ -7196,7 +7196,7 @@ function _cptValue(p, legs, ctx) {
   const z = Number(rv.z), az = Math.abs(z);
   const pct = Math.max(1, Math.min(99, Math.round(Number(rv.percentile) * 100)));
   const fmt = x => Number(x).toPrecision(4);
-  const entry = ctx.rvEntryZ;
+  const entry = rv.entry_z ?? ctx.rvEntryZ;
   let text;
   if (!rv.rich) {
     text = `${legs[0]} and ${legs[1]} are priced about as usual against each other, measured over the last ${years} years.`;
