@@ -1,0 +1,12 @@
+{
+  "about": "One-time repairs of fund trades booked wrongly, applied once each at the start of a fund cycle (scripts/fund_cycle.py, fund_ledger.reprice_trade). Applied corrections are kept in the ledger's fund_corrections table and shown in fund_live.json 'corrections'.",
+  "corrections": [
+    {
+      "id": "fx-banknifty-trim-2026-11-25",
+      "trade_ts": "2026-11-25T04:01:11.678988+00:00",
+      "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
+      "fx": 92.867,
+      "reason": "The owner's Nifty Bank trim sold in rupees but was booked at 1 rupee per dollar, adding a false $14,393 profit; re-booked at that cycle's rate (the board's own marks)."
+    }
+  ]
+}

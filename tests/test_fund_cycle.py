@@ -119,6 +119,22 @@ class FundCycleTests(unittest.TestCase):
             self.assertFalse(ok)
             self.assertIn("under 3 hours ago", why)
 
+    def test_trades_that_move_the_fund_value_are_undone(self):
+        # 2026-11-25: a rupee trim booked in dollars lifted the fund from $9,473 to $23,899.
+        self.assertIn("nothing was traded", cycle.accounting_check(9_472.65, 23_898.95))
+        self.assertIsNone(cycle.accounting_check(9_472.65, 9_466.0))  # fees and fills off the mark
+        fund = sqlite3.connect(":memory:")
+        fund_ledger.ensure_schema(fund)
+        fund_ledger.open_fund(fund, cycle.FUND_ID, 100.0)
+        fund.commit()
+        fund.execute("SAVEPOINT fund_orders")
+        fund_ledger.buy(fund, cycle.FUND_ID, {"id": "kalshi:X"}, "YES", 10, 0.5)
+        fund.execute("ROLLBACK TO fund_orders")
+        fund.execute("RELEASE fund_orders")
+        fund.commit()
+        self.assertEqual(fund_ledger.positions(fund, cycle.FUND_ID), [])
+        self.assertEqual(fund.execute("SELECT cash FROM fund_account").fetchone()[0], 100.0)
+
     def test_the_day_trades_at_the_open_and_checks_once_at_the_end(self):
         # Owner, 2026-11-23: trade at the start of the trading window, one check at its end.
         fund = sqlite3.connect(":memory:")

@@ -141,6 +141,15 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             detail_json TEXT NOT NULL,
             PRIMARY KEY (fund_id, ts)
         );
+        CREATE TABLE IF NOT EXISTS fund_corrections (
+            id TEXT NOT NULL,
+            fund_id TEXT NOT NULL,
+            ts TEXT NOT NULL,
+            trade_id TEXT NOT NULL,
+            delta_usd REAL NOT NULL,
+            detail_json TEXT NOT NULL,
+            PRIMARY KEY (fund_id, id)
+        );
     """)
 
 
@@ -166,6 +175,13 @@ def _usd(amount: float, currency: str, fx: float) -> float:
     if not fx or fx <= 0:
         raise LedgerError(f"no USD rate for {currency}")
     return amount / fx
+
+
+def _need_rate(currency: str, fx: float, what: str) -> None:
+    """A non-dollar fill needs its own exchange rate: the default 1.0 would count each rupee
+    as a dollar (on 2026-11-25 a Nifty Bank trim booked a $14,393 gain that way)."""
+    if currency != "USD" and (not fx or fx <= 0 or fx == 1.0):
+        raise LedgerError(f"{what}: no USD rate for {currency} (got {fx!r})")
 
 
 def open_fund(conn: sqlite3.Connection, fund_id: str, starting_value: float, *, cash: Optional[float] = None,
@@ -220,6 +236,7 @@ def buy(conn: sqlite3.Connection, fund_id: str, instrument: Mapping[str, Any], s
     if quantity <= MIN_QUANTITY or price <= 0:
         raise LedgerError("a fill needs a positive quantity and price")
     currency = instrument.get("currency", "USD")
+    _need_rate(currency, fx, instrument["id"])
     multiplier = float(instrument.get("multiplier") or 1.0)
     notional = _usd(price * quantity * multiplier, currency, fx)
     account = conn.execute("SELECT cash FROM fund_account WHERE fund_id = ?", (fund_id,)).fetchone()
@@ -284,6 +301,7 @@ def sell(conn: sqlite3.Connection, fund_id: str, instrument_id: str, side: str, 
                         (fund_id, instrument_id, side)).fetchone()
     if held is None or held["quantity"] <= MIN_QUANTITY:
         raise LedgerError(f"no {side} position in {instrument_id}")
+    _need_rate(held["currency"], fx, instrument_id)
     qty = min(quantity, held["quantity"])
     share = qty / held["quantity"]
     collateral = held["collateral_usd"] * share
@@ -352,7 +370,7 @@ def nav(conn: sqlite3.Connection, fund_id: str, quotes: Mapping[str, Mapping[str
             by_analyst[analyst] = by_analyst.get(analyst, 0.0) + weight * pnl
         rows.append({**{k: pos[k] for k in ("instrument_id", "label", "side", "kind", "venue", "asset_class",
                                             "underlying", "quantity", "entry_price", "collateral_usd", "pair_key",
-                                            "opened_at")},
+                                            "opened_at", "currency", "multiplier")},
                      "mark": mark, "value_usd": round(worth, 4), "pnl_usd": round(pnl, 4), "marked": mark is not None,
                      "attribution": json.loads(pos["attribution_json"])})
     realized_by_analyst = {}
@@ -368,6 +386,64 @@ def nav(conn: sqlite3.Connection, fund_id: str, quotes: Mapping[str, Mapping[str
         "unrealized_pnl_by_analyst": {k: round(v, 4) for k, v in by_analyst.items()},
         "realized_pnl_by_analyst": {k: round(v, 4) for k, v in realized_by_analyst.items()},
     }
+
+
+
+def reprice_trade(conn: sqlite3.Connection, fund_id: str, correction: Mapping[str, Any], *,
+                  now: Optional[str] = None) -> Optional[dict[str, Any]]:
+    """Re-book a sale that was recorded at the wrong exchange rate, once per correction id.
+
+    ``correction`` names the trade (``trade_ts`` and ``instrument_id``, a sale) and the rate it
+    should have used (``fx``, units of its currency per USD). The trade's profit, the cash it
+    returned, the account's realized profit and every fund value recorded since are moved by
+    the difference; the trade's note says so. Returns what changed, or None when the
+    correction was applied before or names no trade.
+    """
+    cid = str(correction["id"])
+    if conn.execute("SELECT 1 FROM fund_corrections WHERE fund_id = ? AND id = ?", (fund_id, cid)).fetchone():
+        return None
+    trade = conn.execute("SELECT * FROM fund_trades WHERE fund_id = ? AND ts = ? AND instrument_id = ?"
+                         " AND action IN ('reduce', 'close')",
+                         (fund_id, correction["trade_ts"], correction["instrument_id"])).fetchone()
+    if trade is None:
+        return None
+    spec = conn.execute("SELECT kind, currency FROM fund_positions WHERE fund_id = ? AND instrument_id = ?",
+                        (fund_id, trade["instrument_id"])).fetchone()
+    kind = spec["kind"] if spec else _kind(trade["side"])
+    fx_old, fx_new = float(trade["fx"] or 1.0), float(correction["fx"])
+    if fx_new <= 0:
+        raise LedgerError(f"correction {cid}: the rate must be positive")
+    pnl_old = trade["realized_pnl_usd"] + trade["fee_usd"]
+    collateral = trade["notional_usd"] - pnl_old
+    if kind == "option":
+        pnl_new = trade["notional_usd"] * fx_old / fx_new - collateral
+    elif kind == "linear":
+        pnl_new = pnl_old * fx_old / fx_new
+    else:
+        raise LedgerError(f"correction {cid}: {kind} sides are priced in dollars")
+    delta = pnl_new - pnl_old
+    ts = now or _now()
+    note = (trade["note"] or "") + (f" [Corrected {ts[:10]}: first booked without its exchange rate (profit"
+                                    f" ${pnl_old:,.2f}); re-booked at {fx_new:g} per USD: ${pnl_new:,.2f}.]")
+    conn.execute("UPDATE fund_trades SET fx = ?, notional_usd = notional_usd + ?, cash_delta_usd = cash_delta_usd + ?,"
+                 " realized_pnl_usd = realized_pnl_usd + ?, note = ? WHERE id = ?",
+                 (fx_new, delta, delta, delta, note.strip(), trade["id"]))
+    conn.execute("UPDATE fund_account SET cash = cash + ?, realized_pnl = realized_pnl + ?, updated_at = ?"
+                 " WHERE fund_id = ?", (delta, delta, ts, fund_id))
+    moved = conn.execute("UPDATE fund_nav SET nav_usd = nav_usd + ?, cash_usd = cash_usd + ? WHERE fund_id = ?"
+                         " AND ts >= ?", (delta, delta, fund_id, trade["ts"])).rowcount
+    detail = {"id": cid, "trade_ts": trade["ts"], "instrument_id": trade["instrument_id"], "fx_was": fx_old,
+              "fx": fx_new, "profit_was_usd": round(pnl_old, 4), "profit_usd": round(pnl_new, 4),
+              "delta_usd": round(delta, 4), "nav_points_moved": moved, "reason": correction.get("reason")}
+    conn.execute("INSERT INTO fund_corrections (id, fund_id, ts, trade_id, delta_usd, detail_json) VALUES (?, ?, ?, ?, ?, ?)",
+                 (cid, fund_id, ts, trade["id"], delta, json.dumps(detail, sort_keys=True)))
+    return detail
+
+
+def corrections(conn: sqlite3.Connection, fund_id: str) -> list[dict[str, Any]]:
+    """Every correction applied to the ledger, oldest first."""
+    return [{**json.loads(r["detail_json"]), "applied": r["ts"]} for r in conn.execute(
+        "SELECT ts, detail_json FROM fund_corrections WHERE fund_id = ? ORDER BY ts", (fund_id,))]
 
 
 def record_predictions(conn: sqlite3.Connection, fund_id: str, analyst: str, mode: str,

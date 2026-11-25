@@ -80,6 +80,10 @@ PUT_SLEEVE = "put_premium"
 BLEND_PATH = ROOT / "configs" / "fund_blend.json"
 #: Owner instructions carried out at the next trading cycle (trims to a risk limit).
 OWNER_ACTIONS_PATH = ROOT / "configs" / "fund_owner_actions.json"
+CORRECTIONS_PATH = ROOT / "configs" / "fund_corrections.json"
+#: Trades alone (at the marks the cycle used) should barely move the fund's value: fees and the
+#: gap between a fill and its mark. A bigger move is an accounting error, and the cycle trades nothing.
+ACCOUNTING_TOLERANCE = float(os.environ.get("FUND_ACCOUNTING_TOLERANCE", "0.02"))
 CHECKS_PATH = ROOT / "static" / "fund_rationale_checks.json"
 #: Rationale checks older than this no longer describe a live forecast.
 CHECKS_MAX_AGE_H = 48
@@ -421,6 +425,16 @@ def _sessions_since(stamp: str, today: date) -> int:
     return sum(1 for d in range((today - start).days) if (start + timedelta(days=d + 1)).weekday() < 5)
 
 
+def accounting_check(value_before: float, value_after: float) -> Optional[str]:
+    """Why a cycle's trades must be undone, or None. Trading at the cycle's own marks barely moves
+    the fund's value (fees, fills off the mark); a bigger move is a booking error, such as a rupee
+    sale counted in dollars (2026-11-25)."""
+    if abs(value_after - value_before) <= ACCOUNTING_TOLERANCE * max(value_before, 1.0):
+        return None
+    return (f"accounting check: this cycle's trades would move the fund's value from ${value_before:,.2f} "
+            f"to ${value_after:,.2f}; nothing was traded")
+
+
 def run(now: Optional[datetime] = None) -> dict:
     now = now or datetime.now(timezone.utc)
     today = now.astimezone(IST).date()
@@ -435,6 +449,12 @@ def run(now: Optional[datetime] = None) -> dict:
             raise SystemExit("no fund yet and no FUND_SEED_AGENT_STORE to open it from")
         seeded = seed_from_agent(conn, agent_store, stamp)
         conn.commit()
+    # One-time repairs of trades booked wrongly (configs/fund_corrections.json), each applied once.
+    for fix in _load_json(CORRECTIONS_PATH).get("corrections") or []:
+        done = ledger.reprice_trade(conn, FUND_ID, fix, now=stamp)
+        if done:
+            print(f"  corrected {done['instrument_id']} at {done['trade_ts']}: ${done['delta_usd']:+,.2f}", file=sys.stderr)
+    conn.commit()
 
     fx = usd_inr()
     rates = {"USD": 1.0, "INR": fx}
@@ -510,6 +530,8 @@ def run(now: Optional[datetime] = None) -> dict:
         passed = result["passed"] + closed
         writer = note_writer()
         cycle_id = f"fund-{now:%Y%m%dT%H%M}"
+        value_before = ledger.nav(conn, FUND_ID, quotes, rates)["nav_usd"]
+        conn.execute("SAVEPOINT fund_orders")
         for order in orders:
             body = dataclasses.asdict(order)
             note = fund_notes.write_note(body, writer)
@@ -529,6 +551,14 @@ def run(now: Optional[datetime] = None) -> dict:
                 executed.append({**body, **note})
             except (ledger.LedgerError, StopIteration) as exc:
                 passed.append({"instrument": order.instrument["id"], "reason": str(exc)})
+        why_not = accounting_check(value_before, ledger.nav(conn, FUND_ID, quotes, rates)["nav_usd"])
+        if why_not:
+            conn.execute("ROLLBACK TO fund_orders")
+            print(f"  {why_not}", file=sys.stderr)
+            passed += [{"instrument": o["instrument"]["id"], "label": o["instrument"].get("label"), "reason": why_not}
+                       for o in executed]
+            executed = []
+        conn.execute("RELEASE fund_orders")
         conn.commit()
         snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
@@ -558,6 +588,7 @@ def run(now: Optional[datetime] = None) -> dict:
     # Each position's worst case and alerts against the last published board (fund_risk).
     payload["risk"] = fund_risk.review(snapshot, previous=_load_json(PAYLOAD_PATH))
     payload["owner_actions"] = _load_json(OWNER_ACTIONS_PATH).get("trims") or []
+    payload["corrections"] = ledger.corrections(conn, FUND_ID)
     PAYLOAD_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
     conn.close()
     return payload
