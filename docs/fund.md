@@ -1785,6 +1785,20 @@ Three changes stop it happening again and repair the record:
   recorded since move by the difference, and the trade's note says so. Applied corrections are in
   the board's `corrections`.
 
+## Risk limits bind held positions (2026-11-25)
+
+The 3% per-position limit (Risk limits, 2026-11-21) only sized new positions. On 2026-11-25 the
+fund's positions could lose 43% of it together, over the 40% total, so a relative-value pair
+(zinc / lead, z +2.8) found no room. Six positions were over 3%, five of them bought before the
+limit (the largest, a Polymarket NO from the old agent board, could lose 11%); the fund's one
+large realized loss so far (-$585 on an inherited Kalshi NO, 6% of the fund) was such a bet.
+
+Now every cycle sells down any held position whose worst case is over 3% of the fund, with the
+same 10% slack as owner trims (`fund_orchestrator.plan(risk_trims=True)`, `FUND_RISK_TRIMS=1`).
+Pair legs are left alone. The risk and cash a cycle's sales free count for its entries, so a
+trim and the trade it makes room for can happen in the same cycle. Trims wait for their venue's
+hours like every other order.
+
 ## Trading hours (owner, 2026-11-16)
 
 The owner asked that the fund make proper use of each market's trading hours. A
