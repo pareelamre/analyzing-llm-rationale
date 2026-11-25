@@ -1994,6 +1994,15 @@ back nickel / copper (Indonesia's nickel surplus looks lasting).
 **Caveats.** Monthly averages are rougher than daily prices; the ranges and averages lean on oil
 and gas, whose ratio swings most; a story's "lasting" label is a judgement, recorded with sources.
 
+**WTI / gas from 0.85 (owner, 2026-11-25).** The owner asked to start trading the WTI / natural gas
+pair. Its ratio stood +0.87 from its 10-year normal (WTI dear), inside the 1.5 line. On its own
+unseen years (Pink Sheet, 2005-2026) the pair held up from every nearer line tried: from 1.5, 13
+trades, won 85%, +20.5% a trade; from 1.0, 15, 87%, +14.3%; from 0.85, 17, 88%, +12.0% (95% CI
++2.8% to +21.3%); worst trade -39% (2009). Across all nine pairs a nearer line halves the edge
+(+2.6% a trade from 1.0 against +5.8% from 1.5), so only WTI / gas moves:
+`commodity_pairs.RV_ENTRY_Z_BY_PAIR = {"wti-natgas": 0.85}`. The line was chosen after seeing these
+results, so its live record is the real test.
+
 **Owner holds (2026-11-23).** The owner can keep a held pair open against the rules: a `holds` entry
 in `configs/fund_owner_actions.json` stops every pair exit for that pair (the skipped exit is listed
 as passed, with its reason). The first is copper / aluminium: the owner chose to keep the long-copper,

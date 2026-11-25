@@ -131,6 +131,15 @@ class RuleTests(unittest.TestCase):
         self.assertEqual((rv["rich"], rv["cheap"]), (None, None))
         self.assertIsNone(cp.relative_value(PAIR["copper-zinc"], None))
 
+    def test_wti_gas_trades_from_its_own_nearer_line(self):
+        # Owner, 2026-11-25: start trading WTI / gas; its unseen years hold up from 0.85.
+        rv = cp.relative_value(PAIR["wti-natgas"], _ctx(0.87))
+        self.assertEqual((rv["rich"], rv["cheap"], rv["side"], rv["signal"], rv["entry_z"]),
+                         ("WTI", "Natural gas", -1, True, 0.85))
+        self.assertFalse(cp.relative_value(PAIR["wti-natgas"], _ctx(0.8))["signal"])
+        other = cp.relative_value(PAIR["zinc-lead"], _ctx(0.87))
+        self.assertEqual((other["signal"], other["entry_z"]), (False, 1.5))
+
     def test_a_lasting_cause_holds_the_trade_back(self):
         story = {"driver": "lasting", "cause": "Indonesia's smelters kept nickel in surplus. More text."}
         rv = cp.relative_value(PAIR["nickel-copper"], _ctx(-2.1, story))

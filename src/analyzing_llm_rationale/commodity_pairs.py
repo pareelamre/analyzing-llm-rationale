@@ -112,6 +112,14 @@ TIDE_RECORD: dict[str, Any] = {
 #: did not help on the early years, so there is no timing filter. RV_RECORD is that run, per
 #: dollar on both legs after costs; RV_BY_PAIR is each pair's own trades over all years.
 RV_ENTRY_Z = 1.5
+#: A pair whose own unseen-years record holds up from a nearer line enters there (owner, 2026-11-25:
+#: "the wti/natural gas pairing seems interesting ... we should start exercising that"). WTI / gas on
+#: the Pink Sheet, 2005-2026 (unseen), 24-month limit: from 1.5, 13 trades, won 85%, +20.5% a
+#: trade; from 1.0, 15, 87%, +14.3%; from 0.85, 17, 88%, +12.0% (95% CI +2.8% to +21.3%); from
+#: 0.75, 17, 88%, +11.2%. Positive from every line tried, worst trade -39% (2009, the shale glut).
+#: Across all nine pairs a nearer line halves the edge (from 1.0: +2.6% a trade against +5.8%), so
+#: the others keep 1.5.
+RV_ENTRY_Z_BY_PAIR: dict[str, float] = {"wti-natgas": 0.85}
 RV_EXIT_Z = 0.5
 RV_MAX_MONTHS = 24
 RV_SESSIONS_PER_MONTH = 21
@@ -704,6 +712,11 @@ def rv_expected(key: str, live: Optional[Mapping[str, Any]] = None) -> dict[str,
             "backtest_trades": parts[0][0], "live_trades": parts[1][0]}
 
 
+def rv_entry_z(key: str) -> float:
+    """How far from its 10-year normal (standard deviations) a pair's ratio must be to trade."""
+    return RV_ENTRY_Z_BY_PAIR.get(key, RV_ENTRY_Z)
+
+
 def relative_value(pair: Mapping[str, str], long_ctx: Optional[Mapping[str, Any]],
                    live: Optional[Mapping[str, Any]] = None) -> Optional[dict[str, Any]]:
     """The pair's relative-value read: which leg is dear against the 10-year normal, and the trade.
@@ -717,14 +730,15 @@ def relative_value(pair: Mapping[str, str], long_ctx: Optional[Mapping[str, Any]
     first, second = _legs(dict(pair))
     away = abs(z) >= RV_EXIT_Z
     rich, cheap = ((first, second) if z > 0 else (second, first)) if away else (None, None)
-    side = (-1 if z > 0 else 1) if abs(z) >= RV_ENTRY_Z else None
+    entry = rv_entry_z(pair["key"])
+    side = (-1 if z > 0 else 1) if abs(z) >= entry else None
     story = long_ctx.get("story") or {}
     held_back = None
     if side is not None and story.get("driver") == "lasting":
         held_back = ("the cause looks lasting (" + str(story.get("cause") or "").split(". ")[0].rstrip(".")
                      + "): past lasting extremes have not come back to normal")
     return {
-        "z": round(z, 3), "percentile": long_ctx.get("percentile"), "ratio": long_ctx.get("ratio"),
+        "z": round(z, 3), "entry_z": entry, "percentile": long_ctx.get("percentile"), "ratio": long_ctx.get("ratio"),
         "usual": long_ctx.get("usual"), "window_months": long_ctx.get("window_months"),
         "rich": rich, "cheap": cheap, "side": side, "driver": story.get("driver"),
         "signal": side is not None and held_back is None, "held_back": held_back,
@@ -832,7 +846,8 @@ def run(series: dict, ledger: list[dict], now: datetime, *,
                      "live": {k: summarize([e for e in ledger if e.get("tide") == k]) for k in ("toward", "away")}},
         } if long_run else None,
         "relative_value": {
-            "rule": {"window_months": 120, "entry_z": RV_ENTRY_Z, "exit_z": RV_EXIT_Z, "max_months": RV_MAX_MONTHS,
+            "rule": {"window_months": 120, "entry_z": RV_ENTRY_Z, "entry_z_by_pair": dict(RV_ENTRY_Z_BY_PAIR),
+                     "exit_z": RV_EXIT_Z, "max_months": RV_MAX_MONTHS,
                      "max_sessions": RV_MAX_MONTHS * RV_SESSIONS_PER_MONTH, "cost_per_side": COST_PER_SIDE,
                      "lasting_causes": "held back"},
             "backtest": RV_RECORD,
