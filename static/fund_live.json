@@ -12,19 +12,19 @@
       "put_premium": 8.8381
     },
     "unrealized": {
-      "agent_transfer": 42.2225,
-      "blend_model": -7.9204,
-      "event_model": 41.1066,
-      "pairs_model": -19.2617,
-      "put_premium": 43.7964
+      "agent_transfer": 37.4723,
+      "blend_model": -0.2219,
+      "event_model": 40.518,
+      "pairs_model": -17.8649,
+      "put_premium": 44.0351
     }
   },
   "by_asset_class": {
-    "commodity": 484.9627,
-    "event": 2087.1486,
-    "option": 513.2844
+    "commodity": 486.3595,
+    "event": 2184.1621,
+    "option": 513.5231
   },
-  "cash_usd": 6438.5845,
+  "cash_usd": 6343.9307,
   "corrections": [
     {
       "applied": "2026-11-25T11:22:45.586888+00:00",
@@ -1152,25 +1152,50 @@
     {
       "nav_usd": 9523.9802,
       "ts": "2026-11-26T02:20:02.839209+00:00"
+    },
+    {
+      "nav_usd": 9527.9754,
+      "ts": "2026-11-26T04:00:57.944497+00:00"
     }
   ],
   "cycle": {
-    "orders": 0,
-    "passed": [],
+    "orders": 2,
+    "passed": [
+      {
+        "instrument": "copper-aluminium",
+        "label": "copper-aluminium",
+        "reason": "owner hold hold-copper-aluminium-2026-11-23: kept open although this trade needs the price ratio to move further from its 10-year normal (z +1.43): relative value says Copper is the dear leg, the one this trade holds"
+      },
+      {
+        "instrument": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
+        "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
+        "reason": "the fund holds YES on this market"
+      }
+    ],
     "seeded": null,
-    "signals": 4,
+    "signals": 3,
     "skipped": [
       {
         "instrument": "polymarket:putin-out-before-2027-346",
         "label": "Putin out as President of Russia by December 31, 2026?",
         "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
+      },
+      {
+        "instrument": "mcx:ZINCMINI",
+        "label": "Zinc (MCX ZINCMINI)",
+        "reason": "no MCX price from this session yet"
+      },
+      {
+        "instrument": "mcx:LEADMINI",
+        "label": "Lead (MCX LEADMINI)",
+        "reason": "no MCX price from this session yet"
       }
     ],
-    "traded": false,
-    "window": "07:50 IST is outside the trading hours"
+    "traded": true,
+    "window": "in window"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-26T02:20:02.839209+00:00",
+  "generated_at": "2026-11-26T04:00:57.944497+00:00",
   "guard": {
     "board": 32,
     "checked": 32,
@@ -1213,16 +1238,16 @@
     "holiday_list": true,
     "venues": {
       "bse_fo": {
-        "open": false,
-        "why": "BSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+        "open": true,
+        "why": ""
       },
       "mcx": {
-        "open": false,
-        "why": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+        "open": true,
+        "why": ""
       },
       "nse_fo": {
-        "open": false,
-        "why": "NSE F&O is closed now (it trades 09:15 to 15:30 IST on weekdays)"
+        "open": true,
+        "why": ""
       }
     }
   },
@@ -1398,7 +1423,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9523.9802,
+  "nav_usd": 9527.9754,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1412,7 +1437,9 @@
     "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026": 238.379,
     "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573": 25.0812,
     "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026": 298.461,
-    "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026": 276.2351
+    "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden": 64.7986,
+    "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026": 276.2351,
+    "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102": 29.8552
   },
   "options": {
     "class_cap": 0.1,
@@ -1462,16 +1489,16 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 307.7,
+      "mark": 308.2,
       "marked": true,
       "multiplier": 1000.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 16.3511,
+      "pnl_usd": 15.9599,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 268.4633,
+      "value_usd": 268.0721,
       "venue": "mcx"
     },
     {
@@ -1485,16 +1512,16 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1127.15,
+      "mark": 1136.25,
       "marked": true,
       "multiplier": 2500.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -35.6128,
+      "pnl_usd": -33.8248,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 216.4994,
+      "value_usd": 218.2874,
       "venue": "mcx"
     },
     {
@@ -1577,16 +1604,16 @@
       "instrument_id": "kalshi:KXUKCHAGOS-28JAN01-26DEC01",
       "kind": "binary",
       "label": "Will the UK agree to or announce a decision not to transfer sovereignty over Diego Garcia to Mauritius before Dec 1, 2026?",
-      "mark": 0.87,
+      "mark": 0.95,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -1.0,
+      "pnl_usd": 0.6,
       "quantity": 20.0,
       "side": "NO",
       "underlying": "kalshi:KXUKCHAGOS-28JAN01-26DEC01",
-      "value_usd": 17.4,
+      "value_usd": 19.0,
       "venue": "kalshi"
     },
     {
@@ -1646,16 +1673,16 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.972,
+      "mark": 0.97,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 47.6758,
+      "pnl_usd": 47.0872,
       "quantity": 294.2950976609043,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 286.0548,
+      "value_usd": 285.4662,
       "venue": "polymarket"
     },
     {
@@ -1669,16 +1696,16 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.104,
+      "mark": 0.111,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": -7.9204,
+      "pnl_usd": -6.7653,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 17.1608,
+      "value_usd": 18.3159,
       "venue": "polymarket"
     },
     {
@@ -1692,16 +1719,39 @@
       "instrument_id": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
       "kind": "binary",
       "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-      "mark": 0.9,
+      "mark": 0.91,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -12.7005,
+      "pnl_usd": -9.5253,
       "quantity": 317.51170040014586,
       "side": "NO",
       "underlying": "polymarket:will-delcy-rodrguez-be-the-leader-of-venezuela-end-of-2026",
-      "value_usd": 285.7605,
+      "value_usd": 288.9356,
+      "venue": "polymarket"
+    },
+    {
+      "asset_class": "event",
+      "attribution": {
+        "blend_model": 1.0
+      },
+      "collateral_usd": 64.79863376388884,
+      "currency": "USD",
+      "entry_price": 0.73,
+      "instrument_id": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
+      "kind": "binary",
+      "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
+      "mark": 0.77,
+      "marked": true,
+      "multiplier": 1.0,
+      "opened_at": "2026-11-26T04:00:57.944497+00:00",
+      "pair_key": null,
+      "pnl_usd": 3.5506,
+      "quantity": 88.76525173135458,
+      "side": "NO",
+      "underlying": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
+      "value_usd": 68.3492,
       "venue": "polymarket"
     },
     {
@@ -1715,16 +1765,39 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.061000000000000054,
+      "mark": 0.05900000000000005,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 14.288,
+      "pnl_usd": 4.7627,
       "quantity": 4762.675204545904,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 290.5232,
+      "value_usd": 280.9978,
+      "venue": "polymarket"
+    },
+    {
+      "asset_class": "event",
+      "attribution": {
+        "blend_model": 1.0
+      },
+      "collateral_usd": 29.855166649217438,
+      "currency": "USD",
+      "entry_price": 0.409,
+      "instrument_id": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
+      "kind": "binary",
+      "label": "Will Puma Shen win the next Taipei Mayor election?",
+      "mark": 0.45,
+      "marked": true,
+      "multiplier": 1.0,
+      "opened_at": "2026-11-26T04:00:57.944497+00:00",
+      "pair_key": null,
+      "pnl_usd": 2.9928,
+      "quantity": 72.99551747974924,
+      "side": "YES",
+      "underlying": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
+      "value_usd": 32.848,
       "venue": "polymarket"
     },
     {
@@ -1738,16 +1811,16 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2142.415,
+      "mark": 2143.8770000000004,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 16.187,
+      "pnl_usd": 16.3817,
       "quantity": 12.289880162631071,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 285.2908,
+      "value_usd": 285.4854,
       "venue": "nse_fo"
     },
     {
@@ -1761,16 +1834,16 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 735.385,
+      "mark": 735.5269999999999,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 27.6094,
+      "pnl_usd": 27.6534,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 227.9937,
+      "value_usd": 228.0377,
       "venue": "nse_fo"
     }
   ],
@@ -1828,7 +1901,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -4.76,
+  "return_pct": -4.72,
   "risk": {
     "alerts": [],
     "limits": {
@@ -1845,56 +1918,21 @@
     "new_risk_paused": false,
     "over_limit": [
       {
-        "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "side": "NO",
-        "worst_case_share": 0.0305
-      },
-      {
-        "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-        "side": "NO",
-        "worst_case_share": 0.03
-      },
-      {
-        "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
-        "side": "YES",
-        "worst_case_share": 0.03
-      },
-      {
-        "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
-        "side": "NO",
-        "worst_case_share": 0.03
-      },
-      {
-        "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "side": "NO",
-        "worst_case_share": 0.03
-      },
-      {
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.03
+        "worst_case_share": 0.0303
       }
     ],
     "positions": [
       {
         "alerts": [],
-        "entry_worst_case_usd": 276.24,
+        "entry_worst_case_usd": 298.46,
         "kind": "binary",
-        "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "pnl_usd": 14.29,
+        "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
+        "pnl_usd": -9.53,
         "side": "NO",
-        "worst_case_share": 0.0305,
-        "worst_case_usd": 290.52
-      },
-      {
-        "alerts": [],
-        "entry_worst_case_usd": 238.38,
-        "kind": "binary",
-        "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "pnl_usd": 47.68,
-        "side": "NO",
-        "worst_case_share": 0.03,
-        "worst_case_usd": 286.05
+        "worst_case_share": 0.0303,
+        "worst_case_usd": 288.94
       },
       {
         "alerts": [],
@@ -1928,23 +1966,33 @@
       },
       {
         "alerts": [],
-        "entry_worst_case_usd": 298.46,
-        "kind": "binary",
-        "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
-        "pnl_usd": -12.7,
-        "side": "NO",
-        "worst_case_share": 0.03,
-        "worst_case_usd": 285.76
-      },
-      {
-        "alerts": [],
         "entry_worst_case_usd": 269.1,
         "kind": "option",
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-        "pnl_usd": 16.19,
+        "pnl_usd": 16.38,
         "side": "BULL",
         "worst_case_share": 0.03,
-        "worst_case_usd": 285.29
+        "worst_case_usd": 285.49
+      },
+      {
+        "alerts": [],
+        "entry_worst_case_usd": 238.38,
+        "kind": "binary",
+        "label": "US announces end of Iranian blockade by November 30, 2026?",
+        "pnl_usd": 47.09,
+        "side": "NO",
+        "worst_case_share": 0.03,
+        "worst_case_usd": 285.47
+      },
+      {
+        "alerts": [],
+        "entry_worst_case_usd": 276.24,
+        "kind": "binary",
+        "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
+        "pnl_usd": 4.76,
+        "side": "NO",
+        "worst_case_share": 0.0295,
+        "worst_case_usd": 281.0
       },
       {
         "alerts": [],
@@ -1961,10 +2009,20 @@
         "entry_worst_case_usd": 200.38,
         "kind": "option",
         "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-        "pnl_usd": 27.61,
+        "pnl_usd": 27.65,
         "side": "BULL",
         "worst_case_share": 0.0239,
-        "worst_case_usd": 227.99
+        "worst_case_usd": 228.04
+      },
+      {
+        "alerts": [],
+        "entry_worst_case_usd": 64.8,
+        "kind": "binary",
+        "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
+        "pnl_usd": 3.55,
+        "side": "NO",
+        "worst_case_share": 0.0072,
+        "worst_case_usd": 68.35
       },
       {
         "alerts": [],
@@ -1981,44 +2039,54 @@
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Aluminium (MCX ALUMINI)",
-        "pnl_usd": 16.35,
+        "pnl_usd": 15.96,
         "side": "SHORT",
         "worst_case_share": 0.0042,
-        "worst_case_usd": 40.27
+        "worst_case_usd": 40.21
+      },
+      {
+        "alerts": [],
+        "entry_worst_case_usd": 29.86,
+        "kind": "binary",
+        "label": "Will Puma Shen win the next Taipei Mayor election?",
+        "pnl_usd": 2.99,
+        "side": "YES",
+        "worst_case_share": 0.0034,
+        "worst_case_usd": 32.85
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Copper (MCX COPPER)",
-        "pnl_usd": -35.61,
+        "pnl_usd": -33.82,
         "side": "LONG",
         "worst_case_share": 0.0034,
-        "worst_case_usd": 32.47
+        "worst_case_usd": 32.74
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 18.4,
         "kind": "binary",
         "label": "Will the UK agree to or announce a decision not to transfer sovereignty over Diego Garcia to Mauritius before Dec 1, 2026?",
-        "pnl_usd": -1.0,
+        "pnl_usd": 0.6,
         "side": "NO",
-        "worst_case_share": 0.0018,
-        "worst_case_usd": 17.4
+        "worst_case_share": 0.002,
+        "worst_case_usd": 19.0
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": -7.92,
+        "pnl_usd": -6.77,
         "side": "YES",
-        "worst_case_share": 0.0018,
-        "worst_case_usd": 17.16
+        "worst_case_share": 0.0019,
+        "worst_case_usd": 18.32
       }
     ],
-    "worst_case_total_share": 0.2807,
-    "worst_case_total_usd": 2673.15
+    "worst_case_total_share": 0.2908,
+    "worst_case_total_usd": 2770.65
   },
   "scorecard": {
     "retired_records": [
@@ -2244,6 +2312,96 @@
   "shadow": {},
   "starting_value": 10000.0,
   "trades": [
+    {
+      "action": "open",
+      "attribution": {
+        "blend_model": 1.0
+      },
+      "cycle_id": "fund-20261126T0400",
+      "evidence": [
+        {
+          "figure": "question: Will Puma Shen win the next Taipei Mayor election?",
+          "source": "venue"
+        },
+        {
+          "figure": "model probability of YES: 46.8%",
+          "source": "the blend analyst forecast 2026-11-25 17:30 UTC"
+        },
+        {
+          "figure": "price to buy YES: 40.9\u00a2",
+          "source": "Polymarket order book"
+        },
+        {
+          "figure": "expected profit per dollar after costs: 12.5%",
+          "source": "orchestrator"
+        },
+        {
+          "figure": "size: 0.3% of the fund",
+          "source": "orchestrator"
+        },
+        {
+          "figure": "worst case: $30 (0.3% of the fund)",
+          "source": "risk limits"
+        }
+      ],
+      "instrument_id": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
+      "label": "Will Puma Shen win the next Taipei Mayor election?",
+      "note": "The trade involves buying a bet that Puma Shen will win the next Taipei Mayor election, which costs 40.9 cents and has a 46.8% chance of being correct according to the forecast. This specific wager represents a very small portion of the total fund, with a maximum potential loss of $30 and an expected profit of 12.5% per dollar if the bet succeeds.",
+      "note_source": "model",
+      "notional_usd": 29.855166649217438,
+      "pair_key": null,
+      "price": 0.409,
+      "purpose": "view",
+      "quantity": 72.99551747974924,
+      "realized_pnl_usd": 0.0,
+      "side": "YES",
+      "ts": "2026-11-26T04:00:57.944497+00:00"
+    },
+    {
+      "action": "open",
+      "attribution": {
+        "blend_model": 1.0
+      },
+      "cycle_id": "fund-20261126T0400",
+      "evidence": [
+        {
+          "figure": "question: Will Magdalena Andersson be the next Prime Minister of Sweden?",
+          "source": "venue"
+        },
+        {
+          "figure": "model probability of NO: 78.9%",
+          "source": "the blend analyst forecast 2026-11-25 17:32 UTC"
+        },
+        {
+          "figure": "price to buy NO: 73\u00a2",
+          "source": "Polymarket order book"
+        },
+        {
+          "figure": "expected profit per dollar after costs: 6.1%",
+          "source": "orchestrator"
+        },
+        {
+          "figure": "size: 0.7% of the fund",
+          "source": "orchestrator"
+        },
+        {
+          "figure": "worst case: $65 (0.7% of the fund)",
+          "source": "risk limits"
+        }
+      ],
+      "instrument_id": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
+      "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
+      "note": "The trade involves buying a bet that Magdalena Andersson will not become the next Prime Minister of Sweden, based on a 78.9% probability that she will not win. This small investment of 73 cents is part of a larger fund and is designed to yield an expected profit of 6.1% while limiting the worst-case loss to $65.",
+      "note_source": "model",
+      "notional_usd": 64.79863376388884,
+      "pair_key": null,
+      "price": 0.73,
+      "purpose": "view",
+      "quantity": 88.76525173135458,
+      "realized_pnl_usd": 0.0,
+      "side": "NO",
+      "ts": "2026-11-26T04:00:57.944497+00:00"
+    },
     {
       "action": "reduce",
       "attribution": {
