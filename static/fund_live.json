@@ -12,17 +12,17 @@
       "put_premium": 8.8381
     },
     "unrealized": {
-      "agent_transfer": 41.7356,
-      "blend_model": 3.8612,
-      "event_model": 45.2741,
-      "pairs_model": -17.4351,
-      "put_premium": 48.6576
+      "agent_transfer": 41.4482,
+      "blend_model": 10.5797,
+      "event_model": 45.8627,
+      "pairs_model": -25.6864,
+      "put_premium": 49.8785
     }
   },
   "by_asset_class": {
-    "commodity": 486.7892,
-    "event": 2197.2646,
-    "option": 518.1456
+    "commodity": 478.5379,
+    "event": 2204.2843,
+    "option": 519.3665
   },
   "cash_usd": 6343.9307,
   "corrections": [
@@ -1184,25 +1184,29 @@
     {
       "nav_usd": 9546.1301,
       "ts": "2026-11-26T16:01:08.664026+00:00"
+    },
+    {
+      "nav_usd": 9546.1194,
+      "ts": "2026-11-26T18:01:22.039531+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 3,
+    "signals": 2,
     "skipped": [
       {
-        "instrument": "polymarket:putin-out-before-2027-346",
-        "label": "Putin out as President of Russia by December 31, 2026?",
+        "instrument": "polymarket:friedrich-merz-out-as-chancellor-of-germany-before-2027",
+        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
         "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
       }
     ],
     "traded": false,
-    "window": "21:31 IST is outside the trading hours"
+    "window": "23:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-26T16:01:08.664026+00:00",
+  "generated_at": "2026-11-26T18:01:22.039531+00:00",
   "guard": {
     "board": 32,
     "checked": 32,
@@ -1210,34 +1214,28 @@
     "days_recorded": 18,
     "dropped": [
       {
-        "forecast": 0.01,
-        "forecasted_at": "2026-11-25T17:39:30.950904+00:00",
-        "label": "Putin out as President of Russia by December 31, 2026?",
-        "rationale_yes": 0.7191
+        "forecast": 0.04,
+        "forecasted_at": "2026-11-26T17:38:00.322582+00:00",
+        "label": "Friedrich Merz out as Chancellor of Germany before December 31, 2026?",
+        "rationale_yes": 0.8667
       }
     ],
     "flags": [
+      {
+        "forecast": 0.040000000000000036,
+        "forecasted_at": "2026-11-26T17:38:00.322582+00:00",
+        "label": "friedrich-merz-out-as-chancellor-of-germany-before-2027",
+        "rationale_yes": 0.8667
+      },
       {
         "forecast": 0.010000000000000009,
         "forecasted_at": "2026-11-25T17:39:30.950904+00:00",
         "label": "putin-out-before-2027-346",
         "rationale_yes": 0.7191
-      },
-      {
-        "forecast": 0.07999999999999996,
-        "forecasted_at": "2026-11-24T17:35:24.275268+00:00",
-        "label": "will-predictfun-launch-a-token-by-november-30-2026",
-        "rationale_yes": 0.7015
-      },
-      {
-        "forecast": 0.010000000000000009,
-        "forecasted_at": "2026-11-24T17:34:01.950929+00:00",
-        "label": "clarity-act-signed-into-law-in-2026",
-        "rationale_yes": 0.8278
       }
     ],
     "kind": "checker",
-    "markets": 67,
+    "markets": 68,
     "mode": "live",
     "unchecked": 0
   },
@@ -1430,7 +1428,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9546.1301,
+  "nav_usd": 9546.1194,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1496,16 +1494,16 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 307.0,
+      "mark": 316.0,
       "marked": true,
       "multiplier": 1000.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 16.859,
+      "pnl_usd": 9.8576,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 268.9712,
+      "value_usd": 261.9698,
       "venue": "mcx"
     },
     {
@@ -1519,16 +1517,16 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1133.45,
+      "mark": 1127.5,
       "marked": true,
       "multiplier": 2500.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -34.2941,
+      "pnl_usd": -35.544,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 217.818,
+      "value_usd": 216.5681,
       "venue": "mcx"
     },
     {
@@ -1657,16 +1655,16 @@
       "instrument_id": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
       "kind": "binary",
       "label": "Strait of Hormuz traffic returns to normal by December 31?",
-      "mark": 0.972,
+      "mark": 0.971,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 17.8215,
+      "pnl_usd": 17.5341,
       "quantity": 287.443442,
       "side": "NO",
       "underlying": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
-      "value_usd": 279.395,
+      "value_usd": 279.1076,
       "venue": "polymarket"
     },
     {
@@ -1680,16 +1678,16 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.975,
+      "mark": 0.977,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 48.5587,
+      "pnl_usd": 49.1473,
       "quantity": 294.2950976609043,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 286.9377,
+      "value_usd": 287.5263,
       "venue": "polymarket"
     },
     {
@@ -1703,16 +1701,16 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.139,
+      "mark": 0.133,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": -2.1451,
+      "pnl_usd": -3.1351,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 22.9361,
+      "value_usd": 21.946,
       "venue": "polymarket"
     },
     {
@@ -1749,16 +1747,16 @@
       "instrument_id": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
       "kind": "binary",
       "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
-      "mark": 0.81,
+      "mark": 0.91,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-26T04:00:57.944497+00:00",
       "pair_key": null,
-      "pnl_usd": 7.1012,
+      "pnl_usd": 15.9777,
       "quantity": 88.76525173135458,
       "side": "NO",
       "underlying": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
-      "value_usd": 71.8999,
+      "value_usd": 80.7764,
       "venue": "polymarket"
     },
     {
@@ -1795,16 +1793,16 @@
       "instrument_id": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
       "kind": "binary",
       "label": "Will Puma Shen win the next Taipei Mayor election?",
-      "mark": 0.394,
+      "mark": 0.378,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-26T04:00:57.944497+00:00",
       "pair_key": null,
-      "pnl_usd": -1.0949,
+      "pnl_usd": -2.2629,
       "quantity": 72.99551747974924,
       "side": "YES",
       "underlying": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
-      "value_usd": 28.7602,
+      "value_usd": 27.5923,
       "venue": "polymarket"
     },
     {
@@ -1823,11 +1821,11 @@
       "multiplier": 1.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 19.1979,
+      "pnl_usd": 19.8772,
       "quantity": 12.289880162631071,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 288.3016,
+      "value_usd": 288.981,
       "venue": "nse_fo"
     },
     {
@@ -1846,11 +1844,11 @@
       "multiplier": 1.0,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 29.4597,
+      "pnl_usd": 30.0013,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 229.844,
+      "value_usd": 230.3856,
       "venue": "nse_fo"
     }
   ],
@@ -1947,7 +1945,7 @@
       {
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "side": "BULL",
-        "worst_case_share": 0.0302
+        "worst_case_share": 0.0303
       },
       {
         "label": "US announces end of Iranian blockade by November 30, 2026?",
@@ -1978,6 +1976,16 @@
       },
       {
         "alerts": [],
+        "entry_worst_case_usd": 269.1,
+        "kind": "option",
+        "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
+        "pnl_usd": 19.88,
+        "side": "BULL",
+        "worst_case_share": 0.0303,
+        "worst_case_usd": 288.98
+      },
+      {
+        "alerts": [],
         "entry_worst_case_usd": 298.46,
         "kind": "binary",
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
@@ -1998,33 +2006,23 @@
       },
       {
         "alerts": [],
-        "entry_worst_case_usd": 269.1,
-        "kind": "option",
-        "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-        "pnl_usd": 19.2,
-        "side": "BULL",
-        "worst_case_share": 0.0302,
-        "worst_case_usd": 288.3
-      },
-      {
-        "alerts": [],
         "entry_worst_case_usd": 238.38,
         "kind": "binary",
         "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "pnl_usd": 48.56,
+        "pnl_usd": 49.15,
         "side": "NO",
         "worst_case_share": 0.0301,
-        "worst_case_usd": 286.94
+        "worst_case_usd": 287.53
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 261.57,
         "kind": "binary",
         "label": "Strait of Hormuz traffic returns to normal by December 31?",
-        "pnl_usd": 17.82,
+        "pnl_usd": 17.53,
         "side": "NO",
-        "worst_case_share": 0.0293,
-        "worst_case_usd": 279.39
+        "worst_case_share": 0.0292,
+        "worst_case_usd": 279.11
       },
       {
         "alerts": [],
@@ -2041,20 +2039,20 @@
         "entry_worst_case_usd": 200.38,
         "kind": "option",
         "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-        "pnl_usd": 29.46,
+        "pnl_usd": 30.0,
         "side": "BULL",
         "worst_case_share": 0.0241,
-        "worst_case_usd": 229.84
+        "worst_case_usd": 230.39
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 64.8,
         "kind": "binary",
         "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
-        "pnl_usd": 7.1,
+        "pnl_usd": 15.98,
         "side": "NO",
-        "worst_case_share": 0.0075,
-        "worst_case_usd": 71.9
+        "worst_case_share": 0.0085,
+        "worst_case_usd": 80.78
       },
       {
         "alerts": [],
@@ -2071,40 +2069,40 @@
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Aluminium (MCX ALUMINI)",
-        "pnl_usd": 16.86,
+        "pnl_usd": 9.86,
         "side": "SHORT",
-        "worst_case_share": 0.0042,
-        "worst_case_usd": 40.35
+        "worst_case_share": 0.0041,
+        "worst_case_usd": 39.3
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Copper (MCX COPPER)",
-        "pnl_usd": -34.29,
+        "pnl_usd": -35.54,
         "side": "LONG",
         "worst_case_share": 0.0034,
-        "worst_case_usd": 32.67
+        "worst_case_usd": 32.49
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 29.86,
         "kind": "binary",
         "label": "Will Puma Shen win the next Taipei Mayor election?",
-        "pnl_usd": -1.09,
+        "pnl_usd": -2.26,
         "side": "YES",
-        "worst_case_share": 0.003,
-        "worst_case_usd": 28.76
+        "worst_case_share": 0.0029,
+        "worst_case_usd": 27.59
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": -2.15,
+        "pnl_usd": -3.14,
         "side": "YES",
-        "worst_case_share": 0.0024,
-        "worst_case_usd": 22.94
+        "worst_case_share": 0.0023,
+        "worst_case_usd": 21.95
       },
       {
         "alerts": [],
@@ -2117,8 +2115,8 @@
         "worst_case_usd": 19.0
       }
     ],
-    "worst_case_total_share": 0.2921,
-    "worst_case_total_usd": 2788.43
+    "worst_case_total_share": 0.2928,
+    "worst_case_total_usd": 2795.46
   },
   "scorecard": {
     "retired_records": [
