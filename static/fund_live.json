@@ -12,17 +12,17 @@
       "put_premium": 8.8381
     },
     "unrealized": {
-      "agent_transfer": 40.5449,
-      "blend_model": -0.6727,
-      "event_model": 41.1066,
-      "pairs_model": -17.9313,
-      "put_premium": 47.3602
+      "agent_transfer": 37.1848,
+      "blend_model": 3.5936,
+      "event_model": 39.6351,
+      "pairs_model": -18.5434,
+      "put_premium": 48.9317
     }
   },
   "by_asset_class": {
-    "commodity": 486.2931,
-    "event": 2187.3725,
-    "option": 516.8482
+    "commodity": 485.6809,
+    "event": 2186.8073,
+    "option": 518.4196
   },
   "cash_usd": 6343.9307,
   "corrections": [
@@ -1160,25 +1160,42 @@
     {
       "nav_usd": 9534.4444,
       "ts": "2026-11-26T06:00:56.407736+00:00"
+    },
+    {
+      "nav_usd": 9534.8385,
+      "ts": "2026-11-26T08:01:10.619523+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
     "passed": [],
     "seeded": null,
-    "signals": 4,
-    "skipped": [],
+    "signals": 3,
+    "skipped": [
+      {
+        "instrument": "polymarket:putin-out-before-2027-346",
+        "label": "Putin out as President of Russia by December 31, 2026?",
+        "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
+      }
+    ],
     "traded": false,
-    "window": "11:30 IST is outside the trading hours"
+    "window": "13:31 IST is outside the trading hours"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-26T06:00:56.407736+00:00",
+  "generated_at": "2026-11-26T08:01:10.619523+00:00",
   "guard": {
     "board": 32,
     "checked": 32,
     "checker": "Open-Jev 2B (Qwen3.5-2B base)",
     "days_recorded": 18,
-    "dropped": [],
+    "dropped": [
+      {
+        "forecast": 0.01,
+        "forecasted_at": "2026-11-25T17:39:30.950904+00:00",
+        "label": "Putin out as President of Russia by December 31, 2026?",
+        "rationale_yes": 0.7191
+      }
+    ],
     "flags": [
       {
         "forecast": 0.010000000000000009,
@@ -1393,7 +1410,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9534.4444,
+  "nav_usd": 9534.8385,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1459,16 +1476,16 @@
       "instrument_id": "mcx:ALUMINI",
       "kind": "linear",
       "label": "Aluminium (MCX ALUMINI)",
-      "mark": 308.85,
+      "mark": 308.0,
       "marked": true,
       "multiplier": 1000.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": 15.4514,
+      "pnl_usd": 16.1164,
       "quantity": 0.0722045798525614,
       "side": "SHORT",
       "underlying": "aluminium",
-      "value_usd": 267.5636,
+      "value_usd": 268.2286,
       "venue": "mcx"
     },
     {
@@ -1482,16 +1499,16 @@
       "instrument_id": "mcx:COPPER",
       "kind": "linear",
       "label": "Copper (MCX COPPER)",
-      "mark": 1138.5,
+      "mark": 1132.0,
       "marked": true,
       "multiplier": 2500.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": "copper-aluminium",
-      "pnl_usd": -33.3827,
+      "pnl_usd": -34.6599,
       "quantity": 0.007253569226399168,
       "side": "LONG",
       "underlying": "copper",
-      "value_usd": 218.7295,
+      "value_usd": 217.4523,
       "venue": "mcx"
     },
     {
@@ -1505,16 +1522,16 @@
       "instrument_id": "kalshi:KXMEDIARELEASESPIDERMAN-DEC26",
       "kind": "binary",
       "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-      "mark": 0.94,
+      "mark": 0.93,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 3.0727,
+      "pnl_usd": 0.0,
       "quantity": 307.2693903225807,
       "side": "NO",
       "underlying": "kalshi:KXMEDIARELEASESPIDERMAN-DEC26",
-      "value_usd": 288.8332,
+      "value_usd": 285.7605,
       "venue": "kalshi"
     },
     {
@@ -1620,16 +1637,16 @@
       "instrument_id": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
       "kind": "binary",
       "label": "Strait of Hormuz traffic returns to normal by December 31?",
-      "mark": 0.972,
+      "mark": 0.971,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": 17.8215,
+      "pnl_usd": 17.5341,
       "quantity": 287.443442,
       "side": "NO",
       "underlying": "polymarket:strait-of-hormuz-traffic-returns-to-normal-by-december-31",
-      "value_usd": 279.395,
+      "value_usd": 279.1076,
       "venue": "polymarket"
     },
     {
@@ -1643,16 +1660,16 @@
       "instrument_id": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
       "kind": "binary",
       "label": "US announces end of Iranian blockade by November 30, 2026?",
-      "mark": 0.972,
+      "mark": 0.967,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-09T20:01:19.050785+00:00",
       "pair_key": null,
-      "pnl_usd": 47.6758,
+      "pnl_usd": 46.2043,
       "quantity": 294.2950976609043,
       "side": "NO",
       "underlying": "polymarket:us-announces-end-of-iranian-blockade-by-november-30-2026",
-      "value_usd": 286.0548,
+      "value_usd": 284.5834,
       "venue": "polymarket"
     },
     {
@@ -1666,16 +1683,16 @@
       "instrument_id": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
       "kind": "binary",
       "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-      "mark": 0.118,
+      "mark": 0.13,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-21T08:00:47.529834+00:00",
       "pair_key": null,
-      "pnl_usd": -5.6103,
+      "pnl_usd": -3.6302,
       "quantity": 165.0078676801452,
       "side": "YES",
       "underlying": "polymarket:will-bitcoin-dip-to-45000-by-december-31-2026-674-923-755-971-998-525-926-245-316-517-544-589-965-923-986-841-815-224-586-231-289-533-573",
-      "value_usd": 19.4709,
+      "value_usd": 21.451,
       "venue": "polymarket"
     },
     {
@@ -1712,16 +1729,16 @@
       "instrument_id": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
       "kind": "binary",
       "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
-      "mark": 0.77,
+      "mark": 0.79,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-26T04:00:57.944497+00:00",
       "pair_key": null,
-      "pnl_usd": 3.5506,
+      "pnl_usd": 5.3259,
       "quantity": 88.76525173135458,
       "side": "NO",
       "underlying": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
-      "value_usd": 68.3492,
+      "value_usd": 70.1245,
       "venue": "polymarket"
     },
     {
@@ -1758,16 +1775,16 @@
       "instrument_id": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
       "kind": "binary",
       "label": "Will Puma Shen win the next Taipei Mayor election?",
-      "mark": 0.428,
+      "mark": 0.435,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-26T04:00:57.944497+00:00",
       "pair_key": null,
-      "pnl_usd": 1.3869,
+      "pnl_usd": 1.8979,
       "quantity": 72.99551747974924,
       "side": "YES",
       "underlying": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
-      "value_usd": 31.2421,
+      "value_usd": 31.7531,
       "venue": "polymarket"
     },
     {
@@ -1781,16 +1798,16 @@
       "instrument_id": "nse_fo:BANKNIFTY:put_spread:2026-12-29:59300/57000",
       "kind": "option",
       "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-      "mark": 2159.1730000000002,
+      "mark": 2169.682,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-16T08:01:17.337704+00:00",
       "pair_key": null,
-      "pnl_usd": 18.4186,
+      "pnl_usd": 19.818,
       "quantity": 12.289880162631071,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 287.5223,
+      "value_usd": 288.9217,
       "venue": "nse_fo"
     },
     {
@@ -1804,16 +1821,16 @@
       "instrument_id": "nse_fo:NIFTY:put_spread:2026-12-08:24350/23600",
       "kind": "option",
       "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-      "mark": 739.682,
+      "mark": 740.2370000000001,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-10T20:01:18.295272+00:00",
       "pair_key": null,
-      "pnl_usd": 28.9416,
+      "pnl_usd": 29.1137,
       "quantity": 28.613537030612367,
       "side": "BULL",
       "underlying": "india_equity",
-      "value_usd": 229.3259,
+      "value_usd": 229.4979,
       "venue": "nse_fo"
     }
   ],
@@ -1871,7 +1888,7 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -4.656,
+  "return_pct": -4.652,
   "risk": {
     "alerts": [],
     "limits": {
@@ -1888,11 +1905,6 @@
     "new_risk_paused": false,
     "over_limit": [
       {
-        "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-        "side": "NO",
-        "worst_case_share": 0.0303
-      },
-      {
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "side": "NO",
         "worst_case_share": 0.0303
@@ -1900,7 +1912,7 @@
       {
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "side": "BULL",
-        "worst_case_share": 0.0302
+        "worst_case_share": 0.0303
       }
     ],
     "positions": [
@@ -1916,33 +1928,23 @@
       },
       {
         "alerts": [],
-        "entry_worst_case_usd": 285.76,
-        "kind": "binary",
-        "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-        "pnl_usd": 3.07,
-        "side": "NO",
-        "worst_case_share": 0.0303,
-        "worst_case_usd": 288.83
-      },
-      {
-        "alerts": [],
         "entry_worst_case_usd": 269.1,
         "kind": "option",
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
-        "pnl_usd": 18.42,
+        "pnl_usd": 19.82,
         "side": "BULL",
-        "worst_case_share": 0.0302,
-        "worst_case_usd": 287.52
+        "worst_case_share": 0.0303,
+        "worst_case_usd": 288.92
       },
       {
         "alerts": [],
-        "entry_worst_case_usd": 238.38,
+        "entry_worst_case_usd": 285.76,
         "kind": "binary",
-        "label": "US announces end of Iranian blockade by November 30, 2026?",
-        "pnl_usd": 47.68,
+        "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
+        "pnl_usd": 0.0,
         "side": "NO",
         "worst_case_share": 0.03,
-        "worst_case_usd": 286.05
+        "worst_case_usd": 285.76
       },
       {
         "alerts": [],
@@ -1966,6 +1968,16 @@
       },
       {
         "alerts": [],
+        "entry_worst_case_usd": 238.38,
+        "kind": "binary",
+        "label": "US announces end of Iranian blockade by November 30, 2026?",
+        "pnl_usd": 46.2,
+        "side": "NO",
+        "worst_case_share": 0.0298,
+        "worst_case_usd": 284.58
+      },
+      {
+        "alerts": [],
         "entry_worst_case_usd": 276.24,
         "kind": "binary",
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
@@ -1979,30 +1991,30 @@
         "entry_worst_case_usd": 261.57,
         "kind": "binary",
         "label": "Strait of Hormuz traffic returns to normal by December 31?",
-        "pnl_usd": 17.82,
+        "pnl_usd": 17.53,
         "side": "NO",
         "worst_case_share": 0.0293,
-        "worst_case_usd": 279.39
+        "worst_case_usd": 279.11
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 200.38,
         "kind": "option",
         "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
-        "pnl_usd": 28.94,
+        "pnl_usd": 29.11,
         "side": "BULL",
         "worst_case_share": 0.0241,
-        "worst_case_usd": 229.33
+        "worst_case_usd": 229.5
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 64.8,
         "kind": "binary",
         "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
-        "pnl_usd": 3.55,
+        "pnl_usd": 5.33,
         "side": "NO",
-        "worst_case_share": 0.0072,
-        "worst_case_usd": 68.35
+        "worst_case_share": 0.0074,
+        "worst_case_usd": 70.12
       },
       {
         "alerts": [],
@@ -2019,40 +2031,40 @@
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Aluminium (MCX ALUMINI)",
-        "pnl_usd": 15.45,
+        "pnl_usd": 16.12,
         "side": "SHORT",
         "worst_case_share": 0.0042,
-        "worst_case_usd": 40.13
+        "worst_case_usd": 40.23
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 37.82,
         "kind": "linear",
         "label": "Copper (MCX COPPER)",
-        "pnl_usd": -33.38,
+        "pnl_usd": -34.66,
         "side": "LONG",
         "worst_case_share": 0.0034,
-        "worst_case_usd": 32.81
+        "worst_case_usd": 32.62
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 29.86,
         "kind": "binary",
         "label": "Will Puma Shen win the next Taipei Mayor election?",
-        "pnl_usd": 1.39,
+        "pnl_usd": 1.9,
         "side": "YES",
         "worst_case_share": 0.0033,
-        "worst_case_usd": 31.24
+        "worst_case_usd": 31.75
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
-        "pnl_usd": -5.61,
+        "pnl_usd": -3.63,
         "side": "YES",
-        "worst_case_share": 0.002,
-        "worst_case_usd": 19.47
+        "worst_case_share": 0.0022,
+        "worst_case_usd": 21.45
       },
       {
         "alerts": [],
@@ -2065,8 +2077,8 @@
         "worst_case_usd": 19.0
       }
     ],
-    "worst_case_total_share": 0.2913,
-    "worst_case_total_usd": 2777.15
+    "worst_case_total_share": 0.2914,
+    "worst_case_total_usd": 2778.07
   },
   "scorecard": {
     "retired_records": [
