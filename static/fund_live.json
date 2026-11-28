@@ -12,8 +12,8 @@
       "put_premium": 8.8381
     },
     "unrealized": {
-      "agent_transfer": -29.1045,
-      "blend_model": 14.815,
+      "agent_transfer": -38.6299,
+      "blend_model": -13.8488,
       "event_model": 56.0659,
       "pairs_model": -20.4043,
       "put_premium": 43.1968
@@ -21,7 +21,7 @@
   },
   "by_asset_class": {
     "commodity": 483.8201,
-    "event": 2182.7,
+    "event": 2144.5109,
     "option": 512.6848
   },
   "cash_usd": 6308.1681,
@@ -1284,48 +1284,66 @@
     {
       "nav_usd": 9487.373,
       "ts": "2026-11-28T08:01:16.329265+00:00"
+    },
+    {
+      "nav_usd": 9449.1838,
+      "ts": "2026-11-28T10:01:11.461484+00:00"
     }
   ],
   "cycle": {
     "orders": 0,
-    "passed": [],
-    "seeded": null,
-    "signals": 4,
-    "skipped": [
+    "passed": [
       {
-        "instrument": "polymarket:putin-out-before-2027-346",
-        "label": "Putin out as President of Russia by December 31, 2026?",
-        "reason": "its forecast points away from its own rationale (rationale checker), so the market prices it alone"
-      },
+        "instrument": "copper-aluminium",
+        "label": "copper-aluminium",
+        "reason": "owner hold hold-copper-aluminium-2026-11-23: kept open although this trade needs the price ratio to move further from its 10-year normal (z +1.61): relative value says Copper is the dear leg, the one this trade holds"
+      }
+    ],
+    "seeded": null,
+    "signals": 0,
+    "skipped": [
       {
         "instrument": "polymarket:will-chiang-wan-an-win-the-next-taipei-mayor-election-20260813125857101",
         "label": "Will Chiang Wan-an win the next Taipei Mayor election?",
-        "reason": "closes within a day"
+        "reason": "forecast 97.9% is 38 points from the market; treated as a likely model error until the model has a record"
       },
       {
         "instrument": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
         "label": "Will Puma Shen win the next Taipei Mayor election?",
-        "reason": "closes within a day"
+        "reason": "forecast 2.6% is 37 points from the market; treated as a likely model error until the model has a record"
+      },
+      {
+        "instrument": "mcx:COPPER",
+        "label": "Copper (MCX COPPER)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:ALUMINI",
+        "label": "Aluminium (MCX ALUMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:ZINCMINI",
+        "label": "Zinc (MCX ZINCMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
+      },
+      {
+        "instrument": "mcx:LEADMINI",
+        "label": "Lead (MCX LEADMINI)",
+        "reason": "MCX is closed now (it trades 09:00 to 23:30 IST on weekdays, 23:55 in the US winter)"
       }
     ],
-    "traded": false,
-    "window": "13:31 IST is outside the trading hours"
+    "traded": true,
+    "window": "end-of-day check: exits and risk only, no new positions"
   },
   "fund_id": "foresea-fund",
-  "generated_at": "2026-11-28T08:01:16.329265+00:00",
+  "generated_at": "2026-11-28T10:01:11.461484+00:00",
   "guard": {
     "board": 33,
     "checked": 33,
     "checker": "Open-Jev 2B (Qwen3.5-2B base)",
     "days_recorded": 20,
-    "dropped": [
-      {
-        "forecast": 0.01,
-        "forecasted_at": "2026-11-27T17:34:55.741632+00:00",
-        "label": "Putin out as President of Russia by December 31, 2026?",
-        "rationale_yes": 0.8815
-      }
-    ],
+    "dropped": [],
     "flags": [
       {
         "forecast": 0.010000000000000009,
@@ -1534,7 +1552,7 @@
     "position": 0.1,
     "underlying": 0.15
   },
-  "nav_usd": 9487.373,
+  "nav_usd": 9449.1838,
   "net_exposure_by_underlying": {
     "aluminium": -252.1122,
     "copper": 252.1122,
@@ -1877,16 +1895,16 @@
       "instrument_id": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
       "kind": "binary",
       "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
-      "mark": 0.87,
+      "mark": 0.89,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-26T04:00:57.944497+00:00",
       "pair_key": null,
-      "pnl_usd": 12.4271,
+      "pnl_usd": 14.2024,
       "quantity": 88.76525173135458,
       "side": "NO",
       "underlying": "polymarket:will-magdalena-andersson-be-the-next-prime-minister-of-sweden",
-      "value_usd": 77.2258,
+      "value_usd": 79.0011,
       "venue": "polymarket"
     },
     {
@@ -1900,16 +1918,16 @@
       "instrument_id": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
       "kind": "binary",
       "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-      "mark": 0.04300000000000004,
+      "mark": 0.041000000000000036,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-08T23:10:50.271479+00:00",
       "pair_key": null,
-      "pnl_usd": -71.4401,
+      "pnl_usd": -80.9655,
       "quantity": 4762.675204545904,
       "side": "NO",
       "underlying": "polymarket:will-mojtaba-khamenei-be-head-of-state-in-iran-end-of-2026",
-      "value_usd": 204.795,
+      "value_usd": 195.2697,
       "venue": "polymarket"
     },
     {
@@ -1923,16 +1941,16 @@
       "instrument_id": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
       "kind": "binary",
       "label": "Will Puma Shen win the next Taipei Mayor election?",
-      "mark": 0.429,
+      "mark": 0.012,
       "marked": true,
       "multiplier": 1.0,
       "opened_at": "2026-11-26T04:00:57.944497+00:00",
       "pair_key": null,
-      "pnl_usd": 1.4599,
+      "pnl_usd": -28.9792,
       "quantity": 72.99551747974924,
       "side": "YES",
       "underlying": "polymarket:will-puma-shen-win-the-next-taipei-mayor-election-20260813125857102",
-      "value_usd": 31.3151,
+      "value_usd": 0.8759,
       "venue": "polymarket"
     },
     {
@@ -2036,9 +2054,17 @@
       "since": "2026-11-15"
     }
   ],
-  "return_pct": -5.126,
+  "return_pct": -5.508,
   "risk": {
-    "alerts": [],
+    "alerts": [
+      {
+        "alerts": [
+          "lost 97% of its stake"
+        ],
+        "label": "Will Puma Shen win the next Taipei Mayor election?",
+        "side": "YES"
+      }
+    ],
     "limits": {
       "alert_drop": 0.01,
       "alert_loss": 0.02,
@@ -2055,32 +2081,32 @@
       {
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "side": "NO",
-        "worst_case_share": 0.0313
+        "worst_case_share": 0.0314
       },
       {
         "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
         "side": "YES",
-        "worst_case_share": 0.0307
+        "worst_case_share": 0.0309
       },
       {
         "label": "US announces end of Iranian blockade by November 30, 2026?",
+        "side": "NO",
+        "worst_case_share": 0.0307
+      },
+      {
+        "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
         "side": "NO",
         "worst_case_share": 0.0306
       },
       {
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "side": "NO",
-        "worst_case_share": 0.0305
-      },
-      {
-        "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
-        "side": "NO",
-        "worst_case_share": 0.0304
+        "worst_case_share": 0.0306
       },
       {
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "side": "BULL",
-        "worst_case_share": 0.03
+        "worst_case_share": 0.0301
       }
     ],
     "positions": [
@@ -2091,7 +2117,7 @@
         "label": "Will the United States acquire any territory not under its sovereignty (as of Issuance) before Jan 21, 2029?",
         "pnl_usd": 4.27,
         "side": "NO",
-        "worst_case_share": 0.0313,
+        "worst_case_share": 0.0314,
         "worst_case_usd": 296.6
       },
       {
@@ -2101,7 +2127,7 @@
         "label": "Will 3 mg THC beverages qualify as hemp under federal law on Dec 10, 2026?",
         "pnl_usd": 29.77,
         "side": "YES",
-        "worst_case_share": 0.0307,
+        "worst_case_share": 0.0309,
         "worst_case_usd": 291.71
       },
       {
@@ -2111,7 +2137,7 @@
         "label": "US announces end of Iranian blockade by November 30, 2026?",
         "pnl_usd": 51.8,
         "side": "NO",
-        "worst_case_share": 0.0306,
+        "worst_case_share": 0.0307,
         "worst_case_usd": 290.18
       },
       {
@@ -2121,7 +2147,7 @@
         "label": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
         "pnl_usd": -9.53,
         "side": "NO",
-        "worst_case_share": 0.0305,
+        "worst_case_share": 0.0306,
         "worst_case_usd": 288.94
       },
       {
@@ -2131,7 +2157,7 @@
         "label": "Will the official trailer for Spider-Man: Beyond the Spider-Verse be released Worldwide before Dec 1, 2026?",
         "pnl_usd": 3.07,
         "side": "NO",
-        "worst_case_share": 0.0304,
+        "worst_case_share": 0.0306,
         "worst_case_usd": 288.83
       },
       {
@@ -2141,7 +2167,7 @@
         "label": "Nifty Bank put credit spread 57,000/59,300, 29 Dec 2026",
         "pnl_usd": 15.71,
         "side": "BULL",
-        "worst_case_share": 0.03,
+        "worst_case_share": 0.0301,
         "worst_case_usd": 284.82
       },
       {
@@ -2151,7 +2177,7 @@
         "label": "Strait of Hormuz traffic returns to normal by December 31?",
         "pnl_usd": 17.82,
         "side": "NO",
-        "worst_case_share": 0.0294,
+        "worst_case_share": 0.0296,
         "worst_case_usd": 279.39
       },
       {
@@ -2161,7 +2187,7 @@
         "label": "Nifty 50 put credit spread 23,600/24,350, 8 Dec 2026",
         "pnl_usd": 27.49,
         "side": "BULL",
-        "worst_case_share": 0.024,
+        "worst_case_share": 0.0241,
         "worst_case_usd": 227.87
       },
       {
@@ -2169,20 +2195,20 @@
         "entry_worst_case_usd": 276.24,
         "kind": "binary",
         "label": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
-        "pnl_usd": -71.44,
+        "pnl_usd": -80.97,
         "side": "NO",
-        "worst_case_share": 0.0216,
-        "worst_case_usd": 204.79
+        "worst_case_share": 0.0207,
+        "worst_case_usd": 195.27
       },
       {
         "alerts": [],
         "entry_worst_case_usd": 64.8,
         "kind": "binary",
         "label": "Will Magdalena Andersson be the next Prime Minister of Sweden?",
-        "pnl_usd": 12.43,
+        "pnl_usd": 14.2,
         "side": "NO",
-        "worst_case_share": 0.0081,
-        "worst_case_usd": 77.23
+        "worst_case_share": 0.0084,
+        "worst_case_usd": 79.0
       },
       {
         "alerts": [],
@@ -2191,7 +2217,7 @@
         "label": "Bill Belichick out before Dec 1, 2026",
         "pnl_usd": 0.0,
         "side": "YES",
-        "worst_case_share": 0.0056,
+        "worst_case_share": 0.0057,
         "worst_case_usd": 53.57
       },
       {
@@ -2226,16 +2252,6 @@
       },
       {
         "alerts": [],
-        "entry_worst_case_usd": 29.86,
-        "kind": "binary",
-        "label": "Will Puma Shen win the next Taipei Mayor election?",
-        "pnl_usd": 1.46,
-        "side": "YES",
-        "worst_case_share": 0.0033,
-        "worst_case_usd": 31.32
-      },
-      {
-        "alerts": [],
         "entry_worst_case_usd": 25.08,
         "kind": "binary",
         "label": "Will Bitcoin dip to $45,000 by December 31, 2026?",
@@ -2253,10 +2269,22 @@
         "side": "NO",
         "worst_case_share": 0.0021,
         "worst_case_usd": 19.6
+      },
+      {
+        "alerts": [
+          "lost 97% of its stake"
+        ],
+        "entry_worst_case_usd": 29.86,
+        "kind": "binary",
+        "label": "Will Puma Shen win the next Taipei Mayor election?",
+        "pnl_usd": -28.98,
+        "side": "YES",
+        "worst_case_share": 0.0001,
+        "worst_case_usd": 0.88
       }
     ],
-    "worst_case_total_share": 0.2918,
-    "worst_case_total_usd": 2767.96
+    "worst_case_total_share": 0.2889,
+    "worst_case_total_usd": 2729.77
   },
   "scorecard": {
     "retired_records": [
