@@ -154,6 +154,24 @@ Two jobs in the data repo keep the base growing toward what Foresea is asked:
   horizon and many duplicates, so the review gate is not optional. Work in progress lives in the clone's gitignored
   `.kb/reports/<id>/`, so a stopped night resumes where it left off. Reports from publishers the
   watch list does not cover can be queued by hand (`queue file.pdf|URL --id ...`).
+- **Papers** (`scripts/knowledge_papers.py`, daily in the same job; owner 2026-11-28: "start a
+  collector of papers for quant finance and prediction markets ... cover all forms of forecasting
+  ... let it run indefinitely"): arXiv's daily RSS feeds (every quantitative-finance paper, and
+  forecasting papers from economics, statistics, machine learning, AI, language, atmospheric
+  physics, epidemiology and systems; rss.arxiv.org has no robots rules, while export.arxiv.org's
+  API disallows all crawlers, so it is not used) and OpenAlex (CC0, robots allow all: new work in
+  24 forecasting, finance, weather, epidemics, elections and sports journals, plus anything on
+  prediction markets and forecast aggregation; self-publishing sites, datasets, non-English
+  titles and abstract-less search hits are left out). Each new paper becomes a card in
+  `papers/cards/<YYYY-MM>.jsonl` with its abstract, links, licence, forecasting topics and a
+  relevance score for Foresea (main topic first, so an essay naming every topic does not win).
+  First run (2026-11-28, a Saturday with empty arXiv feeds): 290 cards. **Mondays**: the three best
+  unread papers with an open PDF whose main topic is core to Foresea (prediction markets, LLM
+  forecasting, calibration, pairs, commodities, options) go to `inbox.jsonl` as reports, so the
+  night reader reads them and the morning review decides every claim, the same gates as any
+  report; `papers/digest/latest.md` (and `papers/digest/<year>-W<week>.md`) lists the week's best
+  papers by the part of Foresea they could improve. Three a week keeps the review within the
+  usage budget; the rest stay as searchable cards.
 - **Crawler rules:** honest user agent (`ForeseaKnowledgeWatch/1.0`), robots.txt obeyed (RFC 9309:
   an unavailable robots.txt means no rules, a 401/403 means the site refuses us), 1.5 s between
   requests to a host, at most five new editions per source per run. A site that blocks the
