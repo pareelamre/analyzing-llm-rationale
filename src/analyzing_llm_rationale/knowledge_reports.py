@@ -279,7 +279,11 @@ def _check_pdf(data: bytes, sha256: Optional[str]) -> None:
 
 
 def _published(row: Mapping[str, Any]) -> tuple[str, bool]:
-    """A publication date for an inbox row: the edition key when it is a date, else when it was found."""
+    """A publication date for an inbox row: its own ``published`` date (papers), the edition key
+    when it is a date, else when it was found."""
+    stated = str(row.get("published") or "")
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", stated):
+        return stated, False
     key = str(row.get("edition") or "")
     for fmt in ("%B %d, %Y", "%Y/%m/%d", "%Y-%m-%d", "%Y%m%d", "%d %B %Y"):
         try:
