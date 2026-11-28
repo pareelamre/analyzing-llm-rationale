@@ -1799,6 +1799,24 @@ Pair legs are left alone. The risk and cash a cycle's sales free count for its e
 trim and the trade it makes room for can happen in the same cycle. Trims wait for their venue's
 hours like every other order.
 
+## Futures contracts and rolls (2026-11-28)
+
+The fund's list of contracts (`static/fund_universe.json`) was built on 2026-11-09 with each
+commodity's nearest contract and kept for 30 days. By late November the crude and natural gas
+contracts in it had expired (19 and 24 November), and the zinc and lead minis, due on 30 November,
+traded so thinly that no bar printed in the first half hour of 26 and 27 November, so zinc / lead
+waited at the open ("no MCX price from this session yet"). Every MCX contract in the list, the
+held copper / aluminium pair's included, expired on 30 November, and the fund had no way to roll.
+
+- **Next contract:** a future with fewer than `fund_universe.ROLL_DAYS` (7) days left gives way to
+  the next one when the list is built.
+- **Rebuilt in time:** the list is rebuilt every 30 days and whenever one of its futures is inside
+  those 7 days. It remembers the expiry of every contract it listed in the last 120 days.
+- **Rolls:** at a trading cycle, a held future whose contract is no longer the list's is sold at
+  its own contract's price from this session (its last close once it has expired) and bought on the
+  new contract for the same rupee value, same side, pair, attribution and opening date. A pair's
+  legs roll together or wait together. Until then a held future is priced on its own contract.
+
 ## Trading hours (owner, 2026-11-16)
 
 The owner asked that the fund make proper use of each market's trading hours. A
