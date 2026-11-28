@@ -136,14 +136,33 @@ def usd_inr() -> float:
     raise SystemExit("no USD/INR rate; not valuing rupee positions at a guess")
 
 
+def _legs(universe: dict) -> list[dict]:
+    return list(universe.get("indices") or []) + [p[s] for p in universe.get("pairs") or [] for s in ("a", "b")]
+
+
+def contract_expiries(universe: dict) -> dict[str, str]:
+    """Upstox key -> expiry of every contract this universe or an earlier one listed (kept 120 days),
+    so a held contract's expiry is known after the universe moves on to the next one."""
+    out = dict(universe.get("expiries") or {})
+    out.update({leg["key"]: leg["expiry"] for leg in _legs(universe) if leg.get("key") and leg.get("expiry")})
+    return out
+
+
 def load_universe(today: date, fx: float) -> dict:
+    """The cached universe, rebuilt every UNIVERSE_MAX_AGE_DAYS and whenever one of its futures is
+    inside fu.ROLL_DAYS of expiry, so the fund trades and rolls into the next contract in time."""
     cached = _load_json(UNIVERSE_PATH)
     try:
         fresh = (today - date.fromisoformat(cached["as_of"])).days < UNIVERSE_MAX_AGE_DAYS
+        fresh = fresh and not any(leg.get("expiry") and date.fromisoformat(leg["expiry"]) < today + timedelta(days=fu.ROLL_DAYS)
+                                  for leg in _legs(cached))
     except (KeyError, ValueError):
         fresh = False
     if not fresh:
+        old = contract_expiries(cached) if cached else {}
         cached = fu.universe_payload(fu.build_universe(today, fx))
+        horizon = (today - timedelta(days=120)).isoformat()
+        cached["expiries"] = {k: v for k, v in {**old, **contract_expiries(cached)}.items() if v >= horizon}
         UNIVERSE_PATH.write_text(json.dumps(cached, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return cached
 
@@ -183,11 +202,13 @@ def event_quote(raw: dict) -> dict:
     return {"yes_bid": yb, "yes_ask": ya, "no_bid": nb, "no_ask": na}
 
 
-def fetch_quotes(instrument_ids: set[str], universe: dict, now: datetime) -> dict[str, dict]:
+def fetch_quotes(instrument_ids: set[str], universe: dict, now: datetime,
+                 keys: Optional[dict[str, str]] = None) -> dict[str, dict]:
     """Quotes for the fund's instruments. An Upstox-listed contract (MCX, an index) is priced at
     its latest trade: this session's 30-minute bar while it trades, else its last daily close,
     with the time of that price (``at``), so the fund never trades on a stale close
-    (fund_hours). A Kalshi perp's quote carries whether its market is open."""
+    (fund_hours). ``keys`` prices a held future on its own contract until it is rolled. A
+    Kalshi perp's quote carries whether its market is open."""
     quotes: dict[str, dict] = {}
     perps = None
     known = {i["id"]: i for i in universe.get("indices", [])}
@@ -207,14 +228,71 @@ def fetch_quotes(instrument_ids: set[str], universe: dict, now: datetime) -> dic
                 if key in perps:
                     schedule = perps[key].get("schedule") or {}
                     quotes[iid] = {**fu.kalshi_quote(perps[key]), "open": schedule.get("is_open", True) is not False}
-            elif iid in known:
-                candle = fo.latest_candle(known[iid]["key"], now, http_get=requests.get)
+            elif iid in known or iid in (keys or {}):
+                candle = fo.latest_candle((keys or {}).get(iid) or known[iid]["key"], now, http_get=requests.get)
                 if candle is not None and candle[1] > 0:
                     at, last, _volume = candle
                     quotes[iid] = {"bid": last, "ask": last, "last": last, "at": at.isoformat(), "source": "last trade"}
         except (market_data.MarketDataError, fu.FeedError, requests.RequestException, ValueError) as exc:
             print(f"  no quote for {iid}: {exc}", file=sys.stderr)
     return quotes
+
+
+def roll_contracts(conn: sqlite3.Connection, universe: dict, quotes: dict, now: datetime, stamp: str,
+                   rates: dict, calendar) -> tuple[list[dict], list[dict]]:
+    """Move held futures onto the universe's current contract before theirs expires.
+
+    Each is sold at its own contract's price from this session (its last close once it has
+    expired) and bought again on the new contract for the same rupee value: same side, pair,
+    attribution and opening date. A pair's legs roll together or wait together. ``quotes`` then
+    price the position on its new contract. Returns (trades, positions that wait, with why).
+    """
+    current = {leg["id"]: leg for leg in _legs(universe) if leg.get("venue") in fh.SESSIONS and leg.get("key")}
+    expiries = contract_expiries(universe)
+    today = now.astimezone(IST).date()
+    due = [dict(p) for p in ledger.positions(conn, FUND_ID) if p["kind"] == "linear"
+           and p["instrument_id"] in current and p.get("key") and p["key"] != current[p["instrument_id"]]["key"]]
+    groups: dict[str, list[dict]] = {}
+    for p in due:
+        groups.setdefault(p.get("pair_key") or p["instrument_id"], []).append(p)
+    done, waiting = [], []
+    for _group, held in groups.items():
+        legs, why = [], None
+        for p in held:
+            new = current[p["instrument_id"]]
+            venue = p["instrument_id"].split(":", 1)[0]
+            old_q, new_q = (fo.latest_candle(k, now, http_get=requests.get) for k in (p["key"], new["key"]))
+            if new_q is None or not fh.live({"at": new_q[0].isoformat()}, venue, now, calendar):
+                why = f"waiting to roll: no price from this session yet on {new.get('contract') or new['key']}"
+                break
+            expired = (expiries.get(p["key"]) or "9999") < today.isoformat()
+            if old_q is None or not (expired or fh.live({"at": old_q[0].isoformat()}, venue, now, calendar)):
+                why = "waiting to roll: no price from this session yet on the contract held"
+                break
+            legs.append((p, new, old_q, new_q))
+        if why:
+            waiting += [{"instrument": p["instrument_id"], "label": p["label"], "reason": why} for p in held]
+            continue
+        for p, new, old_q, new_q in legs:
+            fx = rates.get(p["currency"], 1.0)
+            old_price, new_price = float(old_q[1]), float(new_q[1])
+            note = (f"Rolled from {p['key']} to {new.get('contract') or new['key']} before expiry "
+                    f"({p['side'].lower()} the same rupee value: {old_price:,.2f} -> {new_price:,.2f}).")
+            ledger.sell(conn, FUND_ID, p["instrument_id"], p["side"], p["quantity"], old_price, fx=fx,
+                        purpose="roll", pair_key=p.get("pair_key"), cycle_id=f"fund-{now:%Y%m%dT%H%M}",
+                        note=note, now=stamp)
+            quantity = p["quantity"] * old_price / new_price
+            ledger.buy(conn, FUND_ID, new, p["side"], quantity, new_price, fx=fx,
+                       attribution=json.loads(p["attribution_json"]), purpose="roll", pair_key=p.get("pair_key"),
+                       cycle_id=f"fund-{now:%Y%m%dT%H%M}", note=note, action="open", now=stamp)
+            conn.execute("UPDATE fund_positions SET opened_at = ? WHERE fund_id = ? AND instrument_id = ? AND side = ?",
+                         (p["opened_at"], FUND_ID, p["instrument_id"], p["side"]))
+            quotes[p["instrument_id"]] = {"bid": new_price, "ask": new_price, "last": new_price,
+                                          "at": new_q[0].isoformat(), "source": "last trade"}
+            done.append({"instrument": {"id": p["instrument_id"], "label": p["label"]}, "side": p["side"],
+                         "action": "roll", "purpose": "roll", "quantity": quantity, "price": new_price,
+                         "pair_key": p.get("pair_key"), "reason": note})
+    return done, waiting
 
 
 def note_writer() -> Optional[Callable[[str], str]]:
@@ -481,12 +559,21 @@ def run(now: Optional[datetime] = None) -> dict:
     held_ids = {p["instrument_id"] for p in ledger.positions(conn, FUND_ID)}
     hedges = {p["b"]["underlying"]: p["b"] for p in universe.get("pairs", []) if p["b"]["venue"] == "kalshi_perp"}
     wanted = held_ids | {s.instrument["id"] for s in signals} | {h["id"] for h in hedges.values()}
-    quotes = fetch_quotes(wanted, universe, now)
+    held_keys = {p["instrument_id"]: p["key"] for p in map(dict, ledger.positions(conn, FUND_ID))
+                 if p["kind"] == "linear" and p.get("key")}
+    quotes = fetch_quotes(wanted, universe, now, keys=held_keys)
     quotes.update(fo.structure_quotes({k: v for k, v in option_specs.items() if v.get("legs")}, quote_fn))
     snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
 
     can_trade, why = trading_window(conn, now)
     executed, passed = [], []
+    rolled, roll_waiting = [], []
+    if can_trade:
+        # Futures near expiry move to the next contract first (fund_universe.ROLL_DAYS).
+        rolled, roll_waiting = roll_contracts(conn, universe, quotes, now, stamp, rates, calendar)
+        if rolled:
+            conn.commit()
+            snapshot = ledger.nav(conn, FUND_ID, quotes, rates)
     options = {"signals": [], "skipped": [], "values": {}, "quotes": {}, "sleeve": []}
     option_skips: list = []
     sleeve_modes = put_sleeve_modes()
@@ -566,6 +653,7 @@ def run(now: Optional[datetime] = None) -> dict:
     guard = record_guard(conn, guard, now, stamp)
     ledger.record_nav(conn, snapshot, now=stamp)
     conn.commit()
+    executed, passed = rolled + executed, roll_waiting + passed
     payload = build_payload(conn, snapshot, universe, now=now, window=why, traded=can_trade, executed=executed,
                             passed=passed, skipped=skipped_events + skipped_pairs + option_skips,
                             signals=signals, seeded=seeded)

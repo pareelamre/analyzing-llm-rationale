@@ -16,9 +16,10 @@ from __future__ import annotations
 import gzip
 import json
 import math
+import os
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 from urllib.parse import quote
 
 import requests
@@ -125,6 +126,26 @@ def _get_json(url: str, *, http_get: HttpGet, accept: str = "application/json") 
     return resp
 
 
+#: A future in its last ROLL_DAYS days trades thinly (positions move to the next month) and is
+#: about to expire, so the fund trades the next contract (2026-11-26: the November zinc and lead
+#: minis printed no bar in the first half hour, and the cached crude and gas contracts had expired).
+ROLL_DAYS = int(os.environ.get("FUND_ROLL_DAYS", "7"))
+
+
+def _expiry(row: Mapping[str, Any]) -> Optional[date]:
+    return datetime.fromtimestamp(row["expiry"] / 1000, IST).date() if row.get("expiry") else None
+
+
+def tradable(contracts: Sequence[dict], today: date) -> Optional[dict]:
+    """The nearest contract with at least ROLL_DAYS left (``contracts`` nearest expiry first); the
+    farthest one if none has."""
+    for row in contracts:
+        expiry = _expiry(row)
+        if expiry is None or expiry >= today + timedelta(days=ROLL_DAYS):
+            return row
+    return contracts[-1] if contracts else None
+
+
 def upstox_futures(exchange: str, *, http_get: HttpGet = requests.get) -> list[dict]:
     """Every listed future on an Upstox exchange file (NSE, BSE or MCX), nearest expiry first."""
     raw = _get_json(UPSTOX_INSTRUMENTS_URL.format(exchange=exchange), http_get=http_get, accept="application/gzip").content
@@ -210,7 +231,7 @@ def rank_indices(nse: Sequence[dict], bse: Sequence[dict], kalshi: Sequence[dict
                 by_symbol.setdefault(row.get("underlying_symbol") or row.get("name"), []).append(row)
         for symbol, contracts in by_symbol.items():
             volume = _upstox_volume_usd(contracts, today, usdinr, http_get=http_get)
-            out.append(_upstox_instrument(contracts[0], venue=venue, asset_class="index",
+            out.append(_upstox_instrument(tradable(contracts, today), venue=venue, asset_class="index",
                                           underlying="india_equity", label=INDEX_LABELS.get(symbol, symbol), volume=volume))
     out += [_kalshi_instrument(m, asset_class="index") for m in kalshi if m.get("asset_class") == "Indices" and _active(m)]
     return sorted((i for i in out if i.volume_usd > 0), key=lambda i: -i.volume_usd)[:size]
@@ -234,7 +255,7 @@ def commodity_legs(mcx: Sequence[dict], kalshi: Sequence[dict], today: date, usd
         contracts = by_symbol.get(symbol)
         if contracts:
             legs[(underlying, "mcx")] = _upstox_instrument(
-                contracts[0], venue="mcx", asset_class="commodity", underlying=underlying,
+                tradable(contracts, today), venue="mcx", asset_class="commodity", underlying=underlying,
                 label=f"{underlying.title()} (MCX {symbol})", volume=volume_by_underlying.get(underlying, 0.0))
     for market in kalshi:
         underlying = KALSHI_UNDERLYING.get(market.get("ticker", ""))
